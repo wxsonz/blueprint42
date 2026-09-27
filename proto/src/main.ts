@@ -130,16 +130,74 @@ function analyze(src: string, fresh: boolean): void {
   }
 }
 
-function loadSample(key: string | undefined): void {
+// ---------------- per-sample work, kept in this browser ----------------
+interface Saved {
+  src: string;
+  places: [string, number, number, boolean][];
+  waypoints: [string, number, number][];
+}
+
+function readSaved(key: string): Saved | null {
+  try {
+    const raw = store.get(`sample.${key}`);
+    return raw ? (JSON.parse(raw) as Saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+let saveTimer = 0;
+function saveSoon(): void {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => {
+    const saved: Saved = {
+      src: editor.state.doc.toString(),
+      places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
+      waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
+    };
+    store.set(`sample.${S.sample.key}`, JSON.stringify(saved));
+    renderRevert();
+  }, 400);
+}
+
+function applySavedLayout(saved: Saved): void {
+  for (const [id, x, y, pinned] of saved.places) {
+    const n = layout.nodes.get(id);
+    if (n) n.place = { x, y, pinned };
+  }
+  for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
+}
+
+function renderRevert(): void {
+  const saved = readSaved(S.sample.key);
+  const edited = !!saved && (saved.src !== S.sample.src || saved.places.some((p) => p[3]) || saved.waypoints.length > 0);
+  $<HTMLButtonElement>('btn-revert').hidden = !edited;
+}
+
+function revertSample(): void {
+  store.set(`sample.${S.sample.key}`, '');
+  loadSample(S.sample.key, true);
+  toast('back to the original sample (Ctrl+Z in the editor undoes this)');
+}
+
+function loadSample(key: string | undefined, pristine = false): void {
   const s = SAMPLES.find((x) => x.key === key || x.title === key) ?? (key ? SAMPLES[Number(key) - 1] : undefined);
   if (!s) return toast(`no sample “${key}” — try ${SAMPLES.map((x) => x.key).join(', ')}`);
   S.sample = s;
   S.selected = null;
+  store.set('lastSample', s.key);
+  const saved = pristine ? null : readSaved(s.key);
+  const src = saved?.src ?? s.src;
   $('file-name').textContent = s.file;
   renderSampleTabs();
-  setDoc(editor, s.src);
+  setDoc(editor, src);
   clearTimeout(debounce);
-  analyze(s.src, true);
+  analyze(src, true);
+  if (saved) {
+    applySavedLayout(saved);
+    view.fit(S, true);
+  }
+  renderRevert();
   if (S.trace) setTimeout(() => play(), 450);
 }
 
@@ -233,11 +291,13 @@ function gotoCode(e: Entity | null): void {
 function unpin(id: string): void {
   if (!S.model) return;
   layout.unpin(id, S.model);
+  saveSoon();
   toast('handed back to auto-placement');
 }
 
 function resetRoute(key: string): void {
   layout.waypoints.delete(key);
+  saveSoon();
   toast('route reset');
 }
 
@@ -315,6 +375,7 @@ function bindMouse(): void {
 
   const end = () => {
     if (drag?.k === 'node' && drag.moved) toast('pinned: auto-layout won’t move it (right-click → Unpin)');
+    if ((drag?.k === 'node' || drag?.k === 'belt') && drag.moved) saveSoon();
     if (drag?.k === 'pan' && !drag.moved && S.selected === null) S.legend = null;
     drag = null;
     setCursorStyle();
@@ -438,6 +499,7 @@ function renderSkinPicker(): void {
 // ---------------- vim toggle ----------------
 const hooks: EditorHooks = {
   onChange: (doc) => {
+    saveSoon();
     clearTimeout(debounce);
     debounce = window.setTimeout(() => analyze(doc, false), 150);
   },
@@ -778,6 +840,7 @@ async function boot(): Promise<void> {
   $('vim-toggle').addEventListener('click', toggleVim);
   renderVimToggle();
   $('btn-help').addEventListener('click', openHelp);
+  $('btn-revert').addEventListener('click', revertSample);
   $('btn-fit').addEventListener('click', () => view.fit(S));
   const followBtn = $('btn-follow');
   followBtn.setAttribute('aria-pressed', String(S.follow));
@@ -820,10 +883,9 @@ async function boot(): Promise<void> {
   await applySkin(S.skin);
   await document.fonts.ready;
   view.resize();
-  analyze(S.sample.src, true);
+  loadSample(store.get('lastSample') ?? S.sample.key);
   requestAnimationFrame(frame);
   editor.focus();
-  setTimeout(() => play(), 700);
   // Dev-only handle for the headless screenshot checks.
   if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, computeBelts } });
 }
