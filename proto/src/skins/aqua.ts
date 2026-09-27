@@ -3,7 +3,7 @@
 // running shows a barber-pole bar, stale code gets the spinning pinwheel.
 // Belts are gel tubes: blue while carrying a call, graphite otherwise.
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
+import { arrowHead, baseName, beltMid, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -225,6 +225,124 @@ export const aqua: Skin = {
     }
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), blue ? '#1d4f9e' : '#6b737c');
+    if (o.count > 1) {
+      const [mx, my] = beltMid(pts);
+      const fs = px(dc, 11, 7);
+      g.font = UI(fs, true);
+      const t = `${o.count}`;
+      const pw = Math.max(g.measureText(t).width + px(dc, 12), fs + px(dc, 6));
+      const ph2 = fs + px(dc, 5);
+      gel(g, { x: mx - pw / 2, y: my - ph2 / 2, w: pw, h: ph2 }, ph2 / 2, blue ? 'blue' : 'graphite');
+      g.fillStyle = blue ? '#fff' : '#2c3036';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(t, mx, my + 0.5);
+    }
+  },
+
+  // A collapsed file is a Finder window: a source list of its public functions.
+  module(dc, r, m) {
+    const g = dc.g;
+    const lights: [Gel, Gel, Gel] = [
+      m.state === 'error' ? 'red' : 'graphite',
+      m.state === 'waiting' ? 'yellow' : 'graphite',
+      m.state === 'running' ? 'green' : 'graphite',
+    ];
+    const body = windowChrome(dc, r, baseName(m.name), lights, false, m.state === 'idle');
+    const pad = px(dc, 6);
+    const foot = px(dc, 18, 10);
+    const list = { x: r.x + pad, y: body.y + pad, w: r.w - pad * 2, h: body.h - pad * 2 - foot };
+    rrect(g, list.x, list.y, list.w, list.h, px(dc, 4, 2));
+    g.fillStyle = '#e8edf3';
+    g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.18)';
+    g.lineWidth = 1;
+    g.stroke();
+    g.save();
+    rrect(g, list.x, list.y, list.w, list.h, px(dc, 4, 2));
+    g.clip();
+    const rowH = 0.55 * dc.cs;
+    const fs = px(dc, 11, 7);
+    g.textBaseline = 'middle';
+    m.doors.forEach((d, i) => {
+      const y = list.y + px(dc, 3) + i * rowH;
+      if (d.live) {
+        const hg = g.createLinearGradient(0, y, 0, y + rowH);
+        hg.addColorStop(0, '#6aa3f0');
+        hg.addColorStop(1, '#2f6fd6');
+        g.fillStyle = hg;
+        g.fillRect(list.x, y, list.w, rowH);
+      }
+      light(g, list.x + px(dc, 9), y + rowH / 2, px(dc, 3.5, 2), d.undeclared ? 'orange' : d.live ? 'green' : 'graphite', false);
+      g.font = UI(fs);
+      g.textAlign = 'left';
+      g.fillStyle = d.live ? '#fff' : '#242a35';
+      g.fillText(fitText(g, d.name, (s2) => UI(s2), fs, list.w - px(dc, 22), 6), list.x + px(dc, 17), y + rowH / 2 + 0.5);
+    });
+    if (m.more) {
+      g.font = UI(px(dc, 10, 6));
+      g.fillStyle = '#77818e';
+      g.textAlign = 'left';
+      g.fillText(`${m.more} more`, list.x + px(dc, 17), list.y + px(dc, 3) + m.doors.length * rowH + rowH / 2);
+    }
+    g.restore();
+    g.font = UI(px(dc, 10, 6));
+    g.fillStyle = m.state === 'error' ? '#b3261e' : '#7a7a7a';
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    const status = m.state === 'running' ? `Running ${m.running ?? ''}` : m.state === 'waiting' ? `Waiting in ${m.running ?? ''}` : m.state === 'error' ? 'Quit unexpectedly' : `${m.fns} function${m.fns === 1 ? '' : 's'}`;
+    g.fillText(fitText(g, status + (m.depth > 1 ? ` · ×${m.depth}` : ''), (s2) => UI(s2), px(dc, 10, 6), r.w - pad * 2 - 12, 6), list.x, r.y + r.h - foot / 2 - px(dc, 2));
+    if (m.pinned) {
+      g.fillStyle = BLUE;
+      g.beginPath(); g.arc(r.x + r.w - pad - px(dc, 3), r.y + r.h - foot / 2 - px(dc, 2), px(dc, 3, 2), 0, Math.PI * 2); g.fill();
+    }
+    const ph = (ys: number[]) => Math.min(px(dc, 12, 6), ys.length > 1 ? (ys[1] - ys[0]) * 0.7 : 99);
+    const pk = m.state === 'running' ? 'blue' : 'graphite';
+    for (const y of m.inPorts) gel(g, { x: r.x - px(dc, 4), y: y - ph(m.inPorts) / 2, w: px(dc, 5, 3), h: ph(m.inPorts) }, 2, pk);
+    for (const y of m.outPorts) gel(g, { x: r.x + r.w - 1, y: y - ph(m.outPorts) / 2, w: px(dc, 5, 3), h: ph(m.outPorts) }, 2, pk);
+    if (m.selected || m.hovered) focusRing(g, r, px(dc, 7, 3), m.selected);
+  },
+
+  // An open file is a glass drawer with a brushed tab.
+  wall(dc, r, w) {
+    const g = dc.g;
+    const rad = px(dc, 10, 4);
+    rrect(g, r.x, r.y, r.w, r.h, rad);
+    g.fillStyle = 'rgba(255,255,255,0.42)';
+    g.fill();
+    g.strokeStyle = w.live ? 'rgba(56,117,215,0.55)' : 'rgba(0,0,0,0.18)';
+    g.lineWidth = w.live ? 2 : 1;
+    g.stroke();
+    const h = w.head;
+    g.save();
+    rrect(g, r.x, r.y, r.w, r.h, rad);
+    g.clip();
+    const tg = g.createLinearGradient(0, h.y, 0, h.y + h.h);
+    tg.addColorStop(0, '#f4f5f7');
+    tg.addColorStop(1, '#cfd3d9');
+    g.fillStyle = tg;
+    g.fillRect(h.x, h.y, h.w, h.h);
+    g.fillStyle = 'rgba(0,0,0,0.15)';
+    g.fillRect(h.x, h.y + h.h - 1, h.w, 1);
+    g.restore();
+    const fs = px(dc, 12, 7);
+    g.font = UI(fs, true);
+    g.fillStyle = w.live ? '#1b4f9c' : '#4a4f57';
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.fillText(fitText(g, w.name, (s2) => UI(s2, true), fs, h.w - px(dc, 60), 6), h.x + px(dc, 12), h.y + h.h / 2 + 0.5);
+    g.font = UI(px(dc, 10, 6));
+    g.fillStyle = '#7a7a7a';
+    g.textAlign = 'right';
+    g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
+    if (w.selected || w.hovered) focusRing(g, r, rad, w.selected);
+  },
+
+  door(dc, [x, y], vertical, live) {
+    const L = px(dc, 14, 8);
+    const T = px(dc, 7, 4);
+    const r = vertical ? { x: x - T / 2, y: y - L / 2, w: T, h: L } : { x: x - L / 2, y: y - T / 2, w: L, h: T };
+    gel(dc.g, r, T / 2, live ? 'blue' : 'graphite');
   },
 
   node(dc, r, n) {

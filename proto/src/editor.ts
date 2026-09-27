@@ -66,10 +66,10 @@ export interface EditorHooks {
 
 const vimSlot = new Compartment();
 
-export function createEditor(parent: HTMLElement, doc: string, hooks: EditorHooks, useVim: boolean, extra: Extension[] = []): EditorView {
-  const view = new EditorView({
-    parent,
-    state: EditorState.create({
+// One EditorState per open file (M5): switching files swaps states, so each
+// keeps its own undo history, selection and scroll target.
+export function createState(doc: string, hooks: EditorHooks, useVim: boolean, extra: Extension[] = []): EditorState {
+  return EditorState.create({
       doc,
       extensions: [
         vimSlot.of(useVim ? vim() : []),
@@ -96,10 +96,21 @@ export function createEditor(parent: HTMLElement, doc: string, hooks: EditorHook
         }),
         ...extra,
       ],
-    }),
   });
+}
+
+export function createEditor(parent: HTMLElement, doc: string, hooks: EditorHooks, useVim: boolean, extra: Extension[] = []): EditorView {
+  const view = new EditorView({ parent, state: createState(doc, hooks, useVim, extra) });
   if (useVim) watchVim(view, hooks);
   return view;
+}
+
+// Show another file's state, with the vim setting the author has now.
+export function swapState(view: EditorView, state: EditorState, useVim: boolean, hooks: EditorHooks): void {
+  view.setState(state);
+  view.dispatch({ effects: vimSlot.reconfigure(useVim ? vim() : []) });
+  if (useVim) watchVim(view, hooks);
+  else hooks.onMode('');
 }
 
 function watchVim(view: EditorView, hooks: EditorHooks): void {

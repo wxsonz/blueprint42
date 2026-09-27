@@ -34,6 +34,7 @@ export interface Snap {
 
 interface EvBase {
   line: number;
+  file?: string; // project-relative (M5); absent for a single buffer
   frame: number | null; // frame executing when the event happened
 }
 
@@ -61,11 +62,11 @@ export interface Trace {
   snaps: Snap[]; // snaps[i] = state before evs[i], snaps[i + 1] = after it
   cells: Map<number, CellInfo>;
   exit: V | null;
-  error: { msg: string; line: number } | null;
+  error: { msg: string; line: number; file?: string } | null;
   truncated: boolean;
   stdout?: string;
   heapSlots?: Map<number, number>; // heap cell -> shelf slot, stable for the block's life
-  leaks?: { cell: number; size: number; line: number | null }[];
+  leaks?: { cell: number; size: number; line: number | null; file?: string }[];
   warnings?: string[];
 }
 

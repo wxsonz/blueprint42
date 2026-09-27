@@ -124,3 +124,14 @@ export function tailLines(out: string | undefined, n: number): string[] {
   const lines = out.replace(/\n$/, '').split('\n');
   return lines.slice(-n);
 }
+
+// Middle of a belt's middle leg: where a trunk shows how many calls it carries.
+export function beltMid(pts: Pt[]): Pt {
+  const w = new Walk(pts);
+  const p = w.at(w.length / 2);
+  return [p.x, p.y];
+}
+
+// The last path segment of a project-relative file name, for tight labels.
+export const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+export const dirName = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '');

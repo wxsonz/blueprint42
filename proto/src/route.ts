@@ -6,6 +6,10 @@
 // placed in reserved slots next to the home, so recursion reads as a chain of
 // factories rather than one machine talking to itself.
 import { MH, MW, footprint, invCells, type Layout, type NodeState } from './layout';
+//
+// Modules (M5): a collapsed module is one host (key "mod:<file>"). Calls
+// from outside land on it; all calls between the same two hosts share one
+// belt (the trunk), whose `lines` count the call sites it carries.
 import type { Model } from './parse';
 import type { Trace } from './interp';
 import type { Pt } from './skins/types';
@@ -20,13 +24,19 @@ export interface Rect {
 }
 
 export interface Host {
-  key: string; // "fn" for the home, "fn#k" for copy k
+  key: string; // "fn" for the home, "fn#k" for copy k, "mod:<file>" for a collapsed module
   fn: string;
   copy: number; // 1 = home
   x: number;
   y: number;
+  w: number; // body size, cells (MW × MH for a machine)
+  h: number;
   inv: number; // frame panel height, cells
+  module?: string; // set on a collapsed module's host
 }
+
+export const moduleKey = (file: string) => `mod:${file}`;
+export const isModuleKey = (k: string) => k.startsWith('mod:');
 
 export interface Belt {
   key: string; // "<fromHost>><toHost>"; the process is ''
@@ -39,6 +49,8 @@ export interface Belt {
   custom: boolean;
   chain: boolean; // recursive hand-off between copies
   transient: boolean; // exists only while that call is live
+  callees: string[]; // functions this belt delivers to (several on a trunk into a module)
+  srcFile: string; // file the call sites (lines) are in
 }
 
 export interface Scene {
@@ -47,6 +59,8 @@ export interface Scene {
   belts: Belt[];
   ports: Map<string, { in: number[]; out: number[] }>; // host key -> world y's
   obstacles: Rect[];
+  moduleOf: Map<string, string>; // function → its collapsed module's host key
+  walls: { file: string; rect: Rect }[]; // expanded modules
 }
 
 export const hostKey = (fn: string, copy: number) => (copy <= 1 ? fn : `${fn}#${copy}`);
@@ -73,7 +87,7 @@ const overlaps = (a: Rect, b: Rect, pad = 0) =>
   a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
 function hostRect(h: Host): Rect {
-  return { x: h.x, y: h.y, w: MW, h: MH + h.inv };
+  return { x: h.x, y: h.y, w: h.w, h: h.h + h.inv };
 }
 
 function simplify(pts: Pt[]): Pt[] {
@@ -92,7 +106,12 @@ function simplify(pts: Pt[]): Pt[] {
 
 export function procPlace(layout: Layout): { x: number; y: number } | null {
   const main = layout.nodes.get('func:main');
-  return main ? { x: main.place.x - 7, y: main.place.y } : null;
+  if (!main) return null;
+  if (layout.hidden(main)) {
+    const r = layout.moduleRect(main.file);
+    return { x: r.x - 7, y: r.y };
+  }
+  return { x: main.place.x - 7, y: main.place.y };
 }
 
 // ---------- scene ----------
@@ -106,6 +125,8 @@ interface Edge {
   lines: number[];
   chain: boolean;
   transient: boolean;
+  callees: Set<string>;
+  srcFile: string;
   sy: number;
   ty: number;
 }
@@ -114,13 +135,28 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   const hosts = new Map<string, Host>();
   const copies = new Map<string, number>();
   const obstacles: Rect[] = [];
-  const scene: Scene = { hosts, copies, belts: [], ports: new Map(), obstacles };
+  const moduleOf = new Map<string, string>();
+  const scene: Scene = { hosts, copies, belts: [], ports: new Map(), obstacles, moduleOf, walls: [] };
   if (!model) return scene;
 
   for (const n of layout.nodes.values()) {
-    hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, inv: invCells(n.fn) });
+    if (layout.hidden(n)) {
+      moduleOf.set(n.name, moduleKey(n.file));
+      continue;
+    }
+    hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, w: MW, h: MH, inv: invCells(n.fn) });
     const f = footprint(n);
     obstacles.push({ x: f.x + 1, y: f.y, w: MW, h: f.h });
+  }
+  for (const m of layout.modules.values()) {
+    const r = layout.moduleRect(m.file);
+    if (!m.collapsed) {
+      scene.walls.push({ file: m.file, rect: r });
+      continue;
+    }
+    const key = moduleKey(m.file);
+    hosts.set(key, { key, fn: key, copy: 1, x: r.x, y: r.y, w: r.w, h: r.h, inv: 0, module: m.file });
+    obstacles.push(r);
   }
   const pp = procPlace(layout);
   const procRect: Rect | null = pp ? { x: pp.x, y: pp.y, w: MW, h: MH } : null;
@@ -129,7 +165,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   // ---- reserve copy slots next to each recursive function ----
   for (const f of model.fns) {
     const home = layout.nodes.get(f.id);
-    if (!home) continue;
+    if (!home || layout.hidden(home)) continue;
     const selfRec = f.calls.some((c) => c.callee === f.name);
     const want = Math.min(MAX_COPIES, Math.max(selfRec ? 2 : 0, maxFrames(trace, f.name)));
     copies.set(f.name, Math.max(1, want));
@@ -141,7 +177,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
       for (let d = 2; d < 30; d++) cands.push([prev.x, prev.y + d * (h + 1)], [prev.x + 6, prev.y + d * (h + 1)]);
       const spot = cands.find(([x, y]) => !obstacles.some((o) => overlaps({ x, y, w: MW, h }, o, 0.9))) ?? cands[0];
       prev = { x: spot[0], y: spot[1] };
-      hosts.set(hostKey(f.name, c), { key: hostKey(f.name, c), fn: f.name, copy: c, x: prev.x, y: prev.y, inv });
+      hosts.set(hostKey(f.name, c), { key: hostKey(f.name, c), fn: f.name, copy: c, x: prev.x, y: prev.y, w: MW, h: MH, inv });
       obstacles.push({ x: prev.x, y: prev.y, w: MW, h });
     }
   }
@@ -149,37 +185,46 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   // ---- edges: calls between homes, recursive chains, the process, live extras ----
   const edges: Edge[] = [];
   const seen = new Map<string, Edge>();
-  const addEdge = (from: string, to: string, A: Host | null, B: Host, line: number | null, chain: boolean, isTransient: boolean) => {
+  const addEdge = (from: string, to: string, A: Host | null, B: Host, line: number | null, chain: boolean, isTransient: boolean, callee: string, srcFile: string) => {
     const key = `${A ? A.key : ''}>${B.key}`;
     const have = seen.get(key);
     if (have) {
       if (line !== null) have.lines.push(line);
+      have.callees.add(callee);
       return;
     }
-    const e: Edge = { key, from, to, A, B, lines: line === null ? [] : [line], chain, transient: isTransient, sy: 0, ty: 0 };
+    const e: Edge = { key, from, to, A, B, lines: line === null ? [] : [line], chain, transient: isTransient, callees: new Set([callee]), srcFile, sy: 0, ty: 0 };
     seen.set(key, e);
     edges.push(e);
   };
-  const home = (fn: string) => hosts.get(fn);
-  if (pp && home('main')) addEdge('', 'main', null, home('main')!, null, false, false);
+  // A function's host: its own node, or the collapsed module it is inside.
+  const home = (fn: string) => hosts.get(fn) ?? hosts.get(moduleOf.get(fn) ?? '');
+  const mainHost = home('main');
+  if (pp && mainHost) addEdge('', mainHost.fn, null, mainHost, null, false, false, 'main', '');
   for (const f of model.fns) {
     const A = home(f.name);
     if (!A) continue;
     for (const c of f.calls) {
+      if (A.module) {
+        // inside a collapsed module: only calls that leave it are drawn
+        const B = home(c.callee);
+        if (B && B !== A) addEdge(A.fn, B.fn, A, B, c.line, false, false, c.callee, f.file);
+        continue;
+      }
       if (c.callee === f.name) {
         // recursion: home -> copy 2 -> copy 3 ...
         const n = copies.get(f.name) ?? 1;
-        for (let k = 1; k < n; k++) addEdge(f.name, f.name, hosts.get(hostKey(f.name, k))!, hosts.get(hostKey(f.name, k + 1))!, c.line, true, false);
+        for (let k = 1; k < n; k++) addEdge(f.name, f.name, hosts.get(hostKey(f.name, k))!, hosts.get(hostKey(f.name, k + 1))!, c.line, true, false, f.name, f.file);
         continue;
       }
       const B = home(c.callee);
-      if (B) addEdge(f.name, c.callee, A, B, c.line, false, false);
+      if (B) addEdge(f.name, B.fn, A, B, c.line, false, false, c.callee, f.file);
     }
   }
   for (const [a, b] of transient) {
     const A = hosts.get(a);
     const B = hosts.get(b);
-    if (A && B && !seen.has(`${a}>${b}`)) addEdge(A.fn, B.fn, A, B, null, false, true);
+    if (A && B && A !== B && !seen.has(`${a}>${b}`)) addEdge(A.fn, B.fn, A, B, null, false, true, B.fn, '');
   }
 
   // ---- ports: every edge gets its own slot on each side ----
@@ -192,17 +237,17 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     if (!ins.has(e.B.key)) ins.set(e.B.key, []);
     ins.get(e.B.key)!.push(e);
   }
-  const portY = (top: number, i: number, k: number) => top + 0.95 + ((MH - 1.55) * (i + 0.5)) / k;
+  const portY = (top: number, i: number, k: number, h = MH) => top + 0.95 + ((h - 1.55) * (i + 0.5)) / k;
   for (const [k, list] of outs) {
     const top = k === '' ? pp!.y : hosts.get(k)!.y;
     list.sort((a, b) => a.B.y - b.B.y || a.B.x - b.B.x);
-    list.forEach((e, i) => (e.sy = portY(top, i, list.length)));
+    list.forEach((e, i) => (e.sy = portY(top, i, list.length, k === '' ? MH : hosts.get(k)!.h)));
     if (k) scene.ports.set(k, { in: [], out: list.map((e) => e.sy) });
   }
   for (const [k, list] of ins) {
     const h = hosts.get(k)!;
     list.sort((a, b) => (a.A?.y ?? pp!.y) - (b.A?.y ?? pp!.y) || (a.A?.x ?? -1e9) - (b.A?.x ?? -1e9));
-    list.forEach((e, i) => (e.ty = portY(h.y, i, list.length)));
+    list.forEach((e, i) => (e.ty = portY(h.y, i, list.length, h.h)));
     const p = scene.ports.get(k) ?? { in: [], out: [] };
     p.in = list.map((e) => e.ty);
     scene.ports.set(k, p);
@@ -214,10 +259,10 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   const plan = new Map<Edge, { kind: 'simple' | 'corridor' | 'custom'; cy?: number }>();
   const corridors: { y: number; x0: number; x1: number }[] = [];
   const clearOf = (r: Rect, skip: Rect[]) => !obstacles.some((o) => !skip.includes(o) && overlaps(r, o, -0.05));
-  const rectOfHost = (h: Host | null): Rect | null => (h ? obstacles.find((o) => o.x === h.x && o.y <= h.y && o.y + o.h >= h.y + MH) ?? hostRect(h) : procRect);
+  const rectOfHost = (h: Host | null): Rect | null => (h ? obstacles.find((o) => o.x === h.x && o.y <= h.y && o.y + o.h >= h.y + h.h) ?? hostRect(h) : procRect);
 
   for (const e of edges) {
-    const ax = (e.A ? e.A.x : pp!.x) + MW;
+    const ax = (e.A ? e.A.x + e.A.w : pp!.x + MW);
     const bx = e.B.x;
     const custom = !e.transient ? layout.waypoints.get(e.key) : undefined;
     if (custom) {
@@ -270,7 +315,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   }
 
   for (const e of edges) {
-    const ax = (e.A ? e.A.x : pp!.x) + MW;
+    const ax = (e.A ? e.A.x + e.A.w : pp!.x + MW);
     const bx = e.B.x;
     const p = plan.get(e)!;
     let pts: Pt[];
@@ -288,6 +333,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     scene.belts.push({
       key: e.key, from: e.from, to: e.to, fromHost: e.A ? e.A.key : '', toHost: e.B.key,
       pts: simplify(pts), lines: e.lines, custom: p.kind === 'custom', chain: e.chain, transient: e.transient,
+      callees: [...e.callees], srcFile: e.srcFile,
     });
   }
   return scene;

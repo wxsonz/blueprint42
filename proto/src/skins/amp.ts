@@ -3,7 +3,7 @@
 // dances while it runs, and a transport row whose lit button is the state.
 // Frames are the playlist; pointers are amber.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, fitText, hash, snapRect, strokeLine, Walk } from './util';
+import { arrowHead, baseName, beltMid, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -154,6 +154,133 @@ export const amp: Skin = {
     const walk = new Walk(pts);
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), o.live ? LCD : '#6c6c88');
+    if (o.count > 1) {
+      const [mx, my] = beltMid(pts);
+      const fs = px(dc, 15, 9);
+      g.font = VT(fs);
+      const t = `x${o.count}`;
+      const tw = Math.round(g.measureText(t).width + px(dc, 8));
+      const th = Math.round(fs * 0.95);
+      lcdBox(g, { x: Math.round(mx - tw / 2), y: Math.round(my - th / 2), w: tw, h: th });
+      g.fillStyle = o.live ? LCD : '#58b858';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(t, mx, my + 1);
+    }
+  },
+
+  // A collapsed file is a playlist window: its doors are the tracks.
+  module(dc, r0, m) {
+    const g = dc.g;
+    const r = snapRect(r0);
+    if (m.state === 'running' || m.state === 'error') {
+      g.shadowColor = m.state === 'error' ? RED : 'rgba(0,224,0,0.6)';
+      g.shadowBlur = 18 * dc.z;
+    }
+    metal(g, r);
+    g.shadowBlur = 0;
+    const mg = px(dc, 3);
+    strip(dc, { x: r.x + mg, y: r.y + mg, w: r.w - 2 * mg, h: px(dc, 11, 7) }, baseName(m.name).toUpperCase(), m.state === 'running');
+    const lcd = { x: r.x + px(dc, 6), y: r.y + px(dc, 17), w: r.w - px(dc, 12), h: r.h - px(dc, 36, 18) };
+    lcdBox(g, lcd);
+    g.save();
+    g.beginPath();
+    g.rect(lcd.x + 1, lcd.y + 1, lcd.w - 2, lcd.h - 2);
+    g.clip();
+    const rowH = 0.55 * dc.cs;
+    const fs = px(dc, 17, 9);
+    g.textBaseline = 'middle';
+    m.doors.forEach((d, i) => {
+      const y = lcd.y + px(dc, 4) + i * rowH;
+      if (d.live) {
+        g.fillStyle = SEL;
+        g.fillRect(lcd.x + 1, y, lcd.w - 2, rowH);
+      }
+      g.textAlign = 'left';
+      g.fillStyle = d.live ? '#ffffff' : LCD;
+      const label = `${i + 1}. ${d.name}`;
+      g.fillText(fitText(g, label, VT, fs, lcd.w - px(dc, 18), 7), lcd.x + px(dc, 4), y + rowH / 2 + 1);
+      if (d.undeclared) {
+        g.textAlign = 'right';
+        g.fillStyle = AMBER;
+        g.fillText('!', lcd.x + lcd.w - px(dc, 4), y + rowH / 2 + 1);
+      }
+    });
+    if (m.more) {
+      g.textAlign = 'left';
+      g.fillStyle = LCD_DIM;
+      g.fillText(`+${m.more} MORE`, lcd.x + px(dc, 4), lcd.y + px(dc, 4) + m.doors.length * rowH + rowH / 2 + 1);
+    }
+    if (!m.doors.length) {
+      g.textAlign = 'center';
+      g.fillStyle = LCD_DIM;
+      g.fillText('NO PUBLIC FNS', lcd.x + lcd.w / 2, lcd.y + lcd.h / 2);
+    }
+    g.restore();
+    // status line under the LCD
+    const blink = Math.floor(dc.time * 2.5) % 2 === 0;
+    const status =
+      m.state === 'running' ? `PLAYING ${m.running ?? ''}` :
+      m.state === 'waiting' ? `HOLD ${m.running ?? ''}` :
+      m.state === 'error' ? (blink ? 'ERROR' : '') : `${m.fns} FN${m.fns === 1 ? '' : 'S'}`;
+    const sf = px(dc, 15, 8);
+    g.font = VT(sf);
+    g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    g.fillStyle = m.state === 'idle' ? '#a8a8c0' : m.state === 'error' ? RED : LCD;
+    const sy = r.y + r.h - px(dc, 10, 6);
+    g.fillText(fitText(g, status, VT, sf, r.w - px(dc, 40), 6), r.x + px(dc, 6), sy);
+    g.textAlign = 'right';
+    g.fillStyle = '#a8a8c0';
+    g.fillText(m.depth > 1 ? `x${m.depth}` : m.pinned ? 'PIN' : '', r.x + r.w - px(dc, 6), sy);
+    // ports
+    g.fillStyle = '#07070b';
+    const ph = (ys: number[]) => Math.min(px(dc, 10, 5), ys.length > 1 ? (ys[1] - ys[0]) * 0.7 : 99);
+    for (const y of m.inPorts) g.fillRect(r.x - px(dc, 3), y - ph(m.inPorts) / 2, px(dc, 3), ph(m.inPorts));
+    for (const y of m.outPorts) g.fillRect(r.x + r.w, y - ph(m.outPorts) / 2, px(dc, 3), ph(m.outPorts));
+    if (m.selected || m.hovered) {
+      g.strokeStyle = m.selected ? LCD : '#8080a8';
+      g.lineWidth = m.selected ? 2 : 1;
+      g.setLineDash(m.selected ? [4, 3] : []);
+      g.lineDashOffset = -dc.time * 12;
+      g.strokeRect(r.x - 4, r.y - 4, r.w + 8, r.h + 8);
+      g.setLineDash([]);
+    }
+  },
+
+  // An open file is a rack: a recessed panel with a title strip.
+  wall(dc, r0, w) {
+    const g = dc.g;
+    const r = snapRect(r0);
+    g.fillStyle = 'rgba(28,28,44,0.62)';
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = '#050508';
+    g.lineWidth = 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    g.strokeStyle = w.live ? 'rgba(0,224,0,0.35)' : '#2c2c40';
+    g.strokeRect(r.x + 2.5, r.y + 2.5, r.w - 5, r.h - 5);
+    const h = snapRect(w.head);
+    const mg = px(dc, 3);
+    metal(g, { x: h.x + 2, y: h.y + 2, w: h.w - 4, h: h.h - 3 });
+    strip(dc, { x: h.x + 2 + mg, y: h.y + 2 + mg, w: h.w - 4 - 2 * mg, h: h.h - 3 - 2 * mg }, `${w.name.toUpperCase()}${w.pinned ? '  [PIN]' : ''}`, w.live);
+    if (w.selected || w.hovered) {
+      g.strokeStyle = w.selected ? LCD : '#8080a8';
+      g.lineWidth = w.selected ? 2 : 1;
+      g.setLineDash(w.selected ? [4, 3] : []);
+      g.lineDashOffset = -dc.time * 12;
+      g.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
+      g.setLineDash([]);
+    }
+  },
+
+  door(dc, [x, y], vertical, live) {
+    const g = dc.g;
+    const L = px(dc, 14, 8);
+    const T = px(dc, 6, 4);
+    const r = vertical ? { x: x - T / 2, y: y - L / 2, w: T, h: L } : { x: x - L / 2, y: y - T / 2, w: L, h: T };
+    metal(g, snapRect(r));
+    g.fillStyle = live ? LCD : LCD_DIM;
+    g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2);
   },
 
   node(dc, r0, n) {

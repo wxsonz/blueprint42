@@ -1,15 +1,19 @@
 import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
-import { createEditor, jumpTo, setDoc, setExecLine, setVim, type EditorHooks } from './editor';
+import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Trace } from './interp';
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { footprint, Layout } from './layout';
+import { doorsOf, footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
 import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
-import { SAMPLES, type Sample } from './samples';
+import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
+import {
+  BP_JSON, DRIVER, META, RUN_JSON, buildFiles, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, projectModel,
+  runEmpty, save, serializeRun, splitArgs, type Listing, type Opened, type PFile, type Project,
+} from './workspace';
 import { SKINS, SKIN_FONTS } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import './styles/base.css';
@@ -54,6 +58,7 @@ const S: ViewState & {
   stdin: string;
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
   sprites: Sprite[];
+  project: Project | null; // M5: an open folder (or a bundled sample project)
 } = {
   layout,
   model: null,
@@ -76,6 +81,7 @@ const S: ViewState & {
   stdin: '',
   gdb: { status: 'idle' },
   sprites: [],
+  project: null,
 };
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 12, 20];
@@ -129,8 +135,14 @@ function toast(msg: string): void {
 let debounce = 0;
 let editor: ReturnType<typeof createEditor>;
 
+// The buffer (a sample) or every file of the open project.
+function currentSrc(): string {
+  return editor.state.doc.toString();
+}
+
 function analyze(src: string, fresh: boolean): void {
-  const model = parse(src);
+  const model = S.project ? projectModel(S.project) : parse(src);
+  modelRevision++;
   if (fresh) layout.reset();
   const renamed = layout.sync(model);
   if (renamed.size) {
@@ -177,6 +189,7 @@ function applyTrace(trace: Trace | null, fresh: boolean): void {
 // ---------------- engines: the interpreter, or the real thing under gdb ----------------
 function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
   if (model.error || !model.byName.has('main')) return 'none';
+  if (model.project) return 'gdb'; // the interpreter reads one buffer
   if (S.engine !== 'auto') return S.engine;
   return model.fns.some((f) => f.externals.length) ? 'gdb' : 'interp';
 }
@@ -196,9 +209,21 @@ function startGdb(src: string, model: Model, fresh: boolean): void {
     const ac = new AbortController();
     gdbAbort = ac;
     let r: GResult | 'unavailable';
+    const p = S.project;
+    const files = p ? buildFiles(p) : null;
     try {
       r = await requestTrace(
-        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
+        p
+          ? {
+            project: { files: files! }, defines: p.run.defines, stdin: p.run.stdin, args: p.run.args,
+            fns: [...new Set(model.fns.map((f) => f.cname))], maxSteps: 20000, maxSeconds: 8,
+            // the tracer knows functions by C name and file, not by key
+            bindings: S.sprites.map((sp) => {
+              const fn = sp.binding?.fn ? model.byName.get(sp.binding.fn) : undefined;
+              return fn && sp.binding ? { ...sp, binding: { ...sp.binding, fn: fn.cname, file: fn.file } } : sp;
+            }),
+          }
+          : { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
         ac.signal,
       );
     } catch {
@@ -214,7 +239,7 @@ function startGdb(src: string, model: Model, fresh: boolean): void {
       applyTrace(null, fresh);
     } else {
       S.gdb = { status: 'done', ms: r.ms };
-      applyTrace(convertGdb(r, model, src), fresh);
+      applyTrace(convertGdb(r, model, files ?? src), fresh);
       if (fresh) {
         autoSpeed(S.trace!);
         view.fit(S);
@@ -264,6 +289,7 @@ function readSaved(key: string): Saved | null {
 
 const saveTimers = new Map<string, number>();
 function saveSoon(): void {
+  if (S.project) return projectSaveSoon();
   const key = S.sample.key;
   clearTimeout(saveTimers.get(key));
   const saved: Saved = {
@@ -289,6 +315,7 @@ function applySavedLayout(saved: Saved): void {
 }
 
 function blueprint(): Blueprint {
+  if (S.project) return layout.toBlueprint(S.sprites, true);
   return {
     version: 1,
     nodes: Object.fromEntries([...layout.nodes.values()].map((n) => [n.id, { x: n.place.x, y: n.place.y, pinned: n.place.pinned }])),
@@ -302,7 +329,7 @@ function exportBlueprint(): void {
   const url = URL.createObjectURL(data);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${S.sample.key}.blueprint.json`;
+  a.download = `${S.project?.name ?? S.sample.key}.blueprint.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -311,12 +338,15 @@ async function importBlueprint(file: File): Promise<void> {
   try {
     if (file.size > 200_000) throw new Error('Blueprint is too large');
     const bp = parseBlueprint(await file.text());
-    for (const [id, p] of Object.entries(bp.nodes)) {
-      const n = layout.nodes.get(id);
-      if (n) n.place = { ...p };
+    if (S.project && S.model) layout.applyBlueprint(bp, S.model, false);
+    else {
+      for (const [id, p] of Object.entries(bp.nodes)) {
+        const n = layout.nodes.get(id);
+        if (n) n.place = { ...p };
+      }
+      layout.waypoints.clear();
+      for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
     }
-    layout.waypoints.clear();
-    for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
     S.sprites = bp.sprites;
     S.selected = null;
     bindingsChanged();
@@ -327,6 +357,7 @@ async function importBlueprint(file: File): Promise<void> {
 }
 
 function renderRevert(): void {
+  if (S.project) return void ($<HTMLButtonElement>('btn-revert').hidden = true);
   const saved = readSaved(S.sample.key);
   const edited = !!saved && (saved.src !== S.sample.src || (saved.stdin ?? '') !== (S.sample.stdin ?? '') || saved.places.some((p) => p[3]) || saved.waypoints.length > 0 || !!saved.sprites?.length);
   $<HTMLButtonElement>('btn-revert').hidden = !edited;
@@ -341,8 +372,11 @@ function revertSample(): void {
 }
 
 function loadSample(key: string | undefined, pristine = false): void {
+  const sp = SAMPLE_PROJECTS.find((x) => x.key === key);
+  if (sp) return openSampleProject(sp);
   const s = SAMPLES.find((x) => x.key === key || x.title === key) ?? (key ? SAMPLES[Number(key) - 1] : undefined);
   if (!s) return toast(`no sample “${key}” — try ${SAMPLES.map((x) => x.key).join(', ')}`);
+  if (S.project) leaveProject();
   S.sample = s;
   S.selected = null;
   store.set('lastSample', s.key);
@@ -358,6 +392,7 @@ function loadSample(key: string | undefined, pristine = false): void {
   loadingSample = false;
   clearTimeout(debounce);
   analyze(src, true);
+  renderProjectChrome();
   if (saved) {
     applySavedLayout(saved);
     view.fit(S, true);
@@ -382,6 +417,609 @@ function bindingsChanged(): void {
     startGdb(editor.state.doc.toString(), S.model, false);
     renderAlerts();
   }
+}
+
+// ---------------- projects (M5) ----------------
+// A project's unsaved work lives in the page, backed up to this browser
+// ("hot exit"), and reaches disk only through the Save dialog.
+
+interface ProjectSaved {
+  layout: Blueprint; // every position, for continuity
+  bpBase: string; // hash of blueprint.json on disk when this was saved
+  buffers: Record<string, { text: string; base: string | null }>; // unsaved files, over this disk text
+  run: Project['run'];
+  runBase: string;
+  tabs: string[];
+  active: string;
+}
+
+const projectStore = (p: Project) => `project.${p.key}`;
+function readProjectSaved(p: Project): ProjectSaved | null {
+  try {
+    const raw = store.get(projectStore(p));
+    return raw ? (JSON.parse(raw) as ProjectSaved) : null;
+  } catch {
+    return null;
+  }
+}
+
+// The editor has the active file's newest text.
+function syncActive(): void {
+  const p = S.project;
+  const f = p?.files.get(p.active);
+  if (f) f.text = editor.state.doc.toString();
+}
+
+let projectSaveTimer = 0;
+function projectSaveSoon(): void {
+  const p = S.project;
+  if (!p) return;
+  clearTimeout(projectSaveTimer);
+  projectSaveTimer = window.setTimeout(() => {
+    if (S.project === p) writeProjectBackup(p);
+  }, 400);
+}
+
+function writeProjectBackup(p: Project): void {
+  if (S.project === p) syncActive();
+  const buffers: ProjectSaved['buffers'] = {};
+  for (const f of p.files.values()) {
+    if (!isSource(f.path) || !isDirty(f)) continue;
+    buffers[f.path] = { text: f.text, base: f.disk === null ? null : hash(f.disk) };
+  }
+  const saved: ProjectSaved = {
+    layout: layout.toBlueprint(S.sprites, true), bpBase: hash(p.files.get(BP_JSON)?.disk ?? ''),
+    buffers, run: p.run, runBase: hash(p.files.get(RUN_JSON)?.disk ?? ''), tabs: p.tabs, active: p.active,
+  };
+  store.set(projectStore(p), JSON.stringify(saved));
+  if (S.project === p) renderProjectChrome();
+}
+
+function stateFor(f: PFile) {
+  return (f.state ??= createState(f.text, hooks, S.vim));
+}
+
+const mainFileOf = (p: Project) =>
+  [...p.files.values()].find((f) => f.path.endsWith('.c') && f.path !== DRIVER && /^\s*int\s+main\s*\(/m.test(f.text))?.path ??
+  (p.files.has(DRIVER) ? DRIVER : [...p.files.keys()].filter((k) => k.endsWith('.c')).sort()[0] ?? [...p.files.keys()][0]);
+
+function leaveProject(): void {
+  const p = S.project;
+  if (!p) return;
+  store.set('lastProject', '');
+  clearTimeout(projectSaveTimer);
+  writeProjectBackup(p);
+  stopPolling();
+  S.project = null;
+  cancelGdb();
+  layout.reset();
+  // a fresh state: the sample must not share the project file's undo history
+  loadingSample = true;
+  swapState(editor, createState('', hooks, S.vim), S.vim, hooks);
+  loadingSample = false;
+  const kept = [...p.files.values()].filter(isDirty).length;
+  if (kept && !p.readOnly) toast(`${p.name}: ${kept} unsaved file${kept === 1 ? '' : 's'} kept in this browser — reopen to save`);
+}
+
+async function openFolder(path: string): Promise<boolean> {
+  let r: Opened | 'unavailable';
+  try {
+    r = await fsCall<Opened>('open', { dir: path });
+  } catch (e) {
+    toast(`Open Folder: ${(e as Error).message}`);
+    return false;
+  }
+  if (r === 'unavailable') {
+    toast('opening a folder needs the local server (npm run dev)');
+    return false;
+  }
+  const recent = [r.root, ...readRecent().filter((x) => x !== r.root)].slice(0, 8);
+  store.set('recent', JSON.stringify(recent));
+  loadProject(fromFiles(r.root, r.name, r.files, r.truncated));
+  return true;
+}
+
+function readRecent(): string[] {
+  try {
+    const v = JSON.parse(store.get('recent') ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function openSampleProject(sp: SampleProject): void {
+  loadProject(fromFiles(null, sp.name, Object.entries(sp.files).map(([path, text]) => ({ path, text, mtime: null }))));
+}
+
+function loadProject(p: Project): void {
+  if (S.project) leaveProject();
+  S.project = p;
+  S.selected = null;
+  S.sprites = [];
+  store.set('lastProject', p.root ? `folder:${p.root}` : `sample:${SAMPLE_PROJECTS.find((x) => x.name === p.name)?.key ?? ''}`);
+  // Hot exit: unsaved buffers come back only over the disk text they were edited from.
+  const saved = readProjectSaved(p);
+  let restored = 0;
+  for (const [path, b] of Object.entries(saved?.buffers ?? {})) {
+    const f = p.files.get(path);
+    if (f && f.disk !== null && hash(f.disk) === b.base) (f.text = b.text), restored++;
+    else if (!f && b.base === null) (p.files.set(path, { path, text: b.text, disk: null, mtime: null, state: null }), restored++);
+  }
+  if (saved && saved.runBase === hash(p.files.get(RUN_JSON)?.disk ?? '')) p.run = saved.run;
+  p.active = saved?.active && p.files.has(saved.active) ? saved.active : mainFileOf(p);
+  p.tabs = (saved?.tabs ?? []).filter((t) => p.files.has(t));
+  if (!p.tabs.includes(p.active)) p.tabs.push(p.active);
+  loadingSample = true;
+  swapState(editor, stateFor(p.files.get(p.active)!), S.vim, hooks);
+  loadingSample = false;
+  renderRunFields();
+  cancelGdb();
+  clearTimeout(debounce);
+  analyze('', true);
+  // The committed blueprint, then this browser's newer layout made on top of it.
+  const bpDisk = p.files.get(BP_JSON)?.disk ?? null;
+  if (bpDisk && S.model) {
+    try {
+      const bp = parseBlueprint(bpDisk);
+      layout.applyBlueprint(bp, S.model, false);
+      S.sprites = bp.sprites;
+    } catch (e) {
+      toast(`${BP_JSON}: ${(e as Error).message} — ignored`);
+    }
+  }
+  if (saved && saved.bpBase === hash(bpDisk ?? '') && S.model) {
+    try {
+      const bp = parseBlueprint(saved.layout);
+      layout.applyBlueprint(bp, S.model, true);
+      S.sprites = bp.sprites;
+    } catch {
+      /* an old backup format: the committed blueprint stands */
+    }
+  }
+  if (S.sprites.length) bindingsChanged();
+  view.fit(S, true);
+  renderProjectChrome();
+  renderAlerts();
+  renderStatus();
+  startPolling();
+  if (restored) toast(`restored ${restored} unsaved file${restored === 1 ? '' : 's'} from this browser`);
+  else if (p.truncated) toast('large folder: only the first 800 source files were loaded');
+}
+
+function closeProject(): void {
+  leaveProject();
+  loadSample(store.get('lastSample') ?? SAMPLES[0].key);
+}
+
+function switchFile(path: string, at?: { line: number; col: number }): void {
+  const p = S.project;
+  const f = p?.files.get(path);
+  if (!p || !f) return;
+  if (p.active !== path) {
+    const cur = p.files.get(p.active);
+    if (cur) (cur.state = editor.state), (cur.text = editor.state.doc.toString());
+    p.active = path;
+    if (!p.tabs.includes(path)) p.tabs.push(path);
+    loadingSample = true;
+    swapState(editor, stateFor(f), S.vim, hooks);
+    loadingSample = false;
+    lastExec = ''; // mark the running line again, in this file
+    renderProjectChrome();
+    projectSaveSoon();
+  }
+  if (at) jumpTo(editor, at.line, at.col);
+}
+
+// Jump to a place in the code: another file in a project, else this buffer.
+function openAt(file: string | undefined, line: number, col = 0): void {
+  if (S.project && file) switchFile(file, { line, col });
+  else jumpTo(editor, line, col);
+}
+
+function closeTab(path: string): void {
+  const p = S.project;
+  if (!p || p.tabs.length <= 1) return;
+  const i = p.tabs.indexOf(path);
+  p.tabs = p.tabs.filter((t) => t !== path);
+  if (p.active === path) switchFile(p.tabs[Math.max(0, i - 1)]);
+  renderProjectChrome();
+  projectSaveSoon();
+}
+
+// Bring the derived .ft_blueprint files up to date with the run settings and
+// the author's layout; unchanged content keeps the disk text (not dirty).
+function refreshMeta(): void {
+  const p = S.project;
+  if (!p) return;
+  syncActive();
+  const setMeta = (path: string, text: string | null, create: boolean) => {
+    const f = p.files.get(path);
+    if (f) f.text = text ?? f.disk ?? '';
+    else if (create && text !== null) p.files.set(path, { path, text, disk: null, mtime: null, state: null });
+  };
+  const runDisk = p.files.get(RUN_JSON)?.disk;
+  let sameRun = false;
+  try {
+    sameRun = runDisk != null && JSON.stringify(parseRun(runDisk)) === JSON.stringify(p.run);
+  } catch { /* a hand-broken run.json is rewritten on save */ }
+  setMeta(RUN_JSON, sameRun ? null : serializeRun(p.run), !runEmpty(p.run));
+  const bp = layout.toBlueprint(S.sprites, false, S.model?.byName.get('main')?.file);
+  const authored = Object.keys(bp.nodes).length + Object.keys(bp.modules ?? {}).length + Object.keys(bp.waypoints).length + bp.sprites.length > 0;
+  const bpText = serializeBlueprint(bp) + '\n';
+  const bpDisk = p.files.get(BP_JSON)?.disk;
+  let sameBp = false;
+  try {
+    sameBp = bpDisk != null && serializeBlueprint(parseBlueprint(bpDisk)) + '\n' === bpText;
+  } catch { /* rewritten on save */ }
+  setMeta(BP_JSON, sameBp ? null : bpText, authored);
+}
+
+function dirtyFiles(): PFile[] {
+  const p = S.project;
+  if (!p) return [];
+  refreshMeta();
+  return [...p.files.values()].filter(isDirty).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+// A new driver main for a project that has none (a library: libft, gnl…).
+function createDriver(): void {
+  const p = S.project;
+  if (!p || p.files.has(DRIVER)) return;
+  const headers = [...p.files.keys()].filter((k) => k.endsWith('.h') && !k.includes('/')).sort();
+  const text = `${headers.map((h) => `#include "${h}"`).join('\n')}${headers.length ? '\n\n' : ''}int\tmain(void)\n{\n\treturn (0);\n}\n`;
+  p.files.set(DRIVER, { path: DRIVER, text, disk: null, mtime: null, state: null });
+  switchFile(DRIVER, { line: headers.length ? headers.length + 3 : 2, col: 1 });
+  analyze('', false);
+  toast(`${DRIVER} created (not saved) — it runs your code; Ctrl+S to keep it`);
+}
+
+// ---- polling: edits made on disk (nvim, git) show up here ----
+let pollTimer = 0;
+let polling = false;
+function startPolling(): void {
+  stopPolling();
+  if (S.project?.root) pollTimer = window.setInterval(() => void pollOnce(), 2000);
+}
+function stopPolling(): void {
+  clearInterval(pollTimer);
+}
+
+async function pollOnce(): Promise<void> {
+  const p = S.project;
+  if (!p?.root || polling || document.hidden) return;
+  polling = true;
+  try {
+    const known = Object.fromEntries([...p.files.values()].filter((f) => f.mtime !== null).map((f) => [f.path, f.mtime!]));
+    const r = await fsCall<{ changed: { path: string; text: string; mtime: number }[]; removed: string[] }>('poll', { root: p.root, known }).catch(() => 'unavailable' as const);
+    if (r === 'unavailable' || S.project !== p) return;
+    let changed = false;
+    syncActive();
+    for (const nf of r.changed) {
+      const f = p.files.get(nf.path);
+      if (!f) {
+        p.files.set(nf.path, { path: nf.path, text: nf.text, disk: nf.text, mtime: nf.mtime, state: null });
+        changed = true;
+        continue;
+      }
+      if (f.disk === nf.text) {
+        f.mtime = nf.mtime; // touched, same content
+        continue;
+      }
+      if (isDirty(f) && !f.path.startsWith(`${META}/`)) {
+        if (f.conflict?.mtime !== nf.mtime) toast(`${nf.path} changed on disk while you have unsaved edits here`);
+        f.conflict = { text: nf.text, mtime: nf.mtime };
+        changed = true;
+        continue;
+      }
+      f.disk = f.text = nf.text;
+      f.mtime = nf.mtime;
+      delete f.conflict;
+      if (f.path === RUN_JSON) (p.run = parseRun(nf.text)), renderRunFields();
+      if (f.path === p.active) {
+        const head = Math.min(editor.state.selection.main.head, nf.text.length);
+        editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: nf.text }, selection: { anchor: head } });
+      } else f.state = null;
+      changed = true;
+    }
+    for (const path of r.removed) {
+      const f = p.files.get(path);
+      if (!f) continue;
+      if (!isDirty(f) && path !== p.active) {
+        p.files.delete(path);
+        p.tabs = p.tabs.filter((t) => t !== path);
+      } else (f.disk = null), (f.mtime = null);
+      changed = true;
+    }
+    if (changed) {
+      analyze('', false);
+      renderProjectChrome();
+    }
+  } finally {
+    polling = false;
+  }
+}
+
+function renderRunFields(): void {
+  const p = S.project;
+  const stdin = $<HTMLTextAreaElement>('stdin');
+  if (document.activeElement !== stdin) stdin.value = p ? p.run.stdin : S.stdin;
+  $('run-row').hidden = !p;
+  $('stdin-info').textContent = p ? `run settings, saved as ${RUN_JSON}` : 'fed to the program when it runs under gdb';
+  if (!p) return;
+  const args = $<HTMLInputElement>('run-args');
+  const defs = $<HTMLInputElement>('run-defs');
+  if (document.activeElement !== args) args.value = joinArgs(p.run.args);
+  if (document.activeElement !== defs) defs.value = p.run.defines.join(' ');
+}
+
+function runChanged(): void {
+  projectSaveSoon();
+  if (S.model && engineFor(S.model) === 'gdb') {
+    cancelGdb();
+    startGdb(currentSrc(), S.model, false);
+    renderAlerts();
+  }
+}
+
+// ---- chrome: project chip, tabs, explorer, save button ----
+let explorerOpen = store.get('explorer') !== 'off';
+
+function renderProjectChrome(): void {
+  const p = S.project;
+  const chip = $('project-chip');
+  chip.hidden = !p;
+  $('btn-files').hidden = !p;
+  $('btn-files').setAttribute('aria-pressed', String(explorerOpen));
+  $('btn-save').hidden = !p;
+  $('file-name').hidden = !!p;
+  $('tabs').hidden = !p;
+  $('explorer').hidden = !p || !explorerOpen;
+  renderSampleTabs();
+  renderRunFields();
+  // a project always runs under gdb: the interpreter reads one buffer
+  $('engines').querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+    b.disabled = !!p && b.dataset.id !== 'gdb';
+    b.setAttribute('aria-pressed', String(p ? b.dataset.id === 'gdb' : b.dataset.id === S.engine));
+  });
+  if (!p) {
+    document.title = 'ft_blueprint';
+    return;
+  }
+  const dirty = p.readOnly ? [...p.files.values()].filter((f) => isDirty(f) && isSource(f.path)).length : dirtyFiles().length;
+  chip.innerHTML = `<button aria-pressed="true" title="${esc(p.root ?? 'bundled sample project (read-only)')}">${dirty ? '<span class="dirty-dot">●</span> ' : ''}${esc(p.name)}${p.readOnly ? ' <span class="c">(sample)</span>' : ''}<span class="x" data-close title="Close folder">✕</span></button>`;
+  chip.querySelector('[data-close]')!.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeProject();
+  });
+  chip.querySelector('button')!.addEventListener('click', () => void openFolderDialog());
+  $('btn-save').textContent = dirty ? `Save… (${dirty})` : 'Save…';
+  document.title = `${dirty ? '● ' : ''}${p.name} — ft_blueprint`;
+  // tabs
+  const tabs = $('tabs');
+  tabs.innerHTML = p.tabs.map((path) => {
+    const f = p.files.get(path);
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    return `<span class="tab" role="tab" data-path="${esc(path)}" aria-selected="${path === p.active}" title="${esc(path)}">${f?.conflict ? '<span class="warn" title="changed on disk">⚠</span>' : ''}${esc(name)}${f && isDirty(f) ? ' <span class="dirty-dot">●</span>' : ''}${p.tabs.length > 1 ? '<span class="close" data-x title="Close tab (the file stays in the project)">×</span>' : ''}</span>`;
+  }).join('');
+  tabs.querySelectorAll<HTMLElement>('.tab').forEach((t) => t.addEventListener('mousedown', (e) => {
+    const path = t.dataset.path!;
+    if ((e.target as HTMLElement).closest('[data-x]') || e.button === 1) {
+      e.preventDefault();
+      return closeTab(path);
+    }
+    if (e.button === 0) switchFile(path);
+  }));
+  // explorer: folders as headers, files indented under them
+  if (!explorerOpen) return;
+  const counts = new Map<string, number>();
+  for (const f of S.model?.fns ?? []) counts.set(f.file, (counts.get(f.file) ?? 0) + 1);
+  const paths = [...p.files.keys()].filter((k) => isSource(k) || /(^|\/)(Makefile|makefile|GNUmakefile)$/.test(k) || k.startsWith(`${META}/`)).sort((a, b) => {
+    const da = a.includes('/') ? a.slice(0, a.lastIndexOf('/')) : '';
+    const db = b.includes('/') ? b.slice(0, b.lastIndexOf('/')) : '';
+    return da === db ? a.localeCompare(b) : da.localeCompare(db);
+  });
+  let lastDir = '';
+  const rows: string[] = [];
+  for (const path of paths) {
+    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    if (dir !== lastDir) rows.push(`<div class="dir">${esc(dir)}/</div>`);
+    lastDir = dir;
+    const f = p.files.get(path)!;
+    const n = counts.get(path);
+    rows.push(`<button data-path="${esc(path)}" style="--depth:${dir ? 1 : 0}" aria-current="${path === p.active}" title="${esc(path)}"><span class="n">${esc(path.slice(path.lastIndexOf('/') + 1))}</span>${isDirty(f) ? '<span class="dirty-dot">●</span>' : ''}${n ? `<span class="m">${n} fn</span>` : ''}</button>`);
+  }
+  const ex = $('explorer');
+  ex.innerHTML = rows.join('');
+  ex.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
+    const path = b.dataset.path!;
+    if (path.startsWith(`${META}/`) && path.endsWith('.json')) return toast(`${path} is written from the run settings and the layout`);
+    switchFile(path);
+  }));
+}
+
+function toggleExplorer(): void {
+  explorerOpen = !explorerOpen;
+  store.set('explorer', explorerOpen ? 'on' : 'off');
+  renderProjectChrome();
+}
+
+// ---- dialogs ----
+function showDialog(title: string, body: string, kind: string): HTMLElement {
+  overlay.innerHTML = `<div class="dlg" role="dialog" aria-label="${esc(title)}"><div class="dlg-title"><span>${esc(title)}</span><span class="grow"></span><button class="x" data-close aria-label="Close">×</button></div><div class="dlg-body">${body}</div></div>`;
+  overlay.dataset.kind = kind;
+  overlay.hidden = false;
+  overlay.querySelector('[data-close]')!.addEventListener('click', closeOverlay);
+  return overlay.querySelector('.dlg')!;
+}
+
+// Saving always asks: which files, what changes, and what changed on disk meanwhile.
+function openSaveDialog(): void {
+  const p = S.project;
+  if (!p) return toast('samples live in this browser — Export blueprint to keep a layout');
+  const dirty = dirtyFiles();
+  if (!dirty.length) return toast('no unsaved changes');
+  if (p.readOnly) return toast(`${p.name} is a bundled sample and read-only — Open Folder… to work on real files`);
+  const rows = dirty.map((f, i) => {
+    const d = lineDiff(f.disk ?? '', f.text);
+    return `<label><input type="checkbox" data-i="${i}" checked> <span>${esc(f.path)}</span>
+      <span class="stat">${f.disk === null ? 'new file · ' : ''}<span class="a">+${d.added}</span> <span class="r">−${d.removed}</span></span>
+      ${f.conflict ? '<span class="conf">⚠ changed on disk since you opened it</span>' : ''}
+      <a data-diff="${i}">diff</a></label><pre class="diff" data-for="${i}" hidden>${d.text.split('\n').map((l) => `<span class="${l.startsWith('+ ') ? 'a' : l.startsWith('- ') ? 'r' : ''}">${esc(l)}</span>`).join('\n')}</pre>`;
+  }).join('');
+  const dlg = showDialog('Save to disk', `<p class="hint">Nothing is written until you confirm. ${esc(p.root ?? '')}</p>
+    <div class="files">${rows}</div>
+    <div class="row-btns"><span class="note">Enter saves · Esc cancels</span><button class="btn" data-cancel>Cancel</button><button class="btn" data-save>Save selected</button></div>`, 'save');
+  dlg.querySelectorAll<HTMLElement>('[data-diff]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    const pre = dlg.querySelector<HTMLElement>(`pre[data-for="${a.dataset.diff}"]`)!;
+    pre.hidden = !pre.hidden;
+  }));
+  const selected = () => [...dlg.querySelectorAll<HTMLInputElement>('input[type=checkbox]')].filter((c) => c.checked).map((c) => dirty[Number(c.dataset.i)].path);
+  const go = async (force: boolean, paths = selected()) => {
+    if (!paths.length) return closeOverlay();
+    let r;
+    try {
+      r = await save(p, paths, force);
+    } catch (e) {
+      return toast(`Save failed: ${(e as Error).message}`);
+    }
+    if (r === 'unavailable') return toast('saving needs the local server (npm run dev)');
+    if (r.conflicts.length) return showConflicts(p, r.conflicts, paths);
+    closeOverlay();
+    toast(`saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'}`);
+    writeProjectBackup(p);
+    renderProjectChrome();
+  };
+  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
+  dlg.querySelector('[data-save]')!.addEventListener('click', () => void go(false));
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !(e.target as HTMLElement).closest('a')) {
+      e.preventDefault();
+      void go(false);
+    }
+  });
+  dlg.querySelector<HTMLButtonElement>('[data-save]')!.focus();
+}
+
+function showConflicts(p: Project, conflicts: { path: string; mtime: number | null; text: string | null }[], paths: string[]): void {
+  const dlg = showDialog('Changed on disk', `<p class="hint">These files changed on disk after you opened them (another editor, git…). Nothing was saved.</p>
+    <div class="files">${conflicts.map((c) => `<label><span>${esc(c.path)}</span> <span class="conf">${c.text === null ? 'deleted on disk' : 'edited on disk'}</span></label>`).join('')}</div>
+    <div class="row-btns"><button class="btn" data-cancel>Cancel</button><button class="btn" data-theirs title="Drop your edits to these files and load the disk version">Use disk version</button><button class="btn" data-mine title="Write your version over the disk version">Overwrite with mine</button></div>`, 'conflict');
+  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
+  dlg.querySelector('[data-theirs]')!.addEventListener('click', () => {
+    for (const c of conflicts) {
+      const f = p.files.get(c.path);
+      if (!f) continue;
+      f.disk = c.text;
+      f.mtime = c.mtime;
+      f.text = c.text ?? '';
+      f.state = null;
+      delete f.conflict;
+      if (f.path === p.active) {
+        loadingSample = true;
+        swapState(editor, stateFor(f), S.vim, hooks);
+        loadingSample = false;
+      }
+    }
+    closeOverlay();
+    analyze('', false);
+    writeProjectBackup(p);
+  });
+  dlg.querySelector('[data-mine]')!.addEventListener('click', async () => {
+    const r = await save(p, paths, true).catch((e: Error) => (toast(`Save failed: ${e.message}`), null));
+    if (!r || r === 'unavailable') return;
+    closeOverlay();
+    toast(`saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'} (overwrote the disk version)`);
+    writeProjectBackup(p);
+    renderProjectChrome();
+  });
+}
+
+// VS Code-style folder picker, served by the local server (the browser
+// can't hand a real path to the page).
+async function openFolderDialog(dir?: string): Promise<void> {
+  let listing: Listing | 'unavailable';
+  try {
+    listing = await fsCall<Listing>('list', { dir: dir ?? S.project?.root ?? store.get('lastDir') ?? '' });
+  } catch (e) {
+    if (dir !== undefined) return toast((e as Error).message);
+    listing = await fsCall<Listing>('list', { dir: '' }).catch(() => 'unavailable' as const);
+  }
+  if (listing === 'unavailable') {
+    const body = `<p class="hint">Opening a folder needs the local server. Start it with <code>npm run dev -- ~/path/to/project</code>, or try the bundled project:</p>
+      <div class="pick">${SAMPLE_PROJECTS.map((sp) => `<button data-sample="${sp.key}">${esc(sp.title)}<span class="tag">${esc(sp.blurb)}</span></button>`).join('')}</div>`;
+    const dlg = showDialog('Open Folder', body, 'open');
+    dlg.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach((b) => b.addEventListener('click', () => (closeOverlay(), loadSample(b.dataset.sample))));
+    return;
+  }
+  const L = listing;
+  store.set('lastDir', L.dir);
+  const recent = readRecent().filter((r) => r !== L.dir);
+  const items: { label: string; tag: string; act: () => void }[] = [];
+  if (L.parent) items.push({ label: '..', tag: 'up', act: () => void openFolderDialog(L.parent!) });
+  for (const d of L.dirs) items.push({ label: `${d}/`, tag: '', act: () => void openFolderDialog(`${L.dir}/${d}`) });
+  const body = `<input class="path" value="${esc(L.dir)}" spellcheck="false" aria-label="Folder path">
+    <div class="pick">${items.map((it, i) => `<button data-i="${i}">${esc(it.label)}<span class="tag">${esc(it.tag)}</span></button>`).join('') || '<div class="empty">no sub-folders</div>'}</div>
+    ${recent.length ? `<h4 style="margin-top:12px">Recent</h4><div class="pick">${recent.map((r) => `<button data-recent="${esc(r)}">${esc(r)}</button>`).join('')}</div>` : ''}
+    <div class="row-btns"><span class="note">${L.project ? 'this folder has C sources' : 'no .c/.h/Makefile here'} · Enter goes to the typed path · Ctrl+Enter opens it</span>
+    <button class="btn" data-cancel>Cancel</button><button class="btn" data-open>Open ${esc(L.dir.slice(L.dir.lastIndexOf('/') + 1) || '/')}</button></div>`;
+  const dlg = showDialog('Open Folder', body, 'open');
+  const input = dlg.querySelector<HTMLInputElement>('input.path')!;
+  dlg.querySelectorAll<HTMLButtonElement>('[data-i]').forEach((b) => b.addEventListener('click', () => items[Number(b.dataset.i)].act()));
+  dlg.querySelectorAll<HTMLButtonElement>('[data-recent]').forEach((b) => b.addEventListener('click', async () => {
+    if (await openFolder(b.dataset.recent!)) closeOverlay();
+  }));
+  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
+  dlg.querySelector('[data-open]')!.addEventListener('click', async () => {
+    if (await openFolder(L.dir)) closeOverlay();
+  });
+  input.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const path = input.value.trim().replace(/^~(?=$|\/)/, L.home);
+    if (e.ctrlKey || e.metaKey) {
+      if (await openFolder(path)) closeOverlay();
+    } else void openFolderDialog(path);
+  });
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+// Ctrl+P: go to a file by typing part of its path.
+function quickOpen(): void {
+  const p = S.project;
+  if (!p) return;
+  const all = [...p.files.keys()].filter((k) => !(k.startsWith(`${META}/`) && k.endsWith('.json'))).sort();
+  const dlg = showDialog('Go to file', `<input class="path" placeholder="type part of a file name" spellcheck="false"><div class="pick"></div>`, 'quick');
+  const input = dlg.querySelector<HTMLInputElement>('input')!;
+  const list = dlg.querySelector<HTMLElement>('.pick')!;
+  let hits: string[] = [];
+  let sel = 0;
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    hits = all.filter((k) => {
+      let i = 0;
+      for (const ch of k.toLowerCase()) if (ch === q[i]) i++;
+      return i === q.length;
+    }).slice(0, 50);
+    sel = Math.min(sel, Math.max(0, hits.length - 1));
+    list.innerHTML = hits.map((h, i) => `<button data-i="${i}" class="${i === sel ? 'on' : ''}">${esc(h)}${p.files.get(h) && isDirty(p.files.get(h)!) ? '<span class="tag">●</span>' : ''}</button>`).join('') || '<div class="empty">no match</div>';
+    list.querySelectorAll<HTMLButtonElement>('[data-i]').forEach((b) => b.addEventListener('click', () => (closeOverlay(), switchFile(hits[Number(b.dataset.i)]), editor.focus())));
+  };
+  input.addEventListener('input', () => ((sel = 0), render()));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') (sel = Math.min(hits.length - 1, sel + 1)), render(), e.preventDefault();
+    else if (e.key === 'ArrowUp') (sel = Math.max(0, sel - 1)), render(), e.preventDefault();
+    else if (e.key === 'Enter' && hits[sel]) {
+      e.preventDefault();
+      closeOverlay();
+      switchFile(hits[sel]);
+      editor.focus();
+    }
+  });
+  render();
+  input.focus();
 }
 
 // ---------------- playback ----------------
@@ -460,15 +1098,35 @@ function gotoCode(e: Entity | null): void {
   if (!e || !S.model) return;
   if (e.k === 'node') {
     const f = layout.nodes.get(e.id)?.fn;
-    if (f) jumpTo(editor, f.nameLine, f.nameCol);
+    if (f) openAt(f.file, f.nameLine, f.nameCol);
   } else if (e.k === 'static') {
-    const v = S.model.byName.get(e.fn)?.statics.find((x) => x.name === e.name);
-    if (v) jumpTo(editor, v.line, 0);
+    const f = S.model.byName.get(e.fn);
+    const v = f?.statics.find((x) => x.name === e.name);
+    if (v) openAt(f!.file, v.line, 0);
   } else if (e.k === 'belt') {
     const b = computeBelts(layout, S.model, S.trace).find((x) => x.key === e.key);
-    if (b?.lines.length) jumpTo(editor, b.lines[0], 0);
+    if (b?.lines.length) openAt(b.srcFile, b.lines[0], 0);
     else gotoCode({ k: 'node', id: 'func:main' });
+  } else if (e.k === 'module') {
+    const first = S.model.fns.filter((f) => f.file === e.file).sort((a, b) => a.startLine - b.startLine)[0];
+    openAt(e.file, first?.nameLine ?? 0, first?.nameCol ?? 0);
   } else gotoCode({ k: 'node', id: 'func:main' });
+}
+
+function toggleModule(file: string): void {
+  const m = layout.modules.get(file);
+  if (!m || !S.model) return;
+  layout.setCollapsed(file, !m.collapsed, S.model);
+  saveSoon();
+  const r = layout.moduleRect(file);
+  view.ensureVisible(r.x, r.y, Math.min(r.w, view.w / view.cs - 3), Math.min(r.h, view.h / view.cs - 3));
+}
+
+function setAllModules(collapsed: boolean): void {
+  if (!S.model) return;
+  for (const f of layout.modules.keys()) layout.setCollapsed(f, collapsed, S.model);
+  saveSoon();
+  view.fit(S);
 }
 
 function unpin(id: string): void {
@@ -509,7 +1167,8 @@ type Drag =
   | { k: 'pan'; x: number; y: number; moved: boolean }
   | { k: 'node'; id: string; ox: number; oy: number; moved: boolean }
   | { k: 'belt'; key: string; moved: boolean }
-  | { k: 'sprite'; id: string; ox: number; oy: number; moved: boolean };
+  | { k: 'sprite'; id: string; ox: number; oy: number; moved: boolean }
+  | { k: 'module'; file: string; ox: number; oy: number; moved: boolean };
 let drag: Drag | null = null;
 let lastPanAt = 0;
 
@@ -521,8 +1180,8 @@ function localXY(e: MouseEvent): [number, number] {
 function setCursorStyle(): void {
   canvas.style.cursor =
     drag?.k === 'pan' ? 'grabbing' :
-    drag?.k === 'node' || drag?.k === 'belt' ? 'move' :
-    S.hovered?.k === 'node' || S.hovered?.k === 'belt' ? 'move' :
+    drag?.k === 'node' || drag?.k === 'belt' || drag?.k === 'module' ? 'move' :
+    S.hovered?.k === 'node' || S.hovered?.k === 'belt' || S.hovered?.k === 'module' ? 'move' :
     S.hovered ? 'pointer' : 'default';
 }
 
@@ -551,7 +1210,10 @@ function bindMouse(): void {
       const n = layout.nodes.get(hit.id)!;
       drag = { k: 'node', id: hit.id, ox: wx - n.place.x, oy: wy - n.place.y, moved: false };
     } else if (hit?.k === 'belt') drag = { k: 'belt', key: hit.key, moved: false };
-    else if (!hit) drag = { k: 'pan', x: e.clientX, y: e.clientY, moved: false };
+    else if (hit?.k === 'module') {
+      const m = layout.modules.get(hit.file)!;
+      drag = { k: 'module', file: hit.file, ox: wx - m.x, oy: wy - m.y, moved: false };
+    } else if (!hit) drag = { k: 'pan', x: e.clientX, y: e.clientY, moved: false };
     else drag = null;
     setCursorStyle();
   });
@@ -567,6 +1229,10 @@ function bindMouse(): void {
       lastPanAt = performance.now();
     } else if (drag?.k === 'node') {
       if (layout.setPos(drag.id, Math.round(wx - drag.ox), Math.round(wy - drag.oy))) drag.moved = true;
+    } else if (drag?.k === 'module') {
+      const m = layout.modules.get(drag.file);
+      const nx = Math.round(wx - drag.ox), ny = Math.round(wy - drag.oy);
+      if (m && (m.x !== nx || m.y !== ny) && layout.moveModule(drag.file, nx, ny)) drag.moved = true;
     } else if (drag?.k === 'belt') {
       const p = { x: Math.floor(wx) + 0.5, y: Math.floor(wy) + 0.5 };
       const cur = layout.waypoints.get(drag.key);
@@ -590,8 +1256,16 @@ function bindMouse(): void {
   });
 
   const end = () => {
-    if (drag?.k === 'node' && drag.moved) toast('pinned: auto-layout won’t move it (right-click → Unpin)');
-    if ((drag?.k === 'node' || drag?.k === 'belt' || drag?.k === 'sprite') && drag.moved) saveSoon();
+    if (drag?.k === 'node' && drag.moved) {
+      toast('pinned: auto-layout won’t move it (right-click → Unpin)');
+      // Arranging inside a module pins the module too, so re-flowing the
+      // others around its new wall never drags this one away.
+      const n = layout.nodes.get(drag.id);
+      const m = n?.file ? layout.modules.get(n.file) : undefined;
+      if (m && S.model) (m.pinned = true), layout.pack(S.model);
+    }
+    if (drag?.k === 'module' && drag.moved) toast('module pinned where you put it (right-click → Unpin)');
+    if ((drag?.k === 'node' || drag?.k === 'belt' || drag?.k === 'sprite' || drag?.k === 'module') && drag.moved) saveSoon();
     if (drag?.k === 'pan' && !drag.moved && S.selected === null) S.legend = null;
     drag = null;
     setCursorStyle();
@@ -621,6 +1295,7 @@ function bindMouse(): void {
     const hit = entityAt(S, wx, wy);
     if (!hit) return view.fit(S);
     if (hit.k === 'belt' && layout.waypoints.has(hit.key)) return resetRoute(hit.key);
+    if (hit.k === 'module') return toggleModule(hit.file);
     gotoCode(hit);
   });
 
@@ -653,7 +1328,19 @@ function bindMouse(): void {
     } else if (hit?.k === 'belt') {
       items.push(['Go to call site', () => gotoCode(hit)]);
       if (layout.waypoints.has(hit.key)) items.push(['Reset route', () => resetRoute(hit.key)]);
+    } else if (hit?.k === 'module') {
+      const m = layout.modules.get(hit.file);
+      items.push([m?.collapsed ? 'Open module' : 'Close module', () => toggleModule(hit.file)]);
+      items.push(['Go to file', () => gotoCode(hit)]);
+      if (m?.pinned && S.model) items.push(['Unpin (auto-place)', () => (layout.unpinModule(hit.file, S.model!), saveSoon())]);
     } else if (hit) items.push(['Go to code', () => gotoCode(hit)]);
+    // a machine inside an open module can close its module from here too
+    const inFile = hit?.k === 'node' ? layout.nodes.get(hit.id)?.file : undefined;
+    if (inFile && !layout.modules.get(inFile)?.collapsed) items.push([`Close ${inFile.slice(inFile.lastIndexOf('/') + 1)}`, () => toggleModule(inFile)]);
+    if (!hit && layout.modules.size) {
+      items.push(['Open all modules', () => setAllModules(false)]);
+      items.push(['Close all modules', () => setAllModules(true)]);
+    }
     items.push(['Fit view', () => view.fit(S)]);
     showMenu(e.clientX, e.clientY, items);
   });
@@ -677,13 +1364,33 @@ function hideMenu(): void {
 }
 
 // ---------------- keyboard (conventional, canvas only) ----------------
+// VS Code's keys, except where vim (in the editor) owns them: Ctrl+O is
+// vim's jump back and Ctrl+B its page up.
 function onKey(e: KeyboardEvent): void {
-  if (e.ctrlKey && e.key === 'Enter') {
+  if (e.ctrlKey && e.key === 'Enter' && overlay.hidden) {
     e.preventDefault();
     return restart();
   }
+  const mod = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+  const vimOwns = S.vim && editor.hasFocus;
+  if (mod && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    return overlay.hidden ? openSaveDialog() : undefined;
+  }
+  if (mod && overlay.hidden && e.key.toLowerCase() === 'o' && !vimOwns) {
+    e.preventDefault();
+    return void openFolderDialog();
+  }
+  if (mod && overlay.hidden && e.key.toLowerCase() === 'p' && S.project) {
+    e.preventDefault();
+    return quickOpen();
+  }
+  if (mod && overlay.hidden && e.key.toLowerCase() === 'b' && S.project && !vimOwns) {
+    e.preventDefault();
+    return toggleExplorer();
+  }
   if (!overlay.hidden) {
-    if (e.key === 'Escape' || e.key === '?') {
+    if (e.key === 'Escape' || (e.key === '?' && overlay.dataset.kind === 'help')) {
       e.preventDefault();
       closeOverlay();
     }
@@ -730,13 +1437,23 @@ function renderSkinPicker(): void {
 const hooks: EditorHooks = {
   onChange: (doc) => {
     if (loadingSample) return;
+    const p = S.project;
+    if (p) {
+      const f = p.files.get(p.active);
+      if (f) {
+        const was = isDirty(f);
+        f.text = doc;
+        if (was !== isDirty(f)) renderProjectChrome();
+      }
+    }
     saveSoon();
     clearTimeout(debounce);
     debounce = window.setTimeout(() => analyze(doc, false), 150);
   },
   onCursor: (line, col) => {
     S.cursor = { line, col };
-    const f = S.model?.fns.find((x) => line >= x.startLine && line <= x.endLine);
+    const active = S.project?.active;
+    const f = S.model?.fns.find((x) => (!S.project || x.file === active) && line >= x.startLine && line <= x.endLine);
     S.editorFn = f?.name ?? null;
   },
   onMode: (m) => {
@@ -775,17 +1492,22 @@ function openHelp(): void {
           ${K(['Space'], 'play / pause')}${K(['←', '→'], 'step')}${K(['Shift', '←/→'], 'previous / next call')}
           ${K(['Home', 'End'], 'start / end')}${K(['F'], 'fit view')}${K(['Ctrl', 'Enter'], 'run from the start (anywhere)')}
           <h4>Editor</h4>
-          ${K(['vim'], 'toggle in the editor header')}${K([':w'], 'run from the start (vim)')}
+          ${K(['vim'], 'toggle in the editor header')}${K([':w'], 'save… (project) · run from the start (sample)')}
+          <h4>Projects</h4>
+          ${K(['Ctrl', 'S'], 'save… — always asks first')}${K(['Ctrl', 'O'], 'open a folder')}${K(['Ctrl', 'P'], 'go to a file')}${K(['Ctrl', 'B'], 'show / hide files')}
+          ${K(['Double-click file'], 'open / close a module')}
         </div>
       </div>
       <div class="legend">${LEGEND.slice(0, 5).map((l) => `<canvas data-kind="${l.kind}"></canvas><div><b>${esc(l.name)}</b> <span class="c">${esc(l.c)}</span><br>${esc(l.text)}</div>`).join('')}</div>
     </div></div>`;
   overlay.hidden = false;
+  overlay.dataset.kind = 'help';
   overlay.querySelectorAll<HTMLCanvasElement>('canvas[data-kind]').forEach((c) => drawIcon(c, c.dataset.kind as IconKind, 34));
   $('dlg-close').addEventListener('click', closeOverlay);
 }
 function closeOverlay(): void {
   overlay.hidden = true;
+  overlay.dataset.kind = '';
 }
 
 function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
@@ -801,7 +1523,11 @@ function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
 // ---------------- panels ----------------
 function renderSampleTabs(): void {
   const nav = $('samples');
-  nav.innerHTML = SAMPLES.map((s) => `<button data-key="${s.key}" aria-pressed="${s === S.sample}" title="${esc(s.blurb)}">${esc(s.title)}</button>`).join('');
+  const openSample = S.project?.readOnly ? SAMPLE_PROJECTS.find((x) => x.name === S.project!.name) : undefined;
+  nav.innerHTML = [
+    ...SAMPLES.map((s) => `<button data-key="${s.key}" aria-pressed="${!S.project && s === S.sample}" title="${esc(s.blurb)}">${esc(s.title)}</button>`),
+    ...SAMPLE_PROJECTS.map((s) => `<button data-key="${s.key}" aria-pressed="${openSample === s}" title="${esc(s.blurb)}">${esc(s.title)}</button>`),
+  ].join('');
   nav.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => loadSample(b.dataset.key)));
 }
 
@@ -833,25 +1559,35 @@ function renderAlerts(): void {
   const out: string[] = [];
   const m = S.model;
   const al = (kind: keyof typeof ICON, html: string) => out.push(`<div class="alert ${kind}">${ICON[kind]}<div>${html}</div></div>`);
-  if (m?.error) al('warn', `<b>Syntax error</b> on line ${m.error.line + 1}. The picture keeps its last shape; nothing runs until it parses.`);
+  const p = S.project;
+  // a link to a line, in whichever file it is
+  const at = (line: number, file?: string, label?: string) =>
+    `<a data-line="${line}"${file ? ` data-file="${esc(file)}"` : ''}>${label ?? `${file ? `${esc(file)}:` : 'line '}${line + 1}`}</a>`;
+  if (m?.error) al('warn', `<b>Syntax error</b> at ${at(m.error.line, m.error.file)}. The picture keeps its last shape; nothing runs until it parses.`);
   else if (m && !m.byName.has('main'))
-    al('info', `<b>Structure view.</b> No <code>main()</code>, so nothing runs.`);
+    al('info', p && !p.files.has(DRIVER)
+      ? `<b>Structure view.</b> No <code>main()</code> — a library? Give it a driver to run it.<br><button class="btn sm" data-driver>Create ${esc(DRIVER)}</button>`
+      : `<b>Structure view.</b> No <code>main()</code>, so nothing runs.`);
+  if (p?.driverIgnored) al('info', `<b>${esc(DRIVER)} is set aside:</b> the project has its own <code>main()</code>.`);
+  for (const w of m?.warnings ?? []) al('warn', `<b>Link:</b> ${esc(w.msg)} (${at(w.line, w.file)})`);
+  for (const f of p ? [...p.files.values()].filter((x) => x.conflict) : []) al('warn', `<b>${esc(f.path)} changed on disk</b> while you have unsaved edits here. Saving will ask which version wins.`);
   const g = S.gdb;
-  if (g.status === 'running') al('info', `<b>Running under gdb…</b> compiling with <code>cc -Wall -Wextra -Werror</code>${S.sample.defines?.length ? ` <code>${S.sample.defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
+  const defines = p ? p.run.defines : S.sample.defines ?? [];
+  if (g.status === 'running') al('info', `<b>Running under gdb…</b> ${p?.files.has('Makefile') ? 'building with your <code>Makefile</code>' : 'compiling with <code>cc -Wall -Wextra -Werror</code>'}${defines.length ? ` <code>${defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
   if (g.status === 'unavailable') al('warn', `<b>No trace server.</b> Real execution runs inside <code>npm run dev</code> (or <code>npm run preview</code>); a static build can only use the interpreter.`);
   if (g.status === 'error' && g.compile) {
     const errs = g.compile.diagnostics.filter((d) => d.severity === 'error');
     const first = errs[0];
     al('err', first
-      ? `<b>Compile failed</b> on line ${first.line + 1}: ${esc(first.msg)}${errs.length > 1 ? ` <span class="c">(+${errs.length - 1} more)</span>` : ''}`
-      : `<b>Compile failed.</b> <code>${esc(g.compile.text.split('\n')[0] ?? '')}</code>`);
-  } else if (g.status === 'error') al('err', `<b>Trace failed:</b> ${esc(g.error ?? 'unknown error')}`);
-  if (S.trace?.error) al('err', `<b>Stopped</b> at line ${S.trace.error.line + 1}: ${esc(S.trace.error.msg)}`);
+      ? `<b>Compile failed</b> at ${at(first.line, first.file || undefined)}: ${esc(first.msg)}${errs.length > 1 ? ` <span class="c">(+${errs.length - 1} more)</span>` : ''}`
+      : `<b>Compile failed.</b> <code>${esc(g.compile.text.split('\n').find((l) => /error/i.test(l)) ?? g.compile.text.split('\n')[0] ?? '')}</code>`);
+  } else if (g.status === 'error') al('err', `<b>Can't run it:</b> ${esc(g.error ?? 'unknown error')}`);
+  if (S.trace?.error) al('err', `<b>Stopped</b> at ${at(S.trace.error.line, S.trace.error.file)}: ${esc(S.trace.error.msg)}`);
   if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
   const leaks = S.trace?.leaks ?? [];
   if (leaks.length) {
     const bytes = leaks.reduce((a, l) => a + l.size, 0);
-    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from <a data-line="${l.line}">line ${l.line + 1}</a>` : ''}`).join(', ')}).`);
+    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from ${at(l.line, l.file)}` : ''}`).join(', ')}).`);
   }
   for (const w of S.trace?.warnings ?? []) al('warn', esc(w));
   // M4: invariants that broke, and calls the static picture didn't predict
@@ -865,30 +1601,31 @@ function renderAlerts(): void {
   for (const list of byInv.values()) {
     const v = list[0];
     const sp = S.sprites.find((x) => x.id === v.sprite);
-    const where = `<a data-seek="${v.at}"${v.line !== null ? ` data-line="${v.line}"` : ''}>step ${v.at}${v.line !== null ? `, line ${v.line + 1}` : ''}</a>`;
+    const where = `<a data-seek="${v.at}"${v.line !== null ? ` data-line="${v.line}"` : ''}${v.file ? ` data-file="${esc(v.file)}"` : ''}>step ${v.at}${v.line !== null ? `, ${v.file ? `${esc(v.file)}:` : 'line '}${v.line + 1}` : ''}</a>`;
     al('err', `<b>${v.builtin ? 'Picture mismatch' : 'Invariant broken'}:</b> <code>${esc(v.invariant)}</code> on ${esc(sp?.label || sp?.binding?.expr || 'sprite')} — first at ${where}: ${esc(v.detail)}${list.length > 1 ? ` <span class="c">(${list.length} times)</span>` : ''}`);
   }
   for (const c of surpriseCalls(S.trace, (a, b) => a === b || !!S.model?.byName.get(a)?.calls.some((x) => x.callee === b)))
-    al('warn', `<b>Unpredicted call:</b> <code>${esc(c.caller)} → ${esc(c.callee)}</code> at <a data-seek="${c.at}" data-line="${c.line}">line ${c.line + 1}</a> is not in the code's call graph — a function pointer?`);
+    al('warn', `<b>Unpredicted call:</b> <code>${esc(c.caller)} → ${esc(c.callee)}</code> at <a data-seek="${c.at}" data-line="${c.line}"${c.file ? ` data-file="${esc(c.file)}"` : ''}>${c.file ? `${esc(c.file)}:` : 'line '}${c.line + 1}</a> is not in the code's call graph — a function pointer?`);
   alerts.innerHTML = out.join('');
+  alerts.querySelector('[data-driver]')?.addEventListener('click', createDriver);
 }
 
 function renderStatus(): void {
   const m = S.model;
-  const belts = computeBelts(layout, m).filter((b) => b.from !== '' && !b.chain).length + (m?.fns.filter((f) => f.calls.some((c) => c.callee === f.name)).length ?? 0);
+  const belts = m?.fns.reduce((a, f) => a + new Set(f.calls.map((c) => c.callee)).size, 0) ?? 0;
   const statics = m?.fns.reduce((a, f) => a + f.statics.length, 0) ?? 0;
   $('st-parse').innerHTML = !m
     ? ''
     : m.error
-      ? `<span class="bad">syntax error, line ${m.error.line + 1}</span>`
-      : `<span class="ok">parsed</span> · ${m.fns.length} function${m.fns.length === 1 ? '' : 's'} · ${belts} call${belts === 1 ? '' : 's'}${statics ? ` · ${statics} static` : ''}`;
+      ? `<span class="bad">syntax error, ${m.error.file ? `${esc(m.error.file)}:` : 'line '}${m.error.line + 1}</span>`
+      : `<span class="ok">parsed</span> · ${m.project ? `${m.files.length} file${m.files.length === 1 ? '' : 's'} · ` : ''}${m.fns.length} function${m.fns.length === 1 ? '' : 's'} · ${belts} call${belts === 1 ? '' : 's'}${statics ? ` · ${statics} static` : ''}`;
   const t = S.trace;
   $('st-trace').innerHTML = !t
     ? ''
     : t.error
       ? `<span class="bad">runtime error</span> · ${t.evs.length} steps`
       : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · ${t.truncated ? '<span class="bad">truncated</span>' : `<span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`}`;
-  $('grid-info').textContent = m ? `${S.sample.file}` : '';
+  $('grid-info').textContent = S.project ? `${S.project.name}${S.project.root ? '' : ' (sample)'}` : m ? `${S.sample.file}` : '';
 }
 
 let lastStatusKey = '';
@@ -912,6 +1649,7 @@ function renderLiveStatus(): void {
 
 let lastInspectorKey = '';
 let traceRevision = 0;
+let modelRevision = 0;
 
 // M4: invariant violations for the current trace and sprites, recomputed only
 // when either changes (invariants are checked client-side on sampled values).
@@ -975,7 +1713,7 @@ function freeSuggestionPlace(node: ReturnType<Layout['nodes']['get']>): { x: num
   const y = node?.place.y ?? 0;
   const below = node ? footprint(node).y + footprint(node).h + 1 : 2;
   const occupied = [
-    ...[...layout.nodes.values()].map((n) => footprint(n)),
+    ...layout.visible().map((n) => footprint(n)),
     ...buildScene(layout, S.model, S.trace).obstacles,
     ...S.sprites.map((sp) => spriteWorldRect(sp)),
   ];
@@ -1056,7 +1794,7 @@ function renderSpriteInspector(id: string, bound: { bound: boolean; value?: stri
 
 function renderInspector(): void {
   const fr = S.trace && S.trace.evs.length ? frameAt(S.trace, S.pos) : null;
-  const key = `${S.legend}|${entKey(S.selected)}:${S.selected?.k === 'node' ? S.selected.copy ?? 1 : ''}|${fr ? `${fr.si}` : ''}|${traceRevision}|${S.model?.tree.rootNode.text.length}|${S.skin.id}`;
+  const key = `${S.legend}|${entKey(S.selected)}:${S.selected?.k === 'node' ? S.selected.copy ?? 1 : ''}|${fr ? `${fr.si}` : ''}|${traceRevision}|${modelRevision}|${S.skin.id}|${S.selected?.k === 'module' ? `${layout.modules.get(S.selected.file)?.collapsed}${layout.modules.get(S.selected.file)?.pinned}` : ''}`;
   if (key === lastInspectorKey) return;
   if (inspector.contains(document.activeElement)) return;
   lastInspectorKey = key;
@@ -1099,6 +1837,7 @@ function renderInspector(): void {
       ${row('state', `<span class="state ${state}">${state}${waitingOn ? ` on ${esc(waitingOn)}` : ''}</span>${frames.length > 1 ? ` · ${frames.length} frames` : ''}${node.stale ? ' · stale' : ''}`)}
       ${vals ? row('frame', esc(vals)) : ''}
       ${recursive ? row('recursion', copy > 1 ? `call depth ${copy} — spawned by ${esc(node.name)} #${copy - 1}` : 'each call spawns a copy') : ''}
+      ${f?.file ? row('file', `<a data-open-file="${esc(f.file)}">${esc(f.file)}</a>`) : ''}
       ${row('calls', esc([...new Set(f?.calls.map((c) => c.callee))].join(', ') || '—'))}
       ${row('called by', esc(callers.join(', ') || (node.name === 'main' ? 'process' : '—')))}
       ${f?.externals.length ? row('external', esc(f.externals.join(', '))) : ''}
@@ -1112,6 +1851,35 @@ function renderInspector(): void {
       <div class="ins-body">${row('owner', esc(e.fn))}${row('value', c ? esc(fmtVal(c.val, c.type)) : '—')}
       <p>Lives for the whole program, not just one call.</p>${suggestionButtons(S.model?.byName.get(e.fn)?.statics.filter((v) => v.name === e.name) ?? [], e.fn)}</div>`;
     bindSuggestionButtons();
+  } else if (e.k === 'module') {
+    const m = layout.modules.get(e.file);
+    if (!m || !S.model) return void (inspector.hidden = true);
+    const fns = S.model.fns.filter((f) => f.file === e.file);
+    const doors = doorsOf(fns);
+    const into = new Set<string>();
+    const from = new Set<string>();
+    for (const f of S.model.fns) for (const c of f.calls) {
+      const to = S.model.byName.get(c.callee)?.file;
+      if (f.file === e.file && to && to !== e.file) into.add(to);
+      if (to === e.file && f.file !== e.file) from.add(f.file);
+    }
+    const inside = snap?.stack.filter((x) => S.model!.byName.get(x.fn)?.file === e.file) ?? [];
+    const top = snap?.stack.at(-1);
+    const state = !inside.length ? 'idle' : S.model.byName.get(top?.fn ?? '')?.file === e.file ? 'running' : 'waiting';
+    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(e.file)}</span><span class="k">module</span></div>
+      <div class="ins-body">
+      ${row('state', `<span class="state ${state}">${state}${inside.length ? ` in ${esc(S.model.byName.get(inside.at(-1)!.fn)?.cname ?? '')}` : ''}</span>${inside.length > 1 ? ` · ${inside.length} frames` : ''}`)}
+      ${row('functions', `${fns.length}${fns.some((f) => f.isStatic) ? ` · ${fns.filter((f) => f.isStatic).length} static` : ''}`)}
+      ${row('doors', doors.map((d) => `${esc(d.cname)}${d.declared === false ? ' <span class="soon" title="no prototype in any header">(no prototype)</span>' : ''}`).join(', ') || '—')}
+      ${row('calls into', esc([...into].join(', ') || '—'))}
+      ${row('called from', esc([...from].join(', ') || '—'))}
+      <div class="sprite-actions"><button class="btn sm" data-toggle>${m.collapsed ? 'Open module' : 'Close module'}</button><button class="btn sm" data-goto>Go to file</button></div>
+      <div class="foot"><span>double-click → ${m.collapsed ? 'open' : 'close'}</span><span>drag → move</span><span>${m.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
+    inspector.querySelector('[data-toggle]')!.addEventListener('click', () => {
+      toggleModule(e.file);
+      lastInspectorKey = '';
+    });
+    inspector.querySelector('[data-goto]')!.addEventListener('click', () => gotoCode(e));
   } else if (e.k === 'proc') {
     const t = S.trace;
     inspector.innerHTML = `<div class="ins-title"><span class="n">process</span><span class="k">the OS</span></div>
@@ -1120,8 +1888,11 @@ function renderInspector(): void {
   } else {
     const b = computeBelts(layout, S.model, S.trace).find((x) => x.key === e.key);
     if (!b) return void (inspector.hidden = true);
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(b.from || 'process')} → ${esc(b.to)}</span><span class="k">call</span></div>
-      <div class="ins-body">${b.lines.length ? row('call sites', b.lines.map((l) => `line ${l + 1}`).join(', ')) : ''}
+    const hostName = (k: string) => (k.startsWith('mod:') ? k.slice(4) : k);
+    const sites = b.lines.slice(0, 12).map((l) => `<a data-line="${l}" data-file="${esc(b.srcFile)}">${b.srcFile ? `${esc(b.srcFile.slice(b.srcFile.lastIndexOf('/') + 1))}:` : 'line '}${l + 1}</a>`).join(', ') + (b.lines.length > 12 ? ` +${b.lines.length - 12}` : '');
+    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(hostName(b.from) || 'process')} → ${esc(hostName(b.to))}</span><span class="k">${b.fromHost.startsWith('mod:') || b.toHost.startsWith('mod:') ? 'trunk' : 'call'}</span></div>
+      <div class="ins-body">${b.toHost.startsWith('mod:') || b.fromHost.startsWith('mod:') ? row('delivers to', esc(b.callees.map((c) => S.model?.byName.get(c)?.cname ?? c).join(', '))) : ''}
+      ${b.lines.length ? row('call sites', sites) : ''}
       ${row('route', b.custom ? 'yours' : 'auto')}
       <div class="foot"><span>drag → re-route</span>${b.custom ? '<span>double-click → reset</span>' : ''}</div></div>`;
   }
@@ -1170,10 +1941,20 @@ function renderPlaybar(): void {
   }
   const diag = !t ? S.gdb.compile?.diagnostics.find((d) => d.severity === 'error') : undefined;
   const brokeHere = t && !S.playing && Number.isInteger(S.pos) ? violations().find((v) => v.at === S.pos && v.line !== null) : undefined;
-  const execKey = brokeHere ? `v${brokeHere.line}` : ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : '';
+  const markFile = (brokeHere ? brokeHere.file : ev ? ev.file : diag?.file) || undefined;
+  const execKey = `${brokeHere ? `v${brokeHere.line}` : ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : ''}|${markFile ?? ''}|${S.project?.active ?? ''}`;
   if (execKey !== lastExec) {
     lastExec = execKey;
-    const mark = brokeHere ? { line: brokeHere.line!, kind: 'error' as const } : ev ? { line: ev.line, kind: ev.k === 'error' ? ('error' as const) : ('exec' as const) } : diag ? { line: diag.line, kind: 'error' as const } : null;
+    let mark: { line: number; kind: 'exec' | 'error' } | null = brokeHere ? { line: brokeHere.line!, kind: 'error' } : ev ? { line: ev.line, kind: ev.k === 'error' ? 'error' : 'exec' } : diag ? { line: diag.line, kind: 'error' } : null;
+    // In a project the running line may be in another file: follow it there
+    // like a debugger, unless the author is typing.
+    const p = S.project;
+    if (mark && p && markFile && markFile !== p.active) {
+      if ((S.playing || !editor.hasFocus) && p.files.has(markFile)) {
+        switchFile(markFile);
+        lastExec = `${execKey.slice(0, execKey.lastIndexOf('|'))}|${p.active}`;
+      } else mark = null;
+    }
     editor.dispatch({ effects: setExecLine.of(mark) });
     // Follow the running line, unless the author is typing in the editor.
     if (mark && (S.playing || !editor.hasFocus) && mark.line < editor.state.doc.lines) {
@@ -1289,18 +2070,44 @@ async function boot(): Promise<void> {
   document.documentElement.dataset.skin = S.skin.id;
   await initParser();
   editor = createEditor($('editor'), S.sample.src, hooks, S.vim);
-  Vim.defineEx('write', 'w', () => restart());
+  Vim.defineEx('write', 'w', () => (S.project ? openSaveDialog() : restart()));
   Vim.defineEx('sample', 'sa', (_cm: unknown, p: { args?: string[] }) => loadSample(p.args?.[0]));
 
   $('vim-toggle').addEventListener('click', toggleVim);
   renderVimToggle();
   $('btn-help').addEventListener('click', openHelp);
   $('btn-revert').addEventListener('click', revertSample);
-  alerts.addEventListener('click', (e) => {
-    const a = (e.target as HTMLElement).closest<HTMLElement>('a[data-seek], a[data-line]');
+  const lineLinks = (e: MouseEvent) => {
+    const a = (e.target as HTMLElement).closest<HTMLElement>('a[data-seek], a[data-line], a[data-open-file]');
     if (!a) return;
     if (a.dataset.seek !== undefined) seek(Number(a.dataset.seek));
-    if (a.dataset.line !== undefined) jumpTo(editor, Number(a.dataset.line), 0);
+    if (a.dataset.line !== undefined) openAt(a.dataset.file || undefined, Number(a.dataset.line), 0);
+    if (a.dataset.openFile !== undefined) switchFile(a.dataset.openFile);
+  };
+  alerts.addEventListener('click', lineLinks);
+  inspector.addEventListener('click', lineLinks);
+  $('btn-open').addEventListener('click', () => void openFolderDialog());
+  $('btn-files').addEventListener('click', toggleExplorer);
+  $('btn-save').addEventListener('click', openSaveDialog);
+  $<HTMLInputElement>('run-args').addEventListener('change', (e) => {
+    if (!S.project) return;
+    S.project.run.args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
+    runChanged();
+  });
+  $<HTMLInputElement>('run-defs').addEventListener('change', (e) => {
+    if (!S.project) return;
+    const input = e.target as HTMLInputElement;
+    const defs = input.value.split(/[\s,]+/).map((d) => d.replace(/^-D/, '')).filter(Boolean);
+    const bad = defs.find((d) => !/^[A-Za-z_]\w*(=[\w.+-]*)?$/.test(d));
+    if (bad) return toast(`-D ${bad}: use NAME or NAME=value`);
+    S.project.run.defines = defs.slice(0, 32);
+    runChanged();
+  });
+  window.addEventListener('beforeunload', (e) => {
+    if (!S.project || S.project.readOnly) return;
+    writeProjectBackup(S.project);
+    // the backup keeps edits across a reload; closing still deserves a warning
+    if (dirtyFiles().some((f) => isSource(f.path))) e.preventDefault();
   });
   $('btn-blueprint-save').addEventListener('click', exportBlueprint);
   $('btn-blueprint-load').addEventListener('click', () => $<HTMLInputElement>('blueprint-file').click());
@@ -1311,7 +2118,12 @@ async function boot(): Promise<void> {
   });
   renderEngines();
   $<HTMLTextAreaElement>('stdin').addEventListener('input', (e) => {
-    S.stdin = (e.target as HTMLTextAreaElement).value;
+    const value = (e.target as HTMLTextAreaElement).value;
+    if (S.project) {
+      S.project.run.stdin = value;
+      return runChanged();
+    }
+    S.stdin = value;
     saveSoon();
     if (S.model && engineFor(S.model) === 'gdb') {
       cancelGdb();
@@ -1361,11 +2173,18 @@ async function boot(): Promise<void> {
   await applySkin(S.skin);
   await document.fonts.ready;
   view.resize();
-  loadSample(store.get('lastSample') ?? S.sample.key);
+  // Like VS Code: the folder named on the command line, else the last one open.
+  const initial = await fsCall<{ path: string | null }>('initial', {}).catch(() => 'unavailable' as const);
+  const last = store.get('lastProject') ?? '';
+  let opened = false;
+  if (initial !== 'unavailable' && initial.path) opened = await openFolder(initial.path);
+  else if (initial !== 'unavailable' && last.startsWith('folder:')) opened = await openFolder(last.slice(7));
+  else if (last.startsWith('sample:') && SAMPLE_PROJECTS.some((x) => x.key === last.slice(7))) (loadSample(last.slice(7)), (opened = true));
+  if (!opened) loadSample(store.get('lastSample') ?? S.sample.key);
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles } });
 }
 
 boot().catch((err) => {

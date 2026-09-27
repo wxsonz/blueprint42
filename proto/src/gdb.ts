@@ -23,19 +23,22 @@ interface GVar extends GVal {
   addr: number | null;
   size: number;
   owner?: string;
+  ownerFile?: string | null;
 }
+// `file` is project-relative (the sandbox buffer is "sandbox.c").
 type GEv =
-  | { k: 'call'; id: number; fn: string }
+  | { k: 'call'; id: number; fn: string; file?: string | null }
   | { k: 'ret'; id: number; value: GVal | null }
-  | { k: 'alloc'; id: number; addr: number; size: number; line: number | null }
+  | { k: 'alloc'; id: number; addr: number; size: number; line: number | null; file?: string | null }
   | { k: 'free'; id: number }
-  | { k: 'badfree'; addr: number; line: number | null };
+  | { k: 'badfree'; addr: number; line: number | null; file?: string | null };
 interface GStop {
   line: number | null;
+  file?: string | null;
   events: GEv[];
-  frames: { id: number; fn: string; line: number | null; vars: GVar[]; delta?: boolean }[];
+  frames: { id: number; fn: string; file?: string | null; line: number | null; vars: GVar[]; delta?: boolean }[];
   statics: GVar[];
-  heap: { id: number; addr: number; size: number; hex: string; line: number | null }[];
+  heap: { id: number; addr: number; size: number; hex: string; line: number | null; file?: string | null }[];
   heapIds?: number[]; // live blocks (heap then only lists blocks whose bytes changed)
   bound?: Record<string, BoundValue>;
   exited?: boolean;
@@ -43,7 +46,7 @@ interface GStop {
 export interface GResult {
   ok: boolean;
   error?: string;
-  compile?: { flags: string[]; text: string; diagnostics: { line: number; col: number; severity: string; msg: string }[] };
+  compile?: { flags: string[]; text: string; diagnostics: { file?: string; line: number; col: number; severity: string; msg: string }[] };
   stops?: GStop[];
   exit?: number | null;
   signal?: string | null;
@@ -52,14 +55,16 @@ export interface GResult {
   stderr?: string;
   ms?: number;
   flags?: string[];
-  bindingScopes?: Record<string, { scope: 'fn' | 'global'; fn?: string }>;
+  bindingScopes?: Record<string, { scope: 'fn' | 'global'; fn?: string; file?: string }>;
 }
 
 export interface GdbRequest {
-  src: string;
+  src?: string; // the sandbox buffer, or…
+  project?: { files: Record<string, string> }; // …a project's current buffers (M5)
   files?: Record<string, string>;
   defines?: string[];
   stdin?: string;
+  args?: string[];
   fns: string[];
   maxSteps?: number;
   maxSeconds?: number;
@@ -106,7 +111,7 @@ export function expandStops(stops: GStop[]): GStop[] {
       for (const v of f.vars) vars.set(v.name, v);
       return { ...f, vars: [...vars.values()] };
     });
-    for (const v of st.statics) statics.set(`${v.owner ?? ''}.${v.name}`, v);
+    for (const v of st.statics) statics.set(`${v.owner ?? ''}.${v.ownerFile ?? ''}.${v.name}`, v);
     return { ...st, frames, statics: st.exited ? [] : [...statics.values()], heap, ...(bound ? { bound } : {}) };
   });
 }
@@ -146,8 +151,26 @@ interface Region {
   heap?: number; // block id
 }
 
-export function convertGdb(r: GResult, model: Model, src: string): Trace {
-  const lines = src.split('\n');
+// `sources`: the sandbox buffer, or a project's files by path.
+export function convertGdb(r: GResult, model: Model, sources: string | Record<string, string>): Trace {
+  const split = new Map<string, string[]>();
+  const linesOf = (file: string | null | undefined): string[] => {
+    const k = typeof sources === 'string' ? '' : file ?? '';
+    if (!split.has(k)) split.set(k, (typeof sources === 'string' ? sources : sources[k] ?? '').split('\n'));
+    return split.get(k)!;
+  };
+  // gdb names a function by its C name and file; the picture by its key.
+  const keys = new Map<string, string>();
+  const keyOf = (name: string, file: string | null | undefined): string => {
+    if (!model.project) return name;
+    const k = `${name}|${file ?? ''}`;
+    if (!keys.has(k)) {
+      const f = model.fns.find((x) => x.cname === name && x.file === file) ?? model.fns.find((x) => x.cname === name && !x.isStatic);
+      keys.set(k, f?.name ?? name);
+    }
+    return keys.get(k)!;
+  };
+  const fileOf = (file: string | null | undefined): string | undefined => (model.project && file ? file : undefined);
   const stops = expandStops(r.stops ?? []);
   const cells = new Map<number, CellInfo>();
   const types = new Map<number, string>();
@@ -160,11 +183,12 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
   };
 
   // live state
-  const stack: { id: number; fn: string; cells: Map<string, number>; line: number | null }[] = [];
+  const stack: { id: number; fn: string; cname: string; file: string | null; cells: Map<string, number>; line: number | null }[] = [];
   const statics = new Map<string, number>(); // "owner.name" -> cell
   const heapCell = new Map<number, number>(); // block id -> cell
   const heapSize = new Map<number, number>();
   const heapLine = new Map<number, number | null>();
+  const heapFile = new Map<number, string | undefined>();
   const heapAddr = new Map<number, { addr: number; size: number; cell: number; freed: boolean; id: number }>();
   const heapSlots = new Map<number, number>();
   const usedSlots = new Set<number>();
@@ -201,7 +225,7 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
       for (const v of f.vars) if (v.addr !== null && fc?.has(v.name)) regions.push({ addr: v.addr, size: v.size, cell: fc.get(v.name)!, name: v.name, elem: v.elem });
     }
     for (const v of stop.statics) {
-      const c = statics.get(`${v.owner ?? ''}.${v.name}`);
+      const c = statics.get(`${v.owner ?? ''}.${v.ownerFile ?? ''}.${v.name}`);
       if (c !== undefined && v.addr !== null) regions.push({ addr: v.addr, size: v.size, cell: c, name: v.name, elem: v.elem });
     }
     for (const b of heapAddr.values()) if (!b.freed) regions.push({ addr: b.addr, size: b.size, cell: b.cell, name: `#${b.id}`, heap: b.id });
@@ -239,10 +263,12 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
   const frameOf = (id: number) => stack.find((f) => f.id === id);
   const fnInfo = (fn: string) => model.byName.get(fn);
   let lastLine = 0;
+  let lastFile: string | null = null;
   let exitCode: number | null = r.exit ?? null;
 
-  const addFrame = (id: number, fn: string, stop: GStop) => {
+  const addFrame = (id: number, cname: string, file: string | null, stop: GStop) => {
     const data = stop.frames.find((f) => f.id === id);
+    const fn = keyOf(cname, file);
     const info = fnInfo(fn);
     const cs = new Map<string, number>();
     for (const v of data?.vars ?? []) {
@@ -251,8 +277,8 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
       if (info?.params.some((p) => p.name === v.name)) defined.add(c);
     }
     const caller = stack[stack.length - 1] ?? null;
-    stack.push({ id, fn, cells: cs, line: data?.line ?? null });
-    return { caller, data };
+    stack.push({ id, fn, cname, file, cells: cs, line: data?.line ?? null });
+    return { caller, data, fn };
   };
 
   for (const stop of stops) {
@@ -261,20 +287,21 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
     for (const e of stop.events) {
       const top = stack[stack.length - 1] ?? null;
       if (e.k === 'call') {
-        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === e.fn) {
+        const file = e.file ?? stop.frames.find((f) => f.id === e.id)?.file ?? null;
+        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === e.fn && (!scope.file || scope.file === file)) {
           currentBound = { ...currentBound, [id]: { bound: false } };
         }
-        const { caller, data } = addFrame(e.id, e.fn, stop);
+        const { caller, data, fn } = addFrame(e.id, e.fn, file, stop);
         buildRegions(stop);
         const f = frameOf(e.id)!;
-        const params = fnInfo(e.fn)?.params ?? [];
+        const params = fnInfo(fn)?.params ?? [];
         for (const v of data?.vars ?? []) {
           const c = f.cells.get(v.name)!;
           raw.set(c, JSON.stringify(v));
           vals.set(c, defined.has(c) ? toV(v) : { k: 'undef' });
         }
         emit({
-          k: 'call', line: data?.line ? data.line - 1 : lastLine, frame: e.id, fn: e.fn, caller: caller?.fn ?? null,
+          k: 'call', line: data?.line ? data.line - 1 : lastLine, file: fileOf(data?.line ? file : lastFile), frame: e.id, fn, caller: caller?.fn ?? null,
           args: params.map((p) => {
             const c = f.cells.get(p.name);
             const val = c !== undefined ? vals.get(c)! : { k: 'undef' as const };
@@ -286,34 +313,35 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
         if (!f) continue;
         const idx = stack.indexOf(f);
         stack.splice(idx, 1);
-        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === f.fn) {
+        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === f.cname && (!scope.file || scope.file === f.file)) {
           currentBound = { ...currentBound, [id]: { bound: false } };
         }
         const caller = stack[idx - 1] ?? null;
         let val = toV(e.value);
         if (f.fn === 'main' && val.k === 'void' && exitCode !== null) val = { k: 'int', v: exitCode };
-        emit({ k: 'ret', line: f.line ? f.line - 1 : lastLine, frame: e.id, fn: f.fn, caller: caller?.fn ?? null, val });
+        emit({ k: 'ret', line: f.line ? f.line - 1 : lastLine, file: fileOf(f.line ? f.file : lastFile), frame: e.id, fn: f.fn, caller: caller?.fn ?? null, val });
       } else if (e.k === 'alloc') {
         const c = newCell({ name: `#${e.id}`, owner: 'heap', frame: -2 }, `${e.size} bytes`);
         heapCell.set(e.id, c);
         heapSize.set(e.id, e.size);
         heapLine.set(e.id, e.line ? e.line - 1 : null);
+        heapFile.set(e.id, fileOf(e.file));
         heapAddr.set(e.addr, { addr: e.addr, size: e.size, cell: c, freed: false, id: e.id });
         let slot = 0;
         while (usedSlots.has(slot)) slot++;
         usedSlots.add(slot);
         heapSlots.set(c, slot);
         vals.set(c, { k: 'raw', text: 'uninitialised' });
-        emit({ k: 'alloc', line: e.line ? e.line - 1 : lastLine, frame: top?.id ?? null, cell: c, size: e.size });
+        emit({ k: 'alloc', line: e.line ? e.line - 1 : lastLine, file: fileOf(e.line ? e.file : lastFile), frame: top?.id ?? null, cell: c, size: e.size });
       } else if (e.k === 'free') {
         const c = heapCell.get(e.id);
         if (c === undefined) continue;
         heapCell.delete(e.id);
         usedSlots.delete(heapSlots.get(c)!);
         for (const b of heapAddr.values()) if (b.id === e.id) b.freed = true;
-        emit({ k: 'free', line: lastLine, frame: top?.id ?? null, cell: c });
+        emit({ k: 'free', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, cell: c });
       } else if (e.k === 'badfree') {
-        warnings.push(`free() of a pointer that malloc never returned (0x${e.addr.toString(16)}), line ${e.line ?? '?'}`);
+        warnings.push(`free() of a pointer that malloc never returned (0x${e.addr.toString(16)}), ${fileOf(e.file) ? `${e.file}:` : 'line '}${e.line ?? '?'}`);
       }
     }
 
@@ -335,7 +363,7 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
       const fs = frameOf(f.id);
       if (!fs) continue;
       const prevLine = fs.line;
-      const lineText = prevLine ? lines[prevLine - 1] ?? '' : '';
+      const lineText = prevLine ? linesOf(fs.file)[prevLine - 1] ?? '' : '';
       for (const v of f.vars) {
         const c = fs.cells.get(v.name);
         if (c === undefined) continue;
@@ -349,15 +377,15 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
         vals.set(c, nv);
         const region = regions.find((g) => g.cell === c);
         const w = fs.id === top?.id ? null : via(region);
-        emit({ k: 'write', line: (prevLine ?? 1) - 1, frame: top?.id ?? null, cell: c, val: nv, via: w, text: `${v.name} = ${fmtVal(nv, v.type)}` });
+        emit({ k: 'write', line: (prevLine ?? 1) - 1, file: fileOf(fs.file), frame: top?.id ?? null, cell: c, val: nv, via: w, text: `${v.name} = ${fmtVal(nv, v.type)}` });
       }
       fs.line = f.line;
     }
     for (const v of stop.statics) {
-      const key = `${v.owner ?? ''}.${v.name}`;
+      const key = `${v.owner ?? ''}.${v.ownerFile ?? ''}.${v.name}`;
       let c = statics.get(key);
       if (c === undefined) {
-        c = newCell({ name: v.name, owner: v.owner ?? '', frame: -1 }, v.type);
+        c = newCell({ name: v.name, owner: v.owner ? keyOf(v.owner, v.ownerFile) : '', frame: -1 }, v.type);
         statics.set(key, c);
         vals.set(c, toV(v));
         raw.set(c, JSON.stringify(v));
@@ -367,7 +395,7 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
       if (JSON.stringify(nv) === JSON.stringify(vals.get(c))) continue;
       vals.set(c, nv);
       const w = via(regions.find((g) => g.cell === c));
-      emit({ k: 'write', line: lastLine, frame: top?.id ?? null, cell: c, val: nv, via: w, text: `${v.name} = ${text(v)}` });
+      emit({ k: 'write', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, cell: c, val: nv, via: w, text: `${v.name} = ${text(v)}` });
     }
     for (const b of stop.heap) {
       const c = heapCell.get(b.id);
@@ -378,15 +406,16 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
       vals.set(c, nv);
       if (first && /^00( 00)*/.test(nv.text)) continue;
       const w = via(regions.find((g) => g.cell === c));
-      emit({ k: 'write', line: lastLine, frame: top?.id ?? null, cell: c, val: nv, via: w, text: `#${b.id} = ${nv.text}` });
+      emit({ k: 'write', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, cell: c, val: nv, via: w, text: `#${b.id} = ${nv.text}` });
     }
 
     if (stop.line !== null && top) {
       lastLine = stop.line - 1;
+      lastFile = stop.file ?? top.file;
       // The sample represents this completed gdb stop. Earlier call/write/
       // heap events still carry the preceding sample.
       if (nextBound !== undefined) currentBound = nextBound;
-      emit({ k: 'step', line: lastLine, frame: top.id });
+      emit({ k: 'step', line: lastLine, file: fileOf(lastFile), frame: top.id });
     } else if (stop.exited && evs.length) {
       // The inferior no longer has readable memory. Clear globals as well.
       currentBound = Object.create(null);
@@ -397,11 +426,11 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
   // Only a program that exited can leak: a truncated or crashed run just
   // stopped with blocks still in use.
   const exited = !r.truncated && !r.signal;
-  const leaks = exited ? [...heapCell.entries()].map(([id, c]) => ({ cell: c, size: heapSize.get(id) ?? 0, line: heapLine.get(id) ?? null })) : [];
+  const leaks = exited ? [...heapCell.entries()].map(([id, c]) => ({ cell: c, size: heapSize.get(id) ?? 0, line: heapLine.get(id) ?? null, file: heapFile.get(id) })) : [];
   let error: Trace['error'] = null;
   if (r.signal) {
-    error = { msg: `${r.signal}: ${SIGNALS[r.signal] ?? 'the program was killed by a signal'}`, line: lastLine };
-    emit({ k: 'error', line: lastLine, frame: stack[stack.length - 1]?.id ?? null, msg: error.msg });
+    error = { msg: `${r.signal}: ${SIGNALS[r.signal] ?? 'the program was killed by a signal'}`, line: lastLine, file: fileOf(lastFile) };
+    emit({ k: 'error', line: lastLine, file: fileOf(lastFile), frame: stack[stack.length - 1]?.id ?? null, msg: error.msg });
   }
   return {
     engine: 'gdb',

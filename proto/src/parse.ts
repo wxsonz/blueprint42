@@ -1,4 +1,6 @@
 // tree-sitter-c → symbol model. Stable ids: func:<name>, static:<fn>.<var>, global:<name>.
+// A project (M5) parses each file on its own and links them: a `static`
+// function whose name another file also defines becomes func:<name>@<file>.
 import { Parser, Language, type Node, type Tree } from 'web-tree-sitter';
 import tsWasm from 'web-tree-sitter/web-tree-sitter.wasm?url';
 import cWasm from 'tree-sitter-c/tree-sitter-c.wasm?url';
@@ -16,14 +18,17 @@ export interface CallSite {
 
 export interface FnInfo {
   id: string;
-  name: string;
+  name: string; // graph key: the C name, or name@file for a colliding static
+  cname: string; // the identifier in the source
+  file: string; // project-relative path ('' for a single buffer)
   ret: string;
   isStatic: boolean;
   params: Var[];
   locals: Var[]; // non-static locals, in declaration order
   statics: Var[]; // function-local statics (chests)
-  calls: CallSite[]; // calls to functions defined in this buffer
+  calls: CallSite[]; // calls to functions defined in this buffer / project (callee = key)
   externals: string[]; // calls to anything else (read, malloc...)
+  declared?: boolean; // project: a header declares its prototype
   nameLine: number;
   nameCol: number;
   from: number; // char offsets of the whole definition
@@ -37,6 +42,7 @@ export interface FnInfo {
 export interface Global {
   id: string;
   name: string;
+  file: string;
   type: string;
   line: number;
   init: Node | null;
@@ -44,11 +50,15 @@ export interface Global {
 
 export interface Model {
   fns: FnInfo[];
-  byName: Map<string, FnInfo>;
+  byName: Map<string, FnInfo>; // by key
   globals: Global[];
   macros: Map<string, number>;
-  error: { line: number; col: number } | null;
+  error: { line: number; col: number; file?: string } | null;
   tree: Tree;
+  trees: Tree[]; // every parsed file, headers included
+  project: boolean;
+  files: string[]; // project: the .c files that hold functions (one module each)
+  warnings: { file: string; line: number; msg: string }[];
 }
 
 /** Only expressions that can observe a value are allowed in a binding. */
@@ -95,7 +105,7 @@ export function bufferShapes(model: Model): BufferShape[] {
     }
     for (const c of n.namedChildren) if (c) visit(c, n);
   };
-  visit(model.tree.rootNode);
+  for (const t of model.trees) visit(t.rootNode);
   return out;
 }
 
@@ -164,13 +174,23 @@ function firstError(n: Node): Node | null {
   return n;
 }
 
-export function parse(src: string): Model {
+interface Unit {
+  fns: FnInfo[];
+  globals: Global[];
+  macros: Map<string, number>;
+  protos: Set<string>;
+  tree: Tree;
+  error: { line: number; col: number } | null;
+}
+
+function parseUnit(src: string, file: string): Unit {
   if (!parser) throw new Error('parser not initialised');
   const tree = parser.parse(src)!;
   const root = tree.rootNode;
   const fns: FnInfo[] = [];
   const globals: Global[] = [];
   const macros = new Map<string, number>();
+  const protos = new Set<string>();
 
   const visitTop = (n: Node) => {
     if (n.type === 'preproc_def') {
@@ -186,14 +206,17 @@ export function parse(src: string): Model {
       return;
     }
     if (n.type === 'declaration') {
-      const { fnDecl } = declName(n.childForFieldName('declarator'));
-      if (fnDecl) return; // prototype
+      const { name: proto, fnDecl } = declName(n.childForFieldName('declarator'));
+      if (fnDecl) {
+        if (proto) protos.add(proto);
+        return; // prototype
+      }
       for (const d of n.childrenForFieldName('declarator')) {
         if (!d) continue;
         const { name, suffix } = declName(d);
         if (!name) continue;
         globals.push({
-          id: `global:${name}`, name, type: joinType(baseType(n), suffix),
+          id: `global:${name}`, name, file, type: joinType(baseType(n), suffix),
           line: d.startPosition.row, init: d.type === 'init_declarator' ? d.childForFieldName('value') : null,
         });
       }
@@ -226,7 +249,7 @@ export function parse(src: string): Model {
       if (f?.type === 'identifier') calls.push({ callee: f.text, line: c!.startPosition.row });
     }
     fns.push({
-      id: `func:${name}`, name, ret: joinType(baseType(n), suffix), isStatic: isStaticDecl(n),
+      id: `func:${name}`, name, cname: name, file, ret: joinType(baseType(n), suffix), isStatic: isStaticDecl(n),
       params, locals, statics, calls, externals: [],
       nameLine: nameNode.startPosition.row, nameCol: nameNode.startPosition.column,
       from: n.startIndex, to: n.endIndex, startLine: n.startPosition.row, endLine: n.endPosition.row,
@@ -234,16 +257,85 @@ export function parse(src: string): Model {
     });
   };
   for (const c of root.namedChildren) if (c) visitTop(c);
+  const e = firstError(root);
+  return { fns, globals, macros, protos, tree, error: e ? { line: e.startPosition.row, col: e.startPosition.column } : null };
+}
 
-  const byName = new Map(fns.map((f) => [f.name, f]));
+// Give every function its graph key and resolve call sites the way the
+// linker would: a name means this file's own definition first, then the one
+// non-static definition anywhere; anything else is external.
+function link(fns: FnInfo[]): Model['warnings'] {
+  const warnings: Model['warnings'] = [];
+  const byC = new Map<string, FnInfo[]>();
+  for (const f of fns) byC.set(f.cname, [...(byC.get(f.cname) ?? []), f]);
+  for (const group of byC.values()) {
+    const globalOnes = group.filter((f) => !f.isStatic);
+    for (const f of group) {
+      const unique = group.length === 1 || (!f.isStatic && globalOnes.length === 1);
+      f.name = unique ? f.cname : `${f.cname}@${f.file}`;
+      f.id = `func:${f.name}`;
+    }
+  }
   for (const f of fns) {
     const ext = new Set<string>();
-    f.calls = f.calls.filter((c) => (byName.has(c.callee) ? true : (ext.add(c.callee), false)));
+    const calls: CallSite[] = [];
+    for (const c of f.calls) {
+      const group = byC.get(c.callee) ?? [];
+      const target = group.find((g) => g.file === f.file) ?? (group.filter((g) => !g.isStatic).length === 1 ? group.find((g) => !g.isStatic) : undefined);
+      if (target) calls.push({ callee: target.name, line: c.line });
+      else {
+        ext.add(c.callee);
+        if (group.length) warnings.push({ file: f.file, line: c.line, msg: `${c.callee} is static in ${group[0].file}; the linker will not find it from ${f.file}` });
+      }
+    }
+    f.calls = calls;
     f.externals = [...ext];
   }
-  const e = firstError(root);
+  return warnings;
+}
+
+export function parse(src: string): Model {
+  const u = parseUnit(src, '');
+  link(u.fns);
   return {
-    fns, byName, globals, macros, tree,
-    error: e ? { line: e.startPosition.row, col: e.startPosition.column } : null,
+    fns: u.fns, byName: new Map(u.fns.map((f) => [f.name, f])), globals: u.globals, macros: u.macros,
+    tree: u.tree, trees: [u.tree], project: false, files: [], warnings: [], error: u.error,
+  };
+}
+
+export interface SourceFile {
+  path: string;
+  text: string;
+}
+
+// Parsing is per file and cached by text, so an edit re-parses one file.
+const unitCache = new Map<string, { text: string; unit: Unit }>();
+
+export function parseProject(sources: SourceFile[]): Model {
+  const parsed: { path: string; unit: Unit }[] = [];
+  for (const s of sources) {
+    if (!/\.[ch]$/.test(s.path)) continue;
+    let hit = unitCache.get(s.path);
+    if (!hit || hit.text !== s.text) {
+      hit = { text: s.text, unit: parseUnit(s.text, s.path) };
+      unitCache.set(s.path, hit);
+    }
+    // Cached units keep their raw call sites; link() works on copies.
+    const u = hit.unit;
+    parsed.push({ path: s.path, unit: { ...u, fns: u.fns.map((f) => ({ ...f })) } });
+  }
+  const cUnits = parsed.filter((p) => p.path.endsWith('.c')).map((p) => p.unit);
+  const fns = cUnits.flatMap((u) => u.fns);
+  const warnings = link(fns);
+  const headerProtos = new Set(parsed.filter((p) => p.path.endsWith('.h')).flatMap((p) => [...p.unit.protos]));
+  for (const f of fns) f.declared = f.isStatic || f.cname === 'main' || headerProtos.has(f.cname);
+  const macros = new Map<string, number>();
+  for (const { unit } of parsed) for (const [k, v] of unit.macros) if (!macros.has(k)) macros.set(k, v);
+  const broken = parsed.find((p) => p.unit.error);
+  return {
+    fns, byName: new Map(fns.map((f) => [f.name, f])), globals: cUnits.flatMap((u) => u.globals), macros,
+    tree: parsed[0]?.unit.tree ?? parser!.parse('')!, trees: parsed.map((p) => p.unit.tree), project: true,
+    files: [...new Set(fns.map((f) => f.file))], warnings,
+    error: broken ? { ...broken.unit.error!, file: broken.path } : null,
   };
 }

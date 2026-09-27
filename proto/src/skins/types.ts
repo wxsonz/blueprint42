@@ -105,13 +105,41 @@ export interface SpriteInfo {
   hovered: boolean;
 }
 
+// M5: a collapsed module (one .c file) drawn as a single block. Doors are its
+// public functions, the ones other files can call.
+export interface ModuleInfo {
+  name: string; // project-relative path
+  fns: number; // functions inside
+  doors: { name: string; live: boolean; undeclared: boolean }[];
+  more: number; // doors not listed
+  state: RunState; // running: the top frame is inside; waiting: a frame inside is waiting on a callee
+  running: string | null; // the function whose frame is newest inside
+  depth: number; // live frames inside
+  pinned: boolean;
+  selected: boolean;
+  hovered: boolean;
+  inPorts: number[];
+  outPorts: number[];
+}
+
+// An expanded module: a wall around its machines, with a title tab (`head`).
+export interface WallInfo {
+  name: string;
+  fns: number;
+  live: boolean; // a frame is running inside
+  pinned: boolean;
+  selected: boolean;
+  hovered: boolean;
+  head: Rect;
+}
+
 export interface Skin {
   id: string;
   name: string;
   blurb: string;
   casing: string; // canvas background colour, used to cut gaps where lines cross
   background(dc: Dc, camX: number, camY: number): void;
-  belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean }): void;
+  belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean; count: number }): void;
   node(dc: Dc, r: Rect, n: NodeInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
@@ -125,4 +153,7 @@ export interface Skin {
   beltHandle(dc: Dc, p: Pt): void; // drag handle on a selected belt
   ghost(dc: Dc, r: Rect, label: string): void; // reserved slot for a recursive copy
   icon(g: CanvasRenderingContext2D, kind: IconKind, s: number): void;
+  module(dc: Dc, r: Rect, m: ModuleInfo): void;
+  wall(dc: Dc, r: Rect, w: WallInfo): void; // drawn under belts and machines
+  door(dc: Dc, p: Pt, vertical: boolean, live: boolean): void; // where a belt passes through a wall
 }

@@ -6,14 +6,16 @@ why), then this file (current state and the next job).
 
 ## Where things stand (2026-09-27)
 
-- Branch `cleanup-and-trace`, **not merged, not pushed**. The author decides
-  on merging. M2 is committed: Codex's work as `75c5b53`, then a review
-  and fix pass on top.
-- **Done:** M0, M1, M3, M2 and M4. M3 was built before M2 on purpose (see
-  `DECISIONS.md` and SPEC §4).
-- **Next job: M5** (open a real project).
-- **Checks:** 46 tests pass (`npm test`), including automated M2, M3 and
-  M4 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`).
+- `cleanup-and-trace` was merged into `main`. M5 is on branch
+  `m5-open-project`. Nothing is pushed (there is no remote).
+- **Done:** M0, M1, M3, M2, M4 and M5. M3 was built before M2 on purpose
+  (see `DECISIONS.md` and SPEC §4).
+- **Next job: M6** (nvim bridge).
+- **Checks:** 63 tests pass (`npm test`), including automated M2, M3 and
+  M4 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
+  and M5 tests: `test/project.test.ts` (linking, modules, file server)
+  and `test/project-trace.test.ts` (gnl as a project, Makefile + libft,
+  library + driver, compile errors by file).
   `npm run check` is clean. The drop, bind, re-run, export and remove
   authoring flow was exercised headless with no console errors.
 
@@ -38,9 +40,12 @@ npx vitest run -t "M3 acceptance"    # one test by name
 | `styles/*.css` | Chrome and editor restyled via CSS variables on `html[data-skin]`. |
 | `main.ts` | App state, playback, sprite authoring, inspector, blueprint import/export, and per-sample localStorage. |
 | `blueprint.ts` | Validated, source-free author layer (`*.blueprint.json`) and read-only binding grammar. |
-| `samples.ts` | Bundled samples (`?raw`), with optional `stdin`, `defines`, `files`. |
+| `samples.ts` | Bundled samples (`?raw`), with optional `stdin`, `defines`, `files`; plus the gnl_v3 sample *project*. |
+| `workspace.ts` | M5: the open project (buffers vs disk, run settings, driver rule, save, diffs), `/api/fs` client. |
 
-The trace server lives in `proto/server/`:
+The servers live in `proto/server/` (`dev.mjs` starts Vite and takes a folder):
+- `project.mjs` is the only code that reads/writes the author's files
+  (open, list folders, poll for outside edits, save with mtime checks).
 - `trace.mjs` compiles with `cc -Wall -Wextra -Werror -g -O0` in a temp dir,
   runs gdb, and provides the Vite middleware with a same-origin +
   `x-ftb: 1` guard.
@@ -118,11 +123,29 @@ walked in the browser: the strip suggested on `get_next_line` comes with
 `pos <= len <= cap`, and playback freezes at the step with the culprit line
 red.
 
-## Next milestone: M5 (SPEC §4)
+## M5: projects (done)
 
-- **M5, open a real project:** multi-file directories, Makefile-aware build,
-  `.ft_blueprint/` next to the code, one module per file, collapsed by
-  default. This is the first milestone allowed to touch the filesystem.
+`npm run dev -- <folder>` or Open Folder… opens a project. Each `.c` is a
+module: collapsed blocks list their doors (public functions), open ones are
+walls; calls between two hosts share one trunk with a count. Saving always
+goes through the Save dialog (diffs, conflicts with outside edits). Builds
+use the project's Makefile (`CC="cc -g -O0"`), or cc on every file; a
+library runs through `.ft_blueprint/main.c`. Everything is recorded in
+`DECISIONS.md`.
+
+Known gaps:
+- Only sources, headers and Makefiles reach the build copy: a program that
+  opens data files (so_long maps) won't find them yet.
+- Tabs can't be closed down to zero, and there's no "new file"/rename in
+  the file list (edit on disk; the poll picks it up).
+- Pinned modules can still overlap if the author drags them together
+  (refused while dragging, but a module can grow into another when opened).
+
+## Next milestone: M6 (SPEC §4)
+
+- **M6, Neovim bridge:** nvim becomes the editor and ft_blueprint the view
+  next to it. M5's poll already follows files saved from nvim; the bridge
+  would sync unsaved buffers and the cursor.
 
 ## Gotchas learned the hard way
 

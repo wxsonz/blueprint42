@@ -23,15 +23,20 @@ export interface BoundValue {
   markers?: { label: string; index: number }[];
   error?: string;
 }
+// v2 (M5 projects) adds modules; its node positions are relative to their
+// module's top-left, so moving a file's block rewrites one entry, not all.
 export interface Blueprint {
-  version: 1;
+  version: 1 | 2;
   nodes: Record<string, { x: number; y: number; pinned: boolean }>;
+  modules?: Record<string, { x: number; y: number; pinned: boolean; collapsed: boolean }>;
   waypoints: Record<string, { x: number; y: number }>;
   sprites: Sprite[];
 }
 
 const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);
-const ident = /^[A-Za-z_]\w*$/;
+// A function key: its C name, or name@file for a static that another file shares.
+const ident = /^[A-Za-z_]\w*(?:@[\w.+@ /-]{1,300})?$/;
+const modulePath = (p: string) => p.length <= 400 && !p.split('/').some((s) => !s || s === '..' || s === '.');
 const expression = /^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$/;
 const rec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -44,8 +49,17 @@ export function isSafeBindingExpr(value: string): boolean {
 
 export function parseBlueprint(input: unknown): Blueprint {
   const data: unknown = typeof input === 'string' ? JSON.parse(input) : input;
-  if (!rec(data) || data.version !== 1 || !rec(data.nodes) || !rec(data.waypoints) || !Array.isArray(data.sprites))
+  if (!rec(data) || (data.version !== 1 && data.version !== 2) || !rec(data.nodes) || !rec(data.waypoints) || !Array.isArray(data.sprites))
     throw new Error('Invalid blueprint format');
+  let modules: Blueprint['modules'];
+  if (data.version === 2 && data.modules !== undefined) {
+    if (!rec(data.modules) || Object.keys(data.modules).length > 1000) throw new Error('Invalid modules');
+    modules = Object.create(null) as NonNullable<Blueprint['modules']>;
+    for (const [file, m] of Object.entries(data.modules)) {
+      if (!modulePath(file) || !rec(m) || !finite(m.x) || !finite(m.y) || typeof m.pinned !== 'boolean' || typeof m.collapsed !== 'boolean') throw new Error('Invalid module');
+      modules[file] = { x: m.x, y: m.y, pinned: m.pinned, collapsed: m.collapsed };
+    }
+  }
   if (Object.keys(data.nodes).length > 1000 || Object.keys(data.waypoints).length > 2000 || data.sprites.length > 500)
     throw new Error('Blueprint is too large');
   const nodes: Blueprint['nodes'] = Object.create(null);
@@ -95,7 +109,7 @@ export function parseBlueprint(input: unknown): Blueprint {
     }
     return sprite;
   });
-  return { version: 1, nodes, waypoints, sprites };
+  return data.version === 2 ? { version: 2, nodes, ...(modules ? { modules } : {}), waypoints, sprites } : { version: 1, nodes, waypoints, sprites };
 }
 
 export function serializeBlueprint(blueprint: Blueprint): string {

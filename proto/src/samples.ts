@@ -132,3 +132,51 @@ export const SAMPLES: Sample[] = [
     defines: ['BUFFER_SIZE=4', 'GNL_INIT_CAP=8'],
     files: { 'get_next_line.h': gnlH } },
 ];
+
+// M5: a sample *project*. The same fixture files, untouched, plus what the
+// tool keeps next to a project: a driver main and the run settings. Opens
+// read-only (there is no folder to save to); `npm run dev -- <folder>` opens
+// a real one.
+export interface SampleProject {
+  key: string;
+  title: string;
+  blurb: string;
+  name: string;
+  files: Record<string, string>;
+}
+
+const gnlDriver = `#include <stdio.h>
+#include <stdlib.h>
+#include "get_next_line.h"
+
+int	main(void)
+{
+	char	*line;
+	int		n;
+
+	n = 0;
+	line = get_next_line(0);
+	while (line)
+	{
+		n++;
+		printf("%s", line);
+		free(line);
+		line = get_next_line(0);
+	}
+	return (n);
+}
+`;
+
+export const SAMPLE_PROJECTS: SampleProject[] = [
+  {
+    key: 'gnl-project', title: 'gnl_v3 project', name: 'gnl_v3',
+    blurb: 'the same get_next_line opened as a project: one module per file, a driver main in .ft_blueprint/',
+    files: {
+      'get_next_line.c': gnlC,
+      'get_next_line.h': gnlH,
+      'get_next_line_utils.c': gnlU,
+      '.ft_blueprint/main.c': gnlDriver,
+      '.ft_blueprint/run.json': JSON.stringify({ stdin: 'hello\nworld of lines\n!\n', args: [], defines: ['BUFFER_SIZE=4', 'GNL_INIT_CAP=8'] }, null, 2) + '\n',
+    },
+  },
+];

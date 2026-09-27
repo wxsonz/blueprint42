@@ -198,6 +198,13 @@ chasing `len`, are in M2's acceptance, which now comes after M3.)
 - Handles libft-sized projects (~50 files) without the grid becoming a
   hairball. Group into a module per file, collapsed by default.
 
+✅ Accept: gnl_v3 opened as a project runs through its driver main, every
+stop maps to the right file, and the M4 off-by-one is still caught at the
+same step (now reported in `get_next_line_utils.c`). A Makefile project with
+a libft sub-make and two same-named `static` helpers traces with each
+helper told apart. 50 generated files open collapsed, with no overlapping
+modules and one trunk per pair of files that call each other.
+
 ### M6 — Neovim bridge (the end state)
 - An nvim plugin syncs buffers and cursor over msgpack-RPC or a websocket to
   the grid window. Your real nvim with your config becomes the editor, and the

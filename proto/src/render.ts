@@ -1,9 +1,9 @@
 // Grid engine: camera, hosts, hit-testing and playback timing. Routing lives
 // in route.ts; every pixel is delegated to the active skin (skins/*.ts).
-import { CELL_PX, INV_HEAD_PX, MH, MW, SLOT_PX, type Layout } from './layout';
+import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, type Layout } from './layout';
 import type { Model } from './parse';
 import { fmtVal, type Ev, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
-import { buildScene, crossings, hostKey, procPlace, type Belt, type Scene } from './route';
+import { buildScene, crossings, hostKey, isModuleKey, procPlace, type Belt, type Scene } from './route';
 import type { Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
@@ -15,10 +15,11 @@ export type Entity =
   | { k: 'belt'; key: string }
   | { k: 'static'; fn: string; name: string }
   | { k: 'sprite'; id: string }
+  | { k: 'module'; file: string }
   | { k: 'proc' };
 
 export const entKey = (e: Entity | null): string =>
-  !e ? '' : e.k === 'node' ? `n:${e.id}` : e.k === 'belt' ? `b:${e.key}` : e.k === 'static' ? `s:${e.fn}.${e.name}` : e.k === 'sprite' ? `sp:${e.id}` : 'p';
+  !e ? '' : e.k === 'node' ? `n:${e.id}` : e.k === 'belt' ? `b:${e.key}` : e.k === 'static' ? `s:${e.fn}.${e.name}` : e.k === 'sprite' ? `sp:${e.id}` : e.k === 'module' ? `m:${e.file}` : 'p';
 
 export interface ViewState {
   layout: Layout;
@@ -137,6 +138,11 @@ export function frameHosts(snap: Snap | null, scene: Scene): Map<number, string>
   const out = new Map<number, string>();
   const count = new Map<string, number>();
   for (const f of snap?.stack ?? []) {
+    const mk = scene.moduleOf.get(f.fn);
+    if (mk) {
+      out.set(f.id, mk);
+      continue;
+    }
     const k = (count.get(f.fn) ?? 0) + 1;
     count.set(f.fn, k);
     out.set(f.id, hostKey(f.fn, Math.min(k, scene.copies.get(f.fn) ?? 1)));
@@ -148,7 +154,10 @@ function liveHostPairs(snap: Snap | null, hosts: Map<number, string>): [string, 
   const st = snap?.stack ?? [];
   const out: [string, string][] = [];
   if (st.length) out.push(['', hosts.get(st[0].id)!]);
-  for (let i = 0; i + 1 < st.length; i++) out.push([hosts.get(st[i].id)!, hosts.get(st[i + 1].id)!]);
+  for (let i = 0; i + 1 < st.length; i++) {
+    const [a, b] = [hosts.get(st[i].id)!, hosts.get(st[i + 1].id)!];
+    if (a !== b) out.push([a, b]); // a call inside one collapsed module has no belt
+  }
   return out;
 }
 
@@ -160,7 +169,8 @@ function eventPair(trace: Trace, i: number, ev: Ev, base: Scene): [string, strin
   const idx = snap.stack.findIndex((f) => f.id === ev.frame);
   if (idx < 0) return null;
   const caller = idx > 0 ? hosts.get(snap.stack[idx - 1].id)! : '';
-  return [caller, hosts.get(snap.stack[idx].id)!];
+  const callee = hosts.get(snap.stack[idx].id)!;
+  return caller === callee ? null : [caller, callee];
 }
 
 // Scene for the current playback position, including belts that only exist
@@ -193,6 +203,26 @@ export function beltHandle(b: Belt): Pt {
   return [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2];
 }
 
+// Where a belt crosses a module's wall: [point, whether the wall edge is vertical].
+function wallCrossings(pts: Pt[], r: Rect): [Pt, boolean][] {
+  const out: [Pt, boolean][] = [];
+  const between = (v: number, a: number, b: number) => v > Math.min(a, b) + 1e-6 && v < Math.max(a, b) - 1e-6;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [[x0, y0], [x1, y1]] = [pts[i], pts[i + 1]];
+    for (const ex of [r.x, r.x + r.w]) {
+      if (!between(ex, x0, x1)) continue;
+      const y = y0 + ((ex - x0) / (x1 - x0)) * (y1 - y0);
+      if (y > r.y && y < r.y + r.h) out.push([[ex, y], true]);
+    }
+    for (const ey of [r.y, r.y + r.h]) {
+      if (!between(ey, y0, y1)) continue;
+      const x = x0 + ((ey - y0) / (y1 - y0)) * (x1 - x0);
+      if (x > r.x && x < r.x + r.w) out.push([[x, ey], false]);
+    }
+  }
+  return out;
+}
+
 function distToPolyline(pts: Pt[], x: number, y: number): number {
   let best = Infinity;
   for (let i = 0; i + 1 < pts.length; i++) {
@@ -215,6 +245,8 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
   }
   const node = s.layout.at(wx, wy);
   if (node) return { k: 'node', id: node.id };
+  const mod = s.layout.moduleAt(wx, wy);
+  if (mod?.header) return { k: 'module', file: mod.file };
   const scene = sceneAt(s);
   const fr = s.trace && s.trace.evs.length ? frameAt(s.trace, s.pos) : null;
   const live = new Set(frameHosts(fr?.snap ?? null, scene).values());
@@ -224,7 +256,7 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
     const hh = MH + (fn ? (INV_HEAD_PX + (fn.params.length + fn.locals.length) * SLOT_PX + 6) / CELL_PX : 0);
     if (wx >= h.x && wx < h.x + MW && wy >= h.y && wy < h.y + hh) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
   }
-  for (const n of s.layout.nodes.values()) {
+  for (const n of s.layout.visible()) {
     const st = n.fn?.statics ?? [];
     for (let i = 0; i < st.length; i++) {
       const cx = n.place.x + i, cy = n.place.y - 2;
@@ -259,7 +291,7 @@ export function activeHostRect(s: ViewState): Rect | null {
   if (fr.ev?.k === 'call') (snap = s.trace.snaps[fr.i + 1]), (id = fr.ev.frame);
   if (id === null) return null;
   const h = scene.hosts.get(frameHosts(snap, scene).get(id) ?? '');
-  return h ? { x: h.x, y: h.y, w: MW, h: MH + h.inv } : null;
+  return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
 }
 
 function staticCellId(trace: Trace | null, fn: string, name: string): number | null {
@@ -395,6 +427,7 @@ export class GridView {
     };
     const scene = buildScene(s.layout, s.model, s.trace);
     for (const o of scene.obstacles) grow(o.x - 1, o.y, o.w + 2, o.h);
+    for (const w of scene.walls) grow(w.rect.x, w.rect.y, w.rect.w, w.rect.h);
     for (const b of scene.belts) for (const [x, y] of b.pts) grow(x - 0.5, y - 0.5, 1, 1);
     const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
     const shelf = slots >= 0 ? heapSlotRect(s.layout, slots) : null;
@@ -472,7 +505,7 @@ export class GridView {
       const last = trace.evs[trace.evs.length - 1];
       for (const [id, hk] of hostOf) if (id === last?.frame) errHost = hk;
       if (!errHost && last?.frame !== null) {
-        for (const sn of trace.snaps) for (const f of sn.stack) if (f.id === last.frame) errHost = f.fn;
+        for (const sn of trace.snaps) for (const f of sn.stack) if (f.id === last.frame) errHost = scene.moduleOf.get(f.fn) ?? f.fn;
       }
     }
 
@@ -495,11 +528,26 @@ export class GridView {
     // ---- focus: what the pointer is on dims everything unrelated ----
     const focus = s.selected ?? s.hovered;
     const focusFn = focus?.k === 'node' ? focus.id.slice(5) : null;
+    const fileOfHost = (k: string) => scene.hosts.get(k)?.module ?? s.layout.nodes.get(`func:${scene.hosts.get(k)?.fn}`)?.file;
     const related = (b: Belt) =>
       !focus ? true :
       focus.k === 'belt' ? b.key === focus.key :
       focus.k === 'proc' ? b.from === '' :
+      focus.k === 'module' ? fileOfHost(b.fromHost) === focus.file || fileOfHost(b.toHost) === focus.file :
       focusFn !== null ? b.from === focusFn || b.to === focusFn : true;
+
+    // ---- module walls (M5): an expanded file, under everything else ----
+    const liveFiles = new Set(st.map((f) => s.layout.nodes.get(`func:${f.fn}`)?.file));
+    for (const w of scene.walls) {
+      const m = s.layout.modules.get(w.file);
+      g.save();
+      skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), {
+        name: w.file, fns: s.layout.nodesOf(w.file).length, live: liveFiles.has(w.file), pinned: !!m?.pinned,
+        selected: selKey === `m:${w.file}`, hovered: hovKey === `m:${w.file}`,
+        head: this.rectW(w.rect.x, w.rect.y, w.rect.w, 1.2),
+      });
+      g.restore();
+    }
 
     // ---- ghost slot for a recursive function's first copy ----
     for (const h of scene.hosts.values()) {
@@ -544,9 +592,11 @@ export class GridView {
         selected: selKey === `b:${b.key}`,
         hovered: hovKey === `b:${b.key}` || (!!focusFn && !dim && !!focus),
         custom: b.custom,
+        // a trunk into or out of a collapsed module carries this many call sites
+        count: isModuleKey(b.fromHost) || isModuleKey(b.toHost) ? b.lines.length : 0,
       });
       g.restore();
-      const predicted = b.from === b.to || !!s.model?.byName.get(b.from)?.calls.some((c) => c.callee === b.to);
+      const predicted = b.from === b.to || isModuleKey(b.from) || isModuleKey(b.to) || !!s.model?.byName.get(b.from)?.calls.some((c) => c.callee === b.to);
       if (b.transient && !predicted) {
         // M4: a call the static picture did not predict (e.g. through a function pointer)
         const [hx, hy] = this.sp(beltHandle(b));
@@ -561,6 +611,25 @@ export class GridView {
         g.restore();
       }
       drawn.push(b);
+    }
+
+    // ---- doors: where a belt passes through the wall of a module it serves ----
+    const wallOf = new Map(scene.walls.map((w) => [w.file, w.rect]));
+    for (const b of visible) {
+      const fa = fileOfHost(b.fromHost);
+      const fb = fileOfHost(b.toHost);
+      if (fa === fb) continue;
+      const live = b.key === animKey || liveKeys.has(b.key);
+      for (const file of [fa, fb]) {
+        const w = file ? wallOf.get(file) : undefined;
+        if (!w) continue;
+        for (const [p, vertical] of wallCrossings(b.pts, w)) {
+          g.save();
+          g.globalAlpha = related(b) ? 1 : 0.35;
+          skin.door(dc, this.sp(p), vertical, live);
+          g.restore();
+        }
+      }
     }
 
     // ---- process ----
@@ -605,6 +674,29 @@ export class GridView {
       g.restore();
     }
 
+    // ---- collapsed modules (M5): one block per file, doors listed ----
+    for (const h of scene.hosts.values()) {
+      if (!h.module) continue;
+      const inside = framesOnHost.get(h.key) ?? [];
+      const liveFns = new Set(inside.map((f) => f.fn));
+      const fns = s.layout.nodesOf(h.module).map((n) => n.fn);
+      const doors = doorsOf(fns);
+      const newest = inside[inside.length - 1];
+      g.save();
+      skin.module(dc, this.rectW(h.x, h.y, h.w, h.h), {
+        name: h.module, fns: fns.length,
+        doors: doors.slice(0, MOD_DOORS).map((f) => ({ name: f.cname, live: liveFns.has(f.name), undeclared: f.declared === false })),
+        more: Math.max(0, doors.length - MOD_DOORS),
+        state: errHost === h.key ? 'error' : topHost === h.key ? 'running' : inside.length ? 'waiting' : 'idle',
+        running: newest ? s.model?.byName.get(newest.fn)?.cname ?? newest.fn : null,
+        depth: inside.length,
+        pinned: !!s.layout.modules.get(h.module)?.pinned,
+        selected: selKey === `m:${h.module}`, hovered: hovKey === `m:${h.module}`,
+        ...portsOf(h.key),
+      });
+      g.restore();
+    }
+
     // ---- statics (on homes) + frames (on every drawn host) ----
     const anchors = new Map<number, Anchor>();
     const flash = ev && ev.k === 'write' && t >= switchAt(ev) ? { cell: ev.cell, a: 1 - (t - switchAt(ev)) / (1 - switchAt(ev)) } : null;
@@ -614,7 +706,7 @@ export class GridView {
     for (const f of st) for (const c of f.cells) live.add(c.id);
     for (const c of snap?.statics ?? []) live.add(c.id);
 
-    for (const n of s.layout.nodes.values()) {
+    for (const n of s.layout.visible()) {
       (n.fn?.statics ?? []).forEach((v, i) => {
         const r = this.rectW(n.place.x + i + 0.12, n.place.y - 2 + 0.12, 0.76, 0.76);
         const id = staticCellId(trace, n.name, v.name);
@@ -762,8 +854,10 @@ export class GridView {
       const b = anchors.get(c.val.to);
       g.save();
       if (focus) g.globalAlpha = 0.55;
-      if (!b || !live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]);
-      else {
+      if (!live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]);
+      else if (!b) {
+        // points at something on screen elsewhere, e.g. inside a collapsed module
+      } else {
         const inNew = newFrame !== null && st.find((f) => f.id === newFrame)?.cells.some((x) => x.id === c.id);
         const grow = inNew ? Math.min(1, ((t - switchAt(ev!)) / (1 - switchAt(ev!))) * 1.4) : 1;
         const curve = this.wireCurve(a, b);

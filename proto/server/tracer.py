@@ -5,6 +5,7 @@
 import json
 import os
 import re
+import shlex
 import time
 
 import gdb
@@ -13,8 +14,7 @@ CFG = json.load(open(os.environ["FTB_CFG"]))
 USER = set(CFG["fns"])
 MAX_STEPS = CFG["max_steps"]
 DEADLINE = time.monotonic() + CFG.get("max_seconds", 20)
-SRC = CFG["src_name"]
-SOURCE_LINES = open(SRC).read().splitlines()
+ROOT = os.path.realpath(CFG.get("root", "."))
 BINDINGS = CFG.get("bindings", [])
 SAFE_EXPR = re.compile(r"^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$")
 
@@ -62,6 +62,42 @@ def caller_line(frame):
         return frame.find_sal().line
     except Exception:
         return None
+
+
+_rel = {}
+
+
+def rel_path(symtab):
+    """A symtab's file relative to the project root, or None outside it."""
+    if symtab is None:
+        return None
+    try:
+        full = symtab.fullname()
+    except Exception:
+        return None
+    if full not in _rel:
+        real = os.path.realpath(full)
+        _rel[full] = os.path.relpath(real, ROOT) if real.startswith(ROOT + os.sep) else None
+    return _rel[full]
+
+
+def frame_file(frame):
+    try:
+        return rel_path(frame.find_sal().symtab)
+    except Exception:
+        return None
+
+
+_sources = {}
+
+
+def source_lines(path):
+    if path not in _sources:
+        try:
+            _sources[path] = open(os.path.join(ROOT, path)).read().splitlines()
+        except OSError:
+            _sources[path] = []
+    return _sources[path]
 
 
 # ---------------- values ----------------
@@ -173,34 +209,53 @@ def frame_vars(frame, fid):
     return out
 
 
-STATICS = []  # (owner function or "", symbol)
+STATICS = []  # (owner function or "", owner's file, symbol)
+
+
+def function_symbols(fn):
+    """Every definition of fn: two files may each have their own static one."""
+    found = []
+    try:
+        g = gdb.lookup_global_symbol(fn)
+        if g is not None:
+            found.append(g)
+    except Exception:
+        pass
+    try:
+        found.extend(gdb.lookup_static_symbols(fn))
+    except Exception:
+        try:
+            s = gdb.lookup_static_symbol(fn)
+            if s is not None:
+                found.append(s)
+        except Exception:
+            pass
+    return found
 
 
 def collect_statics():
     seen = set()
     for fn in USER:
-        try:
-            sym = gdb.lookup_global_symbol(fn) or gdb.lookup_static_symbol(fn)
-            if sym is None:
+        for sym in function_symbols(fn):
+            try:
+                block = gdb.block_for_pc(int(sym.value().address))
+            except Exception:
                 continue
-            block = gdb.block_for_pc(int(sym.value().address))
-        except Exception:
-            continue
-        stack = [block]
-        while stack:
-            b = stack.pop()
-            for s in b:
-                if s.is_variable and s.addr_class == gdb.SYMBOL_LOC_STATIC and (fn, s.name) not in seen:
-                    seen.add((fn, s.name))
-                    STATICS.append((fn, s))
+            file = rel_path(sym.symtab)
+            if block is None or file is None:
+                continue
+            for s in block:
+                if s.is_variable and s.addr_class == gdb.SYMBOL_LOC_STATIC and (fn, file, s.name) not in seen:
+                    seen.add((fn, file, s.name))
+                    STATICS.append((fn, file, s))
             # sub-blocks are not iterable directly; function-level statics are enough here
     try:
         blk = gdb.selected_frame().block()
         for glob in (blk.static_block, blk.global_block):
             for s in glob:
-                if s.is_variable and s.symtab is not None and s.symtab.filename.endswith(SRC) and ("", s.name) not in seen:
-                    seen.add(("", s.name))
-                    STATICS.append(("", s))
+                if s.is_variable and rel_path(s.symtab) is not None and ("", "", s.name) not in seen:
+                    seen.add(("", "", s.name))
+                    STATICS.append(("", rel_path(s.symtab), s))
     except Exception:
         pass
 
@@ -221,12 +276,12 @@ def changed(key, rec):
 
 def statics_now():
     out = []
-    for owner, s in STATICS:
+    for owner, file, s in STATICS:
         try:
-            key = f"s.{owner}.{s.name}"
+            key = f"s.{owner}.{file}.{s.name}"
             rec = var_record(key, s.name, s.value())
             if changed(key, rec):
-                out.append(dict(rec, owner=owner))
+                out.append(dict(rec, owner=owner, ownerFile=file))
         except Exception:
             pass
     return out
@@ -244,7 +299,7 @@ def heap_now():
         if last_sent.get(("heap", b["id"])) == hexed:
             continue
         last_sent[("heap", b["id"])] = hexed
-        out.append({"id": b["id"], "addr": addr, "size": b["size"], "hex": hexed, "line": b["line"]})
+        out.append({"id": b["id"], "addr": addr, "size": b["size"], "hex": hexed, "line": b["line"], "file": b.get("file")})
     return out, ids
 
 
@@ -280,10 +335,17 @@ class Ret(gdb.FinishBreakpoint):
         pass
 
 
+def is_user(frame):
+    try:
+        return frame.name() in USER and frame_file(frame) is not None
+    except gdb.error:
+        return False
+
+
 def user_caller():
     try:
         caller = gdb.newest_frame().older()
-        return caller if caller is not None and caller.name() in USER else None
+        return caller if caller is not None and is_user(caller) else None
     except Exception:
         return None
 
@@ -323,7 +385,7 @@ class Alloc(gdb.Breakpoint):
             size, old = {"malloc": (a, 0), "calloc": (a * b, 0), "realloc": (b, a)}[self.kind]
         except Exception:
             return False
-        alloc_wait.append({"size": size, "old": old, "line": caller_line(caller)})
+        alloc_wait.append({"size": size, "old": old, "line": caller_line(caller), "file": frame_file(caller)})
         return True
 
 
@@ -340,8 +402,8 @@ def collect_alloc():
     if addr:
         bid = next_block[0]
         next_block[0] += 1
-        heap[addr] = {"id": bid, "size": w["size"], "line": w["line"]}
-        pending.append({"k": "alloc", "id": bid, "addr": addr, "size": w["size"], "line": w["line"]})
+        heap[addr] = {"id": bid, "size": w["size"], "line": w["line"], "file": w["file"]}
+        pending.append({"k": "alloc", "id": bid, "addr": addr, "size": w["size"], "line": w["line"], "file": w["file"]})
 
 
 class Free(gdb.Breakpoint):
@@ -360,7 +422,7 @@ class Free(gdb.Breakpoint):
             b = heap.pop(addr)
             pending.append({"k": "free", "id": b["id"]})
         elif addr:
-            pending.append({"k": "badfree", "addr": addr, "line": caller_line(caller)})
+            pending.append({"k": "badfree", "addr": addr, "line": caller_line(caller), "file": frame_file(caller)})
         return False
 
 
@@ -399,11 +461,8 @@ def user_stack():
     out = []
     f = gdb.newest_frame()
     while f is not None:
-        try:
-            if f.name() in USER:
-                out.append(f)
-        except gdb.error:
-            pass
+        if is_user(f):
+            out.append(f)
         f = f.older()
     out.reverse()
     return out
@@ -510,7 +569,8 @@ def bindings_now(cur):
         for sprite in BINDINGS:
             binding = sprite.get("binding") or {}
             if binding.get("scope") == "fn":
-                selected = next((f for f in reversed(cur) if f.name() == binding.get("fn")), None)
+                want_file = binding.get("file")
+                selected = next((f for f in reversed(cur) if f.name() == binding.get("fn") and (not want_file or frame_file(f) == want_file)), None)
             else:
                 selected = cur[0] if cur else None
             fid = next((fr["id"] for fr in reversed(frames) if fr["frame"] == selected), None) if selected is not None else None
@@ -538,8 +598,8 @@ def record_stop():
     for f in cur[keep:]:
         fid = next_frame[0]
         next_frame[0] += 1
-        frames.append({"id": fid, "fn": f.name(), "frame": f})
-        pending.append({"k": "call", "id": fid, "fn": f.name()})
+        frames.append({"id": fid, "fn": f.name(), "file": frame_file(f), "frame": f})
+        pending.append({"k": "call", "id": fid, "fn": f.name(), "file": frame_file(f)})
         try:
             Ret(f, fid)
         except Exception:
@@ -551,17 +611,19 @@ def record_stop():
         symbols = local_symbols(f)
         local_kinds[fid] = symbols
         line = previous_lines.get(fid)
-        source = SOURCE_LINES[line - 1] if line is not None and 1 <= line <= len(SOURCE_LINES) else ""
+        lines = source_lines(fr["file"]) if fr["file"] else []
+        source = lines[line - 1] if line is not None and 1 <= line <= len(lines) else ""
         for name, is_argument in symbols.items():
             if is_argument or line_assigns(source, name):
                 defined_locals.add((fid, name))
         previous_lines[fid] = caller_line(f)
         sent = [v for v in frame_vars(f, fid) if changed(f"{fid}.{v['name']}", v)]
-        out_frames.append({"id": fid, "fn": fr["fn"], "line": caller_line(f), "vars": sent, "delta": fid in seen_frames})
+        out_frames.append({"id": fid, "fn": fr["fn"], "file": fr["file"], "line": caller_line(f), "vars": sent, "delta": fid in seen_frames})
         seen_frames.add(fid)
     heap_blocks, heap_ids = heap_now()
     stops.append({
         "line": out_frames[-1]["line"] if out_frames else None,
+        "file": out_frames[-1]["file"] if out_frames else None,
         "events": pending[:],
         "frames": out_frames,
         "statics": statics_now(),
@@ -576,12 +638,21 @@ def main():
     result = {"stops": stops, "truncated": False, "exit": None, "signal": None, "error": None}
     try:
         gdb.execute("break main", to_string=True)
-        gdb.execute(f"run < {CFG['stdin']} > {CFG['stdout']} 2> {CFG['stderr']}", to_string=True)
+        args = " ".join(shlex.quote(a) for a in CFG.get("args", []))
+        q = shlex.quote
+        gdb.execute(f"run {args} < {q(CFG['stdin'])} > {q(CFG['stdout'])} 2> {q(CFG['stderr'])}", to_string=True)
     except gdb.error as e:
         result["error"] = str(e)
         return result
     if not alive():
         result["error"] = "the program exited before reaching main"
+        return result
+    try:
+        has_lines = gdb.selected_frame().find_sal().symtab is not None
+    except gdb.error:
+        has_lines = False
+    if not has_lines:
+        result["error"] = "main has no debug info: was it built with -g? (a Makefile that calls cc directly instead of $(CC) drops it)"
         return result
     for spec in ("malloc", "calloc", "realloc"):
         Alloc(spec)

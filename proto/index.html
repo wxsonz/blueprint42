@@ -19,6 +19,8 @@
           <span class="logo" aria-hidden="true"></span>
           <span class="name">ft_blueprint</span>
         </div>
+        <button id="btn-open" class="btn" title="Open a project folder (Ctrl+O)">Open Folder…</button>
+        <div id="project-chip" class="seg" hidden></div>
         <nav id="samples" class="seg" aria-label="Samples"></nav>
         <span class="grow"></span>
         <span class="lbl">Skin</span>
@@ -29,18 +31,28 @@
       <main id="panes">
         <section id="editor-pane" class="pane">
           <div class="pane-head">
+            <button id="btn-files" class="toggle" hidden aria-pressed="true" title="Files (Ctrl+B)"><span class="sw" aria-hidden="true"></span>Files</button>
             <span class="title" id="file-name">pointer.c</span>
             <span class="grow"></span>
+            <button id="btn-save" class="btn sm" hidden title="Save… (Ctrl+S) — always asks first">Save…</button>
             <button id="btn-revert" class="btn sm" hidden title="Discard your edits and layout for this sample">Revert</button>
             <button id="btn-blueprint-save" class="btn sm" title="Download the author layer as a blueprint JSON file">Export blueprint</button>
             <button id="btn-blueprint-load" class="btn sm" title="Load a blueprint JSON file">Import blueprint</button>
             <input id="blueprint-file" type="file" accept=".blueprint.json,application/json" hidden>
             <button id="vim-toggle" class="toggle" aria-pressed="true"><span class="sw" aria-hidden="true"></span>Vim</button>
           </div>
-          <div class="pane-body" id="editor"></div>
+          <div id="tabs" class="tabs" hidden role="tablist" aria-label="Open files"></div>
+          <div class="ed-main">
+            <nav id="explorer" hidden aria-label="Project files"></nav>
+            <div class="pane-body" id="editor"></div>
+          </div>
           <div class="stdin">
-            <label for="stdin"><span class="title">stdin</span> <span class="info">fed to the program when it runs under gdb</span></label>
+            <label for="stdin"><span class="title">stdin</span> <span class="info" id="stdin-info">fed to the program when it runs under gdb</span></label>
             <textarea id="stdin" rows="3" spellcheck="false" autocomplete="off"></textarea>
+            <div class="run-row" id="run-row" hidden>
+              <label>args <input id="run-args" spellcheck="false" autocomplete="off" placeholder="./prog arguments"></label>
+              <label>-D <input id="run-defs" spellcheck="false" autocomplete="off" placeholder="BUFFER_SIZE=42"></label>
+            </div>
           </div>
         </section>
 

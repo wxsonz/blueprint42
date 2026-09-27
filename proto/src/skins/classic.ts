@@ -2,7 +2,7 @@
 // the active (navy) title bar, everything else is inactive grey. Statics are
 // floppy disks, pointers are links, stale code is "(Not Responding)".
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { arrowHead, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
+import { arrowHead, baseName, beltMid, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -179,6 +179,116 @@ export const classic: Skin = {
     const walk = new Walk(pts);
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), DARK);
+    if (o.count > 1) {
+      // a tooltip: how many calls this trunk carries
+      const [mx, my] = beltMid(pts);
+      const fs = px(dc, 11, 7);
+      g.font = UI(fs);
+      const t = `${o.count} calls`;
+      const tw = Math.round(g.measureText(t).width + px(dc, 8));
+      const th = Math.round(fs + px(dc, 5));
+      const bx = Math.round(mx - tw / 2), by = Math.round(my - th / 2);
+      g.fillStyle = '#ffffe1';
+      g.fillRect(bx, by, tw, th);
+      g.strokeStyle = DARK;
+      g.lineWidth = 1;
+      g.strokeRect(bx + 0.5, by + 0.5, tw - 1, th - 1);
+      g.fillStyle = DARK;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(t, mx, by + th / 2 + 0.5);
+    }
+  },
+
+  // A collapsed file is an Explorer window listing its public functions.
+  module(dc, r0, m) {
+    const g = dc.g;
+    const r = snapRect(r0);
+    raised(g, r);
+    const tb = { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: px(dc, 18, 9) };
+    titleBar(dc, tb, baseName(m.name), m.state === 'running' || m.state === 'error', true);
+    const sh = px(dc, 17, 8);
+    const list = { x: r.x + 5, y: tb.y + tb.h + px(dc, 4), w: r.w - 10, h: r.h - tb.h - sh - px(dc, 16) };
+    sunken(g, list, HI);
+    g.save();
+    g.beginPath();
+    g.rect(list.x + 2, list.y + 2, list.w - 4, list.h - 4);
+    g.clip();
+    const rowH = 0.55 * dc.cs;
+    const fs = px(dc, 11, 7);
+    g.textBaseline = 'middle';
+    m.doors.forEach((d, i) => {
+      const y = list.y + 3 + i * rowH;
+      const ix = list.x + px(dc, 5);
+      if (d.live) {
+        g.fillStyle = NAVY;
+        g.fillRect(ix + px(dc, 12), y + 1, list.w - px(dc, 22), rowH - 2);
+      }
+      // a little .exe icon per door
+      g.fillStyle = d.undeclared ? '#ffff00' : FACE;
+      g.fillRect(ix, y + rowH * 0.25, px(dc, 9, 5), rowH * 0.5);
+      g.strokeStyle = DARK;
+      g.lineWidth = 1;
+      g.strokeRect(Math.round(ix) + 0.5, Math.round(y + rowH * 0.25) + 0.5, Math.round(px(dc, 9, 5)) - 1, Math.round(rowH * 0.5) - 1);
+      g.fillStyle = d.live ? HI : DARK;
+      g.textAlign = 'left';
+      g.font = UI(fs);
+      g.fillText(fitText(g, d.name + (d.undeclared ? ' (no prototype)' : ''), (s2) => UI(s2), fs, list.w - px(dc, 26), 6), ix + px(dc, 14), y + rowH / 2 + 0.5);
+    });
+    if (m.more) {
+      g.fillStyle = SHADOW;
+      g.textAlign = 'left';
+      g.fillText(`${m.more} more…`, list.x + px(dc, 19), list.y + 3 + m.doors.length * rowH + rowH / 2);
+    }
+    g.restore();
+    const sy = r.y + r.h - sh - 3;
+    const leftW = (r.w - 6) * 0.62;
+    const f1 = { x: r.x + 3, y: sy, w: leftW - 2, h: sh };
+    const f2 = { x: r.x + 3 + leftW, y: sy, w: r.w - 6 - leftW, h: sh };
+    for (const f of [f1, f2]) bevel(g, f, SHADOW, HI);
+    g.font = UI(px(dc, 10, 6));
+    g.fillStyle = m.state === 'error' ? '#b00000' : DARK;
+    g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    const left = m.state === 'running' ? `Running ${m.running ?? ''}` : m.state === 'waiting' ? `Waiting in ${m.running ?? ''}` : m.state === 'error' ? 'Illegal operation' : `${m.fns} function${m.fns === 1 ? '' : 's'}`;
+    g.fillText(fitText(g, left, (s2) => UI(s2), px(dc, 10, 6), f1.w - 6), f1.x + 3, f1.y + sh / 2 + 0.5);
+    const right = m.depth > 1 ? `×${m.depth}` : m.pinned ? 'pinned' : '';
+    if (right) g.fillText(fitText(g, right, (s2) => UI(s2), px(dc, 10, 6), f2.w - 6), f2.x + 3, f2.y + sh / 2 + 0.5);
+    const pw = px(dc, 4, 2);
+    const ph = (ys: number[]) => Math.min(px(dc, 12, 5), ys.length > 1 ? (ys[1] - ys[0]) * 0.7 : 99);
+    for (const y of m.inPorts) raised(g, { x: r.x - pw, y: Math.round(y - ph(m.inPorts) / 2), w: pw, h: Math.round(ph(m.inPorts)) });
+    for (const y of m.outPorts) raised(g, { x: r.x + r.w, y: Math.round(y - ph(m.outPorts) / 2), w: pw, h: Math.round(ph(m.outPorts)) });
+    if (m.hovered && !m.selected) focusRect(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 });
+    if (m.selected) handles(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, px(dc, 6, 4));
+  },
+
+  // An open file is a group box with a caption.
+  wall(dc, r0, w) {
+    const g = dc.g;
+    const r = snapRect(r0);
+    g.fillStyle = 'rgba(0,0,0,0.10)';
+    g.fillRect(r.x, r.y, r.w, r.h);
+    // etched frame
+    g.strokeStyle = w.live ? NAVY : '#004848';
+    g.lineWidth = 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 2, r.h - 2);
+    g.strokeStyle = '#40a0a0';
+    g.strokeRect(r.x + 1.5, r.y + 1.5, r.w - 2, r.h - 2);
+    const h = snapRect(w.head);
+    const tb = { x: h.x + 4, y: h.y + 4, w: Math.min(h.w - 8, px(dc, 260)), h: h.h - 8 };
+    titleBar(dc, tb, `${w.name}${w.pinned ? ' (pinned)' : ''}`, w.live, false);
+    if (w.hovered && !w.selected) focusRect(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, HI);
+    if (w.selected) handles(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, px(dc, 6, 4));
+  },
+
+  door(dc, [x, y], vertical, live) {
+    const g = dc.g;
+    const L = px(dc, 14, 8);
+    const T = px(dc, 7, 4);
+    const r = snapRect(vertical ? { x: x - T / 2, y: y - L / 2, w: T, h: L } : { x: x - L / 2, y: y - T / 2, w: L, h: T });
+    raised(g, r);
+    g.fillStyle = live ? NAVY : SHADOW;
+    g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2);
   },
 
   node(dc, r0, n) {

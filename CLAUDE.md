@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read `SPEC.md` first. Principles in §1 override convenience.
 
-- Current target: **M5**. M0–M4 are implemented in `proto/`; M3 came
-  before M2 by the author's decision in `DECISIONS.md`.
+- Current target: **M6** (nvim bridge). M0–M5 are implemented in `proto/`;
+  M3 came before M2 by the author's decision in `DECISIONS.md`.
 - Record every deviation from the recommended stack, and every answer to an
   open question from SPEC §6, in `DECISIONS.md` (date, decision, why).
 - `samples/gnl_v3/` is the author's real get_next_line. Treat it as a
@@ -21,20 +21,25 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 - Look and feel lives in skins. New visuals go through the `Skin` interface
   (`proto/src/skins/types.ts`) and every skin, never hard-coded colours in
   the engine.
-- Sandbox rule: no runtime filesystem access until M5. Samples are bundled
-  at build time.
+- Filesystem rule (M5): only `proto/server/project.mjs` reads or writes the
+  author's files, only inside a folder opened this session, and writes
+  happen only after the author confirms the Save dialog. Never auto-save.
+  Samples stay bundled at build time. Test projects go in a temp or
+  scratch folder, never in `samples/gnl_v3/`.
 - The author uses Arch Linux, nvim, and KDE Plasma on Wayland. Node, npm,
   python3, gdb, and cc are available.
 
 ## Current state
 
 `proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
-sprites and bindings) and M4 (invariants and truth checks). No linter yet.
+sprites and bindings), M4 (invariants and truth checks) and M5 (projects:
+folders, modules, Makefile builds, confirmed saves). No linter yet.
 
 ```sh
 cd proto
 npm install
 npm run dev      # vite dev server + the trace server at POST /api/trace
+npm run dev -- ~/42/get_next_line   # …and open that folder (like `code <folder>`)
 npm run check    # tsc --noEmit
 npm test         # vitest: unit tests + integration tests that run cc and gdb
 npx vitest run test/route.test.ts          # one file
@@ -65,8 +70,16 @@ the result). The app picks one per program (Auto: gdb when the code calls
 functions it doesn't define). Samples can carry `stdin`, `-D` defines and
 read-only support files (`src/samples.ts`).
 
-In dev builds `window.__ftb` exposes `{ S, view, layout, computeBelts }` for
-headless checks.
+Projects (M5): `src/workspace.ts` holds the open project (buffers vs disk,
+run settings, the driver rule); `parse.ts` `parseProject` links files
+(a static that another file shares becomes `name@file`); `layout.ts` keeps
+modules (one per `.c`, collapsed blocks or walls) and packs them;
+`route.ts` makes a collapsed module one host (`mod:<file>`) with trunks;
+`server/project.mjs` is the file server (`/api/fs/*`); the trace server
+builds projects with their Makefile. Events carry a `file`.
+
+In dev builds `window.__ftb` exposes `{ S, view, layout, editor,
+computeBelts, openFolder, switchFile, … }` for headless checks.
 
 ## Architecture (planned, SPEC §3)
 

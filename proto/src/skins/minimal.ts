@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
+import { arrowHead, baseName, beltMid, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -69,6 +69,120 @@ export const minimal: Skin = {
     const walk = new Walk(pts);
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, px(dc, 7, 5), col);
+    if (o.count > 1) {
+      const [mx, my] = beltMid(pts);
+      const fs = px(dc, 10.5, 7);
+      g.font = MONO(fs, 600);
+      const t = `${o.count}`;
+      const w = Math.max(g.measureText(t).width + px(dc, 10), fs + px(dc, 6));
+      const h = fs + px(dc, 6);
+      card(g, { x: mx - w / 2, y: my - h / 2, w, h }, h / 2, '#131416', col);
+      g.fillStyle = o.live ? ACCENT : DIM;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(t, mx, my + 0.5);
+    }
+  },
+
+  module(dc, r, m) {
+    const g = dc.g;
+    const rad = px(dc, 6, 3);
+    const border = m.state === 'running' ? ACCENT : m.state === 'error' ? ERR : m.hovered ? '#44474f' : LINE;
+    if (m.state === 'running' || m.state === 'error') {
+      g.save();
+      g.shadowColor = m.state === 'error' ? 'rgba(255,107,107,0.4)' : 'rgba(138,180,255,0.35)';
+      g.shadowBlur = 18 * dc.z;
+      card(g, r, rad, CARD, border, 1.5);
+      g.restore();
+    } else card(g, r, rad, CARD, border);
+    // a second card edge behind: this block stands for a whole file
+    rrect(g, r.x + px(dc, 4) + 0.5, r.y - px(dc, 4) + 0.5, r.w - px(dc, 4) - 1, px(dc, 4), [rad, rad, 0, 0]);
+    g.strokeStyle = LINE;
+    g.lineWidth = 1;
+    g.stroke();
+    const pad = px(dc, 12);
+    g.textAlign = 'left';
+    g.textBaseline = 'top';
+    g.font = MONO(px(dc, 10, 6));
+    g.fillStyle = FAINT;
+    const dir = dirName(m.name);
+    if (dir) g.fillText(fitText(g, dir, MONO, px(dc, 10, 6), r.w - pad * 2, 6), r.x + pad, r.y + px(dc, 4));
+    g.font = UI(px(dc, 14, 8), 600);
+    g.fillStyle = FG;
+    g.fillText(fitText(g, baseName(m.name), (s2) => UI(s2, 600), px(dc, 14, 8), r.w - pad * 2 - px(dc, 22), 6), r.x + pad, r.y + px(dc, 14));
+    g.font = MONO(px(dc, 10.5, 7), 600);
+    g.fillStyle = m.state === 'idle' ? FAINT : ACCENT;
+    g.textAlign = 'right';
+    g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
+    const rowH = 0.55 * dc.cs;
+    const top = r.y + px(dc, 40);
+    g.textBaseline = 'middle';
+    m.doors.forEach((d, i) => {
+      const y = top + i * rowH + rowH / 2;
+      g.fillStyle = d.live ? ACCENT : d.undeclared ? WAIT : FAINT;
+      g.beginPath(); g.arc(r.x + pad + px(dc, 2), y, px(dc, 2.5, 1.5), 0, Math.PI * 2); g.fill();
+      g.font = MONO(px(dc, 11, 7), d.live ? 600 : 500);
+      g.fillStyle = d.live ? FG : DIM;
+      g.textAlign = 'left';
+      g.fillText(fitText(g, d.name, MONO, px(dc, 11, 7), r.w - pad * 2 - px(dc, 10), 6), r.x + pad + px(dc, 10), y);
+    });
+    if (m.more) {
+      g.font = MONO(px(dc, 10, 6));
+      g.fillStyle = FAINT;
+      g.textAlign = 'left';
+      g.fillText(`+${m.more} more`, r.x + pad + px(dc, 10), top + m.doors.length * rowH + rowH / 2);
+    }
+    if (m.state !== 'idle') {
+      g.font = UI(px(dc, 11, 7));
+      g.fillStyle = m.state === 'error' ? ERR : m.state === 'waiting' ? WAIT : ACCENT;
+      g.textAlign = 'left';
+      g.textBaseline = 'alphabetic';
+      const t = m.state === 'error' ? 'crashed' : `${m.state === 'waiting' ? 'waiting in' : 'running'} ${m.running ?? ''}`;
+      g.fillText(fitText(g, t, (s2) => UI(s2), px(dc, 11, 7), r.w - pad * 2, 6), r.x + pad, r.y + r.h - px(dc, 8));
+    }
+    g.fillStyle = border;
+    for (const [x, ys] of [[r.x, m.inPorts], [r.x + r.w, m.outPorts]] as [number, number[]][]) {
+      for (const y of ys) {
+        g.beginPath(); g.arc(x, y, px(dc, 3, 2), 0, Math.PI * 2); g.fill();
+      }
+    }
+    if (m.selected || m.hovered) outline(g, r, rad, m.selected);
+  },
+
+  wall(dc, r, w) {
+    const g = dc.g;
+    const rad = px(dc, 10, 4);
+    rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
+    g.fillStyle = 'rgba(255,255,255,0.025)';
+    g.fill();
+    g.strokeStyle = w.live ? 'rgba(138,180,255,0.55)' : '#34373e';
+    g.lineWidth = 1;
+    g.setLineDash([px(dc, 5, 3), px(dc, 4, 2)]);
+    g.stroke();
+    g.setLineDash([]);
+    const h = w.head;
+    g.font = MONO(px(dc, 11, 7), 600);
+    g.fillStyle = w.live ? ACCENT : DIM;
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.fillText(fitText(g, w.name, MONO, px(dc, 11, 7), h.w - px(dc, 70), 6), h.x + px(dc, 14), h.y + h.h / 2);
+    g.font = MONO(px(dc, 10, 6));
+    g.fillStyle = FAINT;
+    g.textAlign = 'right';
+    g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
+    if (w.selected || w.hovered) outline(g, r, rad, w.selected);
+  },
+
+  door(dc, [x, y], vertical, live) {
+    const g = dc.g;
+    const L = px(dc, 12, 7);
+    g.strokeStyle = live ? ACCENT : '#6a6e78';
+    g.lineWidth = px(dc, 3, 2);
+    g.lineCap = 'round';
+    g.beginPath();
+    if (vertical) (g.moveTo(x, y - L / 2), g.lineTo(x, y + L / 2));
+    else (g.moveTo(x - L / 2, y), g.lineTo(x + L / 2, y));
+    g.stroke();
   },
 
   node(dc, r, n) {

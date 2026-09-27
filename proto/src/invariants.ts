@@ -30,6 +30,7 @@ export interface Violation {
   at: number; // first snapshot index where it is false (state after evs[at - 1])
   end: number; // first snapshot index where it holds again (or snaps.length)
   line: number | null; // the source line that made it false (0-based)
+  file?: string; // …and its file, in a project (M5)
   detail: string; // "pos 24 > len 23"
 }
 
@@ -129,16 +130,17 @@ export function evaluate(check: Check, v: BoundValue | undefined): { ok: boolean
 }
 
 // The line that produced snapshot `at`: the last line executed before it.
-function culpritLine(trace: Trace, at: number): number | null {
+function culpritLine(trace: Trace, at: number): { line: number | null; file?: string } {
   let seenStep = false;
   for (let j = at - 1; j >= 0; j--) {
     const e = trace.evs[j];
     if (e.k === 'step') {
-      if (seenStep) return e.line; // the step before the one that sampled
+      if (seenStep) return { line: e.line, file: e.file }; // the step before the one that sampled
       seenStep = true;
-    } else if (e.k === 'write' || e.k === 'eval' || e.k === 'ret') return e.line;
+    } else if (e.k === 'write' || e.k === 'eval' || e.k === 'ret') return { line: e.line, file: e.file };
   }
-  return trace.evs[at - 1]?.line ?? null;
+  const e = trace.evs[at - 1];
+  return { line: e?.line ?? null, file: e?.file };
 }
 
 export function findViolations(trace: Trace | null, sprites: Sprite[]): Violation[] {
@@ -165,7 +167,7 @@ export function findViolations(trace: Trace | null, sprites: Sprite[]): Violatio
         const r = evaluate(check, trace.snaps[k].bound?.[sprite.id]);
         if (r && !r.ok) {
           if (!open) {
-            open = { sprite: sprite.id, invariant: check.text, builtin, at: k, end: n, line: culpritLine(trace, k), detail: r.detail };
+            open = { sprite: sprite.id, invariant: check.text, builtin, at: k, end: n, ...culpritLine(trace, k), detail: r.detail };
             out.push(open);
           }
         } else if (open) {
@@ -179,8 +181,8 @@ export function findViolations(trace: Trace | null, sprites: Sprite[]): Violatio
 }
 
 // Calls the static graph did not predict (a call through a function pointer).
-export function surpriseCalls(trace: Trace | null, predicted: (caller: string, callee: string) => boolean): { at: number; caller: string; callee: string; line: number }[] {
-  const out: { at: number; caller: string; callee: string; line: number }[] = [];
+export function surpriseCalls(trace: Trace | null, predicted: (caller: string, callee: string) => boolean): { at: number; caller: string; callee: string; line: number; file?: string }[] {
+  const out: { at: number; caller: string; callee: string; line: number; file?: string }[] = [];
   const seen = new Set<string>();
   trace?.evs.forEach((e, i) => {
     if (e.k !== 'call' || !e.caller || predicted(e.caller, e.fn)) return;
@@ -189,14 +191,16 @@ export function surpriseCalls(trace: Trace | null, predicted: (caller: string, c
     seen.add(key);
     // Report the call site: the last line executed before entering the callee.
     let line = e.line;
+    let file = e.file;
     for (let j = i - 1; j >= 0; j--) {
       const p = trace!.evs[j];
       if (p.k === 'step' || p.k === 'write' || p.k === 'eval') {
         line = p.line;
+        file = p.file;
         break;
       }
     }
-    out.push({ at: i + 1, caller: e.caller, callee: e.fn, line });
+    out.push({ at: i + 1, caller: e.caller, callee: e.fn, line, ...(file ? { file } : {}) });
   });
   return out;
 }
