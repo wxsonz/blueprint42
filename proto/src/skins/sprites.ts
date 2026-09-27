@@ -171,7 +171,7 @@ export function drawCrate(dc: Dc, x: number, y: number, c: CrateInfo, p: SpriteP
   const pad = Math.max(3, 6 * z);
   g.save();
   g.font = p.font(fs);
-  const rows = c.rows.map((r) => ({ name: `.${r.name}`, value: r.value }));
+  const rows = c.rows.map((r) => ({ name: /^\w+$/.test(r.name) ? `.${r.name}` : r.name, value: r.value }));
   const nameW = Math.max(0, ...rows.map((r) => g.measureText(r.name).width));
   const valW = Math.min(150 * z, Math.max(0, ...rows.map((r) => g.measureText(r.value).width)));
   const title = c.via ? `${c.title} @ ${c.via}` : c.title;

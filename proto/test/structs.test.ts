@@ -4,6 +4,7 @@ import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { folded, frameRows, invCells } from '../src/layout';
 import { parse } from '../src/parse';
+import { returnCard } from '../src/render';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);
@@ -53,5 +54,14 @@ describe('struct fields', () => {
       if (len?.val.k === 'int') lens.add(String(len.val.v));
     }
     expect(lens.size).toBeGreaterThan(2);
+    // focus mode's return card: gnl_consume came in with pos 0 and hands back pos 6
+    const ri = t.evs.findIndex((e) => e.k === 'ret' && e.fn === 'gnl_consume');
+    const card = returnCard(t, ri)!;
+    expect(card.caller).toBe('get_next_line');
+    const pos = card.rows.find((r) => r.depth === 1 && r.name === 'pos')!;
+    expect([pos.in, pos.out, pos.changed]).toEqual(['0', '6', true]);
+    expect(card.rows.find((r) => r.name === 'cap')!.changed).toBe(false);
+    expect(card.rows.find((r) => r.name === 'line_end')!.out).toBeUndefined(); // a copy, not an output
+    expect(card.ret).toEqual([{ name: 'returns', depth: 0, in: '', out: 'void' }]);
   }, 60000);
 });

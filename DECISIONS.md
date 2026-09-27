@@ -389,19 +389,25 @@ questions. Newest last.
   - Each skin draws the veil colour and its own "look here" mark: Amp a
     green viewfinder, Classic yellow marching ants, Aqua a blue halo,
     Minimal accent corners.
-- **Decision (author feedback):** Focus scenes pause so the data can be
-  read, and the pauses grow with how much it carries:
-  - **Read:** the arguments wait lined up at the sender's port for 1–4 s
-    (about 1 s for an int, about 3 s for a `t_gnl` crate plus an argument).
-  - **Travel:** the passes.
-  - **Hold:** the data stays parked at the receiver's port for 0.9–3 s
-    while its frame fills in, so sent and received can be compared.
-  - The camera frames the sender while you read, both while the data
-    travels, and the receiver during the hold.
-  - In focus, data is never drawn smaller than 100% scale.
-  - Several arguments travel as a train that always fits on the belt, so
-    none is hidden while waiting.
-  - Fast mode is unchanged.
+- **Decision (author feedback, revised):** Focus scenes send the data
+  **once**, with longer pauses instead of repeats:
+  - **A call** (or a write through a pointer) waits at the sender to be
+    read (1.5–5 s, more for more data), travels once, then stays parked at
+    the receiver while its frame fills in (1.2–4 s).
+  - **A return** first shows a **card** over the fully veiled grid (2.5–7 s,
+    sized to its content):
+    - *in*: what the function was called with, including struct fields;
+    - *out*: what it hands back, meaning its return value and anything it
+      changed through its pointers (`buf->pos 0 → 6`, `*n 3 → 4`), with
+      changes marked and unchanged values dimmed.
+    - Changes to by-value copies aren't shown as outputs.
+  - **Then** the end product travels back once. When a function also
+    changed data through pointers, that rides along as a crate
+    (`void · changed`, `buf->pos 6`).
+  - The camera frames the sender while you read (and during the card),
+    both while the data travels, and the receiver during the hold.
+  - Data is drawn at least full size in focus. Arguments travel as a train
+    that fits the belt. Fast mode is unchanged.
 - **Decision:** Focus scenes never play faster than 1.5×. Plain steps still
   follow the speed setting, so long traces (GNL: about 1,000 events) stay
   watchable. Positions are in events, so switching modes mid-run keeps the

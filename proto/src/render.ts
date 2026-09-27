@@ -77,23 +77,119 @@ let MODE: AnimMode = 'fast';
 export const setAnimMode = (m: AnimMode) => void (MODE = m);
 export const animMode = () => MODE;
 
-// A focus scene, in seconds at 1×: the data waits at the sender to be read,
-// travels, then stays parked at the receiver while its frame fills in. The
-// more it carries, the longer both waits.
-interface Scene3 { read: number; pass: number; passes: number; hold: number; total: number }
+// A focus scene, in seconds at 1×. A call (or a write through a pointer)
+// waits at the sender to be read, travels once, then stays parked at the
+// receiver while its frame fills in. A return first shows its card — what
+// went in, what came out — over a dimmed grid, then sends the result back
+// once and holds it at the caller. The more there is to read, the longer.
+interface Scene3 { lead: number; pass: number; hold: number; total: number }
 const sceneCache = new WeakMap<Ev, Scene3>();
+const cardLines = new WeakMap<Ev, number>(); // filled by prepareStage()
+const clampS = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 function sceneOf(e: Ev): Scene3 {
   let hit = sceneCache.get(e);
   if (hit) return hit;
   const weigh = (d?: Payload) => (!d ? 1 : d.k === 'struct' ? 1 + Math.min(6, d.fields.length) : 1 + Math.min(3, Math.floor(d.text.length / 16)));
-  const lines = e.k === 'call' ? Math.max(1, e.args.reduce((a, x) => a + weigh(x.data), 0)) : e.k === 'ret' ? weigh(e.data) : 1;
-  const read = Math.max(1, Math.min(4, 0.7 + 0.35 * lines));
-  const hold = Math.max(0.9, Math.min(3, 0.5 + 0.25 * lines));
-  const passes = e.k === 'call' ? 3 : 2;
-  const pass = 0.75;
-  hit = { read, pass, passes, hold, total: read + passes * pass + hold };
+  const pass = 1.1;
+  if (e.k === 'ret') {
+    const lines = cardLines.get(e) ?? weigh(e.data) + 2;
+    const lead = clampS(1.8 + 0.35 * lines, 2.5, 7);
+    const hold = clampS(0.9 + 0.25 * weigh(e.data), 1.2, 3);
+    hit = { lead, pass, hold, total: lead + pass + hold };
+  } else {
+    const lines = e.k === 'call' ? Math.max(1, e.args.reduce((a, x) => a + weigh(x.data), 0)) : 1;
+    const lead = clampS(1.2 + 0.4 * lines, 1.5, 5);
+    const hold = clampS(1.0 + 0.3 * lines, 1.2, 4);
+    hit = { lead, pass, hold, total: lead + pass + hold };
+  }
   sceneCache.set(e, hit);
   return hit;
+}
+
+// ---- the return card: what went in, what came out ----
+
+export interface CardRow {
+  name: string;
+  depth: 0 | 1; // 1 = a field of the row above
+  in: string; // at the call
+  out?: string; // at the return (only for what the caller can see: through pointers)
+  changed?: boolean;
+}
+export interface ReturnCard {
+  fn: string;
+  caller: string | null;
+  rows: CardRow[];
+  ret: CardRow[]; // the result: one row, or a struct's fields
+}
+
+const cardCache = new WeakMap<Trace, Map<number, ReturnCard | null>>();
+export function returnCard(trace: Trace, i: number): ReturnCard | null {
+  let m = cardCache.get(trace);
+  if (!m) cardCache.set(trace, (m = new Map()));
+  if (m.has(i)) return m.get(i)!;
+  const e = trace.evs[i];
+  let card: ReturnCard | null = null;
+  if (e?.k === 'ret') {
+    let c = i - 1;
+    while (c >= 0 && !(trace.evs[c].k === 'call' && trace.evs[c].frame === e.frame)) c--;
+    const call = c >= 0 ? (trace.evs[c] as Extract<Ev, { k: 'call' }>) : null;
+    const snapThen = call ? trace.snaps[c + 1] : null; // just after the call
+    const snapNow = trace.snaps[i]; // just before the return
+    const all = (sn: Snap | null) => new Map((sn ? [...sn.statics, ...sn.heap, ...sn.stack.flatMap((f) => f.cells)] : []).map((x) => [x.id, x]));
+    const thenCells = all(snapThen);
+    const nowCells = all(snapNow);
+    const frameThen = snapThen?.stack.find((f) => f.id === e.frame);
+    const frameNow = snapNow.stack.find((f) => f.id === e.frame);
+    const rows: CardRow[] = [];
+    for (const a of call?.args ?? []) {
+      const c0 = frameThen?.cells.find((x) => x.name === a.name);
+      const c1 = frameNow?.cells.find((x) => x.name === a.name);
+      const viaPtr = a.val.k === 'ptr' && a.val.to !== null;
+      if (c0?.fields?.length) {
+        // a struct: its fields as they came in and, behind a pointer, as they go back
+        rows.push({ name: a.name, depth: 0, in: a.data?.k === 'struct' ? a.data.via ?? a.data.type : c0.type });
+        for (const f of c0.fields.slice(0, 8)) {
+          const inText = fieldValue(f, trace).text;
+          const f1 = viaPtr ? c1?.fields?.find((x) => x.name === f.name) : undefined;
+          const outText = f1 ? fieldValue(f1, trace).text : undefined;
+          rows.push({ name: f.name, depth: 1, in: inText, ...(outText !== undefined ? { out: outText, changed: outText !== inText } : {}) });
+        }
+      } else if (viaPtr && !c0?.str) {
+        // int *n: what it pointed at, then and now
+        const to = (a.val as { to: number }).to;
+        const t0 = thenCells.get(to);
+        const t1 = nowCells.get(to);
+        const name = (a.val as { label?: string }).label ?? pointeeName(trace, to, null).split('.').pop();
+        const v0 = t0 ? valueOf(t0, null, trace, null).text : '?';
+        const v1 = t1 ? valueOf(t1, null, trace, null).text : undefined;
+        rows.push({ name: a.name, depth: 0, in: `→${name} = ${v0}`, ...(v1 !== undefined ? { out: `→${name} = ${v1}`, changed: v1 !== v0 } : {}) });
+      } else if (c0?.str || c1?.str) {
+        // char *: the text it pointed at, then and now (a buffer may have been filled)
+        const s0 = c0?.str ? clip(c0.str, 14) : a.text;
+        const s1 = c1?.str ? clip(c1.str, 14) : undefined;
+        rows.push({ name: a.name, depth: 0, in: s0, ...(s1 !== undefined ? { out: s1, changed: s1 !== s0 } : {}) });
+      } else rows.push({ name: a.name, depth: 0, in: c0 ? valueOf(c0, null, trace, null).text : a.text });
+    }
+    const ret: CardRow[] = [];
+    if (e.data?.k === 'struct') {
+      ret.push({ name: 'returns', depth: 0, in: '', out: e.data.via ?? e.data.type });
+      for (const f of e.data.fields.slice(0, 8)) ret.push({ name: f.name, depth: 1, in: '', out: f.text.startsWith('"') ? clip(f.text, 14) : f.text });
+    } else if (e.data?.k === 'str') ret.push({ name: 'returns', depth: 0, in: '', out: clip(e.data.text, 18) });
+    else ret.push({ name: 'returns', depth: 0, in: '', out: e.val.k === 'void' ? 'void' : retLabel(e.val, trace) });
+    card = { fn: e.fn, caller: e.caller, rows, ret };
+  }
+  m.set(i, card);
+  return card;
+}
+
+// Size each return's card, so its scene lasts long enough to read.
+export function prepareStage(trace: Trace | null): void {
+  if (!trace) return;
+  trace.evs.forEach((e, i) => {
+    if (e.k !== 'ret') return;
+    const c = returnCard(trace, i);
+    if (c) cardLines.set(e, c.rows.length + c.ret.length);
+  });
 }
 
 // Events that get a focus scene.
@@ -150,7 +246,7 @@ export interface Phase {
   after: number; // 0..1 progress after the switch
   lead: number; // 0..1 through the wait at the sender (focus)
   land: number; // 1..0 through the wait at the receiver (focus)
-  parked: 'read' | 'hold' | null; // focus: the data is standing still to be read
+  parked: 'read' | 'card' | 'hold' | null; // focus: standing still to be read (card: a return's in/out card)
   secs: number; // seconds into the current wait, for blinking
 }
 
@@ -165,16 +261,12 @@ export function phaseOf(e: Ev, t: number): Phase {
   }
   const T = sceneOf(e);
   const sec = t * T.total;
-  const arrive = T.read + T.passes * T.pass;
-  if (sec < T.read) return { travel: 0, pass: 0, passes: T.passes, switched: false, before: sec / arrive, after: 0, lead: sec / T.read, land: 0, parked: 'read', secs: sec };
-  if (sec < arrive) {
-    const k = (sec - T.read) / T.pass;
-    const pass = Math.min(T.passes - 1, Math.floor(k));
-    // each pass ends with a short dwell at the receiver
-    return { travel: Math.min(1, (k - pass) * 1.15), pass, passes: T.passes, switched: false, before: sec / arrive, after: 0, lead: 0, land: 0, parked: null, secs: 0 };
-  }
+  const arrive = T.lead + T.pass;
+  const waiting = e.k === 'ret' ? 'card' : 'read';
+  if (sec < T.lead) return { travel: 0, pass: 0, passes: 1, switched: false, before: sec / arrive, after: 0, lead: sec / T.lead, land: 0, parked: waiting, secs: sec };
+  if (sec < arrive) return { travel: (sec - T.lead) / T.pass, pass: 0, passes: 1, switched: false, before: sec / arrive, after: 0, lead: 0, land: 0, parked: null, secs: 0 };
   const after = (sec - arrive) / T.hold;
-  return { travel: 1, pass: T.passes - 1, passes: T.passes, switched: true, before: 1, after, lead: 0, land: 1 - after, parked: 'hold', secs: sec - arrive };
+  return { travel: 1, pass: 0, passes: 1, switched: true, before: 1, after, lead: 0, land: 1 - after, parked: 'hold', secs: sec - arrive };
 }
 
 export function frameAt(trace: Trace, pos: number): { snap: Snap; ev: Ev | null; t: number; i: number; si: number; ph: Phase | null } {
@@ -1075,10 +1167,11 @@ export class GridView {
       g.fillStyle = skin.spotlight;
       g.beginPath();
       g.rect(0, 0, this.w, this.h);
-      for (const r of [src, dst]) if (r) g.rect(r.x - hole, r.y - hole, r.w + 2 * hole, r.h + 2 * hole);
+      // while a return's card is up, everything is veiled
+      if (ph.parked !== 'card') for (const r of [src, dst]) if (r) g.rect(r.x - hole, r.y - hole, r.w + 2 * hole, r.h + 2 * hole);
       g.fill('evenodd');
       g.restore();
-      if (redraw) {
+      if (redraw && ph.parked !== 'card') {
         g.save();
         redraw();
         g.restore();
@@ -1090,8 +1183,10 @@ export class GridView {
       const sa = ph.parked === 'read' ? blink(ph.secs) : ph.switched ? 0.3 * (1 - ph.after) : 0.4;
       const da = ph.parked === 'hold' ? blink(ph.secs) * Math.min(1, (1 - ph.after) / 0.3) : 0.4;
       g.save();
-      if (src && sa > 0.02) skin.attention(dc, src, sa);
-      if (dst && da > 0.02) skin.attention(dc, dst, da);
+      if (ph.parked !== 'card') {
+        if (src && sa > 0.02) skin.attention(dc, src, sa);
+        if (dst && da > 0.02) skin.attention(dc, dst, da);
+      }
       g.restore();
     }
 
@@ -1108,7 +1203,7 @@ export class GridView {
         const ease = travel < 0.5 ? 2 * travel * travel : 1 - Math.pow(-2 * travel + 2, 2) / 2;
         // In focus the data never blinks out: it stays put while parked, and
         // sits at the receiver for the short dwell that ends each pass.
-        const shown = travel < 1 || staged(ev);
+        const shown = (travel < 1 || staged(ev)) && ph!.parked !== 'card';
         if (shown && ev.k === 'call') {
           if (!ev.args.length) {
             const p = walk.at(Math.min(walk.length, cs * 0.4 + ease * (walk.length - cs * 0.8)));
@@ -1137,9 +1232,21 @@ export class GridView {
             else skin.plate(ddc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg');
           });
         } else if (shown && ev.k === 'ret') {
-          const half = (ev.data?.k === 'struct' ? 1.3 : 0.4) * ddc.z * CELL_PX;
+          // The end product includes what the function changed through its
+          // pointers: in focus mode those changes ride back with the result.
+          const card = MODE === 'focus' && !ev.data ? returnCard(trace, fr!.i) : null;
+          const changes: { name: string; value: string }[] = [];
+          let parent = '';
+          for (const r of card?.rows ?? []) {
+            if (!r.depth) parent = r.name;
+            if (r.changed && r.out !== undefined) changes.push({ name: r.depth ? `${parent}->${r.name}` : `*${r.name}`, value: r.out });
+          }
+          const result = ev.val.k === 'void' ? 'void' : `returns ${retLabel(ev.val, trace)}`;
+          const crate: CrateInfo | null = changes.length ? { title: `${result} · changed`, rows: changes.slice(0, 6), more: Math.max(0, changes.length - 6), kind: 'ret' } : null;
+          const half = (ev.data?.k === 'struct' || crate ? 1.3 : 0.4) * ddc.z * CELL_PX;
           const p = walk.at(MODE === 'focus' ? Math.min(walk.length - half, Math.max(half, (1 - ease) * walk.length)) : (1 - ease) * walk.length);
-          if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
+          if (crate) skin.crate(ddc, p[0], p[1], crate);
+          else if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
           else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret');
           else skin.plate(ddc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
         }

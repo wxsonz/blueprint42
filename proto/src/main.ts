@@ -7,7 +7,7 @@ import { doorsOf, folded, footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -192,6 +192,7 @@ function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
   S.trace = trace;
+  prepareStage(trace); // focus mode sizes each return's card before playing it
   traceRevision++;
   lastInspectorKey = '';
   const n = trace?.evs.length ?? 0;
@@ -2050,6 +2051,40 @@ function drawTimeline(): void {
   }
 }
 
+// ---------------- focus mode: a return's card ----------------
+// Over the veiled grid, before the result travels back: what the function
+// was called with and what it hands back — its return value, and whatever it
+// changed through its pointers.
+const stageCard = $<HTMLElement>('stage-card');
+let stageCardKey = '';
+function renderStageCard(): void {
+  const t = S.trace;
+  const fr = t && t.evs.length ? frameAt(t, S.pos) : null;
+  const ph = fr?.ph;
+  if (!t || !fr || !ph || ph.parked !== 'card') {
+    stageCard.hidden = true;
+    stageCardKey = '';
+    return;
+  }
+  // fade in and out at the ends of the wait
+  const total = ph.lead > 0 ? ph.secs / ph.lead : 1;
+  stageCard.style.opacity = String(Math.min(1, ph.secs / 0.3, (total - ph.secs) / 0.3));
+  if (stageCardKey === `${traceRevision}|${fr.i}`) return;
+  stageCardKey = `${traceRevision}|${fr.i}`;
+  const c = returnCard(t, fr.i);
+  if (!c) return void (stageCard.hidden = true);
+  const name = (k: string | null) => (k ? S.model?.byName.get(k)?.cname ?? k : 'process');
+  const row = (r: { name: string; depth: 0 | 1; in: string; out?: string; changed?: boolean }, cls = '') =>
+    `<tr class="${r.depth ? 'f' : ''} ${cls}"><td class="n">${r.depth ? '.' : ''}${esc(r.name)}</td><td class="i">${esc(r.in)}</td><td class="o${r.changed ? ' chg' : r.out !== undefined && !r.changed && cls !== 'ret' ? ' same' : ''}">${r.out !== undefined ? esc(r.out) : ''}</td></tr>`;
+  stageCard.innerHTML = `<div class="sc-title"><span class="fn">${esc(name(c.fn))}</span> <span class="k">returns to</span> <span class="fn">${esc(name(c.caller))}</span></div>
+    <table><thead><tr><th></th><th>in — called with</th><th>out — at return</th></tr></thead><tbody>
+    ${c.rows.map((r) => row(r)).join('') || '<tr><td class="n">(no arguments)</td><td></td><td></td></tr>'}
+    <tr class="sep"><td colspan="3"></td></tr>
+    ${c.ret.map((r) => row(r, 'ret')).join('')}
+    </tbody></table>`;
+  stageCard.hidden = false;
+}
+
 // ---------------- main loop ----------------
 let lastT = performance.now();
 let lastFollowEv = -1;
@@ -2102,7 +2137,7 @@ function frame(now: number): void {
     if (ph && stageKey !== lastStage) {
       lastStage = stageKey;
       lastFollowEv = i;
-      const r = stageRect(S, i, ph.parked === 'read' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both');
+      const r = stageRect(S, i, ph.parked === 'read' || ph.parked === 'card' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both');
       if (r) view.focusOn(r, ph.parked ? 2.6 : 1.6);
     } else if (!ph && i !== lastFollowEv && i < t.evs.length) {
       lastFollowEv = i;
@@ -2113,6 +2148,7 @@ function frame(now: number): void {
   }
   S.violations = violations();
   view.draw(S, S.skin, now);
+  renderStageCard();
   renderPlaybar();
   renderInspector();
   renderLiveStatus();
