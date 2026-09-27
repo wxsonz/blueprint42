@@ -205,6 +205,29 @@ a libft sub-make and two same-named `static` helpers traces with each
 helper told apart. 50 generated files open collapsed, with no overlapping
 modules and one trunk per pair of files that call each other.
 
+### M5.5 — Inside a machine
+- Rename the canvas pane from "Factory" to **Blueprint**.
+- Open a function **in place**: its machine expands on the grid into its
+  interior, and auto-placed neighbours move aside (like opening a module).
+  Double-click or right-click opens and closes it, and the state is saved
+  with the blueprint like struct folds.
+- **Every statement is a station**, in code order (1:1 with the editor):
+  - `if`/`else` is a switch that forks the track;
+  - `while`/`for`/`do` is a loop-back with an iteration count;
+  - `return` is an exit.
+- A token shows the running line. Each switch shows its operands' live
+  values and the result, e.g. `buf->pos == buf->len` → `6 == 8 → false`.
+- Engines:
+  - The interpreter already emits `eval` events (condition + result).
+  - Under gdb only line steps exist: infer the branch from the next line
+    executed, and read operand values from frame cells and struct fields.
+  - Never evaluate a condition in gdb: it may have side effects.
+
+✅ Accept: on gnl_v3, open `gnl_consume`. During the run its
+`if (buf->pos == buf->len)` switch shows `6 == 8 → false` and routes the
+token down the false branch. The zeroing loop shows its count (8). The pane
+reads "Blueprint".
+
 ### M6 — Neovim bridge (the end state)
 - An nvim plugin syncs buffers and cursor over msgpack-RPC or a websocket to
   the grid window. Your real nvim with your config becomes the editor, and the

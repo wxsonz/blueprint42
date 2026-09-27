@@ -10,7 +10,7 @@ why), then this file (current state and the next job).
   `m5-open-project`. Nothing is pushed (there is no remote).
 - **Done:** M0, M1, M3, M2, M4 and M5. M3 was built before M2 on purpose
   (see `DECISIONS.md` and SPEC §4).
-- **Next job: M6** (nvim bridge).
+- **Next job: M5.5** (inside a machine, see below), then M6 (nvim bridge).
 - **Checks:** 63 tests pass (`npm test`), including automated M2, M3 and
   M4 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
   and M5 tests: `test/project.test.ts` (linking, modules, file server)
@@ -140,6 +140,37 @@ Known gaps:
   the file list (edit on disk; the poll picks it up).
 - Pinned modules can still overlap if the author drags them together
   (refused while dragging, but a module can grow into another when opened).
+
+## Next milestone: M5.5, inside a machine (SPEC §4)
+
+The author's design is in SPEC. What's done since M5, all on
+`m5-open-project`:
+- real data on belts (strings as text, structs as crates);
+- struct fields in frames;
+- Fast/Focus playback: one pass, reading pauses, and a return card showing
+  in/out and pointer changes.
+
+Implementation sketch:
+- `parse.ts`: build a per-function statement tree from `fn.node`
+  (`if`/`else`, `while`/`for`/`do`, `return`, expression statements, with
+  lines). `interp.ts` already walks the same node types.
+- `layout.ts`: an "opened machine" set like `folded`. `invCells` and
+  `footprint` grow for an open machine, and `reflow()` (already used by
+  struct folds) makes room.
+- Skins: new hooks `station`, `switch` and `loop`, in all four skins.
+- `render.ts`:
+  - draw the interior under the node;
+  - place the token from the current event's line (`frameAt` → `ev.line`,
+    `ev.file`);
+  - get switch results from `eval` events (interpreter), or from the next
+    step's line (gdb);
+  - get operand values from `SnapCell` / `SnapField` (`fieldValue`,
+    `valueOf`).
+- `main.ts`: double-click currently jumps to code. Make it open/close the
+  machine as well (or move that to a right-click item). Persist the state in
+  blueprint v1/v2 next to `folded`.
+- Rename "Factory" → "Blueprint" in `index.html`, the help text and the
+  docs.
 
 ## Next milestone: M6 (SPEC §4)
 
