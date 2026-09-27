@@ -1,0 +1,173 @@
+/* Amp — gunmetal, gold grip stripes, green LCD. */
+html[data-skin='amp'] {
+  --font-ui: 'Silkscreen', 'DejaVu Sans Mono', monospace;
+  --font-mono: 'VT323', 'DejaVu Sans Mono', monospace;
+  --ui-size: 11px;
+  --bg: #07070b;
+  --fg: #d8d8f0;
+  --fg-dim: #8a8aa8;
+  --accent: #00e000;
+  --ok: #00e000;
+  --bad: #ff3a2a;
+  --warn: #ffc020;
+  --info: #5ad1ff;
+  --run: #00e000;
+  --wait: #ffc020;
+
+  --metal: linear-gradient(#4e4e68, #34344a 55%, #25253a);
+  --bevel: inset 1px 1px 0 rgba(255, 255, 255, 0.22), inset -1px -1px 0 rgba(0, 0, 0, 0.55);
+  --grip: repeating-linear-gradient(to bottom, #d8b860 0 1px, #5c4816 1px 2px);
+  --grip-dim: repeating-linear-gradient(to bottom, #6c6c88 0 1px, #25253a 1px 2px);
+
+  --bar-bg: var(--metal);
+  --bar-fg: #d8d8f0;
+  --bar-border: 1px solid #000;
+  --bar-shadow: var(--bevel);
+  --brand-font: 13px 'Silkscreen', monospace;
+  --brand-fg: #f0e0a8;
+  --brand-spacing: 0.08em;
+  --logo: #00e000;
+
+  --btn-bg: linear-gradient(#5c5c78, #3c3c52);
+  --btn-bg-hover: linear-gradient(#6a6a88, #46465e);
+  --btn-fg: #d8d8f0;
+  --btn-border: 1px solid #06060a;
+  --btn-radius: 0;
+  --btn-shadow: var(--bevel);
+  --btn-shadow-active: inset -1px -1px 0 rgba(255, 255, 255, 0.18), inset 1px 1px 0 rgba(0, 0, 0, 0.6);
+  --btn-bg-on: linear-gradient(#26263a, #34344c);
+  --btn-fg-on: #00e000;
+  --btn-shadow-on: inset 1px 1px 0 rgba(0, 0, 0, 0.7), inset -1px -1px 0 rgba(255, 255, 255, 0.14);
+  --primary-bg: linear-gradient(#5c5c78, #3c3c52);
+  --primary-fg: #00e000;
+  --sw-off: #111;
+  --sw-on: #00c000;
+  --sw-knob: #b8b8d0;
+  --sw-radius: 0;
+  --sw-knob-radius: 0;
+  --sw-shadow: inset 1px 1px 0 #000;
+
+  --panes-bg: #07070b;
+  --pane-bg: var(--metal);
+  --pane-border: #000;
+  --pane-shadow: var(--bevel);
+  --head-h: 22px;
+  --head-bg: #15151f;
+  --head-fg: #9a9ab8;
+  --head-bg-active: #15151f;
+  --head-fg-active: #fff2c0;
+  --head-font: 10px 'Silkscreen', monospace;
+  --head-dim: #6c6c88;
+  --body-margin: 0 5px 5px;
+  --body-border: 1px solid #000;
+  --body-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  --panel-bg: var(--metal);
+  --panel-fg: #d8d8f0;
+  --panel-dim: #8a8aa8;
+  --panel-border: 1px solid #000;
+  --panel-radius: 0;
+  --panel-shadow: var(--bevel), 0 8px 24px rgba(0, 0, 0, 0.6);
+  --ptitle-bg: #15151f;
+  --ptitle-fg: #fff2c0;
+  --ptitle-font: 10px 'Silkscreen', monospace;
+  --ptitle-pad: 4px 8px;
+  --field-bg: #000;
+  --field-fg: #00e000;
+  --field-border: 1px solid #000;
+  --field-radius: 0;
+  --rule: 1px solid #1a1a26;
+
+  --slot-bg: #15151f;
+  --slot-border: 1px solid #000;
+
+  --pb-bg: var(--metal);
+  --pb-border: 1px solid #000;
+  --pb-shadow: var(--bevel);
+  --lcd-bg: #000;
+  --lcd-fg: #00e000;
+  --lcd-font: 'VT323', monospace;
+  --lcd-small: 15px;
+  --lcd-big: 20px;
+  --lcd-border: 1px solid #000;
+  --lcd-radius: 0;
+  --lcd-shadow: 0 1px 0 rgba(255, 255, 255, 0.15);
+  --lcd-fn: #ffffff;
+  --lcd-fn-weight: 400;
+  --lcd-ptr: #ffc020;
+  --lcd-ret: #9dff9d;
+  --tl-bg: #000;
+  --tl-border: 1px solid #000;
+  --tl-shadow: 0 1px 0 rgba(255, 255, 255, 0.15);
+  --tl-call: #18c018;
+  --tl-ret: #0a6a0a;
+  --tl-ptr: #ffc020;
+  --tl-write: #2a8a2a;
+  --tl-eval: #1b3a1b;
+  --tl-err: #ff3a2a;
+  --tl-head: #ffffff;
+
+  --st-bg: #000;
+  --st-fg: #00c000;
+  --st-font: 16px 'VT323', monospace;
+  --st-border: 1px solid #1a1a26;
+  --mode-fg: #000;
+  --mode-normal-bg: #00e000;
+  --mode-insert-bg: #ffc020;
+  --mode-visual-bg: #5ad1ff;
+
+  --kbd-bg: #000;
+  --kbd-fg: #00e000;
+  --kbd-border: 1px solid #2c2c40;
+  --kbd-radius: 0;
+  --menu-hover-bg: #0000c6;
+  --menu-hover-fg: #fff;
+  --menu-item-radius: 0;
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  /* editor: the playlist look */
+  --ed-bg: #000;
+  --ed-fg: #b4f0b4;
+  --ed-font: 'VT323', monospace;
+  --ed-size: 19px;
+  --ed-line: 1.25;
+  --ed-cursor: #00ff00;
+  --ed-gutter: #06060a;
+  --ed-gutter-fg: #2a5a2a;
+  --ed-gutter-active: #00e000;
+  --ed-active: rgba(0, 224, 0, 0.06);
+  --ed-sel: rgba(0, 0, 198, 0.75);
+  --ed-exec: rgba(0, 0, 198, 0.45);
+  --ed-exec-bar: #00e000;
+  --ed-err: rgba(255, 58, 42, 0.25);
+  --ed-err-bar: #ff3a2a;
+  --syn-kw: #f0e060;
+  --syn-type: #5ad1ff;
+  --syn-def: #ffffff;
+  --syn-fn: #ffffff;
+  --syn-var: #b4f0b4;
+  --syn-num: #ffa040;
+  --syn-str: #ff90c0;
+  --syn-com: #3e7a3e;
+  --syn-com-style: normal;
+  --syn-macro: #d090ff;
+  --syn-op: #00e000;
+  --syn-punct: #5a9a5a;
+}
+/* gold grip stripes fill the empty space in title strips, like the classic player */
+html[data-skin='amp'] .pane-head .grow { align-self: center; height: 8px; margin: 0 4px; background: var(--grip-dim); }
+html[data-skin='amp'] .pane.focused .pane-head .grow { background: var(--grip); }
+html[data-skin='amp'] #top .grow { align-self: center; height: 10px; margin: 0 6px; background: var(--grip); opacity: 0.9; }
+html[data-skin='amp'] .pane-head .title { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 400; }
+html[data-skin='amp'] .seg button, html[data-skin='amp'] .btn, html[data-skin='amp'] .toggle { font-size: 10px; text-transform: uppercase; padding: 3px 8px; }
+html[data-skin='amp'] .ins-title .n { font-family: 'VT323', monospace; font-size: 18px; color: #00e000; text-transform: none; }
+html[data-skin='amp'] .ins-body { font-family: 'VT323', monospace; font-size: 16px; }
+html[data-skin='amp'] .ins-body .row .v, html[data-skin='amp'] .ins-body .sig { font-size: 16px; }
+html[data-skin='amp'] .alert { font-family: 'VT323', monospace; font-size: 16px; }
+html[data-skin='amp'] .dlg-body { font-family: 'VT323', monospace; font-size: 17px; }
+html[data-skin='amp'] .dlg h4 { font-family: 'Silkscreen', monospace; font-size: 9px; color: #e8c86a; }
+html[data-skin='amp'] kbd { font-family: 'VT323', monospace; font-size: 15px; line-height: 1.1; }
+html[data-skin='amp'] #toast { font-family: 'VT323', monospace; font-size: 17px; color: #00e000; }
+html[data-skin='amp'] #menu button { font-family: 'VT323', monospace; font-size: 17px; }
+html[data-skin='amp'] .pb-buttons button { width: 30px; height: 24px; }
+html[data-skin='amp'] .pb-buttons button.primary { width: 36px; }

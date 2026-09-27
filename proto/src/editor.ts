@@ -1,0 +1,125 @@
+import { Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
+import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { HighlightStyle, bracketMatching, indentUnit, syntaxHighlighting } from '@codemirror/language';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { cpp } from '@codemirror/lang-cpp';
+import { tags as t } from '@lezer/highlight';
+import { vim, getCM } from '@replit/codemirror-vim';
+
+// ---- execution line (driven by playback) ----
+export const setExecLine = StateEffect.define<{ line: number; kind: 'exec' | 'error' } | null>();
+
+const execField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setExecLine)) continue;
+      if (!e.value || e.value.line >= tr.state.doc.lines) return Decoration.none;
+      const l = tr.state.doc.line(e.value.line + 1);
+      deco = Decoration.set([Decoration.line({ class: e.value.kind === 'error' ? 'cm-errLine' : 'cm-execLine' }).range(l.from)]);
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+// Colours and fonts come from CSS variables, so each skin restyles the editor.
+const theme = EditorView.theme({
+  '&': { height: '100%', backgroundColor: 'var(--ed-bg)', color: 'var(--ed-fg)' },
+  '.cm-scroller': { fontFamily: 'var(--ed-font)', fontSize: 'var(--ed-size)', lineHeight: 'var(--ed-line, 1.55)' },
+  '.cm-content': { caretColor: 'var(--ed-cursor)', padding: '8px 0' },
+  '.cm-cursor': { borderLeftColor: 'var(--ed-cursor)', borderLeftWidth: '2px' },
+  '.cm-gutters': { backgroundColor: 'var(--ed-gutter)', color: 'var(--ed-gutter-fg)', border: 'none', borderRight: 'var(--ed-gutter-border, none)' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--ed-gutter-active)' },
+  '.cm-activeLine': { backgroundColor: 'var(--ed-active)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: 'var(--ed-sel) !important' },
+  '.cm-fat-cursor': { background: 'var(--ed-cursor) !important', color: 'var(--ed-bg) !important' },
+  '&:not(.cm-focused) .cm-fat-cursor': { background: 'none !important', outline: '1px solid var(--ed-cursor)', color: 'inherit !important' },
+  '.cm-execLine': { backgroundColor: 'var(--ed-exec)', boxShadow: 'inset 3px 0 0 var(--ed-exec-bar)' },
+  '.cm-errLine': { backgroundColor: 'var(--ed-err)', boxShadow: 'inset 3px 0 0 var(--ed-err-bar)' },
+  '.cm-matchingBracket': { backgroundColor: 'var(--ed-sel)', outline: 'none' },
+  '.cm-panels': { backgroundColor: 'var(--ed-gutter)', color: 'var(--ed-fg)' },
+  '.cm-panels input': { fontFamily: 'var(--ed-font)', color: 'var(--ed-fg)', background: 'transparent', border: 'none', outline: 'none' },
+  '.cm-vim-panel': { padding: '2px 8px', fontFamily: 'var(--ed-font)' },
+});
+
+const highlight = HighlightStyle.define([
+  { tag: [t.keyword, t.controlKeyword, t.modifier], color: 'var(--syn-kw)', fontWeight: 'var(--syn-kw-weight, normal)' },
+  { tag: [t.typeName, t.standard(t.typeName)], color: 'var(--syn-type)' },
+  { tag: t.definition(t.variableName), color: 'var(--syn-def)' },
+  { tag: [t.function(t.variableName)], color: 'var(--syn-fn)' },
+  { tag: t.variableName, color: 'var(--syn-var)' },
+  { tag: [t.number, t.bool, t.null], color: 'var(--syn-num)' },
+  { tag: [t.string, t.character], color: 'var(--syn-str)' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--syn-com)', fontStyle: 'var(--syn-com-style, italic)' },
+  { tag: [t.processingInstruction, t.macroName], color: 'var(--syn-macro)' },
+  { tag: [t.operator, t.derefOperator], color: 'var(--syn-op)' },
+  { tag: [t.punctuation, t.bracket], color: 'var(--syn-punct)' },
+]);
+
+export interface EditorHooks {
+  onChange: (doc: string) => void;
+  onCursor: (line: number, col: number) => void;
+  onMode: (mode: string) => void;
+}
+
+const vimSlot = new Compartment();
+
+export function createEditor(parent: HTMLElement, doc: string, hooks: EditorHooks, useVim: boolean, extra: Extension[] = []): EditorView {
+  const view = new EditorView({
+    parent,
+    state: EditorState.create({
+      doc,
+      extensions: [
+        vimSlot.of(useVim ? vim() : []),
+        lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        drawSelection(),
+        history(),
+        bracketMatching(),
+        indentUnit.of('\t'),
+        EditorState.tabSize.of(4),
+        cpp(),
+        syntaxHighlighting(highlight),
+        theme,
+        execField,
+        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) hooks.onChange(u.state.doc.toString());
+          if (u.selectionSet || u.docChanged) {
+            const head = u.state.selection.main.head;
+            const line = u.state.doc.lineAt(head);
+            hooks.onCursor(line.number - 1, head - line.from);
+          }
+        }),
+        ...extra,
+      ],
+    }),
+  });
+  if (useVim) watchVim(view, hooks);
+  return view;
+}
+
+function watchVim(view: EditorView, hooks: EditorHooks): void {
+  getCM(view)?.on('vim-mode-change', (e: { mode: string; subMode?: string }) => hooks.onMode(e.subMode ? `${e.mode} ${e.subMode}` : e.mode));
+  hooks.onMode('normal');
+}
+
+export function setVim(view: EditorView, on: boolean, hooks: EditorHooks): void {
+  view.dispatch({ effects: vimSlot.reconfigure(on ? vim() : []) });
+  if (on) watchVim(view, hooks);
+  else hooks.onMode('');
+}
+
+export function setDoc(view: EditorView, doc: string): void {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: 0 } });
+}
+
+export function jumpTo(view: EditorView, line: number, col: number): void {
+  const l = view.state.doc.line(Math.min(line + 1, view.state.doc.lines));
+  const pos = Math.min(l.from + col, l.to);
+  view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
+  view.focus();
+}

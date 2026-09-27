@@ -1,0 +1,173 @@
+/* Classic — 3D bevels, navy title bars, a teal desktop. */
+html[data-skin='classic'] {
+  --font-ui: Tahoma, 'DejaVu Sans', Verdana, sans-serif;
+  --font-mono: Cousine, 'Liberation Mono', 'Courier New', monospace;
+  --ui-size: 12px;
+  --bg: #008080;
+  --fg: #000;
+  --fg-dim: #404040;
+  --accent: #000080;
+  --ok: #008000;
+  --bad: #c00000;
+  --warn: #808000;
+  --info: #000080;
+  --run: #000080;
+  --wait: #808000;
+
+  --raised: inset -1px -1px 0 #000, inset 1px 1px 0 #fff, inset -2px -2px 0 #808080, inset 2px 2px 0 #dfdfdf;
+  --sunken: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff, inset 2px 2px 0 #000, inset -2px -2px 0 #dfdfdf;
+  --title: linear-gradient(90deg, #000080, #1084d0);
+  --title-off: linear-gradient(90deg, #808080, #b5b5b5);
+
+  --app-pad: 0;
+  --bar-bg: #c0c0c0;
+  --bar-fg: #000;
+  --bar-shadow: var(--raised);
+  --brand-font: 700 13px Tahoma, 'DejaVu Sans', sans-serif;
+  --logo: #000080;
+  --top-h: 38px;
+
+  --btn-bg: #c0c0c0;
+  --btn-fg: #000;
+  --btn-border: none;
+  --btn-radius: 0;
+  --btn-shadow: var(--raised);
+  --btn-shadow-active: var(--sunken);
+  --btn-bg-on: #c0c0c0;
+  --btn-fg-on: #000;
+  --btn-shadow-on: var(--sunken);
+  --primary-bg: #c0c0c0;
+  --primary-fg: #000;
+  --sw-off: #fff;
+  --sw-on: #fff;
+  --sw-knob: #000080;
+  --sw-radius: 0;
+  --sw-knob-radius: 0;
+  --sw-shadow: var(--sunken);
+  --seg-gap: 0;
+
+  --panes-bg: #008080;
+  --pane-gap: 6px;
+  --panes-pad: 6px;
+  --pane-bg: #c0c0c0;
+  --pane-border: #c0c0c0;
+  --pane-border-w: 0;
+  --pane-shadow: var(--raised);
+  --head-h: 22px;
+  --head-bg: var(--title-off);
+  --head-fg: #d4d0c8;
+  --head-bg-active: var(--title);
+  --head-fg-active: #fff;
+  --head-font: 700 12px Tahoma, 'DejaVu Sans', sans-serif;
+  --head-dim: inherit;
+  --body-margin: 2px 4px 4px;
+  --body-shadow: var(--sunken);
+  --body-border: 2px solid transparent;
+
+  --panel-bg: #c0c0c0;
+  --panel-fg: #000;
+  --panel-dim: #404040;
+  --panel-border: none;
+  --panel-radius: 0;
+  --panel-shadow: var(--raised), 2px 2px 0 rgba(0, 0, 0, 0.35);
+  --ptitle-bg: var(--title);
+  --ptitle-fg: #fff;
+  --ptitle-font: 700 12px Tahoma, 'DejaVu Sans', sans-serif;
+  --ptitle-pad: 3px 4px 3px 6px;
+  --ptitle-k-transform: none;
+  --field-bg: #fff;
+  --field-fg: #000;
+  --field-border: none;
+  --field-radius: 0;
+  --field-shadow: var(--sunken);
+  --rule: 1px solid #808080;
+
+  --slot-bg: #c0c0c0;
+  --slot-shadow: var(--raised);
+
+  --pb-bg: #c0c0c0;
+  --pb-shadow: var(--raised);
+  --lcd-bg: #fff;
+  --lcd-fg: #000;
+  --lcd-font: Tahoma, 'DejaVu Sans', sans-serif;
+  --lcd-radius: 0;
+  --lcd-shadow: var(--sunken);
+  --lcd-small: 11px;
+  --lcd-big: 13px;
+  --lcd-fn: #000080;
+  --lcd-ptr: #0000ff;
+  --lcd-ret: #008000;
+  --tl-bg: #fff;
+  --tl-shadow: var(--sunken);
+  --tl-call: #000080;
+  --tl-ret: #008080;
+  --tl-ptr: #0000ff;
+  --tl-write: #808080;
+  --tl-eval: #c0c0c0;
+  --tl-err: #ff0000;
+  --tl-head: #000;
+
+  --st-bg: #c0c0c0;
+  --st-fg: #000;
+  --st-font: 12px Tahoma, 'DejaVu Sans', sans-serif;
+  --st-gap: 2px;
+  --st-pad: 2px;
+  --st-cell-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff;
+  --mode-fg: #fff;
+  --mode-normal-bg: #000080;
+  --mode-insert-bg: #008000;
+  --mode-visual-bg: #800080;
+
+  --kbd-bg: #c0c0c0;
+  --kbd-fg: #000;
+  --kbd-border: none;
+  --kbd-radius: 0;
+  --kbd-shadow: var(--raised);
+  --menu-hover-bg: #000080;
+  --menu-hover-fg: #fff;
+  --menu-item-radius: 0;
+  --menu-pad: 3px;
+  --scrim: transparent;
+
+  /* editor: a 90s IDE */
+  --ed-bg: #fff;
+  --ed-fg: #000;
+  --ed-font: Cousine, 'Liberation Mono', 'Courier New', monospace;
+  --ed-size: 13px;
+  --ed-line: 1.4;
+  --ed-cursor: #000;
+  --ed-gutter: #c0c0c0;
+  --ed-gutter-fg: #808080;
+  --ed-gutter-active: #000;
+  --ed-gutter-border: 1px solid #808080;
+  --ed-active: transparent;
+  --ed-sel: rgba(0, 0, 128, 0.25);
+  --ed-exec: #ffff80;
+  --ed-exec-bar: #000080;
+  --ed-err: #ffc0c0;
+  --ed-err-bar: #ff0000;
+  --syn-kw: #0000ff;
+  --syn-type: #0000ff;
+  --syn-def: #000;
+  --syn-fn: #000;
+  --syn-var: #000;
+  --syn-num: #000;
+  --syn-str: #a31515;
+  --syn-com: #008000;
+  --syn-com-style: normal;
+  --syn-macro: #0000ff;
+  --syn-op: #000;
+  --syn-punct: #000;
+}
+html[data-skin='classic'] #top { padding: 0 6px; gap: 8px; }
+html[data-skin='classic'] .seg button, html[data-skin='classic'] .btn, html[data-skin='classic'] .toggle { padding: 3px 10px; min-height: 22px; }
+html[data-skin='classic'] .seg button[aria-pressed='true'] { background: repeating-conic-gradient(#c0c0c0 0 25%, #fff 0 50%) 0 0 / 2px 2px; }
+html[data-skin='classic'] .pane-head .btn, html[data-skin='classic'] .pane-head .toggle { min-height: 16px; padding: 0 6px; font-weight: 400; color: #000; font-size: 11px; }
+html[data-skin='classic'] .ins-title .k, html[data-skin='classic'] .dlg-title .x { color: #000; }
+html[data-skin='classic'] .dlg-title .x { width: 18px; height: 16px; font-weight: 700; }
+html[data-skin='classic'] .alert { background: #ffffe1; box-shadow: 1px 1px 0 #000, 3px 3px 0 rgba(0,0,0,0.3); border: 1px solid #000; }
+html[data-skin='classic'] #toast { background: #ffffe1; border: 1px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,0.35); }
+html[data-skin='classic'] .dlg { box-shadow: var(--raised), 4px 4px 0 rgba(0,0,0,0.4); }
+html[data-skin='classic'] .dlg-title { justify-content: space-between; }
+html[data-skin='classic'] #status .mode { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+html[data-skin='classic'] .readout { padding: 3px 8px; }

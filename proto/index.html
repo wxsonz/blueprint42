@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-skin="amp">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ft_blueprint</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect x=%271%27 y=%273%27 width=%275%27 height=%274%27 fill=%27%2300e000%27/%3E%3Crect x=%2710%27 y=%279%27 width=%275%27 height=%274%27 fill=%27%2300e000%27/%3E%3Cpath d=%27M6 5h2v6h2%27 stroke=%27%2300e000%27 fill=%27none%27/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cousine:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header id="top">
+        <div class="brand">
+          <span class="logo" aria-hidden="true"></span>
+          <span class="name">ft_blueprint</span>
+        </div>
+        <nav id="samples" class="seg" aria-label="Samples"></nav>
+        <span class="grow"></span>
+        <span class="lbl">Skin</span>
+        <div id="skins" class="seg" aria-label="Skin"></div>
+        <button id="btn-help" class="btn" title="Help">?</button>
+      </header>
+
+      <main id="panes">
+        <section id="editor-pane" class="pane">
+          <div class="pane-head">
+            <span class="title" id="file-name">pointer.c</span>
+            <span class="grow"></span>
+            <button id="vim-toggle" class="toggle" aria-pressed="true"><span class="sw" aria-hidden="true"></span>Vim</button>
+          </div>
+          <div class="pane-body" id="editor"></div>
+        </section>
+
+        <section id="grid-pane" class="pane" tabindex="0">
+          <div class="pane-head">
+            <span class="title">Factory</span>
+            <span id="grid-info" class="info"></span>
+            <span class="grow"></span>
+            <button id="btn-follow" class="toggle" aria-pressed="true" title="Keep the running function in view"><span class="sw" aria-hidden="true"></span>Follow</button>
+            <button id="btn-fit" class="btn sm" title="Fit everything (F, or double-click empty space)">Fit</button>
+            <span id="zoom-read" class="info"></span>
+          </div>
+          <div class="pane-body" id="grid-wrap">
+            <canvas id="grid"></canvas>
+            <div id="alerts"></div>
+            <aside id="inspector" hidden></aside>
+            <div id="dock" aria-label="Legend"></div>
+            <div id="toast" hidden></div>
+          </div>
+        </section>
+      </main>
+
+      <footer id="playbar">
+        <div class="pb-buttons">
+          <button data-act="start" title="Start (Home)"><svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM14 3v10L6 8z" /></svg></button>
+          <button data-act="back" title="Step back (←)"><svg viewBox="0 0 16 16"><path d="M11 3v10L4 8z" /></svg></button>
+          <button data-act="play" class="primary" title="Play / pause (Space)"><svg viewBox="0 0 16 16" id="play-icon"><path d="M4 2v12l10-6z" /></svg></button>
+          <button data-act="step" title="Step (→)"><svg viewBox="0 0 16 16"><path d="M5 3v10l7-5z" /></svg></button>
+          <button data-act="end" title="End (End)"><svg viewBox="0 0 16 16"><path d="M2 3v10l8-5zM11 3h2v10h-2z" /></svg></button>
+        </div>
+        <div class="readout">
+          <div id="pb-step">—</div>
+          <div id="pb-event">&nbsp;</div>
+        </div>
+        <canvas id="timeline" title="Scrub"></canvas>
+        <div class="pb-speed">
+          <button id="spd-down" class="btn sm" title="Slower">−</button>
+          <span id="pb-speed">1×</span>
+          <button id="spd-up" class="btn sm" title="Faster">+</button>
+        </div>
+      </footer>
+
+      <div id="status">
+        <span id="st-mode" class="mode">NORMAL</span>
+        <span id="st-pos" class="cell"></span>
+        <span id="st-parse" class="cell"></span>
+        <span id="st-trace" class="cell"></span>
+        <span class="grow"></span>
+        <span id="st-hint" class="cell"></span>
+      </div>
+
+      <div id="overlay" hidden></div>
+      <div id="menu" role="menu" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
