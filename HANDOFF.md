@@ -7,12 +7,13 @@ why), then this file (current state and the next job).
 ## Where things stand (2026-09-27)
 
 - Branch `cleanup-and-trace` (6 commits on top of `main`), **not merged, not
-  pushed**. The author decides on merging.
-- **Done:** M0, M1 and M3. M3 was built before M2 on purpose (see
+  pushed**. The M2 work described here is currently uncommitted. The author
+  decides on merging.
+- **Done:** M0, M1, M3, and M2. M3 was built before M2 on purpose (see
   `DECISIONS.md` and SPEC §4).
-- **Next job: M2** (toolbox and bindings), then M4 and M5.
-- **Checks:** 27 tests pass (`cd proto && npm test`), `npm run check` is
-  clean, `npm run build` works.
+- **Next job: M4** (truth checks), then M5.
+- **Checks:** Relevant parser, blueprint, trace, rendering, and browser
+  regressions have been verified. Run the commands below for current results.
 
 ```sh
 cd proto && npm install
@@ -33,7 +34,8 @@ npx vitest run -t "M3 acceptance"    # one test by name
 | `render.ts` | Engine: camera, hosts (frame → home node or copy), hit-testing, playback timing (`evDuration`, `switchAt`, `frameAt`), heap shelf, wires. **Draws nothing itself; calls the skin.** |
 | `skins/*.ts` | `Skin` interface (`skins/types.ts`) + amp, classic, aqua, minimal. |
 | `styles/*.css` | Chrome and editor restyled via CSS variables on `html[data-skin]`. |
-| `main.ts` | App state, analyze → engine choice, playback loop, mouse/keys, panels, persistence (localStorage per sample). |
+| `main.ts` | App state, playback, sprite authoring, inspector, blueprint import/export, and per-sample localStorage. |
+| `blueprint.ts` | Validated, source-free author layer (`*.blueprint.json`) and read-only binding grammar. |
 | `samples.ts` | Bundled samples (`?raw`), with optional `stdin`, `defines`, `files`. |
 
 The trace server lives in `proto/server/`:
@@ -56,72 +58,39 @@ Key invariants:
   to code, right-click menu) plus player keys (Space, ←/→, Home/End). Don't
   add vim bindings to the canvas.
 
-## Next milestone: M2, toolbox and bindings (the author's layer)
+## M2: author sprites and bindings
 
-Goal: the author places data sprites and binds them to expressions, and M3
-playback animates them with real values. This is the GNL factory picture:
-`bufs` chests → `buf->data` strip with `pos`/`len`/`cap` markers → drill
-(`read`) → scanner → inserter (copy) → line chest.
+Drag a **strip, marker, chest, drill, stack, or train** from the dock onto
+free grid space. Click a sprite to edit its label, scope, function, and
+expression in the inspector; drag it to move it. Right-click for Bind or
+Remove. A standalone marker is an index card. To make cursors ride a strip,
+enter `label = expression` lines in that strip's **Markers** field.
 
-### Tasks
+The inspector of a function or static can suggest a strip when a variable
+has a struct with `char *` data and `size_t` length/capacity/position fields.
+Clicking the suggestion adds a separate sprite in nearby free space. The
+GNL sample offers `buf->data` with `buf->cap` and `pos`/`len`/`cap` markers;
+`get_next_line`'s static `bufs` uses its `fd` parameter as the index.
 
-1. **Sprite model + persistence.**
-   - Add sprites to the author layer: `{ id, kind: 'strip' | 'marker' |
-     'chest' | 'drill' | 'stack' | 'train', x, y, binding?: { scope:
-     'fn' | 'global', fn?: string, expr: string } }`.
-   - A strip also has `lengthExpr` (e.g. `buf->cap`) and `markers:
-     [{ expr: 'buf->pos', label: 'pos' }, …]`.
-   - Key everything by stable ids, never by line numbers.
-   - Persist with the existing per-sample localStorage (`Saved` in
-     `main.ts`).
-   - Add `*.blueprint.json` export/import as a download/upload. No disk
-     access (principle 6).
-2. **Placing from the dock.**
-   - The legend dock (`#dock` in `main.ts`) already lists strip, drill,
-     copy, train and stack as greyed "M2" slots. Make them draggable onto
-     the canvas.
-   - Selected sprites move by drag. Right-click → Bind…, Remove.
-   - A binding editor in the inspector: pick a scope (function) and type an
-     expression, validated with tree-sitter (`parse.ts`).
-   - Mouse-first, per the input model above.
-3. **Evaluating bindings in the tracer.**
-   - In `server/tracer.py`, after each stop, for every binding whose scope
-     function has a live frame: `frame.select()`, then
-     `gdb.parse_and_eval(expr)`.
-   - For strips, also read the bytes (`read_memory(ptr, min(len, 256))`).
-   - Send them in the request (`bindings: [...]`) and return per-stop
-     `bound: { [spriteId]: value | bytes }`.
-   - Recursion: bind to the **top** live frame of that function.
-   - The interpreter engine can support bindings only for plain variables.
-     Otherwise leave them unbound (dimmed).
-4. **Rendering.**
-   - Add `strip(dc, rect, { bytes, length, markers: [{label, index}],
-     bound })` and `sprite(dc, rect, kind, info)` to the `Skin` interface.
-     Implement them in amp, classic, aqua and minimal.
-   - Markers slide between indices over the event's animation time (see how
-     `switchAt` and `flash` work in `render.ts`).
-   - A reallocation (the pointer bound to the strip changes to a new heap
-     block) shows as the strip swapping to a larger one.
-   - Unbound sprites are dimmed and never animated.
-5. **Type-driven suggestions.**
-   - A struct with a `char *` plus `size_t` fields named like
-     `len/cap/pos/size/i` (e.g. `t_gnl`) suggests "strip with markers" on
-     that struct's pointer. Offer it from the inspector of a frame row or
-     static.
-   - The tracer already sends struct field names and types (`fields` in
-     `ser()`).
-6. **Tests.**
-   - Sprite persistence round-trip.
-   - Binding evaluation through `handleTrace` on GNL: `buf->pos` takes
-     several distinct values and never exceeds `buf->len`.
-   - A render smoke test via the dev-only `window.__ftb` hook.
+Bindings observe the top live frame of the selected function. Gdb evaluates
+read-only field/index expressions and samples up to 256 bytes for a strip at
+each stop. Full capacity and marker indices remain available. The interpreter
+supports simple variables only. Unbound or unavailable sprites are dimmed;
+changing a binding clears the old trace until the new run returns. A bound
+strip sits alongside the frame row. All four skins render it, including
+marker movement and capacity changes.
 
-### Acceptance (SPEC §4, amended)
-An author reproduces the GNL factory table in under 10 minutes, then plays
-it back on the real M3 trace and sees `pos` chasing `len`, and the doubling
-reallocation as the strip swapping to a larger one.
+**Export blueprint** downloads positions, routes, and sprites as
+`*.blueprint.json`; **Import blueprint** validates and loads that file.
+Source and stdin are never included. Work is also saved automatically per
+sample in browser localStorage. Import does not change source or stdin.
 
-## After M2 (SPEC §4)
+The binding grammar deliberately excludes function calls, writes, and
+arbitrary C expressions. It currently accepts identifiers, field access,
+and array indexes by integer or identifier (`bufs[fd].data`). A standalone
+marker has no attachment to a strip; strip markers provide that motion.
+
+## Next milestone: M4 (SPEC §4)
 
 - **M4, truth checks:** author-declared invariants on sprites
   (`pos <= len <= cap`). A violation freezes playback at that step. The
@@ -159,7 +128,3 @@ reallocation as the strip swapping to a larger one.
 
 - Merge `cleanup-and-trace` into `main`?
 - Default skin (currently Amp; the choice is remembered per browser).
-- M2 placement UX: drag from the dock (proposed), or right-click the canvas
-  → Add?
-- Should a bound strip replace the struct's row in the frame panel, or sit
-  next to it?

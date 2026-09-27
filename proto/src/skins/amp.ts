@@ -5,6 +5,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
+import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const LCD = '#00e000';
 const LCD_DIM = '#1f6a1f';
@@ -15,6 +16,7 @@ const SEL = '#0000c6';
 const PIX = (px: number) => `${px}px Silkscreen, "DejaVu Sans Mono", monospace`;
 const VT = (px: number) => `${px}px VT323, "DejaVu Sans Mono", monospace`;
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, Math.round(v * dc.z));
+const spritePalette: SpritePalette = { body: '#303044', edge: '#08080c', track: LCD_BG, cell: '#143714', text: '#e8e8d0', muted: '#77798c', accent: LCD, marker: AMBER, selection: LCD, font: (s) => PIX(s), radius: 1 };
 
 function metal(g: CanvasRenderingContext2D, r: Rect): void {
   const grad = g.createLinearGradient(0, r.y, 0, r.y + r.h);
@@ -116,6 +118,8 @@ export const amp: Skin = {
   name: 'Amp',
   blurb: 'a 90s media player: LCDs, analyzers, playlists',
   casing: '#0d0d14',
+  strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
+  sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -474,4 +478,3 @@ export const amp: Skin = {
     }
   },
 };
-

@@ -2,6 +2,8 @@
 // and hit-testing; a skin only decides how each entity looks. Geometry is the
 // same for every skin, so switching skins never moves anything.
 
+import type { SpriteKind } from '../blueprint';
+
 export type Pt = [number, number];
 
 export interface Rect {
@@ -80,6 +82,27 @@ export type PlateKind = 'arg' | 'ptr' | 'ret' | 'void';
 
 export type IconKind = 'node' | 'belt' | 'frame' | 'wire' | 'chest' | 'strip' | 'drill' | 'copy' | 'train' | 'stack';
 
+export interface StripInfo {
+  label: string;
+  bound: boolean;
+  bytes: number[];
+  length: number | null;
+  pointer: number | null;
+  markers: { label: string; index: number; sampledIndex: number }[];
+  error?: string;
+  selected: boolean;
+  hovered: boolean;
+}
+
+export interface SpriteInfo {
+  label: string;
+  bound: boolean;
+  value: string | null;
+  error?: string;
+  selected: boolean;
+  hovered: boolean;
+}
+
 export interface Skin {
   id: string;
   name: string;
@@ -90,6 +113,8 @@ export interface Skin {
   node(dc: Dc, r: Rect, n: NodeInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
+  strip(dc: Dc, r: Rect, info: StripInfo): void;
+  sprite(dc: Dc, r: Rect, kind: Exclude<SpriteKind, 'strip'>, info: SpriteInfo): void;
   proc(dc: Dc, r: Rect, p: ProcInfo): void;
   plate(dc: Dc, x: number, y: number, text: string, kind: PlateKind): void;
   wire(dc: Dc, pts: Pt[], complete: boolean): void;

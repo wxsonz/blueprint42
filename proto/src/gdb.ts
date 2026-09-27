@@ -2,6 +2,7 @@
 // timeline into the same Trace the renderer plays for the interpreter.
 import type { Model } from './parse';
 import { fmtVal, type CellInfo, type Ev, type Snap, type SnapCell, type Trace, type V } from './interp';
+import type { BoundValue, Sprite } from './blueprint';
 
 // ---------------- wire format (server/tracer.py) ----------------
 
@@ -35,6 +36,7 @@ interface GStop {
   frames: { id: number; fn: string; line: number | null; vars: GVar[] }[];
   statics: GVar[];
   heap: { id: number; addr: number; size: number; hex: string; line: number | null }[];
+  bound?: Record<string, BoundValue>;
   exited?: boolean;
 }
 export interface GResult {
@@ -49,6 +51,7 @@ export interface GResult {
   stderr?: string;
   ms?: number;
   flags?: string[];
+  bindingScopes?: Record<string, { scope: 'fn' | 'global'; fn?: string }>;
 }
 
 export interface GdbRequest {
@@ -58,6 +61,7 @@ export interface GdbRequest {
   stdin?: string;
   fns: string[];
   maxSteps?: number;
+  bindings?: Sprite[];
 }
 
 export async function requestTrace(req: GdbRequest, signal?: AbortSignal): Promise<GResult | 'unavailable'> {
@@ -143,12 +147,17 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
   const evs: Ev[] = [];
   const snaps: Snap[] = [];
   const warnings: string[] = [];
+  const boundIds = new Set<string>();
+  let currentBound: Record<string, BoundValue> | undefined;
+  for (const id of Object.keys(r.bindingScopes ?? {})) boundIds.add(id);
+  if (boundIds.size) currentBound = Object.create(null);
 
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' } });
   const snapshot = (): Snap => ({
     stack: stack.map((f) => ({ id: f.id, fn: f.fn, cells: [...f.cells.values()].map(snapCell) })),
     statics: [...statics.values()].map(snapCell),
     heap: [...heapCell.values()].map(snapCell),
+    ...(currentBound ? { bound: Object.fromEntries([...boundIds].map((id) => [id, currentBound![id] ?? { bound: false }])) } : {}),
   });
   const emit = (e: Ev) => {
     evs.push(e);
@@ -220,9 +229,14 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
   };
 
   for (const stop of stops) {
+    const nextBound = stop.bound;
+    for (const id of Object.keys(nextBound ?? {})) boundIds.add(id);
     for (const e of stop.events) {
       const top = stack[stack.length - 1] ?? null;
       if (e.k === 'call') {
+        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === e.fn) {
+          currentBound = { ...currentBound, [id]: { bound: false } };
+        }
         const { caller, data } = addFrame(e.id, e.fn, stop);
         buildRegions(stop);
         const f = frameOf(e.id)!;
@@ -245,6 +259,9 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
         if (!f) continue;
         const idx = stack.indexOf(f);
         stack.splice(idx, 1);
+        for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === f.fn) {
+          currentBound = { ...currentBound, [id]: { bound: false } };
+        }
         const caller = stack[idx - 1] ?? null;
         let val = toV(e.value);
         if (f.fn === 'main' && val.k === 'void' && exitCode !== null) val = { k: 'int', v: exitCode };
@@ -339,7 +356,14 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
 
     if (stop.line !== null && top) {
       lastLine = stop.line - 1;
+      // The sample represents this completed gdb stop. Earlier call/write/
+      // heap events still carry the preceding sample.
+      if (nextBound !== undefined) currentBound = nextBound;
       emit({ k: 'step', line: lastLine, frame: top.id });
+    } else if (stop.exited && evs.length) {
+      // The inferior no longer has readable memory. Clear globals as well.
+      currentBound = Object.create(null);
+      snaps[snaps.length - 1] = snapshot();
     }
   }
 

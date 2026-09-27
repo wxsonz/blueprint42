@@ -206,7 +206,8 @@ kbd {
 }
 #dock .slot:hover { background: var(--slot-bg-hover, var(--btn-bg-hover)); }
 #dock .slot.on { background: var(--btn-bg-on); box-shadow: var(--btn-shadow-on, none); }
-#dock .slot.later canvas { opacity: 0.45; }
+#dock .slot.placeable { cursor: grab; }
+#dock .slot.placeable:active { cursor: grabbing; }
 #dock .slot:nth-child(6) { margin-left: 6px; }
 
 #toast { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); padding: 6px 12px; white-space: nowrap; pointer-events: none; }
@@ -320,3 +321,17 @@ kbd {
 }
 #engines button { font-size: 0.9em; }
 .alert .c { opacity: 0.7; }
+
+/* Sprite authoring uses each skin's existing field and panel variables. */
+.sprite-form label { display: flex; flex-direction: column; gap: 2px; color: var(--panel-dim); font-size: 0.9em; }
+.sprite-form input, .sprite-form select, .sprite-form textarea {
+  width: 100%; min-width: 0; padding: 4px 6px;
+  font: 12px/1.35 var(--font-mono); color: var(--field-fg);
+  background: var(--field-bg); border: var(--field-border);
+  border-radius: var(--field-radius, 3px); box-shadow: var(--field-shadow, none);
+}
+.sprite-form textarea { resize: vertical; }
+.sprite-form .hint, .suggestions .hint { color: var(--panel-dim); font-size: 0.85em; }
+.binding-status { padding: 5px 0; color: var(--panel-dim); font-family: var(--font-mono); font-size: 11px; }
+.sprite-actions { display: flex; gap: 6px; }
+.suggestions { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding-top: 6px; border-top: var(--rule, 1px solid rgba(128,128,128,0.25)); }

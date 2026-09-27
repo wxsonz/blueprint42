@@ -4,7 +4,8 @@ import { CELL_PX, INV_HEAD_PX, MH, MW, SLOT_PX, type Layout } from './layout';
 import type { Model } from './parse';
 import { fmtVal, type Ev, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, hostKey, procPlace, type Belt, type Scene } from './route';
-import type { Dc, Pt, Rect, RowInfo, RunState, Skin, ValueKind } from './skins/types';
+import type { Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
+import type { BoundValue, Sprite } from './blueprint';
 
 export { procPlace, type Belt };
 
@@ -12,10 +13,11 @@ export type Entity =
   | { k: 'node'; id: string; copy?: number }
   | { k: 'belt'; key: string }
   | { k: 'static'; fn: string; name: string }
+  | { k: 'sprite'; id: string }
   | { k: 'proc' };
 
 export const entKey = (e: Entity | null): string =>
-  !e ? '' : e.k === 'node' ? `n:${e.id}` : e.k === 'belt' ? `b:${e.key}` : e.k === 'static' ? `s:${e.fn}.${e.name}` : 'p';
+  !e ? '' : e.k === 'node' ? `n:${e.id}` : e.k === 'belt' ? `b:${e.key}` : e.k === 'static' ? `s:${e.fn}.${e.name}` : e.k === 'sprite' ? `sp:${e.id}` : 'p';
 
 export interface ViewState {
   layout: Layout;
@@ -25,6 +27,38 @@ export interface ViewState {
   selected: Entity | null;
   hovered: Entity | null;
   editorFn: string | null;
+  sprites?: Sprite[];
+}
+
+// World footprint is shared by drawing, fitting and hit testing. A sampled
+// capacity can widen a strip, but unknown capacity never produces a fake size.
+export function spriteWorldRect(sprite: Sprite, bound?: BoundValue): Rect {
+  const cap = bound?.bound && Number.isFinite(bound.length) ? Math.max(0, bound.length!) : null;
+  const width = sprite.kind === 'strip' ? cap === null ? 5.2 : Math.min(8.2, 4.4 + Math.log2(cap + 1) * 0.55) :
+    sprite.kind === 'train' || sprite.kind === 'stack' ? 2.8 : 2.2;
+  return { x: sprite.x, y: sprite.y, w: width, h: sprite.kind === 'strip' ? 2.35 : 1.55 };
+}
+
+export function spriteStripInfo(sprite: Sprite, trace: Trace | null, pos: number, selected = false, hovered = false): StripInfo {
+  const fr = trace?.evs.length ? frameAt(trace, pos) : null;
+  const sample = fr?.snap ?? trace?.snaps[0];
+  const value = sample?.bound?.[sprite.id];
+  const known = !!value?.bound && !value.error;
+  const length = known && Number.isFinite(value.length) ? Math.max(0, value.length!) : null;
+  const before = fr?.ev ? trace!.snaps[fr.i].bound?.[sprite.id] : undefined;
+  const after = fr?.ev ? trace!.snaps[fr.i + 1].bound?.[sprite.id] : undefined;
+  const sameBlock = !!before?.bound && !!after?.bound && before.pointer !== undefined && before.pointer !== null && before.pointer === after.pointer;
+  const markers = known ? (value.markers ?? []).filter((m) => Number.isFinite(m.index)).map((m) => {
+    const a = sameBlock ? before?.markers?.find((x) => x.label === m.label) : undefined;
+    const b = sameBlock ? after?.markers?.find((x) => x.label === m.label) : undefined;
+    return { label: m.label, index: a && b && Number.isFinite(a.index) && Number.isFinite(b.index) ? a.index + (b.index - a.index) * fr!.t : m.index, sampledIndex: m.index };
+  }) : [];
+  return {
+    label: sprite.label || sprite.binding?.expr || 'strip', bound: known,
+    bytes: known && Array.isArray(value.bytes) ? value.bytes.filter((b) => Number.isInteger(b) && b >= 0 && b <= 255) : [],
+    length, pointer: known && Number.isFinite(value.pointer) ? value.pointer! : null,
+    markers, error: value?.error, selected, hovered,
+  };
 }
 
 // ---------------- playback timing ----------------
@@ -172,6 +206,11 @@ function distToPolyline(pts: Pt[], x: number, y: number): number {
 
 // Hit-test in world units. Topmost first: nodes (and live copies), chests, the process, belts.
 export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
+  const sample = s.trace?.evs.length ? frameAt(s.trace, s.pos).snap : s.trace?.snaps[0];
+  for (const sprite of [...(s.sprites ?? [])].reverse()) {
+    const r = spriteWorldRect(sprite, sample?.bound?.[sprite.id]);
+    if (wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) return { k: 'sprite', id: sprite.id };
+  }
   const node = s.layout.at(wx, wy);
   if (node) return { k: 'node', id: node.id };
   const scene = sceneAt(s);
@@ -358,6 +397,11 @@ export class GridView {
     const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
     const shelf = slots >= 0 ? heapSlotRect(s.layout, slots) : null;
     if (shelf) grow(shelf.x, shelf.y, 4, 1);
+    const sample = s.trace?.evs.length ? frameAt(s.trace, s.pos).snap : s.trace?.snaps[0];
+    for (const sprite of s.sprites ?? []) {
+      const r = spriteWorldRect(sprite, sample?.bound?.[sprite.id]);
+      grow(r.x, r.y, r.w, r.h);
+    }
     if (!isFinite(x0)) return;
     const pad = 1.2;
     const zx = this.w / ((x1 - x0 + pad * 2) * CELL_PX);
@@ -404,7 +448,7 @@ export class GridView {
 
     const trace = s.trace;
     const fr = trace && trace.evs.length ? frameAt(trace, s.pos) : null;
-    const snap = fr?.snap ?? null;
+    const snap = fr?.snap ?? trace?.snaps[0] ?? null;
     const ev = fr?.ev ?? null;
     const t = fr?.t ?? 0;
     const finished = !!trace && s.pos >= trace.evs.length;
@@ -656,6 +700,24 @@ export class GridView {
         stacked: Math.max(0, frames.length - 1),
         rows,
         head: { x: X, y: Y, w: W, h: INV_HEAD_PX * z },
+      });
+      g.restore();
+    }
+
+    // ---- authored data sprites; all displayed values come from the selected snapshot ----
+    for (const sprite of s.sprites ?? []) {
+      const value = snap?.bound?.[sprite.id];
+      const world = spriteWorldRect(sprite, value);
+      const r = this.rectW(world.x, world.y, world.w, world.h);
+      const selected = selKey === `sp:${sprite.id}`;
+      const hovered = hovKey === `sp:${sprite.id}`;
+      g.save();
+      if (sprite.kind === 'strip') skin.strip(dc, r, spriteStripInfo(sprite, trace, s.pos, selected, hovered));
+      else skin.sprite(dc, r, sprite.kind, {
+        label: sprite.label || sprite.binding?.expr || sprite.kind,
+        bound: !!value?.bound && !value.error,
+        value: value?.bound ? value.value ?? (Number.isFinite(value.number) ? String(value.number) : null) : null,
+        error: value?.error, selected, hovered,
       });
       g.restore();
     }

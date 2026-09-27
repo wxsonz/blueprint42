@@ -51,6 +51,54 @@ export interface Model {
   tree: Tree;
 }
 
+/** Only expressions that can observe a value are allowed in a binding. */
+export function validateBindingExpr(expr: string): string | null {
+  if (!parser) return 'parser not initialised';
+  if (!expr.trim()) return 'enter an expression';
+  if (expr.length > 256) return 'expression is too long';
+  const tree = parser.parse(`void __ftb_binding(void) { (void)(${expr}); }`)!;
+  const root = tree.rootNode;
+  if (root.hasError) return 'invalid C expression';
+  const fn = root.namedChildren[0];
+  const body = fn?.childForFieldName('body');
+  if (!body || body.namedChildren.length !== 1 || body.namedChild(0)?.type !== 'expression_statement') return 'enter one expression';
+  const forbidden = new Set(['call_expression', 'assignment_expression', 'update_expression', 'comma_expression', 'statement_expression', 'compound_literal_expression']);
+  const visit = (n: Node): boolean => forbidden.has(n.type) || n.namedChildren.some((c) => !!c && visit(c));
+  return visit(body) ? 'bindings cannot call functions or change program state' : null;
+}
+
+export interface BufferShape { type: string; data: string; markers: string[] }
+
+/** Find the common char* + size_t buffer shape without relying on field names alone. */
+export function bufferShapes(model: Model): BufferShape[] {
+  const out: BufferShape[] = [];
+  const seen = new Set<string>();
+  const visit = (n: Node, parent?: Node) => {
+    if (n.type === 'struct_specifier') {
+      const body = n.childForFieldName('body');
+      if (body) {
+        const fields = body.namedChildren.filter((c): c is Node => !!c && c.type === 'field_declaration')
+          .flatMap((d) => varsOf(d));
+        const data = fields.find((f) => /\bchar\b/.test(f.type) && f.type.includes('*'));
+        const markers = fields.filter((f) => /\bsize_t\b/.test(f.type) && /^(len|cap|pos|size|i|length|capacity|index)$/i.test(f.name)).map((f) => f.name);
+        if (data && markers.length) {
+          const tag = n.childForFieldName('name')?.text;
+          const aliases = parent?.type === 'type_definition'
+            ? [parent.text.match(/}\s*([A-Za-z_]\w*)\s*;/)?.[1]].filter((s): s is string => !!s)
+            : [];
+          for (const type of [...(tag ? [`struct ${tag}`] : []), ...aliases]) if (!seen.has(type)) {
+            out.push({ type, data: data.name, markers });
+            seen.add(type);
+          }
+        }
+      }
+    }
+    for (const c of n.namedChildren) if (c) visit(c, n);
+  };
+  visit(model.tree.rootNode);
+  return out;
+}
+
 let parser: Parser | null = null;
 
 // Paths default to the bundled wasm URLs; tests pass filesystem paths.

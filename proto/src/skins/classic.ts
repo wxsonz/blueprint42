@@ -4,6 +4,7 @@
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { arrowHead, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
+import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const FACE = '#c0c0c0';
 const HI = '#ffffff';
@@ -16,6 +17,7 @@ const UI = (px: number, bold = false) => `${bold ? '700 ' : ''}${px}px Tahoma, "
 const MONO = (px: number) => `${px}px Cousine, "Liberation Mono", "Courier New", monospace`;
 
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, Math.round(v * dc.z));
+const spritePalette: SpritePalette = { body: FACE, edge: DARK, track: HI, cell: '#c8d8fc', text: DARK, muted: SHADOW, accent: NAVY, marker: '#b02020', selection: NAVY, font: (s) => MONO(s), radius: 0 };
 
 function raised(g: CanvasRenderingContext2D, r: Rect): void {
   g.fillStyle = FACE;
@@ -147,6 +149,8 @@ export const classic: Skin = {
   name: 'Classic',
   blurb: 'a 90s desktop: windows, floppies, marching ants',
   casing: TEAL,
+  strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
+  sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -470,4 +474,3 @@ export const classic: Skin = {
     }
   },
 };
-

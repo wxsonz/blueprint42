@@ -5,12 +5,14 @@
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
+import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, bold = false) => `${bold ? '700 ' : ''}${px}px "Lucida Grande", "DejaVu Sans", "Helvetica Neue", sans-serif`;
 const MONO = (px: number) => `${px}px Monaco, "DejaVu Sans Mono", Menlo, monospace`;
 const BLUE = '#3875d7';
 const ORANGE = '#e8641b';
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
+const spritePalette: SpritePalette = { body: '#e8ebef', edge: '#8794a5', track: '#ffffff', cell: '#b6d4f8', text: '#242a35', muted: '#77818e', accent: BLUE, marker: ORANGE, selection: BLUE, font: (s) => MONO(s), radius: 8 };
 
 type Gel = 'blue' | 'graphite' | 'green' | 'orange' | 'red' | 'yellow';
 const GELS: Record<Gel, [string, string, string]> = {
@@ -186,6 +188,8 @@ export const aqua: Skin = {
   name: 'Aqua',
   blurb: 'early-2000s gloss: gel, pinstripes, traffic lights',
   casing: '#ececec',
+  strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
+  sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;

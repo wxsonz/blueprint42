@@ -3,6 +3,7 @@
 // is computed from the code, never invented (principle 4).
 import type { Node } from 'web-tree-sitter';
 import type { FnInfo, Model } from './parse';
+import type { BoundValue, Sprite } from './blueprint';
 
 export type V =
   | { k: 'int'; v: number }
@@ -28,6 +29,7 @@ export interface Snap {
   stack: SnapFrame[];
   statics: SnapCell[]; // function-local statics and globals
   heap: SnapCell[]; // live malloc blocks (gdb engine only)
+  bound?: Record<string, BoundValue>;
 }
 
 interface EvBase {
@@ -124,6 +126,34 @@ export function fmtVal(v: V, type = ''): string {
     case 'void':
       return 'void';
   }
+}
+
+// The small interpreter can observe simple variables already present in each
+// snapshot. It cannot inspect structs, arrays or external memory.
+export function evaluateInterpreterBindings(trace: Trace, sprites: Sprite[]): Trace {
+  if (!sprites.length) return trace;
+  return {
+    ...trace,
+    snaps: trace.snaps.map((snap) => {
+      const bound: Record<string, BoundValue> = Object.create(null);
+      for (const sprite of sprites) {
+        const binding = sprite.binding;
+        let result: BoundValue = { bound: false };
+        if (binding && !['strip', 'stack', 'train'].includes(sprite.kind) && /^[A-Za-z_]\w*$/.test(binding.expr)) {
+          const frame = binding.scope === 'fn' ? [...snap.stack].reverse().find((f) => f.fn === binding.fn) : undefined;
+          const cell = binding.scope === 'fn'
+            ? frame?.cells.find((c) => c.name === binding.expr) ?? snap.statics.find((c) => c.name === binding.expr && trace.cells.get(c.id)?.owner === binding.fn)
+            : snap.statics.find((c) => c.name === binding.expr && trace.cells.get(c.id)?.owner === '');
+          if (cell && cell.val.k !== 'undef') {
+            result = { bound: true, value: fmtVal(cell.val, cell.type) };
+            if (cell.val.k === 'int') result.number = cell.val.v;
+          }
+        }
+        bound[sprite.id] = result;
+      }
+      return { ...snap, bound };
+    }),
+  };
 }
 
 function parseNumber(text: string, line: number): number {

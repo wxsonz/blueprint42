@@ -1,4 +1,5 @@
 import type { GResult } from '../src/gdb';
+import type { Sprite } from '../src/blueprint';
 
 export interface TraceRequest {
   src: string;
@@ -8,6 +9,7 @@ export interface TraceRequest {
   fns: string[];
   maxSteps?: number;
   maxSeconds?: number;
+  bindings?: Sprite[];
 }
 export function handleTrace(req: TraceRequest): Promise<GResult>;
 export function parseDiagnostics(text: string): { line: number; col: number; severity: string; msg: string }[];

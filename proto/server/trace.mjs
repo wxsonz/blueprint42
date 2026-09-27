@@ -41,12 +41,25 @@ export function parseDiagnostics(text) {
 const NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*\.[ch]$/;
 const DEFINE = /^[A-Za-z_]\w*(=[\w.+-]*)?$/;
 const FN = /^[A-Za-z_]\w*$/;
+const EXPR = /^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$/;
+const KINDS = new Set(['strip', 'marker', 'chest', 'drill', 'stack', 'train']);
+const safeExpr = (e) => typeof e === 'string' && e.length <= 160 && EXPR.test(e.trim());
+function validBinding(s) {
+  if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !s.id || s.id.length > 100 || !KINDS.has(s.kind)) return false;
+  if (s.binding !== undefined) {
+    const b = s.binding;
+    if (!b || !['fn', 'global'].includes(b.scope) || !safeExpr(b.expr) || (b.scope === 'fn' && (typeof b.fn !== 'string' || !FN.test(b.fn)))) return false;
+  }
+  if (s.lengthExpr !== undefined && !safeExpr(s.lengthExpr)) return false;
+  return s.markers === undefined || (Array.isArray(s.markers) && s.markers.length <= 16 && s.markers.every((m) => m && safeExpr(m.expr) && typeof m.label === 'string' && m.label.length <= 40));
+}
 
 export async function handleTrace(req) {
-  const { src, files = {}, defines = [], stdin = '', fns = [], maxSteps = 20000, maxSeconds = 20 } = req ?? {};
+  const { src, files = {}, defines = [], stdin = '', fns = [], bindings = [], maxSteps = 20000, maxSeconds = 20 } = req ?? {};
   if (typeof src !== 'string' || src.length > 200_000) return { ok: false, error: 'bad request: src' };
   if (!Array.isArray(fns) || !fns.every((f) => typeof f === 'string' && FN.test(f))) return { ok: false, error: 'bad request: fns' };
   if (!Array.isArray(defines) || !defines.every((d) => typeof d === 'string' && DEFINE.test(d))) return { ok: false, error: 'bad request: defines' };
+  if (!Array.isArray(bindings) || bindings.length > 500 || !bindings.every(validBinding) || new Set(bindings.map((s) => s.id)).size !== bindings.length) return { ok: false, error: 'bad request: bindings' };
   for (const n of Object.keys(files)) if (!NAME.test(n) || n === SRC) return { ok: false, error: `bad request: file ${n}` };
 
   const dir = await mkdtemp(join(tmpdir(), 'ftb-'));
@@ -62,7 +75,7 @@ export async function handleTrace(req) {
     }
 
     const cfg = {
-      fns, src_name: SRC,
+      fns, bindings: bindings.filter((s) => s.binding), src_name: SRC,
       max_steps: Math.min(Math.max(1, Number(maxSteps) || 20000), 100000),
       max_seconds: Math.min(Math.max(1, Number(maxSeconds) || 20), 120),
       stdin: 'in.txt', stdout: 'out.txt', stderr: 'err.txt', out: 'trace.json',
@@ -80,8 +93,10 @@ export async function handleTrace(req) {
     } catch {
       return { ok: false, error: `gdb produced no trace${gdb.signal ? ` (killed: ${gdb.signal})` : ''}`, gdb: gdb.err.slice(-4000) };
     }
+    if (trace.error && (!trace.stops || trace.stops.length === 0)) return { ok: false, error: trace.error, gdb: gdb.err.slice(-4000) };
     const read = async (n) => (await readFile(join(dir, n), 'utf8').catch(() => '')).slice(0, OUT_CAP);
-    return { ok: true, flags, ms: Date.now() - started, ...trace, stdout: await read('out.txt'), stderr: await read('err.txt') };
+    const bindingScopes = Object.fromEntries(bindings.filter((s) => s.binding).map((s) => [s.id, { scope: s.binding.scope, fn: s.binding.fn }]));
+    return { ok: true, flags, ms: Date.now() - started, ...trace, bindingScopes, stdout: await read('out.txt'), stderr: await read('err.txt') };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

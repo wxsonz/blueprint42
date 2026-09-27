@@ -1,11 +1,13 @@
 import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
 import { createEditor, jumpTo, setDoc, setExecLine, setVim, type EditorHooks } from './editor';
-import { fmtVal, run, type Ev, type Trace } from './interp';
-import { Layout } from './layout';
+import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Trace } from './interp';
+import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
+import { footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
-import { initParser, parse, type Model } from './parse';
-import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, type Entity, type ViewState } from './render';
+import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
+import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
+import { buildScene } from './route';
 import { SAMPLES, type Sample } from './samples';
 import { SKINS, SKIN_FONTS } from './skins';
 import type { IconKind, Skin } from './skins/types';
@@ -50,6 +52,7 @@ const S: ViewState & {
   engine: 'auto' | 'interp' | 'gdb';
   stdin: string;
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
+  sprites: Sprite[];
 } = {
   layout,
   model: null,
@@ -71,6 +74,7 @@ const S: ViewState & {
   engine: (['auto', 'interp', 'gdb'].includes(store.get('engine') ?? '') ? store.get('engine') : 'auto') as 'auto' | 'interp' | 'gdb',
   stdin: '',
   gdb: { status: 'idle' },
+  sprites: [],
 };
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 12, 20];
@@ -88,11 +92,12 @@ const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: st
   { kind: 'frame', name: 'Stack frame', c: 'parameters + locals', live: true, text: 'Attached under its function. Appears on call; after the return it stays dimmed with the last values.' },
   { kind: 'wire', name: 'Pointer', c: 'T *p', live: true, text: 'Runs from a pointer to what it points at. A write through *p travels along it.' },
   { kind: 'chest', name: 'Static', c: 'static / global variable', live: true, text: 'Lives for the whole program, not one call. Tethered to the function that owns it.' },
-  { kind: 'strip', name: 'Buffer', c: 'array with indices', live: false, text: 'A strip of bytes with markers riding it (pos, len, cap).' },
-  { kind: 'drill', name: 'Input', c: 'read() / fd', live: false, text: 'Produces up to BUFFER_SIZE bytes per call.' },
-  { kind: 'copy', name: 'Copy', c: 'memcpy, copy loops', live: false, text: 'Moves bytes from a buffer into a block.' },
-  { kind: 'train', name: 'List', c: 'linked list', live: false, text: 'Cars coupled by next pointers.' },
-  { kind: 'stack', name: 'Stack', c: 'push_swap A / B', live: false, text: 'A vertical strip.' },
+  { kind: 'strip', name: 'Strip', c: 'array with indices', live: true, text: 'Drag onto the grid; bind bytes, length and markers in the inspector.' },
+  { kind: 'chest', name: 'Chest', c: 'value or storage', live: true, text: 'Drag onto the grid and bind a value.' },
+  { kind: 'marker' as IconKind, name: 'Marker', c: 'cursor or index', live: true, text: 'Standalone card showing a bound index. To make a cursor ride a strip, add it in that strip’s Markers field.' },
+  { kind: 'drill', name: 'Drill', c: 'input fd', live: true, text: 'Drag onto the grid and bind its source.' },
+  { kind: 'train', name: 'Train', c: 'linked list', live: true, text: 'Drag onto the grid and bind a pointer.' },
+  { kind: 'stack', name: 'Stack', c: 'stack A / B', live: true, text: 'Drag onto the grid and bind a value.' },
 ];
 
 // ---------------- DOM ----------------
@@ -126,6 +131,13 @@ function analyze(src: string, fresh: boolean): void {
   const model = parse(src);
   if (fresh) layout.reset();
   const renamed = layout.sync(model);
+  if (renamed.size) {
+    for (const sprite of S.sprites) if (sprite.binding?.scope === 'fn' && sprite.binding.fn) {
+      const next = renamed.get(`func:${sprite.binding.fn}`);
+      if (next?.startsWith('func:')) sprite.binding.fn = next.slice(5);
+    }
+    saveSoon();
+  }
   const sel = S.selected;
   if (sel?.k === 'node' && renamed.has(sel.id)) S.selected = { k: 'node', id: renamed.get(sel.id)! };
   if (sel?.k === 'node' && !layout.nodes.has((S.selected as { id: string }).id)) S.selected = null;
@@ -133,11 +145,11 @@ function analyze(src: string, fresh: boolean): void {
   const engine = engineFor(model);
   cancelGdb();
   if (engine === 'interp') {
-    applyTrace(run(model), fresh);
+    applyTrace(evaluateInterpreterBindings(run(model), S.sprites), fresh);
     if (fresh) autoSpeed(S.trace!);
   }
   else {
-    if (engine === 'none' || fresh) applyTrace(null, fresh);
+    applyTrace(null, fresh);
     if (engine === 'gdb') startGdb(src, model, fresh);
   }
   renderAlerts();
@@ -152,6 +164,8 @@ function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
   S.trace = trace;
+  traceRevision++;
+  lastInspectorKey = '';
   const n = trace?.evs.length ?? 0;
   S.pos = fresh ? 0 : atEnd ? n : Math.min(S.pos, n);
   S.stepTarget = null;
@@ -182,7 +196,7 @@ function startGdb(src: string, model: Model, fresh: boolean): void {
     let r: GResult | 'unavailable';
     try {
       r = await requestTrace(
-        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000 },
+        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, bindings: S.sprites },
         ac.signal,
       );
     } catch {
@@ -234,6 +248,7 @@ interface Saved {
   stdin?: string;
   places: [string, number, number, boolean][];
   waypoints: [string, number, number][];
+  sprites?: Sprite[];
 }
 
 function readSaved(key: string): Saved | null {
@@ -245,19 +260,22 @@ function readSaved(key: string): Saved | null {
   }
 }
 
-let saveTimer = 0;
+const saveTimers = new Map<string, number>();
 function saveSoon(): void {
-  clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => {
-    const saved: Saved = {
-      src: editor.state.doc.toString(),
-      stdin: S.stdin,
-      places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
-      waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
-    };
-    store.set(`sample.${S.sample.key}`, JSON.stringify(saved));
-    renderRevert();
-  }, 400);
+  const key = S.sample.key;
+  clearTimeout(saveTimers.get(key));
+  const saved: Saved = {
+    src: editor.state.doc.toString(),
+    stdin: S.stdin,
+    places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
+    waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
+    sprites: structuredClone(S.sprites),
+  };
+  saveTimers.set(key, window.setTimeout(() => {
+    store.set(`sample.${key}`, JSON.stringify(saved));
+    saveTimers.delete(key);
+    if (S.sample.key === key) renderRevert();
+  }, 400));
 }
 
 function applySavedLayout(saved: Saved): void {
@@ -268,13 +286,53 @@ function applySavedLayout(saved: Saved): void {
   for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
 }
 
+function blueprint(): Blueprint {
+  return {
+    version: 1,
+    nodes: Object.fromEntries([...layout.nodes.values()].map((n) => [n.id, { x: n.place.x, y: n.place.y, pinned: n.place.pinned }])),
+    waypoints: Object.fromEntries([...layout.waypoints].map(([k, p]) => [k, { x: p.x, y: p.y }])),
+    sprites: S.sprites,
+  };
+}
+
+function exportBlueprint(): void {
+  const data = new Blob([serializeBlueprint(blueprint())], { type: 'application/json' });
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${S.sample.key}.blueprint.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importBlueprint(file: File): Promise<void> {
+  try {
+    if (file.size > 200_000) throw new Error('Blueprint is too large');
+    const bp = parseBlueprint(await file.text());
+    for (const [id, p] of Object.entries(bp.nodes)) {
+      const n = layout.nodes.get(id);
+      if (n) n.place = { ...p };
+    }
+    layout.waypoints.clear();
+    for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
+    S.sprites = bp.sprites;
+    S.selected = null;
+    bindingsChanged();
+    saveSoon();
+    view.fit(S);
+    toast(`loaded ${bp.sprites.length} sprite${bp.sprites.length === 1 ? '' : 's'}`);
+  } catch (e) { toast(`Blueprint: ${(e as Error).message}`); }
+}
+
 function renderRevert(): void {
   const saved = readSaved(S.sample.key);
-  const edited = !!saved && (saved.src !== S.sample.src || (saved.stdin ?? '') !== (S.sample.stdin ?? '') || saved.places.some((p) => p[3]) || saved.waypoints.length > 0);
+  const edited = !!saved && (saved.src !== S.sample.src || (saved.stdin ?? '') !== (S.sample.stdin ?? '') || saved.places.some((p) => p[3]) || saved.waypoints.length > 0 || !!saved.sprites?.length);
   $<HTMLButtonElement>('btn-revert').hidden = !edited;
 }
 
 function revertSample(): void {
+  clearTimeout(saveTimers.get(S.sample.key));
+  saveTimers.delete(S.sample.key);
   store.set(`sample.${S.sample.key}`, '');
   loadSample(S.sample.key, true);
   toast('back to the original sample (Ctrl+Z in the editor undoes this)');
@@ -287,12 +345,15 @@ function loadSample(key: string | undefined, pristine = false): void {
   S.selected = null;
   store.set('lastSample', s.key);
   const saved = pristine ? null : readSaved(s.key);
+  S.sprites = saved?.sprites ? parseSavedSprites(saved.sprites) : [];
   const src = saved?.src ?? s.src;
   S.stdin = saved?.stdin ?? s.stdin ?? '';
   $<HTMLTextAreaElement>('stdin').value = S.stdin;
   $('file-name').textContent = s.file;
   renderSampleTabs();
+  loadingSample = true;
   setDoc(editor, src);
+  loadingSample = false;
   clearTimeout(debounce);
   analyze(src, true);
   if (saved) {
@@ -301,6 +362,24 @@ function loadSample(key: string | undefined, pristine = false): void {
   }
   renderRevert();
   if (S.trace) setTimeout(() => play(), 450);
+}
+
+function parseSavedSprites(sprites: Sprite[]): Sprite[] {
+  try { return parseBlueprint({ version: 1, nodes: {}, waypoints: {}, sprites }).sprites; }
+  catch { return []; }
+}
+
+function bindingsChanged(): void {
+  lastInspectorKey = '';
+  if (!S.model) return;
+  const engine = engineFor(S.model);
+  if (engine === 'interp') applyTrace(evaluateInterpreterBindings(run(S.model), S.sprites), false);
+  else if (engine === 'gdb') {
+    cancelGdb();
+    applyTrace(null, false);
+    startGdb(editor.state.doc.toString(), S.model, false);
+    renderAlerts();
+  }
 }
 
 // ---------------- playback ----------------
@@ -403,11 +482,32 @@ function resetRoute(key: string): void {
   toast('route reset');
 }
 
+function placeSprite(kind: SpriteKind, wx: number, wy: number, preset: Partial<Sprite> = {}): Sprite {
+  const id = `sprite:${crypto.randomUUID()}`;
+  const sprite: Sprite = { id, kind, x: Math.round(wx), y: Math.round(wy), ...preset };
+  S.sprites.push(sprite);
+  S.selected = { k: 'sprite', id };
+  S.legend = null;
+  lastInspectorKey = '';
+  saveSoon();
+  bindingsChanged();
+  return sprite;
+}
+
+function removeSprite(id: string): void {
+  S.sprites = S.sprites.filter((s) => s.id !== id);
+  if (S.selected?.k === 'sprite' && S.selected.id === id) S.selected = null;
+  lastInspectorKey = '';
+  saveSoon();
+  bindingsChanged();
+}
+
 // ---------------- mouse ----------------
 type Drag =
   | { k: 'pan'; x: number; y: number; moved: boolean }
   | { k: 'node'; id: string; ox: number; oy: number; moved: boolean }
-  | { k: 'belt'; key: string; moved: boolean };
+  | { k: 'belt'; key: string; moved: boolean }
+  | { k: 'sprite'; id: string; ox: number; oy: number; moved: boolean };
 let drag: Drag | null = null;
 let lastPanAt = 0;
 
@@ -441,7 +541,10 @@ function bindMouse(): void {
     const hit = entityAt(S, wx, wy);
     S.selected = hit;
     S.legend = null;
-    if (hit?.k === 'node' && (hit.copy ?? 1) > 1) drag = null; // copies follow their home
+    if (hit?.k === 'sprite') {
+      const sprite = S.sprites.find((s) => s.id === hit.id)!;
+      drag = { k: 'sprite', id: hit.id, ox: wx - sprite.x, oy: wy - sprite.y, moved: false };
+    } else if (hit?.k === 'node' && (hit.copy ?? 1) > 1) drag = null; // copies follow their home
     else if (hit?.k === 'node') {
       const n = layout.nodes.get(hit.id)!;
       drag = { k: 'node', id: hit.id, ox: wx - n.place.x, oy: wy - n.place.y, moved: false };
@@ -469,6 +572,15 @@ function bindMouse(): void {
         layout.waypoints.set(drag.key, p);
         drag.moved = true;
       }
+    } else if (drag?.k === 'sprite') {
+      const spriteId = drag.id;
+      const sprite = S.sprites.find((s) => s.id === spriteId);
+      if (sprite) {
+        const nx = Math.round(wx - drag.ox), ny = Math.round(wy - drag.oy);
+        if (sprite.x !== nx || sprite.y !== ny) {
+          sprite.x = nx; sprite.y = ny; drag.moved = true;
+        }
+      }
     } else {
       S.hovered = entityAt(S, wx, wy);
     }
@@ -477,7 +589,7 @@ function bindMouse(): void {
 
   const end = () => {
     if (drag?.k === 'node' && drag.moved) toast('pinned: auto-layout won’t move it (right-click → Unpin)');
-    if ((drag?.k === 'node' || drag?.k === 'belt') && drag.moved) saveSoon();
+    if ((drag?.k === 'node' || drag?.k === 'belt' || drag?.k === 'sprite') && drag.moved) saveSoon();
     if (drag?.k === 'pan' && !drag.moved && S.selected === null) S.legend = null;
     drag = null;
     setCursorStyle();
@@ -486,6 +598,17 @@ function bindMouse(): void {
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => {
     if (!drag) S.hovered = null;
+  });
+  canvas.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types.includes('application/x-ftb-sprite')) e.preventDefault();
+  });
+  canvas.addEventListener('drop', (e) => {
+    const kind = e.dataTransfer?.getData('application/x-ftb-sprite') as SpriteKind | undefined;
+    if (!kind || !['strip', 'marker', 'chest', 'drill', 'stack', 'train'].includes(kind)) return;
+    e.preventDefault();
+    const [x, y] = localXY(e);
+    const [wx, wy] = view.toWorld(x, y);
+    placeSprite(kind, wx, wy);
   });
   // Middle-click must not paste or start autoscroll.
   canvas.addEventListener('mousedown', (e) => e.button === 1 && e.preventDefault());
@@ -522,6 +645,9 @@ function bindMouse(): void {
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
+    } else if (hit?.k === 'sprite') {
+      items.push(['Bind…', () => { S.selected = hit; lastInspectorKey = ''; renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
+      items.push(['Remove', () => removeSprite(hit.id)]);
     } else if (hit?.k === 'belt') {
       items.push(['Go to call site', () => gotoCode(hit)]);
       if (layout.waypoints.has(hit.key)) items.push(['Reset route', () => resetRoute(hit.key)]);
@@ -561,7 +687,7 @@ function onKey(e: KeyboardEvent): void {
     }
     return;
   }
-  if (!gridPane.contains(document.activeElement) || e.metaKey || e.altKey) return;
+  if (!gridPane.contains(document.activeElement) || (document.activeElement as HTMLElement | null)?.closest('input, textarea, select, button, [contenteditable="true"]') || e.metaKey || e.altKey) return;
   const k = e.key;
   let handled = true;
   if (k === ' ') togglePlay();
@@ -601,6 +727,7 @@ function renderSkinPicker(): void {
 // ---------------- vim toggle ----------------
 const hooks: EditorHooks = {
   onChange: (doc) => {
+    if (loadingSample) return;
     saveSoon();
     clearTimeout(debounce);
     debounce = window.setTimeout(() => analyze(doc, false), 150);
@@ -614,6 +741,7 @@ const hooks: EditorHooks = {
     S.mode = m;
   },
 };
+let loadingSample = false;
 
 function toggleVim(): void {
   S.vim = !S.vim;
@@ -677,10 +805,14 @@ function renderSampleTabs(): void {
 
 function renderDock(): void {
   const dock = $('dock');
-  dock.innerHTML = LEGEND.map((l, i) => `<button class="slot${l.live ? '' : ' later'}${S.legend === l.kind ? ' on' : ''}" data-i="${i}" title="${esc(l.name)} — ${esc(l.c)}"><canvas></canvas></button>`).join('');
+  dock.innerHTML = LEGEND.map((l, i) => `<button class="slot${S.legend === l.kind ? ' on' : ''}${i >= 5 ? ' placeable' : ''}" data-i="${i}" ${i >= 5 ? 'draggable="true"' : ''} title="${esc(l.name)} — ${i >= 5 ? 'drag onto the grid' : esc(l.c)}"><canvas></canvas></button>`).join('');
   dock.querySelectorAll<HTMLButtonElement>('.slot').forEach((b) => {
     const l = LEGEND[Number(b.dataset.i)];
-    drawIcon(b.querySelector('canvas')!, l.kind, 26);
+    drawIcon(b.querySelector('canvas')!, l.kind === ('marker' as IconKind) ? 'strip' : l.kind, 26);
+    if (Number(b.dataset.i) >= 5) b.addEventListener('dragstart', (e) => {
+      e.dataTransfer?.setData('application/x-ftb-sprite', l.kind);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+    });
     b.addEventListener('click', () => {
       S.legend = S.legend === l.kind ? null : l.kind;
       if (S.legend) S.selected = null;
@@ -761,10 +893,121 @@ function renderLiveStatus(): void {
 }
 
 let lastInspectorKey = '';
+let traceRevision = 0;
+const suggestions: { fn: string; expr: string; lengthExpr: string; markers: { expr: string; label: string }[]; label: string }[] = [];
+
+function suggestionButtons(vars: Var[], fn: string): string {
+  suggestions.length = 0;
+  if (!S.model) return '';
+  for (const v of vars) {
+    const shape = bufferShapes(S.model).find((s) => new RegExp(`(^|\\W)${s.type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\W)`).test(v.type));
+    if (!shape) continue;
+    const index = S.model.byName.get(fn)?.params.some((p) => p.name === 'fd') ? 'fd' : '0';
+    const base = v.type.includes('*') ? `${v.name}->` : v.type.includes('[]') ? `${v.name}[${index}].` : `${v.name}.`;
+    const expr = `${base}${shape.data}`;
+    const markers = shape.markers.map((field) => ({ expr: `${base}${field}`, label: field }));
+    const cap = markers.find((m) => /^(cap|capacity|size)$/i.test(m.label)) ?? markers.find((m) => /^(len|length)$/i.test(m.label));
+    if (!cap) continue;
+    suggestions.push({ fn, expr, lengthExpr: cap.expr, markers, label: v.name });
+  }
+  if (!suggestions.length) return '';
+  return `<div class="suggestions"><div class="hint">Suggested from struct fields</div>${suggestions.map((s, i) => `<button class="btn sm" data-suggest="${i}">Add ${esc(s.label)} strip + markers</button>`).join('')}</div>`;
+}
+
+function bindSuggestionButtons(): void {
+  inspector.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => b.addEventListener('click', () => {
+    const s = suggestions[Number(b.dataset.suggest)];
+    if (!s) return;
+    const node = layout.nodes.get(`func:${s.fn}`);
+    const place = freeSuggestionPlace(node);
+    const sprite = placeSprite('strip', place.x, place.y, { label: `${s.label} buffer`, binding: { scope: 'fn', fn: s.fn, expr: s.expr }, lengthExpr: s.lengthExpr, markers: s.markers });
+    const r = spriteWorldRect(sprite);
+    view.ensureVisible(r.x, r.y, r.w, r.h, 1);
+    toast('suggested strip placed — edit its binding in the inspector');
+  }));
+}
+
+function freeSuggestionPlace(node: ReturnType<Layout['nodes']['get']>): { x: number; y: number } {
+  const x = node?.place.x ?? 0;
+  const y = node?.place.y ?? 0;
+  const below = node ? footprint(node).y + footprint(node).h + 1 : 2;
+  const occupied = [
+    ...[...layout.nodes.values()].map((n) => footprint(n)),
+    ...buildScene(layout, S.model, S.trace).obstacles,
+    ...S.sprites.map((sp) => spriteWorldRect(sp)),
+  ];
+  const free = (cx: number, cy: number) => {
+    const test = { x: cx, y: cy, w: 8.2, h: 2.35 }; // largest bound strip footprint
+    return !occupied.some((o) => test.x < o.x + o.w + 0.5 && o.x < test.x + test.w + 0.5 && test.y < o.y + o.h + 0.5 && o.y < test.y + test.h + 0.5);
+  };
+  for (let ring = 0; ring < 24; ring++) {
+    const candidates: [number, number][] = [
+      [x, below + ring * 4], [x, y - 4 - ring * 4],
+      [x + 7 + ring * 5, y], [x - 9 - ring * 5, y],
+    ];
+    const found = candidates.find(([cx, cy]) => free(cx, cy));
+    if (found) return { x: found[0], y: found[1] };
+  }
+  return { x, y: below + 96 };
+}
+
+function renderSpriteInspector(id: string, bound: { bound: boolean; value?: string; number?: number; length?: number; error?: string } | undefined): void {
+  const sprite = S.sprites.find((s) => s.id === id);
+  if (!sprite) return void (inspector.hidden = true);
+  const b = sprite.binding;
+  inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(sprite.label || sprite.kind)}</span><span class="k">${esc(sprite.kind)}</span></div>
+    <form class="ins-body sprite-form">
+      <label>Label<input name="label" value="${esc(sprite.label ?? '')}" maxlength="100" placeholder="${esc(sprite.kind)}"></label>
+      <label>Scope<select name="scope"><option value="fn" ${b?.scope !== 'global' ? 'selected' : ''}>Function frame</option><option value="global" ${b?.scope === 'global' ? 'selected' : ''}>Global</option></select></label>
+      <label>Function<select name="fn">${(S.model?.fns ?? []).map((f) => `<option value="${esc(f.name)}" ${f.name === (b?.fn ?? S.model?.fns[0]?.name) ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
+      <label>Expression<input name="expr" value="${esc(b?.expr ?? '')}" placeholder="buf-&gt;data" spellcheck="false"></label>
+      ${sprite.kind === 'marker' ? '<p class="hint">This card shows an index. For a cursor that rides a strip, edit the strip’s Markers field.</p>' : ''}
+      ${sprite.kind === 'strip' ? `<label>Length expression<input name="length" value="${esc(sprite.lengthExpr ?? '')}" placeholder="buf-&gt;cap" spellcheck="false"></label>
+      <label>Markers <span class="hint">one label = expression per line</span><textarea name="markers" rows="4" spellcheck="false" placeholder="pos = buf-&gt;pos">${esc(sprite.markers?.map((m) => `${m.label} = ${m.expr}`).join('\n') ?? '')}</textarea></label>` : ''}
+      <div class="binding-status">${bound?.bound ? `Observed: ${esc(bound.value ?? String(bound.number ?? 'value'))}${bound.length !== undefined ? ` · length ${bound.length}` : ''}` : bound?.error ? esc(bound.error) : b ? 'No live value at this step' : 'Unbound — dimmed on the grid'}</div>
+      <div class="sprite-actions"><button class="btn sm" type="submit">Apply binding</button><button class="btn sm" type="button" data-remove>Remove</button></div>
+    </form>`;
+  const form = inspector.querySelector<HTMLFormElement>('form')!;
+  const scope = form.elements.namedItem('scope') as HTMLSelectElement;
+  const fn = form.elements.namedItem('fn') as HTMLSelectElement;
+  const sync = () => { fn.disabled = scope.value === 'global'; };
+  scope.addEventListener('change', sync);
+  sync();
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement).value.trim();
+    const expr = get('expr');
+    const length = sprite.kind === 'strip' ? get('length') : '';
+    const markerLines = sprite.kind === 'strip' ? get('markers').split(/\n/).map((x) => x.trim()).filter(Boolean) : [];
+    const check = (x: string) => isSafeBindingExpr(x) ? validateBindingExpr(x) : 'use an identifier with field and index access only';
+    if (expr && check(expr)) return toast(`Expression: ${check(expr)}`);
+    if (length && check(length)) return toast(`Length: ${check(length)}`);
+    const markers: { expr: string; label: string }[] = [];
+    for (const line of markerLines) {
+      const m = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(line);
+      if (!m || check(m[2])) return toast(`Marker: ${m ? check(m[2]) : 'use label = expression'}`);
+      markers.push({ label: m[1], expr: m[2] });
+    }
+    if (markers.length > 16) return toast('At most 16 markers');
+    sprite.label = get('label');
+    sprite.binding = expr ? { scope: scope.value as 'fn' | 'global', ...(scope.value === 'fn' ? { fn: fn.value } : {}), expr } : undefined;
+    sprite.lengthExpr = length || undefined;
+    sprite.markers = markers;
+    saveSoon();
+    bindingsChanged();
+    inspector.querySelector<HTMLElement>('[name="expr"]')?.blur();
+    lastInspectorKey = '';
+    renderInspector();
+    toast(expr ? 'binding applied' : 'sprite is unbound');
+  });
+  form.querySelector<HTMLButtonElement>('[data-remove]')!.addEventListener('click', () => removeSprite(id));
+}
+
 function renderInspector(): void {
   const fr = S.trace && S.trace.evs.length ? frameAt(S.trace, S.pos) : null;
-  const key = `${S.legend}|${entKey(S.selected)}:${S.selected?.k === 'node' ? S.selected.copy ?? 1 : ''}|${fr ? `${fr.si}` : ''}|${S.model?.tree.rootNode.text.length}|${S.skin.id}`;
+  const key = `${S.legend}|${entKey(S.selected)}:${S.selected?.k === 'node' ? S.selected.copy ?? 1 : ''}|${fr ? `${fr.si}` : ''}|${traceRevision}|${S.model?.tree.rootNode.text.length}|${S.skin.id}`;
   if (key === lastInspectorKey) return;
+  if (inspector.contains(document.activeElement)) return;
   lastInspectorKey = key;
 
   if (S.legend) {
@@ -772,7 +1015,7 @@ function renderInspector(): void {
     inspector.hidden = false;
     inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(l.name)}</span><span class="k">legend</span></div>
       <div class="ins-body"><div class="row"><span class="l">C</span><span class="v">${esc(l.c)}</span></div><p>${esc(l.text)}</p>
-      ${l.live ? '' : '<div class="foot"><span class="soon">placing it arrives in M2</span></div>'}</div>`;
+      ${['strip', 'chest', 'marker', 'drill', 'train', 'stack'].includes(l.kind) ? '<div class="foot"><span>drag from dock onto grid</span></div>' : ''}</div>`;
     return;
   }
   const e = S.selected;
@@ -783,7 +1026,9 @@ function renderInspector(): void {
   inspector.hidden = false;
   const snap = fr?.snap ?? null;
   const row = (l: string, v: string) => `<div class="row"><span class="l">${l}</span><span class="v">${v}</span></div>`;
-  if (e.k === 'node') {
+  if (e.k === 'sprite') {
+    renderSpriteInspector(e.id, fr?.snap.bound?.[e.id]);
+  } else if (e.k === 'node') {
     const node = layout.nodes.get(e.id);
     if (!node) return void (inspector.hidden = true);
     const f = node.fn;
@@ -805,13 +1050,16 @@ function renderInspector(): void {
       ${row('calls', esc([...new Set(f?.calls.map((c) => c.callee))].join(', ') || '—'))}
       ${row('called by', esc(callers.join(', ') || (node.name === 'main' ? 'process' : '—')))}
       ${f?.externals.length ? row('external', esc(f.externals.join(', '))) : ''}
+      ${suggestionButtons([...f?.params ?? [], ...f?.locals ?? []], f?.name ?? '')}
       <div class="foot"><span>double-click → code</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
+    bindSuggestionButtons();
   } else if (e.k === 'static') {
     const id = S.trace ? [...S.trace.cells].find(([, c]) => c.frame === -1 && c.owner === e.fn && c.name === e.name)?.[0] : undefined;
     const c = id !== undefined ? snap?.statics.find((x) => x.id === id) : null;
     inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(e.name)}</span><span class="k">static</span></div>
       <div class="ins-body">${row('owner', esc(e.fn))}${row('value', c ? esc(fmtVal(c.val, c.type)) : '—')}
-      <p>Lives for the whole program, not just one call.</p></div>`;
+      <p>Lives for the whole program, not just one call.</p>${suggestionButtons(S.model?.byName.get(e.fn)?.statics.filter((v) => v.name === e.name) ?? [], e.fn)}</div>`;
+    bindSuggestionButtons();
   } else if (e.k === 'proc') {
     const t = S.trace;
     inspector.innerHTML = `<div class="ins-title"><span class="n">process</span><span class="k">the OS</span></div>
@@ -974,6 +1222,13 @@ async function boot(): Promise<void> {
   renderVimToggle();
   $('btn-help').addEventListener('click', openHelp);
   $('btn-revert').addEventListener('click', revertSample);
+  $('btn-blueprint-save').addEventListener('click', exportBlueprint);
+  $('btn-blueprint-load').addEventListener('click', () => $<HTMLInputElement>('blueprint-file').click());
+  $<HTMLInputElement>('blueprint-file').addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.files?.[0]) void importBlueprint(input.files[0]);
+    input.value = '';
+  });
   renderEngines();
   $<HTMLTextAreaElement>('stdin').addEventListener('input', (e) => {
     S.stdin = (e.target as HTMLTextAreaElement).value;

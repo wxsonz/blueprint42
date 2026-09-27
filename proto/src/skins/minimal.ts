@@ -2,6 +2,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
+import { drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const ACCENT = '#8ab4ff';
 const PTR = '#ff8a7a';
@@ -16,6 +17,7 @@ const LINE = '#2e3036';
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
 const MONO = (px: number, w = 500) => `${w} ${px}px "JetBrains Mono", "DejaVu Sans Mono", monospace`;
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
+const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: '#111317', cell: '#303e54', text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
   rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
@@ -38,6 +40,8 @@ export const minimal: Skin = {
   name: 'Minimal',
   blurb: 'quiet cards and hairlines',
   casing: '#131416',
+  strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
+  sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;

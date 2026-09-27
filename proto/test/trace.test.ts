@@ -4,6 +4,7 @@ import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { parse } from '../src/parse';
 import { sample, setupParser } from './helpers';
+import type { Sprite } from '../src/blueprint';
 
 beforeAll(setupParser);
 
@@ -49,6 +50,82 @@ describe('trace server (cc + gdb)', () => {
     // bufs is seen as the static chest owned by get_next_line
     expect([...t!.cells.values()].some((c) => c.frame === -1 && c.owner === 'get_next_line' && c.name === 'bufs')).toBe(true);
   }, 60000);
+
+  it('M2 bindings: GNL pos follows len and strip capacity doubles', async () => {
+    const s = sample('gnl');
+    const m = parse(s.src);
+    const bindings: Sprite[] = [
+      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }] },
+      { id: 'pos', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->pos' } },
+    ];
+    const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, s.src);
+    const observed = t.snaps.map((snap) => snap.bound?.strip).filter((v) => v?.bound);
+    expect(observed.length).toBeGreaterThan(10);
+    const positions = observed.map((v) => v!.markers?.find((m) => m.label === 'pos')?.index).filter((v): v is number => v !== undefined);
+    expect(new Set(positions).size).toBeGreaterThan(1);
+    for (const v of observed) {
+      const pos = v!.markers?.find((m) => m.label === 'pos')?.index;
+      const len = v!.markers?.find((m) => m.label === 'len')?.index;
+      if (pos !== undefined && len !== undefined) expect(pos).toBeLessThanOrEqual(len);
+      expect(v!.bytes?.length ?? 0).toBeLessThanOrEqual(256);
+    }
+    const capacities = [...new Set(observed.map((v) => v!.length).filter((v): v is number => v !== undefined && v > 0))];
+    expect(capacities.some((cap) => capacities.includes(cap * 2))).toBe(true);
+    expect(t.snaps.at(-1)?.bound?.strip).toEqual({ bound: false });
+  }, 60000);
+
+  it('reads a global even when a live local has the same name', async () => {
+    const src = 'int\tvalue = 7;\n\nint\tmain(void)\n{\n\tint\tvalue;\n\n\tvalue = 3;\n\treturn (value);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: ['main'], bindings: [
+      { id: 'global', kind: 'chest', x: 0, y: 0, binding: { scope: 'global', expr: 'value' } },
+      { id: 'local', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'main', expr: 'value' } },
+    ] });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    const both = t.snaps.find((snap) => snap.bound?.local?.number === 3);
+    expect(both?.bound?.global?.number).toBe(7);
+  }, 30000);
+
+  it('reads a bounded array strip and leaves a null strip unavailable', async () => {
+    const src = "char data[4] = {'a', 'b', 'c', 'd'};\nchar *missing = 0;\nint count = 4;\nint main(void)\n{\n\treturn (data[0]);\n}\n";
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: ['main'], bindings: [
+      { id: 'array', kind: 'strip', x: 0, y: 0, binding: { scope: 'global', expr: 'data' }, lengthExpr: 'count' },
+      { id: 'null', kind: 'strip', x: 0, y: 0, binding: { scope: 'global', expr: 'missing' }, lengthExpr: 'count' },
+    ] });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    expect(t.snaps.some((snap) => snap.bound?.array?.bytes?.join(',') === '97,98,99,100')).toBe(true);
+    expect(t.snaps.some((snap) => snap.bound?.null?.bound === true)).toBe(false);
+  }, 30000);
+
+  it('binds the newest recursive frame and hides locals until assignment executes', async () => {
+    const src = 'int\trec(int n)\n{\n\tint\tlocal;\n\n\tlocal = n;\n\tif (n > 0)\n\t\treturn (rec(n - 1) + local);\n\treturn (local);\n}\n\nint\tmain(void)\n{\n\treturn (rec(2));\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: ['main', 'rec'], bindings: [
+      { id: 'local', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'rec', expr: 'local' } },
+    ] });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const atAssignment = r.stops?.filter((s) => s.frames.at(-1)?.fn === 'rec' && s.line === 5) ?? [];
+    expect(atAssignment.length).toBeGreaterThanOrEqual(3);
+    expect(atAssignment.every((s) => s.bound?.local?.bound === false)).toBe(true);
+    const nested = r.stops?.filter((s) => s.frames.filter((f) => f.fn === 'rec').length >= 2 && s.bound?.local?.bound) ?? [];
+    expect(nested.length).toBeGreaterThan(0);
+    for (const stop of nested) {
+      const frame = stop.frames.filter((f) => f.fn === 'rec').at(-1)!;
+      expect(stop.bound?.local?.number).toBe(frame.vars.find((v) => v.name === 'n')?.v);
+    }
+    const t = convertGdb(r, m, src);
+    for (let i = 0; i < t.evs.length; i++) {
+      const event = t.evs[i];
+      if ((event.k === 'call' || event.k === 'ret') && event.fn === 'rec')
+        expect(t.snaps[i + 1].bound?.local?.bound).toBe(false);
+    }
+    expect(t.snaps.at(-1)?.bound?.local?.bound).toBe(false);
+  }, 30000);
 
   it('reports compile errors with their line (the 42 flags are on)', async () => {
     const r = await handleTrace({ src: 'int\tmain(void)\n{\n\tint\tunused;\n\n\treturn (0);\n}\n', fns: ['main'] });

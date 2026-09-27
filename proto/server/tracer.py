@@ -4,6 +4,7 @@
 # happened since the previous stop. Config comes from $FTB_CFG.
 import json
 import os
+import re
 import time
 
 import gdb
@@ -13,6 +14,9 @@ USER = set(CFG["fns"])
 MAX_STEPS = CFG["max_steps"]
 DEADLINE = time.monotonic() + CFG.get("max_seconds", 20)
 SRC = CFG["src_name"]
+SOURCE_LINES = open(SRC).read().splitlines()
+BINDINGS = CFG.get("bindings", [])
+SAFE_EXPR = re.compile(r"^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$")
 
 for cmd in (
     "set pagination off", "set confirm off", "set width 0", "set height 0",
@@ -324,6 +328,30 @@ class Free(gdb.Breakpoint):
 frames = []   # [{"id", "fn", "frame"}] oldest first
 next_frame = [1]
 stops = []
+local_kinds = {}  # frame id -> {name: is_argument}
+defined_locals = set()  # (frame id, name), only after an executed assignment
+previous_lines = {}  # frame id -> previous stop's source line
+
+
+def local_symbols(frame):
+    found = {}
+    try:
+        block = frame.block()
+        while block is not None:
+            for sym in block:
+                if (sym.is_argument or sym.is_variable) and sym.addr_class != gdb.SYMBOL_LOC_STATIC and sym.name not in found:
+                    found[sym.name] = bool(sym.is_argument)
+            if block.function is not None:
+                break
+            block = block.superblock
+    except (gdb.error, RuntimeError):
+        pass
+    return found
+
+
+def line_assigns(line, name):
+    n = re.escape(name)
+    return bool(re.search(r"(^|[^\w.>])" + n + r"\s*(?:[-+*/%&|^]|<<|>>)?=(?!=)|(?:\+\+|--)\s*" + n + r"\b|\b" + n + r"\s*(?:\+\+|--)", line))
 
 
 def user_stack():
@@ -338,6 +366,120 @@ def user_stack():
         f = f.older()
     out.reverse()
     return out
+
+
+def eval_expr(expr, scope):
+    if scope != "global":
+        return gdb.parse_and_eval(expr)
+    # Resolve the root explicitly so a local with the same name cannot shadow
+    # a file-scope object while a function frame is selected.
+    root = re.match(r"[A-Za-z_]\w*", expr).group()
+    symbol = gdb.lookup_global_symbol(root)
+    if symbol is None:
+        symbol = gdb.lookup_static_symbol(root)
+    if symbol is None:
+        raise gdb.error("global symbol is unavailable")
+    value = symbol.value()
+    rest = expr[len(root):]
+    while rest:
+        member = re.match(r"(->|\.)([A-Za-z_]\w*)", rest)
+        if member:
+            if member.group(1) == "->":
+                value = value.dereference()
+            value = value[member.group(2)]
+            rest = rest[len(member.group()):]
+            continue
+        index = re.match(r"\[(\d+|[A-Za-z_]\w*)\]", rest)
+        if not index:
+            raise gdb.error("unsupported expression")
+        subscript = index.group(1)
+        if not subscript.isdecimal():
+            subscript = int(eval_expr(subscript, "global"))
+        value = value[int(subscript)]
+        rest = rest[len(index.group()):]
+    return value
+
+
+def eval_bound(sprite, selected, fid):
+    binding = sprite.get("binding") or {}
+    expr = binding.get("expr", "").strip()
+    if not SAFE_EXPR.fullmatch(expr):
+        return {"bound": False, "error": "unsupported expression"}
+    scope = binding.get("scope")
+    def initialized(expression):
+        root = re.match(r"[A-Za-z_]\w*", expression).group()
+        names = [root] + re.findall(r"\[([A-Za-z_]\w*)\]", expression)
+        return scope != "fn" or all(name not in local_kinds.get(fid, {}) or (fid, name) in defined_locals for name in names)
+    if not initialized(expr):
+        return {"bound": False, "error": "local is not initialized"}
+    try:
+        selected.select()
+        v = eval_expr(expr, scope)
+        t = v.type.strip_typedefs()
+        out = {"bound": True, "value": str(v)[:160]}
+        if t.code in (gdb.TYPE_CODE_INT, gdb.TYPE_CODE_CHAR, gdb.TYPE_CODE_BOOL, gdb.TYPE_CODE_ENUM):
+            out["number"] = int(v)
+        elif t.code == gdb.TYPE_CODE_PTR:
+            out["pointer"] = int(v)
+        markers = []
+        for marker in sprite.get("markers") or []:
+            marker_expr = marker.get("expr", "").strip()
+            if not SAFE_EXPR.fullmatch(marker_expr) or not initialized(marker_expr):
+                continue
+            try:
+                index = int(eval_expr(marker_expr, scope))
+                if -(1 << 30) <= index <= 1 << 30:
+                    markers.append({"label": marker.get("label", "")[:40], "index": index})
+            except (gdb.error, ValueError, TypeError):
+                pass
+        if markers:
+            out["markers"] = markers
+        length_expr = sprite.get("lengthExpr")
+        if sprite.get("kind") == "strip":
+            if not isinstance(length_expr, str) or not SAFE_EXPR.fullmatch(length_expr.strip()) or not initialized(length_expr.strip()):
+                return {"bound": False, "error": "strip length is unavailable"}
+            length = int(eval_expr(length_expr.strip(), scope))
+            if not 0 <= length <= 1 << 30:
+                return {"bound": False, "error": "strip length is out of range"}
+            if t.code == gdb.TYPE_CODE_PTR:
+                addr = int(v)
+            elif t.code == gdb.TYPE_CODE_ARRAY and v.address is not None:
+                addr = int(v.address)
+                out["pointer"] = addr
+            else:
+                return {"bound": False, "error": "strip data is not an array or pointer"}
+            if addr == 0:
+                return {"bound": False, "error": "strip data is null"}
+            raw = read_bytes(addr, min(length, 256)) if length else b""
+            if raw is None:
+                return {"bound": False, "error": "strip data is unreadable"}
+            out["length"] = length
+            out["bytes"] = list(raw)
+        return out
+    except (gdb.error, ValueError, TypeError, gdb.MemoryError) as e:
+        return {"bound": False, "error": str(e)[:120]}
+
+
+def bindings_now(cur):
+    if not BINDINGS:
+        return {}
+    saved = gdb.selected_frame()
+    bound = {}
+    try:
+        for sprite in BINDINGS:
+            binding = sprite.get("binding") or {}
+            if binding.get("scope") == "fn":
+                selected = next((f for f in reversed(cur) if f.name() == binding.get("fn")), None)
+            else:
+                selected = cur[0] if cur else None
+            fid = next((fr["id"] for fr in reversed(frames) if fr["frame"] == selected), None) if selected is not None else None
+            bound[sprite["id"]] = eval_bound(sprite, selected, fid) if selected is not None else {"bound": False}
+    finally:
+        try:
+            saved.select()
+        except gdb.error:
+            pass
+    return bound
 
 
 def record_stop():
@@ -364,6 +506,15 @@ def record_stop():
     out_frames = []
     for fr in frames:
         f = fr["frame"]
+        fid = fr["id"]
+        symbols = local_symbols(f)
+        local_kinds[fid] = symbols
+        line = previous_lines.get(fid)
+        source = SOURCE_LINES[line - 1] if line is not None and 1 <= line <= len(SOURCE_LINES) else ""
+        for name, is_argument in symbols.items():
+            if is_argument or line_assigns(source, name):
+                defined_locals.add((fid, name))
+        previous_lines[fid] = caller_line(f)
         out_frames.append({"id": fr["id"], "fn": fr["fn"], "line": caller_line(f), "vars": frame_vars(f, fr["id"])})
     stops.append({
         "line": out_frames[-1]["line"] if out_frames else None,
@@ -371,6 +522,7 @@ def record_stop():
         "frames": out_frames,
         "statics": statics_now(),
         "heap": heap_now(),
+        "bound": bindings_now(cur),
     })
     pending.clear()
 
@@ -424,7 +576,7 @@ def main():
         for gone in reversed(frames):
             if gone["id"] not in returned:
                 pending.append({"k": "ret", "id": gone["id"], "value": None})
-        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_now(), "exited": True})
+        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_now(), "bound": {}, "exited": True})
         pending.clear()
     result["exit"] = state["exit"]
     return result
