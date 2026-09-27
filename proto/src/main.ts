@@ -1,8 +1,10 @@
+import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
 import { createEditor, jumpTo, setDoc, setExecLine, setVim, type EditorHooks } from './editor';
 import { fmtVal, run, type Ev, type Trace } from './interp';
 import { Layout } from './layout';
-import { initParser, parse } from './parse';
+import { convertGdb, requestTrace, type GResult } from './gdb';
+import { initParser, parse, type Model } from './parse';
 import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, type Entity, type ViewState } from './render';
 import { SAMPLES, type Sample } from './samples';
 import { SKINS, SKIN_FONTS } from './skins';
@@ -45,6 +47,9 @@ const S: ViewState & {
   vim: boolean;
   skin: Skin;
   cursor: { line: number; col: number };
+  engine: 'auto' | 'interp' | 'gdb';
+  stdin: string;
+  gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
 } = {
   layout,
   model: null,
@@ -63,9 +68,19 @@ const S: ViewState & {
   vim: store.get('vim') !== 'off',
   skin: SKINS.find((s) => s.id === store.get('skin')) ?? SKINS[0],
   cursor: { line: 0, col: 0 },
+  engine: (['auto', 'interp', 'gdb'].includes(store.get('engine') ?? '') ? store.get('engine') : 'auto') as 'auto' | 'interp' | 'gdb',
+  stdin: '',
+  gdb: { status: 'idle' },
 };
 
-const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5];
+const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 12, 20];
+
+// Long real traces pick a speed that plays them in about 45 s.
+function autoSpeed(trace: Trace): void {
+  const total = trace.evs.reduce((a, e) => a + evDuration(e), 0);
+  S.speed = SPEEDS.find((sp) => total / sp <= 45) ?? SPEEDS[SPEEDS.length - 1];
+  $('pb-speed').textContent = `${S.speed}×`;
+}
 
 const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: string }[] = [
   { kind: 'node', name: 'Function', c: 'function definition', live: true, text: 'One per function. Shows whether it is running, waiting on a callee, or idle.' },
@@ -114,14 +129,17 @@ function analyze(src: string, fresh: boolean): void {
   const sel = S.selected;
   if (sel?.k === 'node' && renamed.has(sel.id)) S.selected = { k: 'node', id: renamed.get(sel.id)! };
   if (sel?.k === 'node' && !layout.nodes.has((S.selected as { id: string }).id)) S.selected = null;
-  const oldN = S.trace?.evs.length ?? 0;
-  const atEnd = S.trace !== null && S.pos >= oldN;
   S.model = model;
-  S.trace = !model.error && model.byName.has('main') ? run(model) : null;
-  const n = S.trace?.evs.length ?? 0;
-  S.pos = fresh ? 0 : atEnd ? n : Math.min(S.pos, n);
-  S.stepTarget = null;
-  if (!S.trace) S.playing = false;
+  const engine = engineFor(model);
+  cancelGdb();
+  if (engine === 'interp') {
+    applyTrace(run(model), fresh);
+    if (fresh) autoSpeed(S.trace!);
+  }
+  else {
+    if (engine === 'none' || fresh) applyTrace(null, fresh);
+    if (engine === 'gdb') startGdb(src, model, fresh);
+  }
   renderAlerts();
   renderStatus();
   if (fresh) {
@@ -130,9 +148,90 @@ function analyze(src: string, fresh: boolean): void {
   }
 }
 
+function applyTrace(trace: Trace | null, fresh: boolean): void {
+  const oldN = S.trace?.evs.length ?? 0;
+  const atEnd = S.trace !== null && S.pos >= oldN;
+  S.trace = trace;
+  const n = trace?.evs.length ?? 0;
+  S.pos = fresh ? 0 : atEnd ? n : Math.min(S.pos, n);
+  S.stepTarget = null;
+  if (!trace) S.playing = false;
+}
+
+// ---------------- engines: the interpreter, or the real thing under gdb ----------------
+function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
+  if (model.error || !model.byName.has('main')) return 'none';
+  if (S.engine !== 'auto') return S.engine;
+  return model.fns.some((f) => f.externals.length) ? 'gdb' : 'interp';
+}
+
+let gdbTimer = 0;
+let gdbAbort: AbortController | null = null;
+function cancelGdb(): void {
+  clearTimeout(gdbTimer);
+  gdbAbort?.abort();
+  gdbAbort = null;
+  if (S.gdb.status === 'running') S.gdb = { status: 'idle' };
+}
+
+function startGdb(src: string, model: Model, fresh: boolean): void {
+  S.gdb = { status: 'running' };
+  gdbTimer = window.setTimeout(async () => {
+    const ac = new AbortController();
+    gdbAbort = ac;
+    let r: GResult | 'unavailable';
+    try {
+      r = await requestTrace(
+        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000 },
+        ac.signal,
+      );
+    } catch {
+      return; // superseded by a newer edit
+    }
+    if (ac.signal.aborted || S.model !== model) return;
+    gdbAbort = null;
+    if (r === 'unavailable') {
+      S.gdb = { status: 'unavailable' };
+      applyTrace(null, fresh);
+    } else if (!r.ok) {
+      S.gdb = { status: 'error', compile: r.compile, error: r.error };
+      applyTrace(null, fresh);
+    } else {
+      S.gdb = { status: 'done', ms: r.ms };
+      applyTrace(convertGdb(r, model, src), fresh);
+      if (fresh) {
+        autoSpeed(S.trace!);
+        view.fit(S);
+        setTimeout(() => play(), 300);
+      }
+    }
+    renderAlerts();
+    renderStatus();
+  }, fresh ? 0 : 450);
+}
+
+function renderEngines(): void {
+  const box = $('engines');
+  const opts: [typeof S.engine, string, string][] = [
+    ['auto', 'Auto', 'Interpreter for self-contained code, gdb when it calls read/malloc/printf…'],
+    ['interp', 'Interp', 'Instant in-browser interpreter (a C subset)'],
+    ['gdb', 'gdb', 'Compile with cc -Wall -Wextra -Werror and step it under gdb'],
+  ];
+  box.innerHTML = opts.map(([id, label, title]) => `<button data-id="${id}" aria-pressed="${S.engine === id}" title="${esc(title)}">${label}</button>`).join('');
+  box.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
+    b.addEventListener('click', () => {
+      S.engine = b.dataset.id as typeof S.engine;
+      store.set('engine', S.engine);
+      renderEngines();
+      analyze(editor.state.doc.toString(), false);
+    }),
+  );
+}
+
 // ---------------- per-sample work, kept in this browser ----------------
 interface Saved {
   src: string;
+  stdin?: string;
   places: [string, number, number, boolean][];
   waypoints: [string, number, number][];
 }
@@ -152,6 +251,7 @@ function saveSoon(): void {
   saveTimer = window.setTimeout(() => {
     const saved: Saved = {
       src: editor.state.doc.toString(),
+      stdin: S.stdin,
       places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
       waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
     };
@@ -170,7 +270,7 @@ function applySavedLayout(saved: Saved): void {
 
 function renderRevert(): void {
   const saved = readSaved(S.sample.key);
-  const edited = !!saved && (saved.src !== S.sample.src || saved.places.some((p) => p[3]) || saved.waypoints.length > 0);
+  const edited = !!saved && (saved.src !== S.sample.src || (saved.stdin ?? '') !== (S.sample.stdin ?? '') || saved.places.some((p) => p[3]) || saved.waypoints.length > 0);
   $<HTMLButtonElement>('btn-revert').hidden = !edited;
 }
 
@@ -188,6 +288,8 @@ function loadSample(key: string | undefined, pristine = false): void {
   store.set('lastSample', s.key);
   const saved = pristine ? null : readSaved(s.key);
   const src = saved?.src ?? s.src;
+  S.stdin = saved?.stdin ?? s.stdin ?? '';
+  $<HTMLTextAreaElement>('stdin').value = S.stdin;
   $('file-name').textContent = s.file;
   renderSampleTabs();
   setDoc(editor, src);
@@ -599,9 +701,25 @@ function renderAlerts(): void {
   const al = (kind: keyof typeof ICON, html: string) => out.push(`<div class="alert ${kind}">${ICON[kind]}<div>${html}</div></div>`);
   if (m?.error) al('warn', `<b>Syntax error</b> on line ${m.error.line + 1}. The picture keeps its last shape; nothing runs until it parses.`);
   else if (m && !m.byName.has('main'))
-    al('info', `<b>Structure view.</b> No <code>main()</code>, so nothing runs.${m.fns.some((f) => f.externals.length) ? ' Calls to <code>read</code>/<code>malloc</code> need the real trace server (M3).' : ''}`);
+    al('info', `<b>Structure view.</b> No <code>main()</code>, so nothing runs.`);
+  const g = S.gdb;
+  if (g.status === 'running') al('info', `<b>Running under gdb…</b> compiling with <code>cc -Wall -Wextra -Werror</code>${S.sample.defines?.length ? ` <code>${S.sample.defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
+  if (g.status === 'unavailable') al('warn', `<b>No trace server.</b> Real execution runs inside <code>npm run dev</code> (or <code>npm run preview</code>); a static build can only use the interpreter.`);
+  if (g.status === 'error' && g.compile) {
+    const errs = g.compile.diagnostics.filter((d) => d.severity === 'error');
+    const first = errs[0];
+    al('err', first
+      ? `<b>Compile failed</b> on line ${first.line + 1}: ${esc(first.msg)}${errs.length > 1 ? ` <span class="c">(+${errs.length - 1} more)</span>` : ''}`
+      : `<b>Compile failed.</b> <code>${esc(g.compile.text.split('\n')[0] ?? '')}</code>`);
+  } else if (g.status === 'error') al('err', `<b>Trace failed:</b> ${esc(g.error ?? 'unknown error')}`);
   if (S.trace?.error) al('err', `<b>Stopped</b> at line ${S.trace.error.line + 1}: ${esc(S.trace.error.msg)}`);
   if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
+  const leaks = S.trace?.leaks ?? [];
+  if (leaks.length) {
+    const bytes = leaks.reduce((a, l) => a + l.size, 0);
+    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from line ${l.line + 1}` : ''}`).join(', ')}).`);
+  }
+  for (const w of S.trace?.warnings ?? []) al('warn', esc(w));
   alerts.innerHTML = out.join('');
 }
 
@@ -619,7 +737,7 @@ function renderStatus(): void {
     ? ''
     : t.error
       ? `<span class="bad">runtime error</span> · ${t.evs.length} steps`
-      : `${t.evs.length} steps · <span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`;
+      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · <span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`;
   $('grid-info').textContent = m ? `${S.sample.file}` : '';
 }
 
@@ -723,6 +841,12 @@ function describe(e: Ev, trace: Trace): string {
       return `${esc(e.text)} <span class="${e.result ? 'ret' : 'no'}">${e.result ? 'true' : 'false'}</span>`;
     case 'error':
       return `<span class="err">${esc(e.msg)}</span>`;
+    case 'step':
+      return `<span class="no">line ${e.line + 1}</span>`;
+    case 'alloc':
+      return `malloc <span class="arrow">→</span> <span class="ret">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span> (${e.size} B)`;
+    case 'free':
+      return `free(<span class="ptr">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span>)`;
   }
 }
 
@@ -737,15 +861,24 @@ function renderPlaybar(): void {
   if (key !== lastPbKey) {
     lastPbKey = key;
     const idx = fr ? (fr.ev ? fr.i + 1 : fr.i) : 0;
-    $('pb-step').textContent = t ? `${String(idx).padStart(2, '0')} / ${String(n).padStart(2, '0')}${S.pos >= n && n ? '  done' : ''}` : 'no trace';
+    $('pb-step').textContent = t
+      ? `${t.engine === 'gdb' ? 'gdb  ' : ''}${String(idx).padStart(2, '0')} / ${String(n).padStart(2, '0')}${S.pos >= n && n ? '  done' : ''}`
+      : S.gdb.status === 'running' ? 'running under gdb…' : 'no trace';
     $('pb-event').innerHTML = ev ? describe(ev, t!) : t ? '<span class="no">ready — press play</span>' : '<span class="no">nothing to run</span>';
     $('play-icon').innerHTML = S.playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
     document.querySelectorAll<HTMLButtonElement>('.pb-buttons button').forEach((b) => (b.disabled = !t));
   }
-  const execKey = ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : '';
+  const diag = !t ? S.gdb.compile?.diagnostics.find((d) => d.severity === 'error') : undefined;
+  const execKey = ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : '';
   if (execKey !== lastExec) {
     lastExec = execKey;
-    editor.dispatch({ effects: setExecLine.of(ev ? { line: ev.line, kind: ev.k === 'error' ? 'error' : 'exec' } : null) });
+    const mark = ev ? { line: ev.line, kind: ev.k === 'error' ? ('error' as const) : ('exec' as const) } : diag ? { line: diag.line, kind: 'error' as const } : null;
+    editor.dispatch({ effects: setExecLine.of(mark) });
+    // Follow the running line, unless the author is typing in the editor.
+    if (mark && (S.playing || !editor.hasFocus) && mark.line < editor.state.doc.lines) {
+      const pos = editor.state.doc.line(mark.line + 1).from;
+      editor.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'nearest', yMargin: 60 }) });
+    }
   }
   drawTimeline();
 }
@@ -780,7 +913,7 @@ function drawTimeline(): void {
     const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
     const h = 3 + (d / maxD) * (H - 8);
     g.globalAlpha = i < S.pos ? 1 : 0.3;
-    g.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : col[e.k];
+    g.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : col[e.k];
     g.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
   }
   g.globalAlpha = 1;
@@ -841,6 +974,16 @@ async function boot(): Promise<void> {
   renderVimToggle();
   $('btn-help').addEventListener('click', openHelp);
   $('btn-revert').addEventListener('click', revertSample);
+  renderEngines();
+  $<HTMLTextAreaElement>('stdin').addEventListener('input', (e) => {
+    S.stdin = (e.target as HTMLTextAreaElement).value;
+    saveSoon();
+    if (S.model && engineFor(S.model) === 'gdb') {
+      cancelGdb();
+      startGdb(editor.state.doc.toString(), S.model, false);
+      renderAlerts();
+    }
+  });
   $('btn-fit').addEventListener('click', () => view.fit(S));
   const followBtn = $('btn-follow');
   followBtn.setAttribute('aria-pressed', String(S.follow));

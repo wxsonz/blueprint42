@@ -2,7 +2,7 @@
 // the active (navy) title bar, everything else is inactive grey. Statics are
 // floppy disks, pointers are links, stale code is "(Not Responding)".
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { arrowHead, bevel, fitText, snapRect, strokeLine, Walk } from './util';
+import { arrowHead, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 
 const FACE = '#c0c0c0';
@@ -344,7 +344,7 @@ export const classic: Skin = {
     g.fillStyle = FACE;
     g.textAlign = 'left';
     g.textBaseline = 'top';
-    const lines = ['C:\\>a.out'];
+    const lines = ['C:\\>a.out', ...tailLines(p.out, 3)];
     if (p.state === 'done' && p.exit !== null) lines.push(`exit ${p.exit}`, 'C:\\>');
     if (p.state === 'crashed') lines.push('Abnormal program', 'termination');
     lines.forEach((l, i) => g.fillText(fitText(g, l, MONO, fs, body.w - 6), body.x + 3, body.y + 3 + i * (fs + 2)));

@@ -300,3 +300,23 @@ kbd {
 #menu[hidden] { display: none; }
 #menu button { text-align: left; padding: 4px 18px 4px 14px; background: none; border: none; border-radius: var(--menu-item-radius, 3px); color: inherit; }
 #menu button:hover { background: var(--menu-hover-bg, var(--accent)); color: var(--menu-hover-fg, #fff); }
+
+/* ---------- stdin (gdb engine) ---------- */
+.stdin { flex: none; display: flex; flex-direction: column; gap: 3px; padding: 4px 8px 8px; }
+.stdin label { display: flex; align-items: baseline; gap: 8px; color: var(--head-fg); font-size: 0.9em; }
+.stdin label .title { font-weight: var(--title-weight, 600); }
+.stdin label .info { color: var(--head-dim, var(--fg-dim)); font-size: 0.9em; }
+.stdin textarea {
+  resize: vertical;
+  min-height: 44px;
+  padding: 4px 6px;
+  font: var(--ed-size, 13px) / 1.35 var(--ed-font);
+  color: var(--ed-fg);
+  background: var(--ed-bg);
+  border: var(--field-border, 1px solid var(--pane-border));
+  border-radius: var(--field-radius, 3px);
+  box-shadow: var(--field-shadow, none);
+  outline: none;
+}
+#engines button { font-size: 0.9em; }
+.alert .c { opacity: 0.7; }

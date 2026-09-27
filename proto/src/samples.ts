@@ -9,6 +9,9 @@ export interface Sample {
   blurb: string;
   file: string;
   src: string;
+  stdin?: string; // fed to the program under gdb
+  defines?: string[]; // -D flags for the trace server
+  files?: Record<string, string>; // read-only support files (headers) next to the buffer
 }
 
 const pointer = `void	bump(int *n)
@@ -89,8 +92,29 @@ int	main(void)
 // The three GNL files shown as one buffer. The fixture itself is untouched;
 // only the banners between files are added here.
 const banner = (name: string) => `/* ======== ${name} ======== */\n`;
+// A small sandbox main (not part of the fixture) so the real code can run
+// under the trace server: read stdin line by line, print, free.
+const gnlMain = `#include <stdio.h>
+
+int	main(void)
+{
+	char	*line;
+	int		n;
+
+	n = 0;
+	line = get_next_line(0);
+	while (line)
+	{
+		n++;
+		printf("%s", line);
+		free(line);
+		line = get_next_line(0);
+	}
+	return (n);
+}
+`;
 const gnl = banner('get_next_line.h') + gnlH + '\n' + banner('get_next_line.c')
-  + gnlC + '\n' + banner('get_next_line_utils.c') + gnlU;
+  + gnlC + '\n' + banner('get_next_line_utils.c') + gnlU + '\n' + banner('main.c (sandbox)') + gnlMain;
 
 export const SAMPLES: Sample[] = [
   { key: 'pointer', title: 'pointer in, value out', file: 'pointer.c',
@@ -102,5 +126,9 @@ export const SAMPLES: Sample[] = [
   { key: 'recursion', title: 'recursion', file: 'fact.c',
     blurb: 'one machine, a stack of frames', src: recursion },
   { key: 'gnl', title: 'gnl_v3', file: 'get_next_line.c',
-    blurb: 'structure only: execution needs read()/malloc() (M3)', src: gnl },
+    blurb: 'your get_next_line, run for real under gdb on a 3-line input', src: gnl,
+    stdin: 'hello\nworld of lines\n!\n',
+    // GNL_INIT_CAP=8 (the fixture's own #ifndef knob) makes the doubling visible on short lines
+    defines: ['BUFFER_SIZE=4', 'GNL_INIT_CAP=8'],
+    files: { 'get_next_line.h': gnlH } },
 ];

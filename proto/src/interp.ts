@@ -6,7 +6,8 @@ import type { FnInfo, Model } from './parse';
 
 export type V =
   | { k: 'int'; v: number }
-  | { k: 'ptr'; to: number | null }
+  | { k: 'ptr'; to: number | null; label?: string } // label: "bufs[0]", "#2+4", "freed #3"
+  | { k: 'raw'; text: string } // structs, arrays, pointers into unknown memory
   | { k: 'undef' }
   | { k: 'void' };
 
@@ -26,6 +27,7 @@ export interface SnapFrame {
 export interface Snap {
   stack: SnapFrame[];
   statics: SnapCell[]; // function-local statics and globals
+  heap: SnapCell[]; // live malloc blocks (gdb engine only)
 }
 
 interface EvBase {
@@ -40,21 +42,29 @@ export type Ev = EvBase &
     | { k: 'eval'; text: string; result: boolean }
     | { k: 'ret'; fn: string; caller: string | null; val: V }
     | { k: 'error'; msg: string }
+    | { k: 'step' } // a line executed (gdb engine)
+    | { k: 'alloc'; cell: number; size: number }
+    | { k: 'free'; cell: number }
   );
 
 export interface CellInfo {
   name: string;
-  owner: string; // function name, '' for globals
-  frame: number; // -1 for statics/globals
+  owner: string; // function name, '' for globals, 'heap' for malloc blocks
+  frame: number; // -1 for statics/globals, -2 for heap blocks
 }
 
 export interface Trace {
+  engine: 'interp' | 'gdb';
   evs: Ev[];
   snaps: Snap[]; // snaps[i] = state before evs[i], snaps[i + 1] = after it
   cells: Map<number, CellInfo>;
   exit: V | null;
   error: { msg: string; line: number } | null;
   truncated: boolean;
+  stdout?: string;
+  heapSlots?: Map<number, number>; // heap cell -> shelf slot, stable for the block's life
+  leaks?: { cell: number; size: number; line: number | null }[];
+  warnings?: string[];
 }
 
 const MAX_STEPS = 20000;
@@ -100,12 +110,15 @@ function wrap(type: string, n: number): number {
 export function fmtVal(v: V, type = ''): string {
   switch (v.k) {
     case 'int':
+      if (v.v >= 18446744073709550000) return 'SIZE_MAX';
       if (/\bchar\b/.test(type) && v.v >= 32 && v.v < 127) return `'${String.fromCharCode(v.v)}'`;
       if (/\bchar\b/.test(type) && v.v === 10) return `'\\n'`;
       if (/\bchar\b/.test(type) && v.v === 0) return `'\\0'`;
       return String(v.v);
     case 'ptr':
-      return v.to === null ? 'NULL' : '→';
+      return v.label ? `→${v.label}` : v.to === null ? 'NULL' : '→';
+    case 'raw':
+      return v.text;
     case 'undef':
       return '?';
     case 'void':
@@ -164,6 +177,7 @@ export function run(model: Model): Trace {
   const snapshot = (): Snap => ({
     stack: stack.map((f) => ({ id: f.id, fn: f.fn.name, cells: [...f.names.values()].map(snapCell) })),
     statics: statics.map(snapCell),
+    heap: [],
   });
 
   const top = () => stack[stack.length - 1] ?? null;
@@ -509,7 +523,7 @@ export function run(model: Model): Trace {
     } else throw e;
   }
   if (!snaps.length) snaps.push(snapshot());
-  return { evs, snaps, cells: info, exit, error, truncated };
+  return { engine: 'interp', evs, snaps, cells: info, exit, error, truncated };
 }
 
 function declNameText(d: Node): string {

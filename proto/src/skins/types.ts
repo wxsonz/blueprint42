@@ -71,6 +71,7 @@ export interface ChestInfo {
 export interface ProcInfo {
   state: 'idle' | 'running' | 'done' | 'crashed';
   exit: string | null;
+  out?: string; // what the program printed (shown once it has finished)
   selected: boolean;
   hovered: boolean;
 }

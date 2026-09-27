@@ -3,7 +3,7 @@
 // running shows a barber-pole bar, stale code gets the spinning pinwheel.
 // Belts are gel tubes: blue while carrying a call, graphite otherwise.
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
+import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 
 const UI = (px: number, bold = false) => `${bold ? '700 ' : ''}${px}px "Lucida Grande", "DejaVu Sans", "Helvetica Neue", sans-serif`;
@@ -395,7 +395,7 @@ export const aqua: Skin = {
     g.fillStyle = '#111';
     g.textAlign = 'left';
     g.textBaseline = 'top';
-    const lines = ['[localhost:~] %', './a.out'];
+    const lines = ['[localhost:~] % ./a.out', ...tailLines(p.out, 3)];
     if (p.state === 'done' && p.exit !== null) lines.push(`exit ${p.exit}`);
     if (p.state === 'crashed') lines.push('Bus error');
     lines.forEach((l, i) => g.fillText(fitText(g, l, MONO, fs, body.w - 10, 6), body.x + 5, body.y + 4 + i * (fs + 3)));

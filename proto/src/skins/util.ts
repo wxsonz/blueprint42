@@ -117,3 +117,10 @@ export function hash(n: number): number {
 export function scale(dc: Dc, px: number, min = 0): number {
   return Math.max(min, px * dc.z);
 }
+
+// Last few lines a program printed, for the process terminal.
+export function tailLines(out: string | undefined, n: number): string[] {
+  if (!out) return [];
+  const lines = out.replace(/\n$/, '').split('\n');
+  return lines.slice(-n);
+}

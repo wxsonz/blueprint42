@@ -35,6 +35,10 @@
             <button id="vim-toggle" class="toggle" aria-pressed="true"><span class="sw" aria-hidden="true"></span>Vim</button>
           </div>
           <div class="pane-body" id="editor"></div>
+          <div class="stdin">
+            <label for="stdin"><span class="title">stdin</span> <span class="info">fed to the program when it runs under gdb</span></label>
+            <textarea id="stdin" rows="3" spellcheck="false" autocomplete="off"></textarea>
+          </div>
         </section>
 
         <section id="grid-pane" class="pane" tabindex="0">
@@ -69,6 +73,7 @@
           <div id="pb-event">&nbsp;</div>
         </div>
         <canvas id="timeline" title="Scrub"></canvas>
+        <div id="engines" class="seg" aria-label="Engine"></div>
         <div class="pb-speed">
           <button id="spd-down" class="btn sm" title="Slower">−</button>
           <span id="pb-speed">1×</span>

@@ -40,6 +40,12 @@ export function evDuration(e: Ev): number {
       return 0.45;
     case 'error':
       return 0.6;
+    case 'step':
+      return 0.24;
+    case 'alloc':
+      return 0.6;
+    case 'free':
+      return 0.55;
   }
 }
 
@@ -51,6 +57,10 @@ function switchAt(e: Ev): number {
       return 0.92;
     case 'write':
       return e.via !== null ? 0.62 : 0.3;
+    case 'alloc':
+      return 0.35;
+    case 'free':
+      return 0.7;
     default:
       return 0;
   }
@@ -192,6 +202,12 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
   return best ? { k: 'belt', key: best.key } : null;
 }
 
+// Heap blocks sit on a shelf under the process, one row per slot.
+export function heapSlotRect(layout: Layout, slot: number): Rect | null {
+  const pp = procPlace(layout);
+  return pp ? { x: pp.x, y: pp.y + MH + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
+}
+
 // World rect of the host running the top frame, for the follow camera.
 export function activeHostRect(s: ViewState): Rect | null {
   if (!s.trace || !s.trace.evs.length) return null;
@@ -214,7 +230,7 @@ function staticCellId(trace: Trace | null, fn: string, name: string): number | n
 export function pointeeName(trace: Trace | null, to: number, from: SnapFrame | null): string {
   const c = trace?.cells.get(to);
   if (!c) return '?';
-  if (!c.owner) return c.name;
+  if (!c.owner || c.owner === 'heap') return c.name;
   if (from && from.cells.some((x) => x.id === to)) return c.name;
   return `${c.owner}.${c.name}`;
 }
@@ -222,10 +238,12 @@ export function pointeeName(trace: Trace | null, to: number, from: SnapFrame | n
 function valueOf(c: SnapCell, frame: SnapFrame | null, trace: Trace | null, live: Set<number> | null): { text: string; kind: ValueKind } {
   if (c.val.k === 'undef') return { text: '?', kind: 'undef' };
   if (c.val.k === 'ptr') {
-    if (c.val.to === null) return { text: 'NULL', kind: 'null' };
-    const dangling = live !== null && !live.has(c.val.to);
-    return { text: `→${pointeeName(trace, c.val.to, frame)}`, kind: dangling ? 'dangling' : 'ptr' };
+    if (c.val.to === null && !c.val.label) return { text: 'NULL', kind: 'null' };
+    const dangling = c.val.to !== null && live !== null && !live.has(c.val.to);
+    const name = c.val.label ?? pointeeName(trace, c.val.to!, frame);
+    return { text: `→${name}`, kind: dangling ? 'dangling' : 'ptr' };
   }
+  if (c.val.k === 'raw') return { text: c.val.text, kind: 'int' };
   return { text: fmtVal(c.val, c.type), kind: 'int' };
 }
 
@@ -337,6 +355,9 @@ export class GridView {
     const scene = buildScene(s.layout, s.model, s.trace);
     for (const o of scene.obstacles) grow(o.x - 1, o.y, o.w + 2, o.h);
     for (const b of scene.belts) for (const [x, y] of b.pts) grow(x - 0.5, y - 0.5, 1, 1);
+    const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
+    const shelf = slots >= 0 ? heapSlotRect(s.layout, slots) : null;
+    if (shelf) grow(shelf.x, shelf.y, 4, 1);
     if (!isFinite(x0)) return;
     const pad = 1.2;
     const zx = this.w / ((x1 - x0 + pad * 2) * CELL_PX);
@@ -489,6 +510,7 @@ export class GridView {
       skin.proc(dc, this.rectW(pp.x, pp.y, MW, MH), {
         state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
         exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
+        out: finished ? trace?.stdout : undefined,
         selected: selKey === 'p',
         hovered: hovKey === 'p',
       });
@@ -557,6 +579,50 @@ export class GridView {
       });
     }
 
+    // ---- heap shelf (gdb engine): live blocks, the one being freed, leaks ----
+    if (trace?.heapSlots && pp) {
+      const shown = new Map<number, SnapCell>();
+      for (const c of snap?.heap ?? []) shown.set(c.id, c);
+      let freeing: number | null = null;
+      if (ev?.k === 'free' && t < switchAt(ev)) {
+        const c = trace.snaps[fr!.i].heap.find((x) => x.id === ev.cell);
+        if (c) (shown.set(c.id, c), (freeing = c.id));
+      }
+      const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
+      for (const c of shown.values()) {
+        const slot = trace.heapSlots.get(c.id);
+        const w = slot !== undefined ? heapSlotRect(s.layout, slot) : null;
+        if (!w) continue;
+        const r = this.rectW(w.x + 0.12, w.y + 0.12, 0.76, 0.76);
+        g.save();
+        if (freeing === c.id) g.globalAlpha = Math.max(0.1, 1 - t / switchAt(ev!));
+        const bytes = (c.type.match(/\d+/) ?? ['?'])[0];
+        skin.chest(dc, r, {
+          name: `${c.name} ${c.val.k === 'raw' ? c.val.text : ''}`.trim(),
+          value: `${bytes}B`,
+          flash: flash && flash.cell === c.id ? flash.a : ev?.k === 'alloc' && ev.cell === c.id && t >= switchAt(ev) ? 1 - t : 0,
+          recent: c.id === recent,
+          selected: false,
+          hovered: false,
+        });
+        if (leaked.has(c.id)) {
+          g.strokeStyle = '#e8453a';
+          g.lineWidth = 2;
+          g.setLineDash([4, 3]);
+          g.strokeRect(r.x - 4, r.y - 4, r.w + 8, r.h + 8);
+          g.setLineDash([]);
+          g.fillStyle = '#e8453a';
+          g.font = `700 ${Math.max(9, 11 * z)}px sans-serif`;
+          g.textAlign = 'right';
+          g.textBaseline = 'middle';
+          g.fillText('LEAK', r.x - 8, r.y + r.h / 2);
+        }
+        g.restore();
+        anchors.set(c.id, { y: r.y + r.h / 2, left: r.x, right: r.x + r.w });
+        live.add(c.id);
+      }
+    }
+
     for (const h of hostsToDraw) {
       const fn = s.model?.byName.get(h.fn);
       const count = fn ? fn.params.length + fn.locals.length : 0;
@@ -595,12 +661,22 @@ export class GridView {
     }
 
     // ---- pointer wires ----
+    // Few pointers: draw them all. Many: only the running frame's, the
+    // focused function's, and any wire a write is travelling right now.
     const newFrame = ev?.k === 'call' && t >= switchAt(ev) ? ev.frame : null;
     const cells: SnapCell[] = [...(snap?.statics ?? []), ...st.flatMap((f) => f.cells)];
-    for (const c of cells) {
+    const wired = cells.filter((c) => c.val.k === 'ptr' && c.val.to !== null && anchors.has(c.id));
+    const frameOfCell = new Map<number, SnapFrame>();
+    for (const f of st) for (const c of f.cells) frameOfCell.set(c.id, f);
+    const topId = st[st.length - 1]?.id ?? null;
+    const showAll = wired.length <= 4;
+    for (const c of wired) {
       if (c.val.k !== 'ptr' || c.val.to === null) continue;
-      const a = anchors.get(c.id);
-      if (!a) continue;
+      const a = anchors.get(c.id)!;
+      const owner = frameOfCell.get(c.id);
+      const travelling = ev?.k === 'write' && ev.via === c.id;
+      const focused = !!focusFn && owner?.fn === focusFn;
+      if (!showAll && owner?.id !== topId && !focused && !travelling) continue;
       const b = anchors.get(c.val.to);
       g.save();
       if (focus) g.globalAlpha = 0.55;

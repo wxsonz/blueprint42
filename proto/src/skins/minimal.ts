@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
+import { arrowHead, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 
 const ACCENT = '#8ab4ff';
@@ -191,14 +191,20 @@ export const minimal: Skin = {
     g.textBaseline = 'top';
     g.fillStyle = DIM;
     g.fillText('$ ./a.out', r.x + pad, r.y + pad);
+    const out = tailLines(p.out, 2);
+    g.font = MONO(px(dc, 10.5, 7));
+    g.fillStyle = FG;
+    out.forEach((l, i) => g.fillText(fitText(g, l, MONO, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
+    const dy = out.length ? px(dc, 13) * out.length - px(dc, 4) : 0;
     if (p.state === 'done' && p.exit !== null) {
-      g.font = MONO(px(dc, 22, 10), 600);
+      const big = out.length ? 16 : 22;
+      g.font = MONO(px(dc, big, 9), 600);
       g.fillStyle = RET;
-      g.fillText(fitText(g, `exit ${p.exit}`, (s) => MONO(s, 600), px(dc, 22, 10), r.w - pad * 2, 8), r.x + pad, r.y + pad + px(dc, 26));
+      g.fillText(fitText(g, `exit ${p.exit}`, (s) => MONO(s, 600), px(dc, big, 9), r.w - pad * 2, 8), r.x + pad, r.y + pad + px(dc, 26) + dy);
     } else if (p.state === 'crashed') {
       g.font = MONO(px(dc, 18, 9), 600);
       g.fillStyle = ERR;
-      g.fillText('crashed', r.x + pad, r.y + pad + px(dc, 26));
+      g.fillText('crashed', r.x + pad, r.y + pad + px(dc, 26) + dy);
     } else if (p.state === 'running' && Math.floor(dc.time * 2) % 2 === 0) {
       g.fillStyle = FG;
       g.fillRect(r.x + pad, r.y + pad + px(dc, 26), px(dc, 8), px(dc, 16));
