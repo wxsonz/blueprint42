@@ -114,6 +114,8 @@ export function fmtVal(v: V, type = ''): string {
 }
 
 function parseNumber(text: string, line: number): number {
+  // tree-sitter-c folds a leading minus into the literal ("-7").
+  if (/^[-+]/.test(text)) return (text[0] === '-' ? -1 : 1) * parseNumber(text.slice(1), line);
   const t = text.replace(/[uUlL]+$/, '');
   if (/^0x[0-9a-f]+$/i.test(t)) return Number.parseInt(t, 16);
   if (/^0[0-7]+$/.test(t)) return Number.parseInt(t, 8);

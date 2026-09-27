@@ -53,9 +53,10 @@ export interface Model {
 
 let parser: Parser | null = null;
 
-export async function initParser(): Promise<void> {
-  await Parser.init({ locateFile: () => tsWasm });
-  const lang = await Language.load(cWasm);
+// Paths default to the bundled wasm URLs; tests pass filesystem paths.
+export async function initParser(paths: { runtime?: string; grammar?: string } = {}): Promise<void> {
+  await Parser.init({ locateFile: () => paths.runtime ?? tsWasm });
+  const lang = await Language.load(paths.grammar ?? cWasm);
   parser = new Parser();
   parser.setLanguage(lang);
 }
