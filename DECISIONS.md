@@ -13,7 +13,7 @@ questions. Newest last.
   tested first. It pulls an M3 feature (execution) forward on purpose. M0/M1
   can reuse or replace `proto/`.
 
-## 2026-09-27: in-browser interpreter instead of the gdb trace server (prototype only)
+## 2026-09-27: in-browser interpreter instead of the gdb trace server (prototype only; kept, see below)
 
 - **Decision:** `proto/src/interp.ts` walks the tree-sitter AST for a
   Norminette-shaped C subset (int/char/long, pointers to variables, `if`,
@@ -150,3 +150,64 @@ questions. Newest last.
 - **Why:** Shared out-ports and shared trunks made separate calls look like
   one line, and breadth-first columns produced back-edges that looped over
   the whole graph ("overlapped lines … confused").
+
+## 2026-09-27: M3 before M2
+
+- **Decision:** Build real execution (the gdb trace server) before the
+  toolbox and bindings. SPEC §4 is amended. M3's acceptance check keeps
+  what execution alone can show; the strip parts (`pos` chasing `len`)
+  moved to M2's.
+- **Why:** M2's strips and markers only mean something with real values.
+  Built first, they would all be unbound placeholders.
+
+## 2026-09-27: the trace server (M3) and the two engines
+
+- **Decision:**
+  - The tracer (`proto/server/tracer.py`) runs inside gdb's Python API and
+    steps line by line. It records the user stack with values, calls,
+    return values (finish breakpoints), and `malloc`/`calloc`/`realloc`/
+    `free` called directly from user code, so libc's own allocations (e.g.
+    printf's buffer) are ignored.
+  - `proto/server/trace.mjs` compiles with `cc -Wall -Wextra -Werror -g
+    -O0` in a throwaway temp directory. It is served as Vite middleware
+    (`POST /api/trace` on the dev and preview servers) instead of a
+    separate process, so `npm run dev` stays one command.
+  - The app has two engines: the in-browser interpreter (instant, a C
+    subset) and gdb (the real thing). **Auto** uses gdb whenever the code
+    calls something it doesn't define (`read`, `malloc`, `printf`…).
+- **Why:** The interpreter can't run GNL and must never fake it (principle
+  4). Keeping the interpreter gives instant feedback on small programs and
+  works in a static build with no server.
+- **Security:** the endpoint compiles and runs code, so it only answers
+  same-origin requests from localhost that carry an `x-ftb` header.
+  Another site can't set that header without a CORS preflight, which is
+  never answered. Runs are time-capped. The compiled program is not
+  sandboxed beyond that; it's the author's own code on their own machine.
+
+## 2026-09-27: SPEC §6 trace granularity (measured)
+
+- **Answer:** Per-line stepping under gdb is fast enough for sandbox-sized
+  inputs. gnl_v3 with `BUFFER_SIZE=4` on a 3-line input is about 600 stops
+  (about 1,050 events) in about 1 s, including compile. That's roughly 600
+  stops per second, so a 100-line input (~20k stops) would take about
+  30 s. That's at the cap and needs `-finstrument-functions` or watchpoints
+  if it matters (M5-sized inputs).
+
+## 2026-09-27: what the gdb picture shows (principle 4 details)
+
+- Uninitialised locals show `?`, not stack garbage, until a value changes
+  or the executed line assigns them (a regex over the source line). Params
+  are always defined.
+- Pointers resolve to what they point at: a variable (wire), an array
+  element (`bufs[0]`), a heap block or offset into it (`#1`, `#1+10`), or a
+  block that was freed (`freed #3`, drawn dangling). Anything else shows as
+  a raw address.
+- A write to a variable outside the running function is attributed to the
+  running function's pointer that points at it (the wire it travels).
+- With more than four live pointers, only the running function's wires and
+  the focused function's wires are drawn. The rows still show every target
+  as text.
+- Long traces pick a playback speed that plays them in about 45 s.
+- The GNL sample passes `-D GNL_INIT_CAP=8` (the fixture's own `#ifndef`
+  knob) so the doubling shows on short lines. The fixture files are
+  unchanged; the sandbox adds a small `main` after them.

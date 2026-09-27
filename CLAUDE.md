@@ -28,17 +28,22 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 
 ## Current state
 
-`proto/` is a visual prototype built ahead of M0 (see `DECISIONS.md`). It
-uses the SPEC §3 stack and adds an in-browser interpreter so small pointer
-programs animate. There are no tests or linter yet.
+`proto/` is the app: M1 plus M3 (real execution under gdb), built ahead of
+M2 (see `DECISIONS.md`). No linter yet.
 
 ```sh
 cd proto
 npm install
-npm run dev      # vite dev server
+npm run dev      # vite dev server + the trace server at POST /api/trace
 npm run check    # tsc --noEmit
-npm run build    # type-check + production build
+npm test         # vitest: unit tests + integration tests that run cc and gdb
+npx vitest run test/route.test.ts          # one file
+npx vitest run -t "M3 acceptance"          # one test by name
+npm run build    # type-check + production build (static; interpreter only)
 ```
+
+The integration tests (`test/trace.test.ts`) need `cc` and `gdb` with
+Python on PATH. `npm run preview` also serves the trace server.
 
 Pipeline in `proto/src/`: `parse.ts` (tree-sitter → symbol model) →
 `layout.ts` (positions by stable id, pinning, belt waypoints, rename
@@ -51,6 +56,14 @@ fractional playback position; all drawing is delegated to the active skin) →
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
 editor via CSS variables on `html[data-skin]`. `editor.ts` is CodeMirror
 with vim in a toggleable compartment.
+
+Two engines produce the same `Trace` (events + a snapshot before and after
+each): `interp.ts` (in-browser, a C subset, refuses anything else) and the
+trace server (`server/trace.mjs` compiles with the 42 flags in a temp dir;
+`server/tracer.py` steps it under gdb's Python API; `src/gdb.ts` converts
+the result). The app picks one per program (Auto: gdb when the code calls
+functions it doesn't define). Samples can carry `stdin`, `-D` defines and
+read-only support files (`src/samples.ts`).
 
 In dev builds `window.__ftb` exposes `{ S, view, layout, computeBelts }` for
 headless checks.
