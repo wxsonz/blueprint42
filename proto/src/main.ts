@@ -2137,7 +2137,9 @@ function frame(now: number): void {
     if (ph && stageKey !== lastStage) {
       lastStage = stageKey;
       lastFollowEv = i;
-      const r = stageRect(S, i, ph.parked === 'read' || ph.parked === 'card' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both');
+      // a write through a pointer is a short hop: keep both ends in view throughout
+      const which = t.evs[i].k === 'write' ? 'both' : ph.parked === 'read' || ph.parked === 'card' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both';
+      const r = stageRect(S, i, which);
       if (r) view.focusOn(r, ph.parked ? 2.6 : 1.6);
     } else if (!ph && i !== lastFollowEv && i < t.evs.length) {
       lastFollowEv = i;

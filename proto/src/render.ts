@@ -449,25 +449,46 @@ export function heapSlotRect(layout: Layout, slot: number): Rect | null {
 }
 
 // Focus mode: world rect of who sends ('src'), who receives ('dst'), or
-// both, for event i (a call or a return), for the camera to frame.
+// both, for event i (a call, a return or a write through a pointer), for
+// the camera to frame.
 export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both' = 'both'): Rect | null {
   const ev = s.trace?.evs[i];
-  if (!s.trace || !ev || (ev.k !== 'call' && ev.k !== 'ret')) return null;
+  if (!s.trace || !ev) return null;
   const scene = buildScene(s.layout, s.model, s.trace);
-  const pair = eventPair(s.trace, i, ev, scene);
-  if (!pair) return null;
-  const rects: Rect[] = [];
-  // a call goes caller → callee, a return callee → caller
-  const [src, dst] = ev.k === 'call' ? pair : [pair[1], pair[0]];
-  for (const k of which === 'src' ? [src] : which === 'dst' ? [dst] : pair) {
+  const hostR = (k: string): Rect | null => {
     if (k === '') {
       const pp = procPlace(s.layout);
-      if (pp) rects.push({ x: pp.x, y: pp.y, w: MW, h: MH });
-    } else {
-      const h = scene.hosts.get(k);
-      if (h) rects.push({ x: h.x, y: h.y, w: h.w, h: h.h + h.inv });
+      return pp ? { x: pp.x, y: pp.y, w: MW, h: MH } : null;
     }
-  }
+    const h = scene.hosts.get(k);
+    return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
+  };
+  let src: Rect | null = null;
+  let dst: Rect | null = null;
+  if (ev.k === 'call' || ev.k === 'ret') {
+    const pair = eventPair(s.trace, i, ev, scene);
+    if (!pair) return null;
+    // a call goes caller → callee, a return callee → caller
+    [src, dst] = (ev.k === 'call' ? pair : [pair[1], pair[0]]).map(hostR);
+  } else if (ev.k === 'write' && ev.via !== null) {
+    // a write through a pointer: the frame holding the pointer → where it points
+    // (a static's chest on its home node, a heap block, or another frame)
+    const snap = s.trace.snaps[i];
+    const hosts = frameHosts(snap, scene);
+    const frameOf = (id: number) => snap.stack.find((f) => f.cells.some((c) => c.id === id));
+    const via = frameOf(ev.via);
+    src = via ? hostR(hosts.get(via.id) ?? '') : null;
+    const to = frameOf(ev.cell);
+    if (to) dst = hostR(hosts.get(to.id) ?? '');
+    else if (s.trace.heapSlots?.has(ev.cell)) dst = heapSlotRect(s.layout, s.trace.heapSlots.get(ev.cell)!);
+    else {
+      const c = s.trace.cells.get(ev.cell);
+      const n = c ? s.layout.visible().find((x) => x.name === c.owner) : undefined;
+      const idx = n?.fn?.statics.findIndex((v) => v.name === c!.name) ?? -1;
+      if (n && idx >= 0) dst = { x: n.place.x + idx, y: n.place.y - 2, w: 1, h: 1 };
+    }
+  } else return null;
+  const rects = (which === 'src' ? [src] : which === 'dst' ? [dst] : [src, dst]).filter((r): r is Rect => !!r);
   if (!rects.length) return null;
   const x0 = Math.min(...rects.map((r) => r.x)), y0 = Math.min(...rects.map((r) => r.y));
   const x1 = Math.max(...rects.map((r) => r.x + r.w)), y1 = Math.max(...rects.map((r) => r.y + r.h));
