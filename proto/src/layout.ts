@@ -48,8 +48,39 @@ export interface Rect {
   h: number;
 }
 
+// Struct variables unfold into their fields under their own row. Folded
+// ones ("fnKey.var") show just the one row. Open by default: seeing the
+// struct is the point.
+export const MAX_FIELDS = 6;
+export const folded = new Set<string>();
+
+export interface FrameRow {
+  name: string; // variable, or field under `parent`
+  param: boolean;
+  depth: 0 | 1;
+  parent?: string;
+  fold?: 'open' | 'closed'; // a struct row that can fold
+  more?: number; // a "+n more" row
+}
+
+export function frameRows(fn: FnInfo | null): FrameRow[] {
+  if (!fn) return [];
+  const rows: FrameRow[] = [];
+  const add = (v: FnInfo['params'][number], param: boolean) => {
+    const fs = v.fields ?? [];
+    const open = fs.length > 0 && !folded.has(`${fn.name}.${v.name}`);
+    rows.push({ name: v.name, param, depth: 0, ...(fs.length ? { fold: open ? 'open' : 'closed' } : {}) });
+    if (!open) return;
+    for (const f of fs.slice(0, MAX_FIELDS)) rows.push({ name: f.name, param, depth: 1, parent: v.name });
+    if (fs.length > MAX_FIELDS) rows.push({ name: `+${fs.length - MAX_FIELDS} more`, param, depth: 1, parent: v.name, more: fs.length - MAX_FIELDS });
+  };
+  for (const v of fn.params) add(v, true);
+  for (const v of fn.locals) add(v, false);
+  return rows;
+}
+
 export function invCells(fn: FnInfo | null): number {
-  const slots = fn ? fn.params.length + fn.locals.length : 0;
+  const slots = frameRows(fn).length;
   if (!slots) return 0;
   return Math.ceil((INV_HEAD_PX + slots * SLOT_PX + 12) / CELL_PX);
 }
@@ -83,6 +114,7 @@ export class Layout {
 
   reset(): void {
     this.graph = '';
+    folded.clear();
     this.nodes.clear();
     this.modules.clear();
     this.waypoints.clear();
@@ -261,16 +293,19 @@ export class Layout {
       nodes[n.id] = { x: n.place.x - (m?.x ?? 0), y: n.place.y - (m?.y ?? 0), pinned: n.place.pinned };
     }
     const waypoints = Object.fromEntries([...this.waypoints].map(([k, p]) => [k, { x: p.x, y: p.y }]));
-    if (!project) return { version: 1, nodes, waypoints, sprites };
+    const fold = folded.size ? { folded: [...folded].sort() } : {};
+    if (!project) return { version: 1, nodes, waypoints, sprites, ...fold };
     const modules: NonNullable<Blueprint['modules']> = {};
     for (const m of this.modules.values()) {
       if (!full && !m.pinned && m.collapsed === (m.file !== mainFile)) continue;
       modules[m.file] = { x: m.x, y: m.y, pinned: m.pinned, collapsed: m.collapsed };
     }
-    return { version: 2, nodes, modules, waypoints, sprites };
+    return { version: 2, nodes, modules, waypoints, sprites, ...fold };
   }
 
   applyBlueprint(bp: Blueprint, model: Model, full: boolean): void {
+    folded.clear();
+    for (const k of bp.folded ?? []) folded.add(k);
     for (const [file, b] of Object.entries(bp.modules ?? {})) {
       const m = this.modules.get(file);
       if (!m) continue;
@@ -294,6 +329,35 @@ export class Layout {
     this.waypoints.clear();
     for (const [k, p] of Object.entries(bp.waypoints)) this.waypoints.set(k, { x: p.x, y: p.y });
     if (!full && model.project) this.pack(model);
+  }
+
+  // A frame changed height (a struct folded or unfolded): lay the auto-placed
+  // machines out again, per module, from the same origin. Pinned ones stay.
+  reflow(model: Model): void {
+    const groups = model.project ? model.files : [''];
+    for (const file of groups) {
+      const fns = model.fns.filter((f) => f.file === file && this.nodes.has(f.id));
+      if (!fns.length) continue;
+      const fresh = new Layout();
+      fresh.layered(model, fns);
+      let ox = 0, oy = 0;
+      if (model.project) {
+        const m = this.modules.get(file);
+        const w = fresh.wall(file);
+        if (m && w) (ox = m.x - w.x), (oy = m.y - w.y);
+      } else {
+        // keep the layout where it was: anchor on the first auto machine
+        const a = fns.find((f) => !this.nodes.get(f.id)!.place.pinned);
+        if (a) (ox = this.nodes.get(a.id)!.place.x - fresh.nodes.get(a.id)!.place.x), (oy = this.nodes.get(a.id)!.place.y - fresh.nodes.get(a.id)!.place.y);
+      }
+      for (const f of fns) {
+        const n = this.nodes.get(f.id)!;
+        const p = fresh.nodes.get(f.id)!.place;
+        if (!n.place.pinned) n.place = { x: p.x + ox, y: p.y + oy, pinned: false };
+      }
+      if (file) this.refresh(file);
+    }
+    if (model.project) this.pack(model);
   }
 
   // ---------------- nodes ----------------
@@ -536,7 +600,7 @@ export class Layout {
     for (const n of [...this.nodes.values()].reverse()) {
       if (this.hidden(n)) continue;
       const { x, y } = n.place;
-      const h = MH + (invCells(n.fn) ? (INV_HEAD_PX + ((n.fn!.params.length + n.fn!.locals.length) * SLOT_PX) + 10) / CELL_PX : 0);
+      const h = MH + (invCells(n.fn) ? (INV_HEAD_PX + frameRows(n.fn).length * SLOT_PX + 10) / CELL_PX : 0);
       if (wx >= x && wx < x + MW && wy >= y && wy < y + h) return n;
     }
     return null;

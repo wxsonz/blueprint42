@@ -5,7 +5,7 @@
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, bold = false) => `${bold ? '700 ' : ''}${px}px "Lucida Grande", "DejaVu Sans", "Helvetica Neue", sans-serif`;
 const MONO = (px: number) => `${px}px Monaco, "DejaVu Sans Mono", Menlo, monospace`;
@@ -190,6 +190,7 @@ export const aqua: Skin = {
   casing: '#ececec',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
+  crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -448,9 +449,11 @@ export const aqua: Skin = {
       g.fillStyle = col;
       g.textAlign = 'left';
       const dot = px(dc, 3, 2);
-      g.beginPath(); g.arc(rr.x + 8, rr.y + rr.h / 2, dot, 0, Math.PI * 2);
-      g.fillStyle = sel ? '#fff' : row.param ? ORANGE : '#9aa3ad';
-      g.fill();
+      if (!row.depth) {
+        g.beginPath(); g.arc(rr.x + 8, rr.y + rr.h / 2, dot, 0, Math.PI * 2);
+        g.fillStyle = sel ? '#fff' : row.param ? ORANGE : '#9aa3ad';
+        g.fill();
+      }
       g.fillStyle = col;
       g.fillText(fitText(g, row.name, (s) => UI(s), px(dc, 11, 7), rr.w * 0.5 - 18, 6), rr.x + 15, rr.y + rr.h / 2 + 0.5);
       if (!row.value) return;

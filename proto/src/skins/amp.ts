@@ -5,7 +5,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const LCD = '#00e000';
 const LCD_DIM = '#1f6a1f';
@@ -16,7 +16,7 @@ const SEL = '#0000c6';
 const PIX = (px: number) => `${px}px Silkscreen, "DejaVu Sans Mono", monospace`;
 const VT = (px: number) => `${px}px VT323, "DejaVu Sans Mono", monospace`;
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, Math.round(v * dc.z));
-const spritePalette: SpritePalette = { body: '#303044', edge: '#08080c', track: LCD_BG, cell: '#143714', text: '#e8e8d0', muted: '#77798c', accent: LCD, marker: AMBER, selection: LCD, font: (s) => PIX(s), radius: 1 };
+const spritePalette: SpritePalette = { body: '#303044', edge: '#08080c', track: LCD_BG, cell: '#143714', text: '#e8e8d0', muted: '#77798c', accent: LCD, marker: AMBER, selection: LCD, font: (s) => VT(s * 1.35), radius: 1 }; // VT323 keeps the data's case (Silkscreen is capitals only)
 
 function metal(g: CanvasRenderingContext2D, r: Rect): void {
   const grad = g.createLinearGradient(0, r.y, 0, r.y + r.h);
@@ -120,6 +120,7 @@ export const amp: Skin = {
   casing: '#0d0d14',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
+  crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -414,7 +415,8 @@ export const amp: Skin = {
     g.fillStyle = LCD_BG;
     g.fillRect(body.x, body.y, body.w, body.h);
     const fs = px(dc, 16, 9);
-    f.rows.forEach((row, i) => {
+    let n = 0;
+    f.rows.forEach((row) => {
       const rr = { x: body.x, y: Math.round(row.rect.y), w: body.w, h: Math.round(row.rect.h) };
       if (row.recent || row.flash > 0) {
         g.fillStyle = row.recent ? SEL : `rgba(0,0,198,${row.flash})`;
@@ -425,7 +427,7 @@ export const amp: Skin = {
       g.textBaseline = 'middle';
       g.textAlign = 'left';
       g.fillStyle = base;
-      const label = `${i + 1}. ${row.name}`;
+      const label = row.depth ? row.name : `${++n}. ${row.name}`;
       g.fillText(fitText(g, label, VT, fs, rr.w * 0.55, 7), rr.x + px(dc, 4), rr.y + rr.h / 2 + 1);
       g.textAlign = 'right';
       const val = row.value || '--';

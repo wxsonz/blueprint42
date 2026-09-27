@@ -127,7 +127,13 @@ def ser(v, depth=0):
                 if raw is not None:
                     out["str"] = raw.split(b"\0")[0].decode("latin-1")
                     out["strFull"] = b"\0" in raw
-        elif code == gdb.TYPE_CODE_STRUCT and depth < 2:
+            elif out["v"] and depth < 1 and target.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
+                # what a struct pointer carries: its pointee's fields, one level deep
+                try:
+                    out["deref"] = ser(v.dereference(), depth + 1)
+                except (gdb.MemoryError, gdb.error):
+                    pass
+        elif code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION) and depth < 2:
             out["kind"] = "struct"
             out["fields"] = [dict(ser(v[f.name], depth + 1), name=f.name) for f in t.fields() if f.name]
         elif code == gdb.TYPE_CODE_ARRAY and depth < 2:
@@ -163,17 +169,51 @@ def ser(v, depth=0):
 cache = {}  # key -> (bytes, serialized)
 
 
+def is_charp(t):
+    if t.code != gdb.TYPE_CODE_PTR:
+        return False
+    tgt = t.target().strip_typedefs()
+    return tgt.sizeof == 1 and tgt.code in (gdb.TYPE_CODE_INT, gdb.TYPE_CODE_CHAR)
+
+
+def strings_in(t, blob):
+    """The 24-byte previews behind a struct's char * fields."""
+    out = b""
+    for f in t.fields():
+        ft = f.type.strip_typedefs()
+        if f.name and is_charp(ft) and f.bitpos % 8 == 0:
+            off = f.bitpos // 8
+            p = int.from_bytes(blob[off:off + 8], "little") if len(blob) >= off + 8 else 0
+            out += (read_bytes(p, 24) or b"") if p else b""
+    return out
+
+
+def seen_bytes(t, raw):
+    """Everything a variable's record shows: its bytes, plus what the picture
+    shows through it (a string, a struct's fields and their strings), so the
+    record is rebuilt when any of that changes while the variable doesn't."""
+    if raw is None:
+        return None
+    if is_charp(t):
+        target = int.from_bytes(raw, "little")
+        return raw + (read_bytes(target, 24) or b"") if target else raw
+    if t.code == gdb.TYPE_CODE_PTR:
+        tgt = t.target().strip_typedefs()
+        target = int.from_bytes(raw, "little")
+        if target and tgt.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
+            blob = read_bytes(target, min(tgt.sizeof, 256)) or b""
+            return raw + blob + strings_in(tgt, blob)
+        return raw
+    if t.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
+        return raw + strings_in(t, raw)
+    return raw
+
+
 def var_record(key, name, v):
     t = v.type.strip_typedefs()
     addr = int(v.address) if v.address is not None else None
     size = t.sizeof
-    raw = read_bytes(addr, size) if addr is not None and size <= 1 << 16 else None
-    is_charp = t.code == gdb.TYPE_CODE_PTR and t.target().strip_typedefs().sizeof == 1
-    if is_charp and raw is not None:
-        # A char * shows the string it points at, which can change while the
-        # pointer doesn't: the cache key is the pointer plus its 24-byte preview.
-        target = int.from_bytes(raw, "little")
-        raw = raw + (read_bytes(target, 24) or b"") if target else raw
+    raw = seen_bytes(t, read_bytes(addr, size) if addr is not None and size <= 1 << 16 else None)
     hit = cache.get(key)
     if hit is not None and raw is not None and hit[0] == raw:
         rec = hit[1]

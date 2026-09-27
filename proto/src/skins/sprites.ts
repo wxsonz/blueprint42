@@ -1,5 +1,5 @@
 import type { SpriteKind } from '../blueprint';
-import type { Dc, Rect, SpriteInfo, StripInfo } from './types';
+import type { CrateInfo, Dc, Rect, SpriteInfo, StripInfo } from './types';
 import { fitText, rrect } from './util';
 
 export interface SpritePalette {
@@ -159,5 +159,54 @@ function violationFrame(g: CanvasRenderingContext2D, r: Rect, z: number): void {
   g.setLineDash([4, 3]);
   g.lineWidth = 1;
   g.strokeRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16);
+  g.restore();
+}
+
+// A struct in transit: a small labelled crate, field names left, values right.
+export function drawCrate(dc: Dc, x: number, y: number, c: CrateInfo, p: SpritePalette): void {
+  const g = dc.g;
+  const z = dc.z;
+  const fs = Math.max(8, 10.5 * z);
+  const lh = fs * 1.35;
+  const pad = Math.max(3, 6 * z);
+  g.save();
+  g.font = p.font(fs);
+  const rows = c.rows.map((r) => ({ name: `.${r.name}`, value: r.value }));
+  const nameW = Math.max(0, ...rows.map((r) => g.measureText(r.name).width));
+  const valW = Math.min(150 * z, Math.max(0, ...rows.map((r) => g.measureText(r.value).width)));
+  const title = c.via ? `${c.title} @ ${c.via}` : c.title;
+  const w = clamp(Math.max(pad * 3 + nameW + valW, g.measureText(title).width + pad * 2), 70 * z, 240 * z);
+  const lines = 1 + rows.length + (c.more ? 1 : 0);
+  const h = lines * lh + pad;
+  const r = { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w: Math.round(w), h: Math.round(h) };
+  g.shadowColor = 'rgba(0,0,0,0.35)';
+  g.shadowBlur = 8 * z;
+  g.shadowOffsetY = 2 * z;
+  box(g, r, p.radius * z, p.body, c.kind === 'ret' ? p.marker : p.accent);
+  g.shadowColor = 'transparent';
+  // title band: the type, and where the struct lives
+  rrect(g, r.x + 1, r.y + 1, r.w - 2, lh, [p.radius * z, p.radius * z, 0, 0]);
+  g.fillStyle = c.kind === 'ret' ? p.marker : p.accent;
+  g.globalAlpha *= 0.22;
+  g.fill();
+  g.globalAlpha /= 0.22;
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  g.fillStyle = p.text;
+  caption(g, title, r.x + pad, r.y + 1 + lh / 2, r.w - pad * 2, p, fs);
+  rows.forEach((row, i) => {
+    const cy = r.y + 1 + lh * (i + 1.5);
+    g.textAlign = 'left';
+    g.fillStyle = p.muted;
+    caption(g, row.name, r.x + pad, cy, r.w * 0.45, p, fs);
+    g.textAlign = 'right';
+    g.fillStyle = row.value.startsWith('"') ? p.marker : row.value.startsWith('→') || row.value === 'NULL' ? p.accent : p.text;
+    caption(g, row.value, r.x + r.w - pad, cy, r.w - pad * 3 - Math.min(nameW, r.w * 0.45), p, fs);
+  });
+  if (c.more) {
+    g.textAlign = 'left';
+    g.fillStyle = p.muted;
+    caption(g, `+${c.more} more`, r.x + pad, r.y + 1 + lh * (rows.length + 1.5), r.w - pad * 2, p, fs);
+  }
   g.restore();
 }

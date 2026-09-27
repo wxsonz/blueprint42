@@ -4,7 +4,7 @@
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const FACE = '#c0c0c0';
 const HI = '#ffffff';
@@ -151,6 +151,7 @@ export const classic: Skin = {
   casing: TEAL,
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
+  crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -394,11 +395,13 @@ export const classic: Skin = {
       const is = Math.max(4, rr.h * 0.42);
       const ix = rr.x + 4;
       const iy = rr.y + (rr.h - is) / 2;
-      g.fillStyle = row.param ? '#808000' : HI;
-      g.fillRect(ix, iy, is, is);
-      g.strokeStyle = sel ? HI : DARK;
-      g.lineWidth = 1;
-      g.strokeRect(ix + 0.5, iy + 0.5, is - 1, is - 1);
+      if (!row.depth) {
+        g.fillStyle = row.param ? '#808000' : HI;
+        g.fillRect(ix, iy, is, is);
+        g.strokeStyle = sel ? HI : DARK;
+        g.lineWidth = 1;
+        g.strokeRect(ix + 0.5, iy + 0.5, is - 1, is - 1);
+      }
       const textCol = f.mode === 'none' ? SHADOW : sel ? HI : f.mode === 'returned' ? SHADOW : DARK;
       g.fillStyle = textCol;
       g.font = UI(fs);

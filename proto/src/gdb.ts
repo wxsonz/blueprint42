@@ -1,7 +1,7 @@
 // Real execution (M3): send the buffer to the trace server, then turn gdb's
 // timeline into the same Trace the renderer plays for the interpreter.
 import type { Model } from './parse';
-import { fmtVal, type CellInfo, type Ev, type Snap, type SnapCell, type Trace, type V } from './interp';
+import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type Trace, type V } from './interp';
 import type { BoundValue, Sprite } from './blueprint';
 
 // ---------------- wire format (server/tracer.py) ----------------
@@ -17,6 +17,7 @@ interface GVal {
   items?: (GVal & { index: number })[];
   len?: number;
   elem?: number;
+  deref?: GVal; // a struct pointer's pointee
 }
 interface GVar extends GVal {
   name: string;
@@ -203,7 +204,9 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   for (const id of Object.keys(r.bindingScopes ?? {})) boundIds.add(id);
   if (boundIds.size) currentBound = Object.create(null);
 
-  const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' } });
+  // What the picture shows through a cell: a string, a struct's fields.
+  const extras = new Map<number, { str?: string; fields?: SnapField[] }>();
+  const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   const snapshot = (): Snap => ({
     stack: stack.map((f) => ({ id: f.id, fn: f.fn, cells: [...f.cells.values()].map(snapCell) })),
     statics: [...statics.values()].map(snapCell),
@@ -259,6 +262,36 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     if (g.kind === 'ptr') return resolve(g.v!);
     return { k: 'raw', text: text(g) };
   };
+  const quote = (g: GVal): string | undefined => {
+    if (g.kind !== 'ptr' || g.str === undefined || !g.v) return undefined;
+    const s = g.str.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/"/g, '\\"');
+    return `"${s.length > 40 ? s.slice(0, 40) : s}"${!g.strFull || s.length > 40 ? '…' : ''}`;
+  };
+  const structOf = (g: GVal): GVal | null => (g.kind === 'struct' ? g : g.kind === 'ptr' && g.deref?.kind === 'struct' ? g.deref : null);
+  const extraOf = (g: GVal): { str?: string; fields?: SnapField[] } | undefined => {
+    const st = structOf(g);
+    if (st) return { fields: (st.fields ?? []).map((f) => ({ name: f.name, type: f.type, val: toV(f), ...(quote(f) ? { str: quote(f) } : {}) })) };
+    const q = quote(g);
+    return q ? { str: q } : undefined;
+  };
+  const setExtra = (c: number, g: GVal) => {
+    const x = extraOf(g);
+    if (x) extras.set(c, x);
+    else extras.delete(c);
+  };
+  const payload = (g: GVal | null): Payload | undefined => {
+    if (!g) return undefined;
+    const st = structOf(g);
+    if (st) {
+      return {
+        k: 'struct', type: st.type.replace(/^struct\s+/, 'struct '),
+        ...(g.kind === 'ptr' ? { via: fmtVal(resolve(g.v!)) } : {}),
+        fields: (st.fields ?? []).map((f) => ({ name: f.name, text: quote(f) ?? (f.kind === 'ptr' ? fmtVal(resolve(f.v!)) : text(f)) })),
+      };
+    }
+    const q = quote(g);
+    return q ? { k: 'str', text: q } : undefined;
+  };
 
   const frameOf = (id: number) => stack.find((f) => f.id === id);
   const fnInfo = (fn: string) => model.byName.get(fn);
@@ -292,6 +325,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
           currentBound = { ...currentBound, [id]: { bound: false } };
         }
         const { caller, data, fn } = addFrame(e.id, e.fn, file, stop);
+        const data_ = data;
         buildRegions(stop);
         const f = frameOf(e.id)!;
         const params = fnInfo(fn)?.params ?? [];
@@ -299,13 +333,15 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
           const c = f.cells.get(v.name)!;
           raw.set(c, JSON.stringify(v));
           vals.set(c, defined.has(c) ? toV(v) : { k: 'undef' });
+          if (defined.has(c)) setExtra(c, v);
         }
         emit({
           k: 'call', line: data?.line ? data.line - 1 : lastLine, file: fileOf(data?.line ? file : lastFile), frame: e.id, fn, caller: caller?.fn ?? null,
           args: params.map((p) => {
             const c = f.cells.get(p.name);
             const val = c !== undefined ? vals.get(c)! : { k: 'undef' as const };
-            return { name: p.name, val, text: fmtVal(val) };
+            const data = payload(data_?.vars.find((v) => v.name === p.name) ?? null);
+            return { name: p.name, val, text: fmtVal(val), ...(data ? { data } : {}) };
           }),
         });
       } else if (e.k === 'ret') {
@@ -319,7 +355,8 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
         const caller = stack[idx - 1] ?? null;
         let val = toV(e.value);
         if (f.fn === 'main' && val.k === 'void' && exitCode !== null) val = { k: 'int', v: exitCode };
-        emit({ k: 'ret', line: f.line ? f.line - 1 : lastLine, file: fileOf(f.line ? f.file : lastFile), frame: e.id, fn: f.fn, caller: caller?.fn ?? null, val });
+        const data = payload(e.value);
+        emit({ k: 'ret', line: f.line ? f.line - 1 : lastLine, file: fileOf(f.line ? f.file : lastFile), frame: e.id, fn: f.fn, caller: caller?.fn ?? null, val, ...(data ? { data } : {}) });
       } else if (e.k === 'alloc') {
         const c = newCell({ name: `#${e.id}`, owner: 'heap', frame: -2 }, `${e.size} bytes`);
         heapCell.set(e.id, c);
@@ -372,6 +409,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
         if (!defined.has(c) && (changed || assigns(lineText, v.name))) defined.add(c);
         raw.set(c, now);
         if (!defined.has(c)) continue;
+        if (changed || !extras.has(c)) setExtra(c, v);
         const nv = toV(v);
         if (JSON.stringify(nv) === JSON.stringify(vals.get(c))) continue;
         vals.set(c, nv);
@@ -388,9 +426,11 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
         c = newCell({ name: v.name, owner: v.owner ? keyOf(v.owner, v.ownerFile) : '', frame: -1 }, v.type);
         statics.set(key, c);
         vals.set(c, toV(v));
+        setExtra(c, v);
         raw.set(c, JSON.stringify(v));
         continue;
       }
+      setExtra(c, v);
       const nv = toV(v);
       if (JSON.stringify(nv) === JSON.stringify(vals.get(c))) continue;
       vals.set(c, nv);

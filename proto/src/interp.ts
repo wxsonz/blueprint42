@@ -12,12 +12,28 @@ export type V =
   | { k: 'undef' }
   | { k: 'void' };
 
+// A struct member as the picture shows it (gdb engine).
+export interface SnapField {
+  name: string;
+  type: string;
+  val: V;
+  str?: string; // a char * member's text, quoted
+}
+
 export interface SnapCell {
   id: number;
   name: string;
   type: string;
   val: V;
+  str?: string; // a char *'s text, quoted: what it points at, not where
+  fields?: SnapField[]; // a struct's members, or the members of the struct it points at
 }
+
+// What rides a belt with a call or a return, beyond the bare value: the text
+// a char * points at, or the struct (by value or behind a pointer).
+export type Payload =
+  | { k: 'str'; text: string }
+  | { k: 'struct'; type: string; via?: string; fields: { name: string; text: string }[] };
 
 export interface SnapFrame {
   id: number;
@@ -40,10 +56,10 @@ interface EvBase {
 
 export type Ev = EvBase &
   (
-    | { k: 'call'; fn: string; caller: string | null; args: { name: string; val: V; text: string }[] }
+    | { k: 'call'; fn: string; caller: string | null; args: { name: string; val: V; text: string; data?: Payload }[] }
     | { k: 'write'; cell: number; val: V; via: number | null; text: string }
     | { k: 'eval'; text: string; result: boolean }
-    | { k: 'ret'; fn: string; caller: string | null; val: V }
+    | { k: 'ret'; fn: string; caller: string | null; val: V; data?: Payload }
     | { k: 'error'; msg: string }
     | { k: 'step' } // a line executed (gdb engine)
     | { k: 'alloc'; cell: number; size: number }

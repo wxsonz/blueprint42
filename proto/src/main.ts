@@ -1,13 +1,13 @@
 import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
 import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
-import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Trace } from './interp';
+import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Payload, type Trace } from './interp';
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { doorsOf, footprint, Layout } from './layout';
+import { doorsOf, folded, footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, clip, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -276,6 +276,7 @@ interface Saved {
   places: [string, number, number, boolean][];
   waypoints: [string, number, number][];
   sprites?: Sprite[];
+  folded?: string[];
 }
 
 function readSaved(key: string): Saved | null {
@@ -298,6 +299,7 @@ function saveSoon(): void {
     places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
     waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
     sprites: structuredClone(S.sprites),
+    folded: [...folded],
   };
   saveTimers.set(key, window.setTimeout(() => {
     store.set(`sample.${key}`, JSON.stringify(saved));
@@ -312,6 +314,10 @@ function applySavedLayout(saved: Saved): void {
     if (n) n.place = { x, y, pinned };
   }
   for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
+  if (saved.folded?.length) {
+    for (const k of saved.folded) folded.add(k);
+    if (S.model) layout.reflow(S.model);
+  }
 }
 
 function blueprint(): Blueprint {
@@ -645,7 +651,7 @@ function refreshMeta(): void {
   } catch { /* a hand-broken run.json is rewritten on save */ }
   setMeta(RUN_JSON, sameRun ? null : serializeRun(p.run), !runEmpty(p.run));
   const bp = layout.toBlueprint(S.sprites, false, S.model?.byName.get('main')?.file);
-  const authored = Object.keys(bp.nodes).length + Object.keys(bp.modules ?? {}).length + Object.keys(bp.waypoints).length + bp.sprites.length > 0;
+  const authored = Object.keys(bp.nodes).length + Object.keys(bp.modules ?? {}).length + Object.keys(bp.waypoints).length + bp.sprites.length + (bp.folded?.length ?? 0) > 0;
   const bpText = serializeBlueprint(bp) + '\n';
   const bpDisk = p.files.get(BP_JSON)?.disk;
   let sameBp = false;
@@ -1122,6 +1128,16 @@ function toggleModule(file: string): void {
   view.ensureVisible(r.x, r.y, Math.min(r.w, view.w / view.cs - 3), Math.min(r.h, view.h / view.cs - 3));
 }
 
+// Fold or unfold a struct's fields in a frame; auto-placed machines make room.
+function toggleFold(t: { fn: string; name: string }): void {
+  const key = `${t.fn}.${t.name}`;
+  if (folded.has(key)) folded.delete(key);
+  else folded.add(key);
+  if (S.model) layout.reflow(S.model);
+  lastInspectorKey = '';
+  saveSoon();
+}
+
 function setAllModules(collapsed: boolean): void {
   if (!S.model) return;
   for (const f of layout.modules.keys()) layout.setCollapsed(f, collapsed, S.model);
@@ -1171,6 +1187,7 @@ type Drag =
   | { k: 'module'; file: string; ox: number; oy: number; moved: boolean };
 let drag: Drag | null = null;
 let lastPanAt = 0;
+let pendingFold: { fn: string; name: string } | null = null;
 
 function localXY(e: MouseEvent): [number, number] {
   const r = canvas.getBoundingClientRect();
@@ -1200,6 +1217,7 @@ function bindMouse(): void {
     canvas.setPointerCapture(e.pointerId);
     const [wx, wy] = view.toWorld(x, y);
     const hit = entityAt(S, wx, wy);
+    pendingFold = hit?.k === 'node' ? foldAt(S, wx, wy) : null;
     S.selected = hit;
     S.legend = null;
     if (hit?.k === 'sprite') {
@@ -1256,6 +1274,8 @@ function bindMouse(): void {
   });
 
   const end = () => {
+    if (pendingFold && !(drag && 'moved' in drag && drag.moved)) toggleFold(pendingFold);
+    pendingFold = null;
     if (drag?.k === 'node' && drag.moved) {
       toast('pinned: auto-layout won’t move it (right-click → Unpin)');
       // Arranging inside a module pins the module too, so re-flowing the
@@ -1903,9 +1923,9 @@ function describe(e: Ev, trace: Trace): string {
   const f = (s: string) => `<span class="fn">${esc(s)}</span>`;
   switch (e.k) {
     case 'call':
-      return `${f(e.caller ?? 'process')} <span class="arrow">→</span> ${f(e.fn)}(${e.args.map((a) => (a.val.k === 'ptr' ? `<span class="ptr">${esc(a.text)}</span>` : esc(fmtVal(a.val)))).join(', ')})`;
+      return `${f(e.caller ?? 'process')} <span class="arrow">→</span> ${f(e.fn)}(${e.args.map((a) => (a.data ? `<span class="ptr">${esc(payloadText(a.data))}</span>` : a.val.k === 'ptr' ? `<span class="ptr">${esc(a.text)}</span>` : esc(fmtVal(a.val)))).join(', ')})`;
     case 'ret':
-      return `${f(e.fn)} <span class="arrow">returns</span> <span class="ret">${e.val.k === 'void' ? 'void' : esc(e.val.k === 'ptr' ? (e.val.to === null ? 'NULL' : `→${pointeeName(trace, e.val.to, null)}`) : fmtVal(e.val))}</span> <span class="arrow">to</span> ${f(e.caller ?? 'process')}`;
+      return `${f(e.fn)} <span class="arrow">returns</span> <span class="ret">${e.data ? esc(payloadText(e.data)) : e.val.k === 'void' ? 'void' : esc(e.val.k === 'ptr' ? (e.val.to === null ? 'NULL' : `→${pointeeName(trace, e.val.to, null)}`) : fmtVal(e.val))}</span> <span class="arrow">to</span> ${f(e.caller ?? 'process')}`;
     case 'write':
       return e.via !== null ? `<span class="ptr">${esc(e.text)}</span> <span class="arrow">→</span> ${esc(pointeeName(trace, e.cell, null))}` : esc(e.text);
     case 'eval':
@@ -1919,6 +1939,12 @@ function describe(e: Ev, trace: Trace): string {
     case 'free':
       return `free(<span class="ptr">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span>)`;
   }
+}
+
+// One line for the readout: "hello\n" or {data "hel…", len 23, cap 40, pos 6}
+function payloadText(d: Payload): string {
+  if (d.k === 'str') return clip(d.text, 24);
+  return `{${d.fields.map((x) => `${x.name} ${x.text.startsWith('"') ? clip(x.text, 8) : x.text}`).join(', ')}}`;
 }
 
 let lastPbKey = '';

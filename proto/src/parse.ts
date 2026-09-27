@@ -9,6 +9,7 @@ export interface Var {
   name: string;
   type: string;
   line: number;
+  fields?: Var[]; // members, when the type is a struct or a pointer to one
 }
 
 export interface CallSite {
@@ -109,6 +110,68 @@ export function bufferShapes(model: Model): BufferShape[] {
   return out;
 }
 
+// Struct definitions by every name they go by: `struct s_gnl` and `t_gnl`.
+export function structTable(trees: Tree[]): Map<string, Var[]> {
+  const byTag = new Map<string, Var[]>();
+  const aliases = new Map<string, string>(); // typedef name -> "struct tag" (or the body's own key)
+  let anon = 0;
+  const visit = (n: Node) => {
+    if (n.type === 'type_definition') {
+      const spec = n.childForFieldName('type');
+      if (spec?.type === 'struct_specifier' || spec?.type === 'union_specifier') {
+        const kw = spec.type === 'union_specifier' ? 'union' : 'struct';
+        const tag = spec.childForFieldName('name')?.text;
+        const key = tag ? `${kw} ${tag}` : `${kw} <anon ${anon++}>`;
+        const body = spec.childForFieldName('body');
+        if (body) byTag.set(key, fieldsIn(body));
+        for (const d of n.childrenForFieldName('declarator')) {
+          const { name, suffix } = declName(d);
+          if (name && !suffix) aliases.set(name, key);
+        }
+        return;
+      }
+    }
+    if (n.type === 'struct_specifier' || n.type === 'union_specifier') {
+      const tag = n.childForFieldName('name')?.text;
+      const body = n.childForFieldName('body');
+      if (tag && body) byTag.set(`${n.type === 'union_specifier' ? 'union' : 'struct'} ${tag}`, fieldsIn(body));
+    }
+    for (const c of n.namedChildren) if (c) visit(c);
+  };
+  for (const t of trees) visit(t.rootNode);
+  const out = new Map(byTag);
+  for (const [alias, key] of aliases) {
+    const f = byTag.get(key);
+    if (f) out.set(alias, f);
+  }
+  return out;
+}
+
+function fieldsIn(body: Node): Var[] {
+  return body.namedChildren.filter((c): c is Node => !!c && c.type === 'field_declaration').flatMap((d) => varsOf(d));
+}
+
+// `t_gnl *buf`, `const struct s_x *p`, `t_vars v` → the struct's fields.
+// Arrays and pointers to pointers stay rows of their own.
+export function fieldsOfType(type: string, table: Map<string, Var[]>): Var[] | undefined {
+  const t = type.replace(/\b(const|volatile|restrict)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  if (t.includes('[')) return undefined;
+  const stars = (t.match(/\*/g) ?? []).length;
+  if (stars > 1) return undefined;
+  const base = t.replace(/\*/g, '').trim();
+  const f = table.get(base);
+  return f?.length ? f : undefined;
+}
+
+function attachFields(fns: FnInfo[], trees: Tree[]): void {
+  const table = structTable(trees);
+  if (!table.size) return;
+  for (const f of fns) {
+    f.params = f.params.map((v) => ({ ...v, fields: fieldsOfType(v.type, table) }));
+    f.locals = f.locals.map((v) => ({ ...v, fields: fieldsOfType(v.type, table) }));
+  }
+}
+
 let parser: Parser | null = null;
 
 // Paths default to the bundled wasm URLs; tests pass filesystem paths.
@@ -124,7 +187,7 @@ export function declName(d: Node | null): { name: string; suffix: string; fnDecl
   let suffix = '';
   let fnDecl: Node | null = null;
   while (d) {
-    if (d.type === 'identifier' || d.type === 'field_identifier') return { name: d.text, suffix, fnDecl };
+    if (d.type === 'identifier' || d.type === 'field_identifier' || d.type === 'type_identifier') return { name: d.text, suffix, fnDecl };
     if (d.type === 'pointer_declarator') suffix = '*' + suffix;
     else if (d.type === 'array_declarator') suffix += '[]';
     else if (d.type === 'function_declarator') fnDecl = fnDecl ?? d;
@@ -297,6 +360,7 @@ function link(fns: FnInfo[]): Model['warnings'] {
 export function parse(src: string): Model {
   const u = parseUnit(src, '');
   link(u.fns);
+  attachFields(u.fns, [u.tree]);
   return {
     fns: u.fns, byName: new Map(u.fns.map((f) => [f.name, f])), globals: u.globals, macros: u.macros,
     tree: u.tree, trees: [u.tree], project: false, files: [], warnings: [], error: u.error,
@@ -327,6 +391,7 @@ export function parseProject(sources: SourceFile[]): Model {
   const cUnits = parsed.filter((p) => p.path.endsWith('.c')).map((p) => p.unit);
   const fns = cUnits.flatMap((u) => u.fns);
   const warnings = link(fns);
+  attachFields(fns, parsed.map((p) => p.unit.tree));
   const headerProtos = new Set(parsed.filter((p) => p.path.endsWith('.h')).flatMap((p) => [...p.unit.protos]));
   for (const f of fns) f.declared = f.isStatic || f.cname === 'main' || headerProtos.has(f.cname);
   const macros = new Map<string, number>();

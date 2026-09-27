@@ -52,6 +52,8 @@ export interface RowInfo {
   recent: boolean; // written by the last event
   flash: number; // 0..1, fading highlight while a write lands
   rect: Rect;
+  depth: number; // 1 = a struct field under the row above it
+  fold: 'open' | 'closed' | null; // a struct row (its name already carries ▾/▸)
 }
 
 export interface FrameInfo {
@@ -79,6 +81,15 @@ export interface ProcInfo {
 }
 
 export type PlateKind = 'arg' | 'ptr' | 'ret' | 'void';
+
+// A struct riding a belt: its type, where it lives (for a pointer), fields.
+export interface CrateInfo {
+  title: string;
+  via?: string;
+  rows: { name: string; value: string }[];
+  more: number;
+  kind: 'arg' | 'ret';
+}
 
 export type IconKind = 'node' | 'belt' | 'frame' | 'wire' | 'chest' | 'strip' | 'drill' | 'copy' | 'train' | 'stack';
 
@@ -147,6 +158,7 @@ export interface Skin {
   sprite(dc: Dc, r: Rect, kind: Exclude<SpriteKind, 'strip'>, info: SpriteInfo): void;
   proc(dc: Dc, r: Rect, p: ProcInfo): void;
   plate(dc: Dc, x: number, y: number, text: string, kind: PlateKind): void;
+  crate(dc: Dc, x: number, y: number, c: CrateInfo): void; // centred on (x, y)
   wire(dc: Dc, pts: Pt[], complete: boolean): void;
   dangling(dc: Dc, p: Pt): void;
   pulse(dc: Dc, x: number, y: number): void;

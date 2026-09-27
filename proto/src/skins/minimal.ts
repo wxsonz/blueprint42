@@ -2,7 +2,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const ACCENT = '#8ab4ff';
 const PTR = '#ff8a7a';
@@ -42,6 +42,7 @@ export const minimal: Skin = {
   casing: '#131416',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
+  crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
@@ -266,7 +267,7 @@ export const minimal: Skin = {
         }
       }
       g.font = MONO(px(dc, 11.5, 7));
-      g.fillStyle = row.param ? '#c9b8ff' : DIM;
+      g.fillStyle = row.depth ? FAINT : row.param ? '#c9b8ff' : DIM;
       g.textAlign = 'left';
       g.fillText(fitText(g, row.name, MONO, px(dc, 11.5, 7), r.w * 0.5 - pad, 6), r.x + pad, rr.y + rr.h / 2 + 1);
       const v = row.value || '—';

@@ -1,10 +1,10 @@
 // Grid engine: camera, hosts, hit-testing and playback timing. Routing lives
 // in route.ts; every pixel is delegated to the active skin (skins/*.ts).
-import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, type Layout } from './layout';
+import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import type { Model } from './parse';
-import { fmtVal, type Ev, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
+import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, hostKey, isModuleKey, procPlace, type Belt, type Scene } from './route';
-import type { Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
+import type { CrateInfo, Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
 
@@ -252,8 +252,8 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
   const live = new Set(frameHosts(fr?.snap ?? null, scene).values());
   for (const h of scene.hosts.values()) {
     if (h.copy < 2 || !live.has(h.key)) continue;
-    const fn = s.model?.byName.get(h.fn);
-    const hh = MH + (fn ? (INV_HEAD_PX + (fn.params.length + fn.locals.length) * SLOT_PX + 6) / CELL_PX : 0);
+    const fn = s.model?.byName.get(h.fn) ?? null;
+    const hh = MH + (fn ? (INV_HEAD_PX + frameRows(fn).length * SLOT_PX + 6) / CELL_PX : 0);
     if (wx >= h.x && wx < h.x + MW && wy >= h.y && wy < h.y + hh) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
   }
   for (const n of s.layout.visible()) {
@@ -313,6 +313,7 @@ function valueOf(c: SnapCell, frame: SnapFrame | null, trace: Trace | null, live
   if (c.val.k === 'ptr') {
     if (c.val.to === null && !c.val.label) return { text: 'NULL', kind: 'null' };
     const dangling = c.val.to !== null && live !== null && !live.has(c.val.to);
+    if (c.str && !dangling) return { text: clip(c.str, 12), kind: 'ptr' }; // a char *: the text, not the address
     const name = c.val.label ?? pointeeName(trace, c.val.to!, frame);
     return { text: `→${name}`, kind: dangling ? 'dangling' : 'ptr' };
   }
@@ -320,9 +321,54 @@ function valueOf(c: SnapCell, frame: SnapFrame | null, trace: Trace | null, live
   return { text: fmtVal(c.val, c.type), kind: 'int' };
 }
 
-function argLabel(v: V, text: string, trace: Trace): string {
-  if (v.k === 'ptr') return v.to === null ? 'NULL' : `→${pointeeName(trace, v.to, null).split('.').pop()}`;
+// A quoted string cut to a readable length (never shrunk to fit).
+export function clip(q: string, n: number): string {
+  const inner = q.replace(/^"/, '').replace(/"?…?$/, '');
+  const whole = /"$/.test(q);
+  return inner.length <= n && whole ? q : `"${inner.slice(0, n)}…`;
+}
+
+function fieldValue(f: SnapField, trace: Trace | null): { text: string; kind: ValueKind } {
+  if (f.val.k === 'ptr') {
+    if (f.val.to === null && !f.val.label) return { text: 'NULL', kind: 'null' };
+    if (f.str) return { text: clip(f.str, 12), kind: 'ptr' };
+    return { text: `→${f.val.label ?? pointeeName(trace, f.val.to!, null)}`, kind: 'ptr' };
+  }
+  if (f.val.k === 'undef') return { text: '?', kind: 'undef' };
+  if (f.val.k === 'raw') return { text: f.val.text, kind: 'int' };
+  return { text: fmtVal(f.val, f.type), kind: 'int' };
+}
+
+// The struct row a click lands on (to fold or unfold it), in world units.
+export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name: string } | null {
+  const scene = sceneAt(s);
+  for (const h of scene.hosts.values()) {
+    if (h.module || wx < h.x || wx >= h.x + MW) continue;
+    const fn = s.model?.byName.get(h.fn) ?? null;
+    const rows = frameRows(fn);
+    const top = h.y + MH + 6 / CELL_PX + INV_HEAD_PX / CELL_PX;
+    const i = Math.floor((wy - top) / (SLOT_PX / CELL_PX));
+    if (i >= 0 && i < rows.length && rows[i].fold) return { fn: h.fn, name: rows[i].name };
+  }
+  return null;
+}
+
+// A pointer argument shows what it points at when that is a plain value (→a = 3).
+function argLabel(v: V, text: string, trace: Trace, snap: Snap | null): string {
+  if (v.k === 'ptr') {
+    if (v.to === null) return 'NULL';
+    const name = v.label ?? pointeeName(trace, v.to, null).split('.').pop();
+    const target = snap ? [...snap.statics, ...snap.stack.flatMap((f) => f.cells)].find((c) => c.id === v.to) : undefined;
+    if (target?.val.k === 'int' && !v.label) return `→${name} = ${fmtVal(target.val, target.type)}`;
+    if (target?.str) return target.str;
+    return `→${name}`;
+  }
   return fmtVal(v) === text ? text : fmtVal(v);
+}
+
+function crateOf(d: Extract<Payload, { k: 'struct' }>, kind: 'arg' | 'ret'): CrateInfo {
+  const MAX = 6;
+  return { title: d.type, via: d.via, rows: d.fields.slice(0, MAX).map((f) => ({ name: f.name, value: f.text.startsWith('"') ? clip(f.text, 18) : f.text })), more: Math.max(0, d.fields.length - MAX), kind };
 }
 
 function retLabel(v: V, trace: Trace): string {
@@ -775,9 +821,11 @@ export class GridView {
       }
     }
 
+    const prevSnap = trace && fr ? trace.snaps[Math.max(0, fr.si - 1)] : null;
     for (const h of hostsToDraw) {
       const fn = s.model?.byName.get(h.fn);
-      const count = fn ? fn.params.length + fn.locals.length : 0;
+      const frows = frameRows(fn ?? null);
+      const count = frows.length;
       if (!fn || !count) continue;
       if (fading?.host === h.key && ev?.k === 'call') continue; // frame appears when the argument lands
       const frames = framesOnHost.get(h.key) ?? [];
@@ -789,16 +837,25 @@ export class GridView {
       const W = MW * cs;
       const panel: Rect = { x: X, y: Y, w: W, h: (INV_HEAD_PX + count * SLOT_PX + 6) * z };
       const byName = new Map(shown?.cells.map((c) => [c.name, c]) ?? []);
-      const rows: RowInfo[] = [...fn.params, ...fn.locals].map((v, i) => {
-        const cell = byName.get(v.name) ?? null;
+      const rows: RowInfo[] = frows.map((row, i) => {
         const rect: Rect = { x: X, y: Y + (INV_HEAD_PX + i * SLOT_PX) * z, w: W, h: SLOT_PX * z };
+        if (row.depth === 1) {
+          // a struct field: live value, lit when it changed on this step
+          const parent = byName.get(row.parent!) ?? null;
+          const f = row.more ? undefined : parent?.fields?.find((x) => x.name === row.name);
+          const val = f ? fieldValue(f, trace) : { text: '', kind: 'none' as ValueKind };
+          const before = parent ? prevSnap?.stack.flatMap((x) => x.cells).concat(prevSnap.statics).find((c) => c.id === parent.id)?.fields?.find((x) => x.name === row.name) : undefined;
+          const changed = !!frame && !!f && !!before && fieldValue(before, trace).text !== val.text;
+          return { name: row.more ? `  ${row.name}` : `  .${row.name}`, value: val.text, kind: val.kind, param: row.param, recent: changed, flash: 0, rect, depth: 1, fold: null };
+        }
+        const cell = byName.get(row.name) ?? null;
         const val = cell ? valueOf(cell, shown, trace, frame ? live : null) : { text: '', kind: 'none' as ValueKind };
         if (frame && cell) anchors.set(cell.id, { y: rect.y + rect.h / 2, left: X, right: X + W });
         return {
-          name: v.name, value: val.text, kind: val.kind, param: i < fn.params.length,
+          name: row.fold ? `${row.fold === 'open' ? '▾' : '▸'} ${row.name}` : row.name, value: val.text, kind: val.kind, param: row.param,
           recent: !!frame && !!cell && recent === cell.id,
           flash: frame && cell && flash && flash.cell === cell.id ? flash.a : 0,
-          rect,
+          rect, depth: 0, fold: row.fold ?? null,
         };
       });
       g.save();
@@ -881,15 +938,23 @@ export class GridView {
             const p = walk.at(ease * walk.length);
             skin.plate(dc, p[0], p[1], '()', 'void');
           }
-          ev.args.forEach((a, i) => {
-            const d = ease * walk.length - i * cs * 0.8;
+          // real data rides the belt: strings as text, structs as crates
+          const after = trace.snaps[fr!.i + 1] ?? null;
+          let gap = 0;
+          ev.args.forEach((a) => {
+            const d = ease * walk.length - gap;
+            gap += a.data?.k === 'struct' ? cs * 2.6 : cs * 0.8;
             if (d < 0) return;
             const p = walk.at(d);
-            skin.plate(dc, p[0], p[1], argLabel(a.val, a.text, trace), a.val.k === 'ptr' ? 'ptr' : 'arg');
+            if (a.data?.k === 'struct') skin.crate(dc, p[0], p[1], crateOf(a.data, 'arg'));
+            else if (a.data?.k === 'str') skin.plate(dc, p[0], p[1], clip(a.data.text, 18), 'ptr');
+            else skin.plate(dc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg');
           });
         } else if (travel < 1 && ev.k === 'ret') {
           const p = walk.at((1 - ease) * walk.length);
-          skin.plate(dc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
+          if (ev.data?.k === 'struct') skin.crate(dc, p[0], p[1], crateOf(ev.data, 'ret'));
+          else if (ev.data?.k === 'str') skin.plate(dc, p[0], p[1], clip(ev.data.text, 18), 'ret');
+          else skin.plate(dc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
         }
       }
       if (ev.k === 'write' && ev.via !== null && t < switchAt(ev)) {
