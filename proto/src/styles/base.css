@@ -335,3 +335,6 @@ kbd {
 .binding-status { padding: 5px 0; color: var(--panel-dim); font-family: var(--font-mono); font-size: 11px; }
 .sprite-actions { display: flex; gap: 6px; }
 .suggestions { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding-top: 6px; border-top: var(--rule, 1px solid rgba(128,128,128,0.25)); }
+
+/* M4: alert links seek to the step and jump to the line */
+.alert a { pointer-events: auto; cursor: pointer; text-decoration: underline; color: inherit; font-weight: 600; }

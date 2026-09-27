@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read `SPEC.md` first. Principles in §1 override convenience.
 
-- Current target: **M4**. M0, M1, M3, and M2 are implemented in `proto/`;
-  M3 came before M2 by the author's decision in `DECISIONS.md`.
+- Current target: **M5**. M0–M4 are implemented in `proto/`; M3 came
+  before M2 by the author's decision in `DECISIONS.md`.
 - Record every deviation from the recommended stack, and every answer to an
   open question from SPEC §6, in `DECISIONS.md` (date, decision, why).
 - `samples/gnl_v3/` is the author's real get_next_line. Treat it as a
@@ -28,8 +28,8 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 
 ## Current state
 
-`proto/` is the app: M0, M1, M3 (real execution under gdb), and M2
-(author sprites and bindings). No linter yet.
+`proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
+sprites and bindings) and M4 (invariants and truth checks). No linter yet.
 
 ```sh
 cd proto

@@ -133,8 +133,13 @@ def var_record(key, name, v):
     size = t.sizeof
     raw = read_bytes(addr, size) if addr is not None and size <= 1 << 16 else None
     is_charp = t.code == gdb.TYPE_CODE_PTR and t.target().strip_typedefs().sizeof == 1
+    if is_charp and raw is not None:
+        # A char * shows the string it points at, which can change while the
+        # pointer doesn't: the cache key is the pointer plus its 24-byte preview.
+        target = int.from_bytes(raw, "little")
+        raw = raw + (read_bytes(target, 24) or b"") if target else raw
     hit = cache.get(key)
-    if hit is not None and raw is not None and hit[0] == raw and not is_charp:
+    if hit is not None and raw is not None and hit[0] == raw:
         rec = hit[1]
     else:
         rec = dict(ser(v), name=name, addr=addr, size=size)
@@ -200,21 +205,57 @@ def collect_statics():
         pass
 
 
+# Delta encoding: a stop carries only the records that changed since they
+# were last sent (var_record returns the same object while the bytes are
+# unchanged). src/gdb.ts expandStops() rebuilds full stops on the client.
+last_sent = {}
+seen_frames = set()
+
+
+def changed(key, rec):
+    if last_sent.get(key) is rec:
+        return False
+    last_sent[key] = rec
+    return True
+
+
 def statics_now():
     out = []
     for owner, s in STATICS:
         try:
-            out.append(dict(var_record(f"s.{owner}.{s.name}", s.name, s.value()), owner=owner))
+            key = f"s.{owner}.{s.name}"
+            rec = var_record(key, s.name, s.value())
+            if changed(key, rec):
+                out.append(dict(rec, owner=owner))
         except Exception:
             pass
     return out
 
 
 def heap_now():
-    out = []
+    """Live block ids, plus the blocks whose contents changed since last sent."""
+    out, ids = [], []
     for addr, b in sorted(heap.items(), key=lambda kv: kv[1]["id"]):
-        raw = read_bytes(addr, min(b["size"], 48)) or b""
-        out.append({"id": b["id"], "addr": addr, "size": b["size"], "hex": raw.hex(), "line": b["line"]})
+        ids.append(b["id"])
+        raw = read_bytes(addr, min(b["size"], 48))
+        if raw is None:
+            continue  # the process is gone; keep the last contents
+        hexed = raw.hex()
+        if last_sent.get(("heap", b["id"])) == hexed:
+            continue
+        last_sent[("heap", b["id"])] = hexed
+        out.append({"id": b["id"], "addr": addr, "size": b["size"], "hex": hexed, "line": b["line"]})
+    return out, ids
+
+
+def bound_delta(bound):
+    """Only the sprite samples that changed since last sent."""
+    out = {}
+    for sid, value in bound.items():
+        encoded = json.dumps(value, sort_keys=True)
+        if last_sent.get(("bound", sid)) != encoded:
+            last_sent[("bound", sid)] = encoded
+            out[sid] = value
     return out
 
 
@@ -515,14 +556,18 @@ def record_stop():
             if is_argument or line_assigns(source, name):
                 defined_locals.add((fid, name))
         previous_lines[fid] = caller_line(f)
-        out_frames.append({"id": fr["id"], "fn": fr["fn"], "line": caller_line(f), "vars": frame_vars(f, fr["id"])})
+        sent = [v for v in frame_vars(f, fid) if changed(f"{fid}.{v['name']}", v)]
+        out_frames.append({"id": fid, "fn": fr["fn"], "line": caller_line(f), "vars": sent, "delta": fid in seen_frames})
+        seen_frames.add(fid)
+    heap_blocks, heap_ids = heap_now()
     stops.append({
         "line": out_frames[-1]["line"] if out_frames else None,
         "events": pending[:],
         "frames": out_frames,
         "statics": statics_now(),
-        "heap": heap_now(),
-        "bound": bindings_now(cur),
+        "heap": heap_blocks,
+        "heapIds": heap_ids,
+        "bound": bound_delta(bindings_now(cur)),
     })
     pending.clear()
 
@@ -576,7 +621,9 @@ def main():
         for gone in reversed(frames):
             if gone["id"] not in returned:
                 pending.append({"k": "ret", "id": gone["id"], "value": None})
-        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_now(), "bound": {}, "exited": True})
+        heap_blocks, heap_ids = heap_now()
+        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_blocks, "heapIds": heap_ids,
+                      "bound": bound_delta({sid: {"bound": False} for sid in (b["id"] for b in BINDINGS)}), "exited": True})
         pending.clear()
     result["exit"] = state["exit"]
     return result

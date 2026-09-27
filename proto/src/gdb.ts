@@ -33,9 +33,10 @@ type GEv =
 interface GStop {
   line: number | null;
   events: GEv[];
-  frames: { id: number; fn: string; line: number | null; vars: GVar[] }[];
+  frames: { id: number; fn: string; line: number | null; vars: GVar[]; delta?: boolean }[];
   statics: GVar[];
   heap: { id: number; addr: number; size: number; hex: string; line: number | null }[];
+  heapIds?: number[]; // live blocks (heap then only lists blocks whose bytes changed)
   bound?: Record<string, BoundValue>;
   exited?: boolean;
 }
@@ -61,6 +62,7 @@ export interface GdbRequest {
   stdin?: string;
   fns: string[];
   maxSteps?: number;
+  maxSeconds?: number;
   bindings?: Sprite[];
 }
 
@@ -83,6 +85,31 @@ export async function requestTrace(req: GdbRequest, signal?: AbortSignal): Promi
 }
 
 // ---------------- conversion ----------------
+
+// The tracer sends only what changed at each stop (delta frames and statics).
+// Rebuild full stops: every frame with all its variables, every static.
+export function expandStops(stops: GStop[]): GStop[] {
+  const frameVars = new Map<number, Map<string, GVar>>();
+  const statics = new Map<string, GVar>();
+  const blocks = new Map<number, GStop['heap'][number]>();
+  let bound: Record<string, BoundValue> | undefined;
+  return stops.map((st) => {
+    for (const b of st.heap) blocks.set(b.id, b);
+    const heap = st.heapIds ? st.heapIds.map((id) => blocks.get(id)!).filter(Boolean) : st.heap;
+    if (st.bound) bound = { ...bound, ...st.bound };
+    const frames = st.frames.map((f) => {
+      let vars = frameVars.get(f.id);
+      if (!vars || !f.delta) {
+        vars = new Map();
+        frameVars.set(f.id, vars);
+      }
+      for (const v of f.vars) vars.set(v.name, v);
+      return { ...f, vars: [...vars.values()] };
+    });
+    for (const v of st.statics) statics.set(`${v.owner ?? ''}.${v.name}`, v);
+    return { ...st, frames, statics: st.exited ? [] : [...statics.values()], heap, ...(bound ? { bound } : {}) };
+  });
+}
 
 const SIGNALS: Record<string, string> = {
   SIGSEGV: 'segmentation fault',
@@ -121,7 +148,7 @@ interface Region {
 
 export function convertGdb(r: GResult, model: Model, src: string): Trace {
   const lines = src.split('\n');
-  const stops = r.stops ?? [];
+  const stops = expandStops(r.stops ?? []);
   const cells = new Map<number, CellInfo>();
   const types = new Map<number, string>();
   let nextCell = 1;
@@ -367,7 +394,10 @@ export function convertGdb(r: GResult, model: Model, src: string): Trace {
     }
   }
 
-  const leaks = [...heapCell.entries()].map(([id, c]) => ({ cell: c, size: heapSize.get(id) ?? 0, line: heapLine.get(id) ?? null }));
+  // Only a program that exited can leak: a truncated or crashed run just
+  // stopped with blocks still in use.
+  const exited = !r.truncated && !r.signal;
+  const leaks = exited ? [...heapCell.entries()].map(([id, c]) => ({ cell: c, size: heapSize.get(id) ?? 0, line: heapLine.get(id) ?? null })) : [];
   let error: Trace['error'] = null;
   if (r.signal) {
     error = { msg: `${r.signal}: ${SIGNALS[r.signal] ?? 'the program was killed by a signal'}`, line: lastLine };

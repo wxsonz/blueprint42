@@ -1,4 +1,5 @@
 // The author's annotation layer. Source text is deliberately absent.
+import { parseInvariant } from './invariants';
 export type SpriteKind = 'strip' | 'marker' | 'chest' | 'drill' | 'copy' | 'stack' | 'train';
 export interface Binding { scope: 'fn' | 'global'; fn?: string; expr: string }
 export interface Sprite {
@@ -10,6 +11,7 @@ export interface Sprite {
   binding?: Binding;
   lengthExpr?: string;
   markers?: { expr: string; label: string }[];
+  invariants?: string[]; // M4 truth checks, see invariants.ts
 }
 export interface BoundValue {
   bound: boolean;
@@ -82,6 +84,13 @@ export function parseBlueprint(input: unknown): Blueprint {
       sprite.markers = raw.markers.map((m: unknown) => {
         if (!rec(m) || typeof m.expr !== 'string' || !isSafeBindingExpr(m.expr) || typeof m.label !== 'string' || m.label.length > 40) throw new Error('Invalid marker');
         return { expr: m.expr.trim(), label: m.label };
+      });
+    }
+    if (raw.invariants !== undefined) {
+      if (!Array.isArray(raw.invariants) || raw.invariants.length > 8) throw new Error('Invalid invariants');
+      sprite.invariants = raw.invariants.map((inv: unknown) => {
+        if (typeof inv !== 'string' || typeof parseInvariant(inv) === 'string') throw new Error('Invalid invariant');
+        return inv.trim();
       });
     }
     return sprite;

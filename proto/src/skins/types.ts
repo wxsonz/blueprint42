@@ -90,6 +90,7 @@ export interface StripInfo {
   pointer: number | null;
   markers: { label: string; index: number; sampledIndex: number }[];
   error?: string;
+  violation?: string; // M4: the invariant that is false at this step
   selected: boolean;
   hovered: boolean;
 }
@@ -99,6 +100,7 @@ export interface SpriteInfo {
   bound: boolean;
   value: string | null;
   error?: string;
+  violation?: string;
   selected: boolean;
   hovered: boolean;
 }

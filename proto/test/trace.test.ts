@@ -1,10 +1,11 @@
 // Integration: really compiles with cc and steps under gdb (M3).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
-import { convertGdb } from '../src/gdb';
+import { convertGdb, expandStops } from '../src/gdb';
 import { parse } from '../src/parse';
 import { sample, setupParser } from './helpers';
 import type { Sprite } from '../src/blueprint';
+import { findViolations, surpriseCalls } from '../src/invariants';
 
 beforeAll(setupParser);
 
@@ -103,6 +104,54 @@ describe('trace server (cc + gdb)', () => {
     expect(reads.some((v) => v > 0)).toBe(true);
   }, 60000);
 
+  // The strip the author would put on get_next_line's buffer, with GNL's invariants.
+  const gnlStrip = (): Sprite => ({
+    id: 'buf', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'get_next_line', expr: 'buf->data' }, lengthExpr: 'buf->cap',
+    markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }, { expr: 'buf->cap', label: 'cap' }],
+    // the author's own: data[len] and the following sizeof(size_t) - 1 bytes are zero
+    invariants: ['pos <= len <= cap', 'on return: zero after len for 8'],
+  });
+  const runGnl = async (src: string) => {
+    const s = sample('gnl');
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings: [gnlStrip()] });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    return convertGdb(r, m, src);
+  };
+
+  it('M4: the correct gnl_v3 keeps its invariants (no false alarms)', async () => {
+    const t = await runGnl(sample('gnl').src);
+    expect(t.snaps.some((snap) => snap.bound?.buf?.bound)).toBe(true);
+    const fa = findViolations(t, [gnlStrip()]);
+    expect(fa, JSON.stringify(fa.map((v) => ({ ...v, lineText: sample("gnl").src.split("\n")[v.line ?? 0] }))) ).toEqual([]);
+  }, 60000);
+
+  it('M4 acceptance: an off-by-one in gnl_consume is caught by pos <= len at the exact step', async () => {
+    const good = sample('gnl').src;
+    const bad = good.replace('buf->pos = line_end;', 'buf->pos = line_end + 1;');
+    expect(bad).not.toBe(good);
+    const injected = bad.split('\n').findIndex((l) => l.includes('buf->pos = line_end + 1;'));
+    const t = await runGnl(bad);
+    const v = findViolations(t, [gnlStrip()]);
+    const first = v.find((x) => x.invariant === 'pos <= len <= cap');
+    expect(first, JSON.stringify(v)).toBeDefined();
+    expect(first!.line).toBe(injected);
+    expect(first!.detail).toMatch(/^pos \d+ > len \d+$/);
+    // nothing was wrong before that step
+    expect(v.every((x) => x.at >= first!.at)).toBe(true);
+  }, 60000);
+
+  it('M4: flags a call the static graph did not predict (through a function pointer)', async () => {
+    const src = 'int\ttwice(int x)\n{\n\treturn (x * 2);\n}\n\nint\tapply(int (*f)(int), int x)\n{\n\treturn (f(x));\n}\n\nint\tmain(void)\n{\n\treturn (apply(twice, 3));\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name) });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    expect(t.exit).toEqual({ k: 'int', v: 6 });
+    const predicted = (a: string, b: string) => !!m.byName.get(a)?.calls.some((c) => c.callee === b);
+    expect(surpriseCalls(t, predicted)).toEqual([expect.objectContaining({ caller: 'apply', callee: 'twice', line: 7 })]);
+  }, 30000);
+
   it('reads a global even when a live local has the same name', async () => {
     const src = 'int\tvalue = 7;\n\nint\tmain(void)\n{\n\tint\tvalue;\n\n\tvalue = 3;\n\treturn (value);\n}\n';
     const m = parse(src);
@@ -136,10 +185,11 @@ describe('trace server (cc + gdb)', () => {
       { id: 'local', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'rec', expr: 'local' } },
     ] });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
-    const atAssignment = r.stops?.filter((s) => s.frames.at(-1)?.fn === 'rec' && s.line === 5) ?? [];
+    const stops = expandStops(r.stops ?? []);
+    const atAssignment = stops.filter((s) => s.frames.at(-1)?.fn === 'rec' && s.line === 5) ?? [];
     expect(atAssignment.length).toBeGreaterThanOrEqual(3);
     expect(atAssignment.every((s) => s.bound?.local?.bound === false)).toBe(true);
-    const nested = r.stops?.filter((s) => s.frames.filter((f) => f.fn === 'rec').length >= 2 && s.bound?.local?.bound) ?? [];
+    const nested = stops.filter((s) => s.frames.filter((f) => f.fn === 'rec').length >= 2 && s.bound?.local?.bound);
     expect(nested.length).toBeGreaterThan(0);
     for (const stop of nested) {
       const frame = stop.frames.filter((f) => f.fn === 'rec').at(-1)!;

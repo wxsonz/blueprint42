@@ -6,6 +6,7 @@ import { fmtVal, type Ev, type Snap, type SnapCell, type SnapFrame, type Trace, 
 import { buildScene, crossings, hostKey, procPlace, type Belt, type Scene } from './route';
 import type { Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
+import type { Violation } from './invariants';
 
 export { procPlace, type Belt };
 
@@ -28,6 +29,7 @@ export interface ViewState {
   hovered: Entity | null;
   editorFn: string | null;
   sprites?: Sprite[];
+  violations?: Violation[];
 }
 
 // World footprint is shared by drawing, fitting and hit testing. A sampled
@@ -544,6 +546,20 @@ export class GridView {
         custom: b.custom,
       });
       g.restore();
+      const predicted = b.from === b.to || !!s.model?.byName.get(b.from)?.calls.some((c) => c.callee === b.to);
+      if (b.transient && !predicted) {
+        // M4: a call the static picture did not predict (e.g. through a function pointer)
+        const [hx, hy] = this.sp(beltHandle(b));
+        const rr = Math.max(7, 9 * z);
+        g.save();
+        g.fillStyle = '#ef5b50';
+        g.beginPath(); g.arc(hx, hy, rr, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#fff';
+        g.font = `700 ${rr * 1.3}px sans-serif`;
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText('?', hx, hy + 0.5);
+        g.restore();
+      }
       drawn.push(b);
     }
 
@@ -712,12 +728,16 @@ export class GridView {
       const selected = selKey === `sp:${sprite.id}`;
       const hovered = hovKey === `sp:${sprite.id}`;
       g.save();
-      if (sprite.kind === 'strip') skin.strip(dc, r, spriteStripInfo(sprite, trace, s.pos, selected, hovered));
+      // M4: an invariant that is false at the snapshot on screen
+      const si = fr?.si ?? 0;
+      const broken = s.violations?.find((v) => v.sprite === sprite.id && si >= v.at && si < v.end);
+      const violation = broken ? broken.invariant : undefined;
+      if (sprite.kind === 'strip') skin.strip(dc, r, { ...spriteStripInfo(sprite, trace, s.pos, selected, hovered), violation });
       else skin.sprite(dc, r, sprite.kind, {
         label: sprite.label || sprite.binding?.expr || sprite.kind,
         bound: !!value?.bound && !value.error,
         value: value?.bound ? value.value ?? (Number.isFinite(value.number) ? String(value.number) : null) : null,
-        error: value?.error, selected, hovered,
+        error: value?.error, violation, selected, hovered,
       });
       g.restore();
     }

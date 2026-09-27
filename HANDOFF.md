@@ -9,11 +9,11 @@ why), then this file (current state and the next job).
 - Branch `cleanup-and-trace`, **not merged, not pushed**. The author decides
   on merging. M2 is committed: Codex's work as `75c5b53`, then a review
   and fix pass on top.
-- **Done:** M0, M1, M3, and M2. M3 was built before M2 on purpose (see
+- **Done:** M0, M1, M3, M2 and M4. M3 was built before M2 on purpose (see
   `DECISIONS.md` and SPEC §4).
-- **Next job: M4** (truth checks), then M5.
-- **Checks:** 40 tests pass (`npm test`), including automated M2 and M3
-  acceptance tests on the real GNL (`npx vitest run -t "acceptance"`).
+- **Next job: M5** (open a real project).
+- **Checks:** 46 tests pass (`npm test`), including automated M2, M3 and
+  M4 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`).
   `npm run check` is clean. The drop, bind, re-run, export and remove
   authoring flow was exercised headless with no console errors.
 
@@ -105,14 +105,21 @@ marker has no attachment to a strip; strip markers provide that motion.
 - **Standalone markers don't attach to strips.** A strip's markers come
   from its own Markers field.
 
-## Next milestone: M4 (SPEC §4)
+## M4: truth checks (done)
 
-- **M4, truth checks:** author-declared invariants on sprites
-  (`pos <= len <= cap`). A violation freezes playback at that step. The
-  leak report already exists (`trace.leaks`, alert in `renderAlerts`); link
-  each leak to its `malloc` line in the editor. Flag a marker leaving its
-  strip, and belts the static graph didn't predict. Acceptance: an injected
-  off-by-one in `gnl_consume` is caught at the exact step.
+`src/invariants.ts` holds the grammar, evaluation over sampled values, and
+episode detection (`findViolations`), plus `surpriseCalls`. In `main.ts`,
+`violations()` caches results per trace and sprite set; the playback loop
+freezes on each episode's first step. See `DECISIONS.md` for semantics.
+Acceptance is automated: with `buf->pos = line_end + 1` injected into
+`gnl_consume`, `pos <= len <= cap` fails first on exactly that line
+(`pos 24 > len 23`), and the correct run raises nothing. The same flow was
+walked in the browser: the strip suggested on `get_next_line` comes with
+`pos <= len <= cap`, and playback freezes at the step with the culprit line
+red.
+
+## Next milestone: M5 (SPEC §4)
+
 - **M5, open a real project:** multi-file directories, Makefile-aware build,
   `.ft_blueprint/` next to the code, one module per file, collapsed by
   default. This is the first milestone allowed to touch the filesystem.

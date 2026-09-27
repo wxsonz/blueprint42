@@ -5,6 +5,7 @@ import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Trace } from '.
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
 import { footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
+import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
 import { GridView, activeHostRect, computeBelts, entKey, entityAt, evDuration, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
@@ -197,7 +198,7 @@ function startGdb(src: string, model: Model, fresh: boolean): void {
     let r: GResult | 'unavailable';
     try {
       r = await requestTrace(
-        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, bindings: S.sprites },
+        { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
         ac.signal,
       );
     } catch {
@@ -850,9 +851,25 @@ function renderAlerts(): void {
   const leaks = S.trace?.leaks ?? [];
   if (leaks.length) {
     const bytes = leaks.reduce((a, l) => a + l.size, 0);
-    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from line ${l.line + 1}` : ''}`).join(', ')}).`);
+    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from <a data-line="${l.line}">line ${l.line + 1}</a>` : ''}`).join(', ')}).`);
   }
   for (const w of S.trace?.warnings ?? []) al('warn', esc(w));
+  // M4: invariants that broke, and calls the static picture didn't predict
+  const vs = violations();
+  const byInv = new Map<string, Violation[]>();
+  for (const v of vs) {
+    const k = `${v.sprite}|${v.invariant}`;
+    if (!byInv.has(k)) byInv.set(k, []);
+    byInv.get(k)!.push(v);
+  }
+  for (const list of byInv.values()) {
+    const v = list[0];
+    const sp = S.sprites.find((x) => x.id === v.sprite);
+    const where = `<a data-seek="${v.at}"${v.line !== null ? ` data-line="${v.line}"` : ''}>step ${v.at}${v.line !== null ? `, line ${v.line + 1}` : ''}</a>`;
+    al('err', `<b>${v.builtin ? 'Picture mismatch' : 'Invariant broken'}:</b> <code>${esc(v.invariant)}</code> on ${esc(sp?.label || sp?.binding?.expr || 'sprite')} — first at ${where}: ${esc(v.detail)}${list.length > 1 ? ` <span class="c">(${list.length} times)</span>` : ''}`);
+  }
+  for (const c of surpriseCalls(S.trace, (a, b) => a === b || !!S.model?.byName.get(a)?.calls.some((x) => x.callee === b)))
+    al('warn', `<b>Unpredicted call:</b> <code>${esc(c.caller)} → ${esc(c.callee)}</code> at <a data-seek="${c.at}" data-line="${c.line}">line ${c.line + 1}</a> is not in the code's call graph — a function pointer?`);
   alerts.innerHTML = out.join('');
 }
 
@@ -870,7 +887,7 @@ function renderStatus(): void {
     ? ''
     : t.error
       ? `<span class="bad">runtime error</span> · ${t.evs.length} steps`
-      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · <span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`;
+      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · ${t.truncated ? '<span class="bad">truncated</span>' : `<span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`}`;
   $('grid-info').textContent = m ? `${S.sample.file}` : '';
 }
 
@@ -895,6 +912,18 @@ function renderLiveStatus(): void {
 
 let lastInspectorKey = '';
 let traceRevision = 0;
+
+// M4: invariant violations for the current trace and sprites, recomputed only
+// when either changes (invariants are checked client-side on sampled values).
+let violationCache = { key: '', list: [] as Violation[] };
+function violations(): Violation[] {
+  const key = `${traceRevision}|${JSON.stringify(S.sprites.map((sp) => [sp.id, sp.kind, sp.invariants, sp.markers?.map((m) => m.label)]))}`;
+  if (key !== violationCache.key) {
+    violationCache = { key, list: findViolations(S.trace, S.sprites) };
+    queueMicrotask(renderAlerts);
+  }
+  return violationCache.list;
+}
 const suggestions: { fn: string; expr: string; lengthExpr: string; markers: { expr: string; label: string }[]; label: string }[] = [];
 
 function suggestionButtons(vars: Var[], fn: string): string {
@@ -926,7 +955,10 @@ function bindSuggestionButtons(): void {
     if (!s) return;
     const node = layout.nodes.get(`func:${s.fn}`);
     const place = freeSuggestionPlace(node);
-    const sprite = placeSprite('strip', place.x, place.y, { label: `${s.label} buffer`, binding: { scope: 'fn', fn: s.fn, expr: s.expr }, lengthExpr: s.lengthExpr, markers: s.markers });
+    // Offer the ordering the field names imply (pos <= len <= cap); the author edits or removes it.
+    const order = ['pos', 'len', 'cap'].filter((l) => s.markers.some((m) => m.label === l));
+    const invariants = order.length >= 2 ? [order.join(' <= ')] : undefined;
+    const sprite = placeSprite('strip', place.x, place.y, { label: `${s.label} buffer`, binding: { scope: 'fn', fn: s.fn, expr: s.expr }, lengthExpr: s.lengthExpr, markers: s.markers, invariants });
     const r = spriteWorldRect(sprite);
     view.ensureVisible(r.x, r.y, r.w, r.h, 1);
     // The inspector skips re-rendering while it has focus; release it so the
@@ -975,6 +1007,7 @@ function renderSpriteInspector(id: string, bound: { bound: boolean; value?: stri
       ${sprite.kind === 'marker' ? '<p class="hint">This card shows an index. For a cursor that rides a strip, edit the strip’s Markers field.</p>' : ''}
       ${sprite.kind === 'strip' ? `<label>Length expression<input name="length" value="${esc(sprite.lengthExpr ?? '')}" placeholder="buf-&gt;cap" spellcheck="false"></label>
       <label>Markers <span class="hint">one label = expression per line</span><textarea name="markers" rows="4" spellcheck="false" placeholder="pos = buf-&gt;pos">${esc(sprite.markers?.map((m) => `${m.label} = ${m.expr}`).join('\n') ?? '')}</textarea></label>` : ''}
+      <label>Invariants <span class="hint">one per line — e.g. pos &lt;= len &lt;= cap, on return: zero after len for 8</span><textarea name="invariants" rows="3" spellcheck="false" placeholder="${sprite.kind === 'strip' ? 'pos &lt;= len &lt;= cap' : 'value &gt;= 0'}">${esc((sprite.invariants ?? []).join('\n'))}</textarea></label>
       <div class="binding-status">${bound?.bound ? `Observed: ${esc(bound.value ?? String(bound.number ?? 'value'))}${bound.length !== undefined ? ` · length ${bound.length}` : ''}` : bound?.error ? esc(bound.error) : b ? 'No live value at this step' : 'Unbound — dimmed on the grid'}</div>
       <div class="sprite-actions"><button class="btn sm" type="submit">Apply binding</button><button class="btn sm" type="button" data-remove>Remove</button></div>
     </form>`;
@@ -1004,6 +1037,13 @@ function renderSpriteInspector(id: string, bound: { bound: boolean; value?: stri
     sprite.binding = expr ? { scope: scope.value as 'fn' | 'global', ...(scope.value === 'fn' ? { fn: fn.value } : {}), expr } : undefined;
     sprite.lengthExpr = length || undefined;
     sprite.markers = markers;
+    const invariants = get('invariants').split(/\n/).map((x) => x.trim()).filter(Boolean);
+    for (const inv of invariants) {
+      const r = parseInvariant(inv);
+      if (typeof r === 'string') return toast(`Invariant “${inv}”: ${r}`);
+    }
+    if (invariants.length > 8) return toast('At most 8 invariants');
+    sprite.invariants = invariants.length ? invariants : undefined;
     saveSoon();
     bindingsChanged();
     inspector.querySelector<HTMLElement>('[name="expr"]')?.blur();
@@ -1129,10 +1169,11 @@ function renderPlaybar(): void {
     document.querySelectorAll<HTMLButtonElement>('.pb-buttons button').forEach((b) => (b.disabled = !t));
   }
   const diag = !t ? S.gdb.compile?.diagnostics.find((d) => d.severity === 'error') : undefined;
-  const execKey = ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : '';
+  const brokeHere = t && !S.playing && Number.isInteger(S.pos) ? violations().find((v) => v.at === S.pos && v.line !== null) : undefined;
+  const execKey = brokeHere ? `v${brokeHere.line}` : ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : '';
   if (execKey !== lastExec) {
     lastExec = execKey;
-    const mark = ev ? { line: ev.line, kind: ev.k === 'error' ? ('error' as const) : ('exec' as const) } : diag ? { line: diag.line, kind: 'error' as const } : null;
+    const mark = brokeHere ? { line: brokeHere.line!, kind: 'error' as const } : ev ? { line: ev.line, kind: ev.k === 'error' ? ('error' as const) : ('exec' as const) } : diag ? { line: diag.line, kind: 'error' as const } : null;
     editor.dispatch({ effects: setExecLine.of(mark) });
     // Follow the running line, unless the author is typing in the editor.
     if (mark && (S.playing || !editor.hasFocus) && mark.line < editor.state.doc.lines) {
@@ -1180,6 +1221,11 @@ function drawTimeline(): void {
   const x = Math.round((S.pos / n) * W);
   g.fillStyle = cssVar('--tl-head');
   g.fillRect(x - 1, 0, 2, H);
+  g.fillStyle = '#ef5b50';
+  for (const v of violations()) {
+    const vx = (v.at / n) * W;
+    g.beginPath(); g.moveTo(vx - 4, 0); g.lineTo(vx + 4, 0); g.lineTo(vx, 7); g.fill();
+  }
 }
 
 // ---------------- main loop ----------------
@@ -1194,7 +1240,22 @@ function frame(now: number): void {
     const i = Math.floor(S.pos);
     if (i >= n) S.playing = false;
     else {
+      const before = S.pos;
       S.pos += (dt * S.speed) / evDuration(t.evs[i]);
+      // M4: freeze on the step where an invariant first breaks.
+      const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
+      if (hit) {
+        S.pos = hit.at;
+        S.playing = false;
+        S.stepTarget = null;
+        toast(`stopped: ${hit.invariant} broke — ${hit.detail}`);
+        // Bring the broken sprite into view, clear of the alert banner.
+        const sp = S.sprites.find((x) => x.id === hit.sprite);
+        if (sp) {
+          const r = spriteWorldRect(sp, S.trace?.snaps[hit.at]?.bound?.[sp.id]);
+          view.ensureVisible(r.x, r.y - 2, r.w, r.h + 2, Math.max(2.5, (view.h * 0.28) / view.cs));
+        }
+      }
       if (S.stepTarget !== null && S.pos >= S.stepTarget) {
         S.pos = S.stepTarget;
         S.stepTarget = null;
@@ -1215,6 +1276,7 @@ function frame(now: number): void {
       if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
     }
   }
+  S.violations = violations();
   view.draw(S, S.skin, now);
   renderPlaybar();
   renderInspector();
@@ -1234,6 +1296,12 @@ async function boot(): Promise<void> {
   renderVimToggle();
   $('btn-help').addEventListener('click', openHelp);
   $('btn-revert').addEventListener('click', revertSample);
+  alerts.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement).closest<HTMLElement>('a[data-seek], a[data-line]');
+    if (!a) return;
+    if (a.dataset.seek !== undefined) seek(Number(a.dataset.seek));
+    if (a.dataset.line !== undefined) jumpTo(editor, Number(a.dataset.line), 0);
+  });
   $('btn-blueprint-save').addEventListener('click', exportBlueprint);
   $('btn-blueprint-load').addEventListener('click', () => $<HTMLInputElement>('blueprint-file').click());
   $<HTMLInputElement>('blueprint-file').addEventListener('change', (e) => {
@@ -1297,7 +1365,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, computeBelts } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts } });
 }
 
 boot().catch((err) => {

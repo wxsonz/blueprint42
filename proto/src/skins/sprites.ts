@@ -48,7 +48,8 @@ export function drawStrip(dc: Dc, r: Rect, i: StripInfo, p: SpritePalette): void
   caption(g, i.label, r.x + pad, r.y + Math.max(9, 13 * z), r.w * 0.53, p, Math.max(7, 11 * z));
   g.textAlign = 'right';
   g.fillStyle = i.bound ? p.accent : p.muted;
-  const status = i.error ? 'error' : !i.bound ? 'UNBOUND' : i.length === null ? 'length ?' : `${i.length} slots`;
+  const status = i.violation ? `✗ ${i.violation}` : i.error ? 'error' : !i.bound ? 'UNBOUND' : i.length === null ? 'length ?' : `${i.length} slots`;
+  if (i.violation) g.fillStyle = VIOLATION;
   caption(g, status, r.x + r.w - pad, r.y + Math.max(9, 13 * z), r.w * 0.42, p, Math.max(6, 9 * z));
   const track: Rect = { x: r.x + pad, y: r.y + r.h * 0.31, w: r.w - pad * 2, h: Math.max(11, r.h * 0.27) };
   box(g, track, Math.max(1, p.radius * 0.45 * z), p.track, p.edge);
@@ -99,6 +100,7 @@ export function drawStrip(dc: Dc, r: Rect, i: StripInfo, p: SpritePalette): void
     g.fillStyle = p.muted; g.textAlign = 'center';
     caption(g, i.error ? 'VALUE UNAVAILABLE' : 'NO SAMPLED BYTES', r.x + r.w / 2, track.y + track.h / 2, track.w - 8, p, Math.max(7, 9 * z));
   }
+  if (i.violation) violationFrame(g, r, z);
   g.restore();
 }
 
@@ -138,5 +140,24 @@ export function drawSprite(dc: Dc, r: Rect, kind: Exclude<SpriteKind, 'strip'>, 
     g.strokeStyle = i.selected ? p.selection : p.accent; g.lineWidth = i.selected ? 2 : 1;
     g.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
   }
+  if (i.violation) {
+    violationFrame(g, r, z);
+    g.fillStyle = VIOLATION; g.textAlign = 'left';
+    caption(g, `✗ ${i.violation}`, r.x, r.y - Math.max(6, 8 * z), Math.max(60, r.w * 1.6), p, Math.max(7, 10 * z));
+  }
+  g.restore();
+}
+
+// A broken invariant reads the same in every skin: a red, dashed double frame.
+const VIOLATION = '#ef5b50';
+function violationFrame(g: CanvasRenderingContext2D, r: Rect, z: number): void {
+  g.save();
+  g.globalAlpha = 1;
+  g.strokeStyle = VIOLATION;
+  g.lineWidth = Math.max(2, 2.5 * z);
+  g.strokeRect(r.x - 4, r.y - 4, r.w + 8, r.h + 8);
+  g.setLineDash([4, 3]);
+  g.lineWidth = 1;
+  g.strokeRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16);
   g.restore();
 }
