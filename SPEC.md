@@ -11,9 +11,12 @@ These decide arguments. If a feature conflicts with one of them, the principle w
 1. **Text is the source of truth.** The user edits C source. The grid is a
    *view* of that source plus an *annotation layer* the author arranges.
    The grid never generates or rewrites code.
-2. **Keyboard-first, vim-native.** Every action (editing, moving on the grid,
-   placing from the toolbox, playback) works without a mouse. The mouse is
-   optional.
+2. **Keyboard where you type, direct manipulation where you look.** The
+   editor is vim-native (vim mode is a toggle, on by default). The grid
+   behaves like a normal node editor: middle-drag or drag empty space to pan,
+   wheel to zoom, drag to move or re-route, double-click to jump to code.
+   Playback uses conventional keys (Space, ←/→). *(Amended 2026-09-27, see
+   `DECISIONS.md`.)*
 3. **The tool proposes, the author places.** New nodes get auto-placed on free
    cells. Once the author moves one, that position is theirs and is never
    overwritten by the tool.
@@ -31,8 +34,11 @@ These decide arguments. If a feature conflicts with one of them, the principle w
 | C concept | Grid entity | Notes |
 |---|---|---|
 | function definition | **machine** (1 cell, labeled) | Norminette caps a function at 25 lines, so machines stay uniform |
-| call `f(a, b)` | **belt** from caller → callee | one belt per call site; arguments are labels on the belt |
-| return value | belt back to the caller | drawn only while playing back, or on hover |
+| call `f(a, b)` | **belt** from caller → callee | one belt per caller→callee pair (call sites listed in the inspector); arguments ride it as plates |
+| return value | belt back to the caller | the value rides the same belt home |
+| stack frame | **panel** under its machine | parameters + locals; appears on call, dims to "returned" (last values) after |
+| recursive call | a **spawned copy** of the machine (`fact #2`, `fact #3`…) | the argument rides into the copy; the copy dissolves on return |
+| pointer | **wire** from the pointer to its pointee | a write through `*p` travels the wire; a wire into a returned frame dangles |
 | `struct` definition | **item type / recipe** | shown in a legend panel, not on the grid |
 | global / `static` variable | **chest** that persists between calls | e.g. GNL's `bufs[GNL_MAX_FD]` is a row of chests |
 | heap block (`malloc`) | **chest** with a lifetime | appears on malloc, disappears on free; leaked = never emptied, flagged at exit |
@@ -44,6 +50,9 @@ These decide arguments. If a feature conflicts with one of them, the principle w
 
 Later (not in first milestones): pipes/processes (pipex, minitalk), threads
 and mutexes (Codexion: shared chests with a lock).
+
+The words above (machine, belt, chest…) are the metaphor, not a look. How
+each is drawn is up to the active **skin** (see `DECISIONS.md`).
 
 **Drill-down, not sprawl.** A machine can be *entered* (like the Factorissimo
 mod): stepping inside a function opens its own sub-grid showing its locals and
@@ -98,16 +107,20 @@ grid, sprites, and animation, and Canvas can do all of that.
 Each milestone ends in something usable. Don't start the next one until the
 current one's acceptance checks pass.
 
+**Order change (2026-09-27):** M3 (real execution) is built before M2.
+Without real values, M2's strips and markers would only be unbound
+placeholders. See `DECISIONS.md`.
+
 ### M0 — Sandbox skeleton
 - Split view: editor (vim mode) on the left, empty grid on the right.
-- Grid has keyboard navigation (`hjkl` moves a cell cursor, a key switches
-  focus between editor and grid, e.g. `<C-w>h/l`).
+- The grid pans and zooms with the mouse (middle-drag, wheel); focus follows
+  the click.
 - A toolbox panel lists the entities from §2 (non-functional for now).
 - The built-in sample `samples/gnl_v3/` loads from a sample picker (bundled at
   build time; no filesystem access at runtime).
 
-✅ Accept: opens with the GNL sample in the editor; you can edit in normal/insert
-mode and move around the grid without touching the mouse.
+✅ Accept: opens with the GNL sample in the editor; you can edit (with or
+without vim mode) and move around the grid.
 
 ### M1 — Live view (static structure)
 - On every edit (debounced ~150 ms), parse with tree-sitter and extract
@@ -116,9 +129,10 @@ mode and move around the grid without touching the mouse.
   New symbols are auto-placed on free cells near their callers; placed
   positions persist in memory for the session.
 - Two-way sync: moving the editor cursor into a function highlights its
-  machine; selecting a machine on the grid (`<CR>`) jumps the editor to its
+  machine; double-clicking a machine on the grid jumps the editor to its
   definition.
-- The author can move a machine on the grid with the keyboard (e.g. `m` then `hjkl`).
+- The author can drag a machine anywhere on the grid, and drag a belt to
+  re-route it.
 - Broken or half-typed code never clears the grid. Symbols that don't parse
   keep their last known node and show it as "stale".
 
@@ -143,22 +157,27 @@ Renaming a function in the editor updates its machine label without moving it.
 
 ✅ Accept: an author can reproduce the GNL "factory" table from the design
 discussion (bufs chests → buf strip with pos/len/cap markers → drill → scanner
-→ inserter → line chest) in under 10 minutes, keyboard only.
+→ inserter → line chest) in under 10 minutes, then play it back on the real
+M3 trace and see `pos` chasing `len` and the doubling reallocation as the
+strip swapping to a larger one.
 
 ### M3 — Real execution (the factory moves)
 - Sandbox gets a `main.c` pane and a virtual input-file pane (text that is
   exposed to the program as a file / fd).
 - The trace server compiles and runs under gdb, records per-line steps, function
   enter/exit with args and return values, bound expressions' values at each
-  step, and every malloc/free (address + size). Capped at N steps (default
+  step (once M2 bindings exist), and every malloc/free (address + size). Capped at N steps (default
   20k), with a clear "trace truncated" notice.
-- Playback bar: play/pause/step/scrub (`space`, `[`/`]`, `{`/`}` by call).
+- Playback bar: play/pause/step/scrub (Space, ←/→, Shift+←/→ by call).
   Belts animate on call and return, markers slide along strips, chests appear
   and disappear, and the editor highlights the current line in sync.
 
-✅ Accept: GNL v3 with `-D BUFFER_SIZE=4` on a 3-line input shows `pos`
-chasing `len`, a doubling reallocation as the strip swapping to a larger one,
-and each returned line as a new chest the caller owns.
+✅ Accept: GNL v3 with `-D BUFFER_SIZE=4` on a 3-line input runs under the
+trace server. Frames show the real values at every step. Each allocation in
+`gnl_reserve` appears as a heap chest, and the old block disappears when the
+buffer doubles. Each returned line is a new heap chest the caller owns and
+frees, and the run ends with no leaks reported. (The strip parts, `pos`
+chasing `len`, are in M2's acceptance, which now comes after M3.)
 
 ### M4 — Truth checks (the teaching payoff)
 - **Invariants** on sprites, declared by the author: `pos <= len <= cap`,
@@ -206,10 +225,13 @@ and each returned line as a new chest the caller owns.
 
 - **Rename tracking:** when `gnl_fill_line` is renamed, how do we keep its
   placed position? Options: match by body similarity, ask the author, or keep
-  it orphaned until reattached.
+  it orphaned until reattached. *(Prototype answer in `DECISIONS.md`.)*
 - **Automatic placement:** simple "nearest free cell to the caller", or a
   proper layered layout (Sugiyama-style) for the first placement only?
+  *(Answered in `DECISIONS.md`: Sugiyama-style layering for the first
+  placement.)*
 - **Trace granularity:** is per-line stepping under gdb fast enough for
   100-line inputs, or do we need `-finstrument-functions` plus watchpoints?
 - **Sprite art direction:** pixel art in the Factorio style vs. clean vector.
   (The author dislikes Scratch's look, so avoid rounded toy-block styling.)
+  *(Answered in `DECISIONS.md`: skins.)*
