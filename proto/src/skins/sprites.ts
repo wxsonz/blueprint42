@@ -59,7 +59,8 @@ export function drawStrip(dc: Dc, r: Rect, i: StripInfo, p: SpritePalette): void
     const cw = track.w / shown;
     for (let n = 0; n < visible; n++) {
       const x = track.x + n * cw;
-      if (n < i.bytes.length) {
+      // Zero bytes stay empty so the data stands out from unused capacity.
+      if (n < i.bytes.length && i.bytes[n] !== 0) {
         g.fillStyle = p.cell;
         g.fillRect(x + 1, track.y + 1, Math.max(1, cw - 2), track.h - 2);
         if (cw > 13) {
@@ -76,18 +77,23 @@ export function drawStrip(dc: Dc, r: Rect, i: StripInfo, p: SpritePalette): void
     }
   }
   if (i.bound && capacity > 0) {
-    const lane = r.y + r.h * 0.65;
+    // Label rows share whatever height is left under the track, so they
+    // never spill out of the box when zoomed out.
+    const lane = track.y + track.h + 7 * z;
+    const rows = Math.min(3, Math.max(1, i.markers.length));
+    const step = Math.max(1, (r.y + r.h - 3 - lane) / rows);
+    const labelSize = Math.max(5, Math.min(9 * z, step * 0.95));
     i.markers.forEach((m, n) => {
       if (!Number.isFinite(m.index)) return;
       const out = m.index < 0 || m.index > capacity;
       const offscreen = m.index >= visible && capacity > shown;
       const x = track.x + clamp(m.index / shown, 0, 1) * track.w;
-      const row = n % 3;
-      const y = lane + row * Math.max(8, 10 * z);
+      const row = n % rows;
+      const y = lane + row * step + step / 2;
       g.fillStyle = out ? '#ef5b50' : p.marker;
       g.beginPath(); g.moveTo(x, track.y + track.h - 1); g.lineTo(x - 4 * z, track.y + track.h + 6 * z); g.lineTo(x + 4 * z, track.y + track.h + 6 * z); g.closePath(); g.fill();
       g.textAlign = x > track.x + track.w * 0.7 ? 'right' : 'left';
-      caption(g, `${m.label} ${m.sampledIndex}${offscreen ? ' →' : ''}`, x + (g.textAlign === 'right' ? -3 : 3) * z, y, Math.max(40, track.w * 0.32), p, Math.max(6, 9 * z));
+      if (labelSize >= 5.5) caption(g, `${m.label} ${m.sampledIndex}${offscreen ? ' →' : ''}`, x + (g.textAlign === 'right' ? -3 : 3) * z, y, Math.max(40, track.w * 0.32), p, labelSize);
     });
   } else {
     g.fillStyle = p.muted; g.textAlign = 'center';
@@ -110,6 +116,11 @@ export function drawSprite(dc: Dc, r: Rect, kind: Exclude<SpriteKind, 'strip'>, 
     g.beginPath(); g.moveTo(ix, iy); g.lineTo(ix, iy + 11 * z); g.stroke();
   } else if (kind === 'drill') {
     g.beginPath(); g.moveTo(ix - 7 * z, iy - 7 * z); g.lineTo(ix + 7 * z, iy - 7 * z); g.lineTo(ix + 2 * z, iy + 6 * z); g.lineTo(ix, iy + 10 * z); g.lineTo(ix - 2 * z, iy + 6 * z); g.closePath(); g.stroke();
+  } else if (kind === 'copy') {
+    // inserter: a page handing bytes to the next one
+    g.strokeRect(ix - 9 * z, iy - 8 * z, 10 * z, 12 * z);
+    g.strokeRect(ix - 1 * z, iy - 4 * z, 10 * z, 12 * z);
+    g.beginPath(); g.moveTo(ix - 5 * z, iy + 7 * z); g.lineTo(ix - 5 * z, iy + 11 * z); g.lineTo(ix + 1 * z, iy + 11 * z); g.stroke();
   } else if (kind === 'stack') {
     for (let n = 0; n < 3; n++) g.strokeRect(ix - 8 * z, iy + (n - 1) * 6 * z, 16 * z, 5 * z);
   } else if (kind === 'train') {

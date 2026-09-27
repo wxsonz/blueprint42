@@ -42,7 +42,7 @@ const NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*\.[ch]$/;
 const DEFINE = /^[A-Za-z_]\w*(=[\w.+-]*)?$/;
 const FN = /^[A-Za-z_]\w*$/;
 const EXPR = /^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$/;
-const KINDS = new Set(['strip', 'marker', 'chest', 'drill', 'stack', 'train']);
+const KINDS = new Set(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);
 const safeExpr = (e) => typeof e === 'string' && e.length <= 160 && EXPR.test(e.trim());
 function validBinding(s) {
   if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !s.id || s.id.length > 100 || !KINDS.has(s.kind)) return false;

@@ -6,14 +6,16 @@ why), then this file (current state and the next job).
 
 ## Where things stand (2026-09-27)
 
-- Branch `cleanup-and-trace` (6 commits on top of `main`), **not merged, not
-  pushed**. The M2 work described here is currently uncommitted. The author
-  decides on merging.
+- Branch `cleanup-and-trace`, **not merged, not pushed**. The author decides
+  on merging. M2 is committed: Codex's work as `75c5b53`, then a review
+  and fix pass on top.
 - **Done:** M0, M1, M3, and M2. M3 was built before M2 on purpose (see
   `DECISIONS.md` and SPEC §4).
 - **Next job: M4** (truth checks), then M5.
-- **Checks:** Relevant parser, blueprint, trace, rendering, and browser
-  regressions have been verified. Run the commands below for current results.
+- **Checks:** 40 tests pass (`npm test`), including automated M2 and M3
+  acceptance tests on the real GNL (`npx vitest run -t "acceptance"`).
+  `npm run check` is clean. The drop, bind, re-run, export and remove
+  authoring flow was exercised headless with no console errors.
 
 ```sh
 cd proto && npm install
@@ -60,8 +62,8 @@ Key invariants:
 
 ## M2: author sprites and bindings
 
-Drag a **strip, marker, chest, drill, stack, or train** from the dock onto
-free grid space. Click a sprite to edit its label, scope, function, and
+Drag a **strip, marker, chest, drill, inserter (copy), stack, or train**
+from the dock onto free grid space. Click a sprite to edit its label, scope, function, and
 expression in the inspector; drag it to move it. Right-click for Bind or
 Remove. A standalone marker is an index card. To make cursors ride a strip,
 enter `label = expression` lines in that strip's **Markers** field.
@@ -89,6 +91,19 @@ The binding grammar deliberately excludes function calls, writes, and
 arbitrary C expressions. It currently accepts identifiers, field access,
 and array indexes by integer or identifier (`bufs[fd].data`). A standalone
 marker has no attachment to a strip; strip markers provide that motion.
+
+### Known gaps in M2
+
+- **Shared sprite drawing.** All four skins draw sprites through one shared
+  drawer (`skins/sprites.ts`) with a per-skin palette, so strips don't yet
+  have each skin's own character (Classic bevels, Aqua gel, and so on).
+  Worth a pass if the author cares; the `Skin.strip`/`Skin.sprite` hooks
+  already exist.
+- **Acceptance is only half automated.** `M2 acceptance` binds the whole
+  GNL factory table and checks each piece sees real values. The "under 10
+  minutes by hand" part has not been timed with a person.
+- **Standalone markers don't attach to strips.** A strip's markers come
+  from its own Markers field.
 
 ## Next milestone: M4 (SPEC §4)
 

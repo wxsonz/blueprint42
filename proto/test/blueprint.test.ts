@@ -8,7 +8,10 @@ describe('blueprint annotation layer', () => {
       version: 1,
       nodes: { 'func:get_next_line': { x: 4, y: -2, pinned: true } },
       waypoints: { 'main>get_next_line': { x: 3, y: 1 } },
-      sprites: [{ id: 'buf', kind: 'strip', x: 7, y: 8, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }] }],
+      sprites: [
+        { id: 'buf', kind: 'strip', x: 7, y: 8, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }] },
+        { id: 'ins', kind: 'copy', x: 9, y: 2, label: 'inserter', binding: { scope: 'fn', fn: 'gnl_copy', expr: 'n' } },
+      ],
     };
     const json = serializeBlueprint(blueprint);
     expect(json).not.toContain('"src"');

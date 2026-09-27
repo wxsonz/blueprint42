@@ -214,8 +214,9 @@ questions. Newest last.
 
 ## 2026-09-27: M2 author layer and binding limits
 
-- **Decision:** Place strip, marker, chest, drill, stack, and train sprites by
-  dragging from the dock. They stay where the author puts them and sit
+- **Decision:** Place strip, marker, chest, drill, inserter (copy), stack,
+  and train sprites by dragging from the dock. The inserter was added in
+  review because the M2 acceptance picture needs one. They stay where the author puts them and sit
   alongside function frame rows. Selecting a sprite opens its binding form;
   right-click offers Bind and Remove. A typed struct with `char *` data and
   named `size_t` fields can suggest a strip with markers, but the author

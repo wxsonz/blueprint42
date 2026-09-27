@@ -1,5 +1,5 @@
 // The author's annotation layer. Source text is deliberately absent.
-export type SpriteKind = 'strip' | 'marker' | 'chest' | 'drill' | 'stack' | 'train';
+export type SpriteKind = 'strip' | 'marker' | 'chest' | 'drill' | 'copy' | 'stack' | 'train';
 export interface Binding { scope: 'fn' | 'global'; fn?: string; expr: string }
 export interface Sprite {
   id: string;
@@ -28,7 +28,7 @@ export interface Blueprint {
   sprites: Sprite[];
 }
 
-const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'stack', 'train']);
+const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);
 const ident = /^[A-Za-z_]\w*$/;
 const expression = /^[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*|\[(?:\d+|[A-Za-z_]\w*)\])*$/;
 const rec = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

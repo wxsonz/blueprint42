@@ -76,6 +76,33 @@ describe('trace server (cc + gdb)', () => {
     expect(t.snaps.at(-1)?.bound?.strip).toEqual({ bound: false });
   }, 60000);
 
+  it('M2 acceptance: the GNL factory table binds and every piece sees real values', async () => {
+    const s = sample('gnl');
+    const m = parse(s.src);
+    const fn = (f: string, expr: string) => ({ scope: 'fn' as const, fn: f, expr });
+    // bufs chests → buf strip with pos/len/cap → drill → scanner → inserter → line chest
+    const table: Sprite[] = [
+      { id: 'bufs', kind: 'chest', x: 0, y: 0, label: 'bufs[fd]', binding: fn('get_next_line', 'bufs[fd].len') },
+      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: fn('gnl_fill_line', 'buf->data'), lengthExpr: 'buf->cap',
+        markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }, { expr: 'buf->cap', label: 'cap' }] },
+      { id: 'drill', kind: 'drill', x: 0, y: 0, label: 'read()', binding: fn('gnl_append_chunk', 'n_read') },
+      { id: 'scanner', kind: 'marker', x: 0, y: 0, label: 'scanner', binding: fn('gnl_find_delim', 'from') },
+      { id: 'inserter', kind: 'copy', x: 0, y: 0, label: 'inserter', binding: fn('gnl_copy', 'n') },
+      { id: 'line', kind: 'chest', x: 0, y: 0, label: 'line', binding: fn('get_next_line', 'line') },
+    ];
+    const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings: table });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, s.src);
+    for (const sp of table) {
+      const seen = t.snaps.map((snap) => snap.bound?.[sp.id]).filter((v) => v?.bound);
+      expect(seen.length, `${sp.id} never observed a value`).toBeGreaterThan(0);
+    }
+    // the drill reports real read() sizes: never more than BUFFER_SIZE (4)
+    const reads = t.snaps.map((snap) => snap.bound?.drill?.number).filter((v): v is number => v !== undefined);
+    expect(Math.max(...reads)).toBeLessThanOrEqual(4);
+    expect(reads.some((v) => v > 0)).toBe(true);
+  }, 60000);
+
   it('reads a global even when a live local has the same name', async () => {
     const src = 'int\tvalue = 7;\n\nint\tmain(void)\n{\n\tint\tvalue;\n\n\tvalue = 3;\n\treturn (value);\n}\n';
     const m = parse(src);

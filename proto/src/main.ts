@@ -96,6 +96,7 @@ const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: st
   { kind: 'chest', name: 'Chest', c: 'value or storage', live: true, text: 'Drag onto the grid and bind a value.' },
   { kind: 'marker' as IconKind, name: 'Marker', c: 'cursor or index', live: true, text: 'Standalone card showing a bound index. To make a cursor ride a strip, add it in that strip’s Markers field.' },
   { kind: 'drill', name: 'Drill', c: 'input fd', live: true, text: 'Drag onto the grid and bind its source.' },
+  { kind: 'copy', name: 'Inserter', c: 'memcpy / copy loop', live: true, text: 'Drag onto the grid and bind what the copy is moving, e.g. the bytes left (n) in gnl_copy.' },
   { kind: 'train', name: 'Train', c: 'linked list', live: true, text: 'Drag onto the grid and bind a pointer.' },
   { kind: 'stack', name: 'Stack', c: 'stack A / B', live: true, text: 'Drag onto the grid and bind a value.' },
 ];
@@ -604,7 +605,7 @@ function bindMouse(): void {
   });
   canvas.addEventListener('drop', (e) => {
     const kind = e.dataTransfer?.getData('application/x-ftb-sprite') as SpriteKind | undefined;
-    if (!kind || !['strip', 'marker', 'chest', 'drill', 'stack', 'train'].includes(kind)) return;
+    if (!kind || !['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train'].includes(kind)) return;
     e.preventDefault();
     const [x, y] = localXY(e);
     const [wx, wy] = view.toWorld(x, y);
@@ -911,7 +912,12 @@ function suggestionButtons(vars: Var[], fn: string): string {
     suggestions.push({ fn, expr, lengthExpr: cap.expr, markers, label: v.name });
   }
   if (!suggestions.length) return '';
-  return `<div class="suggestions"><div class="hint">Suggested from struct fields</div>${suggestions.map((s, i) => `<button class="btn sm" data-suggest="${i}">Add ${esc(s.label)} strip + markers</button>`).join('')}</div>`;
+  // Once a strip with that binding exists, say so instead of offering a duplicate.
+  const placed = (x: (typeof suggestions)[number]) =>
+    (S.sprites ?? []).some((sp) => sp.kind === 'strip' && sp.binding?.fn === x.fn && sp.binding?.expr === x.expr);
+  return `<div class="suggestions"><div class="hint">Suggested from struct fields</div>${suggestions.map((s, i) => placed(s)
+    ? `<span class="hint">✓ ${esc(s.label)} strip placed</span>`
+    : `<button class="btn sm" data-suggest="${i}">Add ${esc(s.label)} strip + markers</button>`).join('')}</div>`;
 }
 
 function bindSuggestionButtons(): void {
@@ -923,6 +929,11 @@ function bindSuggestionButtons(): void {
     const sprite = placeSprite('strip', place.x, place.y, { label: `${s.label} buffer`, binding: { scope: 'fn', fn: s.fn, expr: s.expr }, lengthExpr: s.lengthExpr, markers: s.markers });
     const r = spriteWorldRect(sprite);
     view.ensureVisible(r.x, r.y, r.w, r.h, 1);
+    // The inspector skips re-rendering while it has focus; release it so the
+    // suggestion turns into "placed" instead of offering a duplicate.
+    b.blur();
+    lastInspectorKey = '';
+    renderInspector();
     toast('suggested strip placed — edit its binding in the inspector');
   }));
 }
@@ -1015,7 +1026,7 @@ function renderInspector(): void {
     inspector.hidden = false;
     inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(l.name)}</span><span class="k">legend</span></div>
       <div class="ins-body"><div class="row"><span class="l">C</span><span class="v">${esc(l.c)}</span></div><p>${esc(l.text)}</p>
-      ${['strip', 'chest', 'marker', 'drill', 'train', 'stack'].includes(l.kind) ? '<div class="foot"><span>drag from dock onto grid</span></div>' : ''}</div>`;
+      ${['strip', 'chest', 'marker', 'drill', 'copy', 'train', 'stack'].includes(l.kind) ? '<div class="foot"><span>drag from dock onto grid</span></div>' : ''}</div>`;
     return;
   }
   const e = S.selected;
@@ -1041,7 +1052,8 @@ function renderInspector(): void {
     const callers = S.model?.fns.filter((g) => g.calls.some((c) => c.callee === node.name)).map((g) => g.name) ?? [];
     const sig = f ? `${f.isStatic ? 'static ' : ''}${decl(f.ret, f.name)}(${f.params.map((p) => decl(p.type, p.name)).join(', ') || 'void'})` : node.name;
     const recursive = !!f?.calls.some((c) => c.callee === node.name);
-    const vals = frames[0]?.cells.map((c) => `${c.name} = ${c.val.k === 'ptr' && c.val.to !== null ? `→${pointeeName(S.trace, c.val.to, frames[0])}` : fmtVal(c.val, c.type)}`).join(' · ');
+    // A pointer's label ("bufs[0]", "#1+10", "freed #2") is more precise than the cell it lands in.
+    const vals = frames[0]?.cells.map((c) => `${c.name} = ${c.val.k === 'ptr' && c.val.to !== null && !c.val.label ? `→${pointeeName(S.trace, c.val.to, frames[0])}` : fmtVal(c.val, c.type)}`).join(' · ');
     inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(copy > 1 ? `${node.name} #${copy}` : node.name)}</span><span class="k">${copy > 1 ? 'recursive copy' : 'function'}</span></div>
       <div class="ins-body"><div class="sig">${esc(sig)}</div>
       ${row('state', `<span class="state ${state}">${state}${waitingOn ? ` on ${esc(waitingOn)}` : ''}</span>${frames.length > 1 ? ` · ${frames.length} frames` : ''}${node.stale ? ' · stale' : ''}`)}
