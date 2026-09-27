@@ -135,3 +135,14 @@ export function beltMid(pts: Pt[]): Pt {
 // The last path segment of a project-relative file name, for tight labels.
 export const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 export const dirName = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '');
+
+// Corner brackets around a rect, pushed out by `out` px: the focus-mode mark.
+export function brackets(g: CanvasRenderingContext2D, r: Rect, out: number, len: number): void {
+  const x0 = r.x - out, y0 = r.y - out, x1 = r.x + r.w + out, y1 = r.y + r.h + out;
+  g.beginPath();
+  g.moveTo(x0, y0 + len); g.lineTo(x0, y0); g.lineTo(x0 + len, y0);
+  g.moveTo(x1 - len, y0); g.lineTo(x1, y0); g.lineTo(x1, y0 + len);
+  g.moveTo(x1, y1 - len); g.lineTo(x1, y1); g.lineTo(x1 - len, y1);
+  g.moveTo(x0 + len, y1); g.lineTo(x0, y1); g.lineTo(x0, y1 - len);
+  g.stroke();
+}

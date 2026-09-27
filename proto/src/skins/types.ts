@@ -149,6 +149,7 @@ export interface Skin {
   name: string;
   blurb: string;
   casing: string; // canvas background colour, used to cut gaps where lines cross
+  spotlight: string; // focus mode: the veil over everything but the sender and receiver
   background(dc: Dc, camX: number, camY: number): void;
   belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean; count: number }): void;
   node(dc: Dc, r: Rect, n: NodeInfo): void;
@@ -168,4 +169,5 @@ export interface Skin {
   module(dc: Dc, r: Rect, m: ModuleInfo): void;
   wall(dc: Dc, r: Rect, w: WallInfo): void; // drawn under belts and machines
   door(dc: Dc, p: Pt, vertical: boolean, live: boolean): void; // where a belt passes through a wall
+  attention(dc: Dc, r: Rect, a: number): void; // focus mode: "look here", a = 0..1 strength
 }

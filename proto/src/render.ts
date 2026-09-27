@@ -65,8 +65,33 @@ export function spriteStripInfo(sprite: Sprite, trace: Trace | null, pos: number
 }
 
 // ---------------- playback timing ----------------
+//
+// Two ways to play (the author's call, see DECISIONS.md):
+// - fast: every event plays once, the camera only pans;
+// - focus: a call, a return, or a write through a pointer becomes a small
+//   scene. The sender is flagged, the data travels 2–3 times, the receiver
+//   is flagged when it lands, and the rest of the grid is dimmed.
+
+export type AnimMode = 'fast' | 'focus';
+let MODE: AnimMode = 'fast';
+export const setAnimMode = (m: AnimMode) => void (MODE = m);
+export const animMode = () => MODE;
+
+const LEAD = 0.14; // focus: share of the event spent flagging the sender
+const LAND = 0.84; // …after this, the data has arrived and the receiver is flagged
+
+// Events that get a focus scene.
+export function staged(e: Ev | null): boolean {
+  return MODE === 'focus' && !!e && (e.k === 'call' || e.k === 'ret' || (e.k === 'write' && e.via !== null));
+}
 
 export function evDuration(e: Ev): number {
+  if (MODE === 'focus') {
+    if (e.k === 'call') return 4.2;
+    if (e.k === 'ret') return 3.2;
+    if (e.k === 'write' && e.via !== null) return 2.6;
+    if (e.k === 'step') return 0.16;
+  }
   switch (e.k) {
     case 'call':
     case 'ret':
@@ -103,14 +128,48 @@ function switchAt(e: Ev): number {
   }
 }
 
-export function frameAt(trace: Trace, pos: number): { snap: Snap; ev: Ev | null; t: number; i: number; si: number } {
+// Where an event's animation is at local time t (0..1).
+export interface Phase {
+  travel: number; // 0..1 along the belt or wire, this pass
+  pass: number;
+  passes: number;
+  switched: boolean; // the state after the event is showing
+  before: number; // 0..1 progress up to the switch
+  after: number; // 0..1 progress after the switch
+  lead: number; // 0..1 flag on the sender (focus)
+  land: number; // 0..1 flag on the receiver (focus)
+}
+
+export function phaseOf(e: Ev, t: number): Phase {
+  if (!staged(e)) {
+    const sw = switchAt(e);
+    const switched = t >= sw;
+    return {
+      travel: sw ? Math.min(1, t / sw) : 1, pass: 0, passes: 1, switched,
+      before: sw ? Math.min(1, t / sw) : 1, after: switched ? (sw < 1 ? (t - sw) / (1 - sw) : 1) : 0, lead: 0, land: 0,
+    };
+  }
+  const passes = e.k === 'call' ? 3 : 2;
+  if (t < LEAD) return { travel: 0, pass: 0, passes, switched: false, before: t / LAND, after: 0, lead: t / LEAD, land: 0 };
+  if (t < LAND) {
+    const k = ((t - LEAD) / (LAND - LEAD)) * passes;
+    const pass = Math.min(passes - 1, Math.floor(k));
+    // each pass ends with a short dwell at the receiver
+    return { travel: Math.min(1, (k - pass) * 1.15), pass, passes, switched: false, before: t / LAND, after: 0, lead: 0, land: 0 };
+  }
+  const after = (t - LAND) / (1 - LAND);
+  return { travel: 1, pass: passes - 1, passes, switched: true, before: 1, after, lead: 0, land: 1 - after };
+}
+
+export function frameAt(trace: Trace, pos: number): { snap: Snap; ev: Ev | null; t: number; i: number; si: number; ph: Phase | null } {
   const n = trace.evs.length;
   const p = Math.max(0, Math.min(pos, n));
   const i = Math.floor(p);
   const t = p - i;
   const ev = t > 0 && i < n ? trace.evs[i] : null;
-  const si = ev && t >= switchAt(ev) ? i + 1 : i;
-  return { snap: trace.snaps[si], ev, t, i, si };
+  const ph = ev ? phaseOf(ev, t) : null;
+  const si = ph?.switched ? i + 1 : i;
+  return { snap: trace.snaps[si], ev, t, i, si, ph };
 }
 
 // The last frame a function had before snapshot `si`, if it has returned.
@@ -279,6 +338,30 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
 export function heapSlotRect(layout: Layout, slot: number): Rect | null {
   const pp = procPlace(layout);
   return pp ? { x: pp.x, y: pp.y + MH + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
+}
+
+// Focus mode: world rects of who sends and who receives event i (a call or
+// a return), for the camera to frame both.
+export function stageRect(s: ViewState, i: number): Rect | null {
+  const ev = s.trace?.evs[i];
+  if (!s.trace || !ev || (ev.k !== 'call' && ev.k !== 'ret')) return null;
+  const scene = buildScene(s.layout, s.model, s.trace);
+  const pair = eventPair(s.trace, i, ev, scene);
+  if (!pair) return null;
+  const rects: Rect[] = [];
+  for (const k of pair) {
+    if (k === '') {
+      const pp = procPlace(s.layout);
+      if (pp) rects.push({ x: pp.x, y: pp.y, w: MW, h: MH });
+    } else {
+      const h = scene.hosts.get(k);
+      if (h) rects.push({ x: h.x, y: h.y, w: h.w, h: h.h + h.inv });
+    }
+  }
+  if (!rects.length) return null;
+  const x0 = Math.min(...rects.map((r) => r.x)), y0 = Math.min(...rects.map((r) => r.y));
+  const x1 = Math.max(...rects.map((r) => r.x + r.w)), y1 = Math.max(...rects.map((r) => r.y + r.h));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 // World rect of the host running the top frame, for the follow camera.
@@ -466,6 +549,18 @@ export class GridView {
     else if (y + h + margin > this.target.y + vh) this.target.y = y + h + margin - vh;
   }
 
+  // Focus mode: glide to frame a rect, zooming in (within limits) to fill the view.
+  focusOn(r: Rect, pad = 1.6): void {
+    const top = 64;
+    const bottom = 64;
+    const zx = this.w / ((r.w + pad * 2) * CELL_PX);
+    const zy = (this.h - top - bottom) / ((r.h + pad * 2) * CELL_PX);
+    this.target.zoom = Math.max(0.55, Math.min(1.35, zx, zy));
+    const cs = CELL_PX * this.target.zoom;
+    this.target.x = r.x + r.w / 2 - this.w / (2 * cs);
+    this.target.y = r.y + r.h / 2 - (top + (this.h - top - bottom) / 2) / cs;
+  }
+
   fit(s: ViewState, instant = false): void {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const grow = (x: number, y: number, w: number, h: number) => {
@@ -532,6 +627,7 @@ export class GridView {
     const snap = fr?.snap ?? trace?.snaps[0] ?? null;
     const ev = fr?.ev ?? null;
     const t = fr?.t ?? 0;
+    const ph = fr?.ph ?? null;
     const finished = !!trace && s.pos >= trace.evs.length;
     const selKey = entKey(s.selected);
     const hovKey = entKey(s.hovered);
@@ -562,8 +658,8 @@ export class GridView {
       animPair = eventPair(trace, fr!.i, ev, scene);
       const target = animPair?.[1];
       if (target && scene.hosts.get(target)!.copy > 1) {
-        if (ev.k === 'call' && t < switchAt(ev)) fading = { host: target, alpha: t / switchAt(ev) };
-        if (ev.k === 'ret') fading = { host: target, alpha: Math.max(0.15, 1 - (t / switchAt(ev)) * 0.85) };
+        if (ev.k === 'call' && !ph!.switched) fading = { host: target, alpha: ph!.before };
+        if (ev.k === 'ret') fading = { host: target, alpha: Math.max(0.15, 1 - ph!.before * 0.85) };
       }
     }
     const animKey = animPair ? `${animPair[0]}>${animPair[1]}` : null;
@@ -745,7 +841,7 @@ export class GridView {
 
     // ---- statics (on homes) + frames (on every drawn host) ----
     const anchors = new Map<number, Anchor>();
-    const flash = ev && ev.k === 'write' && t >= switchAt(ev) ? { cell: ev.cell, a: 1 - (t - switchAt(ev)) / (1 - switchAt(ev)) } : null;
+    const flash = ev && ev.k === 'write' && ph!.switched ? { cell: ev.cell, a: 1 - ph!.after } : null;
     const lastEv = trace && fr && !ev && fr.i > 0 ? trace.evs[fr.i - 1] : null;
     const recent = lastEv?.k === 'write' ? lastEv.cell : null;
     const live = new Set<number>();
@@ -894,7 +990,7 @@ export class GridView {
     // ---- pointer wires ----
     // Few pointers: draw them all. Many: only the running frame's, the
     // focused function's, and any wire a write is travelling right now.
-    const newFrame = ev?.k === 'call' && t >= switchAt(ev) ? ev.frame : null;
+    const newFrame = ev?.k === 'call' && ph!.switched ? ev.frame : null;
     const cells: SnapCell[] = [...(snap?.statics ?? []), ...st.flatMap((f) => f.cells)];
     const wired = cells.filter((c) => c.val.k === 'ptr' && c.val.to !== null && anchors.has(c.id));
     const frameOfCell = new Map<number, SnapFrame>();
@@ -916,12 +1012,67 @@ export class GridView {
         // points at something on screen elsewhere, e.g. inside a collapsed module
       } else {
         const inNew = newFrame !== null && st.find((f) => f.id === newFrame)?.cells.some((x) => x.id === c.id);
-        const grow = inNew ? Math.min(1, ((t - switchAt(ev!)) / (1 - switchAt(ev!))) * 1.4) : 1;
+        const grow = inNew ? Math.min(1, ph!.after * 1.4) : 1;
         const curve = this.wireCurve(a, b);
         const pts: Pt[] = [];
         for (let i = 0; i <= 40 * grow; i++) pts.push(bez(curve, i / 40));
         if (pts.length > 1) skin.wire(dc, pts, grow >= 1);
       }
+      g.restore();
+    }
+
+    // ---- focus mode: veil everything but the sender and the receiver ----
+    if (ev && ph && trace && staged(ev)) {
+      const hostRect = (k: string): Rect | null => {
+        if (k === '') return pp ? this.rectW(pp.x, pp.y, MW, MH) : null;
+        const h = scene.hosts.get(k);
+        return h ? this.rectW(h.x, h.y, h.w, h.h + h.inv) : null;
+      };
+      let src: Rect | null = null;
+      let dst: Rect | null = null;
+      let redraw: (() => void) | null = null;
+      if ((ev.k === 'call' || ev.k === 'ret') && animPair) {
+        const [from, to] = animPair;
+        [src, dst] = ev.k === 'call' ? [hostRect(from), hostRect(to)] : [hostRect(to), hostRect(from)];
+        const belt = scene.belts.find((b) => b.key === animKey);
+        if (belt) redraw = () => skin.belt(dc, belt.pts.map((p) => this.sp(p)), { live: true, dir: ev.k === 'ret' ? -1 : 1, selected: false, hovered: true, custom: belt.custom, count: 0 });
+      } else if (ev.k === 'write' && ev.via !== null) {
+        const a = anchors.get(ev.via);
+        const b = anchors.get(ev.cell);
+        const row = SLOT_PX * z;
+        if (a) src = { x: a.left, y: a.y - row / 2, w: a.right - a.left, h: row };
+        if (b) dst = { x: b.left, y: b.y - row / 2, w: b.right - b.left, h: row };
+        if (a && b) {
+          const curve = this.wireCurve(a, b);
+          const pts: Pt[] = [];
+          for (let k = 0; k <= 40; k++) pts.push(bez(curve, k / 40));
+          redraw = () => skin.wire(dc, pts, true);
+        }
+      }
+      // fade the veil in quickly, out as the receiver takes over
+      const veil = Math.min(1, t / 0.05) * (ph.switched ? 1 - ph.after : 1);
+      const hole = 10 * z;
+      g.save();
+      g.globalAlpha = veil;
+      g.fillStyle = skin.spotlight;
+      g.beginPath();
+      g.rect(0, 0, this.w, this.h);
+      for (const r of [src, dst]) if (r) g.rect(r.x - hole, r.y - hole, r.w + 2 * hole, r.h + 2 * hole);
+      g.fill('evenodd');
+      g.restore();
+      if (redraw) {
+        g.save();
+        redraw();
+        g.restore();
+      }
+      // the sender flashes before the data leaves, the receiver when it lands;
+      // both keep a quieter mark while the data goes back and forth
+      const blink = (x: number) => 0.55 + 0.45 * Math.cos(x * Math.PI * 4);
+      const sa = ph.lead > 0 ? blink(ph.lead) : ph.switched ? 0.3 * (1 - ph.after) : 0.4;
+      const da = ph.land > 0 ? blink(1 - ph.land) : ph.switched ? 0 : 0.4;
+      g.save();
+      if (src && sa > 0.02) skin.attention(dc, src, sa);
+      if (dst && da > 0.02) skin.attention(dc, dst, da);
       g.restore();
     }
 
@@ -931,7 +1082,7 @@ export class GridView {
       const belt = animKey ? scene.belts.find((b) => b.key === animKey) : null;
       if ((ev.k === 'call' || ev.k === 'ret') && belt) {
         const walk = new PathWalk(belt.pts.map((p) => this.sp(p)));
-        const travel = Math.min(1, t / switchAt(ev));
+        const travel = ph!.travel;
         const ease = travel < 0.5 ? 2 * travel * travel : 1 - Math.pow(-2 * travel + 2, 2) / 2;
         if (travel < 1 && ev.k === 'call') {
           if (!ev.args.length) {
@@ -957,11 +1108,11 @@ export class GridView {
           else skin.plate(dc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
         }
       }
-      if (ev.k === 'write' && ev.via !== null && t < switchAt(ev)) {
+      if (ev.k === 'write' && ev.via !== null && !ph!.switched && ph!.travel < 1) {
         const a = anchors.get(ev.via);
         const b = anchors.get(ev.cell);
         if (a && b) {
-          const [x, y] = bez(this.wireCurve(a, b), Math.min(1, t / switchAt(ev)));
+          const [x, y] = bez(this.wireCurve(a, b), ph!.travel);
           skin.pulse(dc, x, y);
           skin.plate(dc, x, y - cs * 0.42, fmtVal(ev.val), 'arg');
         }

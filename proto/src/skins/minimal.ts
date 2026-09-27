@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, baseName, beltMid, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
+import { arrowHead, baseName, beltMid, brackets, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -40,6 +40,7 @@ export const minimal: Skin = {
   name: 'Minimal',
   blurb: 'quiet cards and hairlines',
   casing: '#131416',
+  spotlight: 'rgba(8,9,11,0.7)',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
@@ -172,6 +173,24 @@ export const minimal: Skin = {
     g.textAlign = 'right';
     g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
     if (w.selected || w.hovered) outline(g, r, rad, w.selected);
+  },
+
+  // Focus: an accent ring and corners, nothing else.
+  attention(dc, r, a) {
+    const g = dc.g;
+    const o = 5 + 12 * (1 - a);
+    g.save();
+    g.globalAlpha = Math.min(1, a * 1.2);
+    g.shadowColor = 'rgba(138,180,255,0.7)';
+    g.shadowBlur = 14 * dc.z;
+    g.strokeStyle = ACCENT;
+    g.lineWidth = Math.max(1.5, 2 * dc.z);
+    brackets(g, r, o, Math.max(8, 14 * dc.z));
+    g.globalAlpha = a * 0.5;
+    rrect(g, r.x - 4, r.y - 4, r.w + 8, r.h + 8, px(dc, 8, 4));
+    g.lineWidth = 1;
+    g.stroke();
+    g.restore();
   },
 
   door(dc, [x, y], vertical, live) {

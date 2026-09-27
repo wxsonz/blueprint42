@@ -188,6 +188,7 @@ export const aqua: Skin = {
   name: 'Aqua',
   blurb: 'early-2000s gloss: gel, pinstripes, traffic lights',
   casing: '#ececec',
+  spotlight: 'rgba(40,48,60,0.5)',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
@@ -337,6 +338,25 @@ export const aqua: Skin = {
     g.textAlign = 'right';
     g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
     if (w.selected || w.hovered) focusRing(g, r, rad, w.selected);
+  },
+
+  // Focus: a soft blue halo that breathes, like a default button.
+  attention(dc, r, a) {
+    const g = dc.g;
+    const o = 4 + 10 * (1 - a);
+    g.save();
+    g.globalAlpha = Math.min(1, a * 1.2);
+    g.shadowColor = 'rgba(56,117,215,0.9)';
+    g.shadowBlur = 24 * dc.z;
+    rrect(g, r.x - o, r.y - o, r.w + 2 * o, r.h + 2 * o, px(dc, 10, 4) + o);
+    g.strokeStyle = 'rgba(56,117,215,0.85)';
+    g.lineWidth = Math.max(3, 5 * dc.z);
+    g.stroke();
+    g.shadowBlur = 0;
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 1;
+    g.stroke();
+    g.restore();
   },
 
   door(dc, [x, y], vertical, live) {

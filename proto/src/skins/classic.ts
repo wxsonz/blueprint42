@@ -2,7 +2,7 @@
 // the active (navy) title bar, everything else is inactive grey. Statics are
 // floppy disks, pointers are links, stale code is "(Not Responding)".
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { arrowHead, baseName, beltMid, bevel, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
+import { arrowHead, baseName, beltMid, bevel, brackets, fitText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -149,6 +149,7 @@ export const classic: Skin = {
   name: 'Classic',
   blurb: 'a 90s desktop: windows, floppies, marching ants',
   casing: TEAL,
+  spotlight: 'rgba(0,40,40,0.62)',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
@@ -280,6 +281,25 @@ export const classic: Skin = {
     titleBar(dc, tb, `${w.name}${w.pinned ? ' (pinned)' : ''}`, w.live, false);
     if (w.hovered && !w.selected) focusRect(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, HI);
     if (w.selected) handles(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, px(dc, 6, 4));
+  },
+
+  // Focus: a yellow-and-black "look here" frame with marching ants.
+  attention(dc, r, a) {
+    const g = dc.g;
+    const o = 5 + 12 * (1 - a);
+    g.save();
+    g.globalAlpha = Math.min(1, a * 1.3);
+    g.lineWidth = Math.max(2, 3 * dc.z);
+    g.strokeStyle = DARK;
+    g.strokeRect(Math.round(r.x - o) + 0.5, Math.round(r.y - o) + 0.5, Math.round(r.w + 2 * o), Math.round(r.h + 2 * o));
+    g.strokeStyle = '#ffff00';
+    g.setLineDash([6, 6]);
+    g.lineDashOffset = -dc.time * 30;
+    g.strokeRect(Math.round(r.x - o) + 0.5, Math.round(r.y - o) + 0.5, Math.round(r.w + 2 * o), Math.round(r.h + 2 * o));
+    g.setLineDash([]);
+    g.strokeStyle = NAVY;
+    brackets(g, r, o + 5, Math.max(8, 14 * dc.z));
+    g.restore();
   },
 
   door(dc, [x, y], vertical, live) {

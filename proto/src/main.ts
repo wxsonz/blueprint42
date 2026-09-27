@@ -7,7 +7,7 @@ import { doorsOf, folded, footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, clip, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, spriteWorldRect, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -85,10 +85,24 @@ const S: ViewState & {
 };
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 12, 20];
+const FOCUS_MAX = 1.5; // focus scenes never play faster than this, whatever the speed
+
+function renderAnimMode(): void {
+  document.querySelectorAll<HTMLButtonElement>('#anim-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === animMode())));
+}
+
+function setMode(m: AnimMode): void {
+  // keep the same event on screen: positions are in events, only durations change
+  setAnimMode(m);
+  store.set('anim', m);
+  lastFollowEv = -1;
+  renderAnimMode();
+  toast(m === 'focus' ? 'Focus: calls and returns are staged — the rest dims, the data travels 2–3 times' : 'Fast: every step once, the camera only pans');
+}
 
 // Long real traces pick a speed that plays them in about 45 s.
 function autoSpeed(trace: Trace): void {
-  const total = trace.evs.reduce((a, e) => a + evDuration(e), 0);
+  const total = trace.evs.reduce((a, e) => a + evDuration(e) / (staged(e) ? Math.min(S.speed, FOCUS_MAX) : 1), 0);
   S.speed = SPEEDS.find((sp) => total / sp <= 45) ?? SPEEDS[SPEEDS.length - 1];
   $('pb-speed').textContent = `${S.speed}×`;
 }
@@ -1426,6 +1440,7 @@ function onKey(e: KeyboardEvent): void {
   else if (k === 'End') seek(N());
   else if (k === 'Escape') (S.selected = null), (S.legend = null), hideMenu();
   else if (k === 'f' || k === 'F') view.fit(S);
+  else if (k === 'm' || k === 'M') setMode(animMode() === 'fast' ? 'focus' : 'fast');
   else if (k === '+' || k === '=') view.zoomAt(view.w / 2, view.h / 2, 1.2);
   else if (k === '-') view.zoomAt(view.w / 2, view.h / 2, 1 / 1.2);
   else if (k === '?') openHelp();
@@ -1510,7 +1525,7 @@ function openHelp(): void {
         </div>
         <div><h4>Playback (canvas focused)</h4>
           ${K(['Space'], 'play / pause')}${K(['←', '→'], 'step')}${K(['Shift', '←/→'], 'previous / next call')}
-          ${K(['Home', 'End'], 'start / end')}${K(['F'], 'fit view')}${K(['Ctrl', 'Enter'], 'run from the start (anywhere)')}
+          ${K(['Home', 'End'], 'start / end')}${K(['F'], 'fit view')}${K(['M'], 'fast ⇄ focus animation')}${K(['Ctrl', 'Enter'], 'run from the start (anywhere)')}
           <h4>Editor</h4>
           ${K(['vim'], 'toggle in the editor header')}${K([':w'], 'save… (project) · run from the start (sample)')}
           <h4>Projects</h4>
@@ -2048,7 +2063,8 @@ function frame(now: number): void {
     if (i >= n) S.playing = false;
     else {
       const before = S.pos;
-      S.pos += (dt * S.speed) / evDuration(t.evs[i]);
+      const e = t.evs[i];
+      S.pos += (dt * (staged(e) ? Math.min(S.speed, FOCUS_MAX) : S.speed)) / evDuration(e);
       // M4: freeze on the step where an invariant first breaks.
       const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
       if (hit) {
@@ -2079,8 +2095,13 @@ function frame(now: number): void {
     const i = Math.floor(S.pos);
     if (i !== lastFollowEv && i < t.evs.length) {
       lastFollowEv = i;
-      const r = activeHostRect(S);
-      if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      // focus: frame the sender and the receiver; fast: only pan, never zoom
+      const stage = staged(t.evs[i]) ? stageRect(S, i) : null;
+      if (stage) view.focusOn(stage);
+      else {
+        const r = activeHostRect(S);
+        if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      }
     }
   }
   S.violations = violations();
@@ -2172,6 +2193,9 @@ async function boot(): Promise<void> {
       ({ start: () => seek(0), back: stepBack, play: togglePlay, step: stepFwd, end: () => seek(N()) } as Record<string, () => void>)[b.dataset.act!]();
     }),
   );
+  setAnimMode(store.get('anim') === 'focus' ? 'focus' : 'fast');
+  renderAnimMode();
+  document.querySelectorAll<HTMLButtonElement>('#anim-mode button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as AnimMode)));
   $('spd-down').addEventListener('click', () => setSpeed(-1));
   $('spd-up').addEventListener('click', () => setSpeed(1));
   let scrubbing = false;
@@ -2210,7 +2234,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect } });
 }
 
 boot().catch((err) => {

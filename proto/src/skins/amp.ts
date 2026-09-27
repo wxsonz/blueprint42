@@ -3,7 +3,7 @@
 // dances while it runs, and a transport row whose lit button is the state.
 // Frames are the playlist; pointers are amber.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, baseName, beltMid, fitText, hash, snapRect, strokeLine, Walk } from './util';
+import { arrowHead, baseName, beltMid, brackets, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -118,6 +118,7 @@ export const amp: Skin = {
   name: 'Amp',
   blurb: 'a 90s media player: LCDs, analyzers, playlists',
   casing: '#0d0d14',
+  spotlight: 'rgba(3,3,8,0.66)',
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
@@ -272,6 +273,22 @@ export const amp: Skin = {
       g.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
       g.setLineDash([]);
     }
+  },
+
+  // Focus: a green LCD glow with viewfinder corners that close in.
+  attention(dc, r, a) {
+    const g = dc.g;
+    g.save();
+    g.globalAlpha = Math.min(1, a * 1.2);
+    g.shadowColor = LCD;
+    g.shadowBlur = 20 * dc.z;
+    g.strokeStyle = LCD;
+    g.lineWidth = Math.max(2, 3 * dc.z);
+    brackets(g, r, 6 + 14 * (1 - a), Math.max(8, 16 * dc.z));
+    g.globalAlpha = a * 0.35;
+    g.lineWidth = 1;
+    g.strokeRect(r.x - 3.5, r.y - 3.5, r.w + 7, r.h + 7);
+    g.restore();
   },
 
   door(dc, [x, y], vertical, live) {
