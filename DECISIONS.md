@@ -389,6 +389,19 @@ questions. Newest last.
   - Each skin draws the veil colour and its own "look here" mark: Amp a
     green viewfinder, Classic yellow marching ants, Aqua a blue halo,
     Minimal accent corners.
+- **Decision (author feedback):** Focus scenes pause so the data can be
+  read, and the pauses grow with how much it carries:
+  - **Read:** the arguments wait lined up at the sender's port for 1–4 s
+    (about 1 s for an int, about 3 s for a `t_gnl` crate plus an argument).
+  - **Travel:** the passes.
+  - **Hold:** the data stays parked at the receiver's port for 0.9–3 s
+    while its frame fills in, so sent and received can be compared.
+  - The camera frames the sender while you read, both while the data
+    travels, and the receiver during the hold.
+  - In focus, data is never drawn smaller than 100% scale.
+  - Several arguments travel as a train that always fits on the belt, so
+    none is hidden while waiting.
+  - Fast mode is unchanged.
 - **Decision:** Focus scenes never play faster than 1.5×. Plain steps still
   follow the speed setting, so long traces (GNL: about 1,000 events) stay
   watchable. Positions are in events, so switching modes mid-run keeps the

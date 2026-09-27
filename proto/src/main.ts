@@ -2053,6 +2053,7 @@ function drawTimeline(): void {
 // ---------------- main loop ----------------
 let lastT = performance.now();
 let lastFollowEv = -1;
+let lastStage = '';
 function frame(now: number): void {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
@@ -2093,15 +2094,21 @@ function frame(now: number): void {
   // Follow the running function, but never fight the author's own panning.
   if (S.follow && t && S.playing && !drag && now - lastPanAt > 2500) {
     const i = Math.floor(S.pos);
-    if (i !== lastFollowEv && i < t.evs.length) {
+    // Focus: the camera follows the scene — the sender while its data is
+    // read, both while it travels, the receiver while it's held there.
+    // Fast: only pan, never zoom.
+    const ph = i < t.evs.length && staged(t.evs[i]) ? frameAt(t, S.pos).ph : null;
+    const stageKey = ph ? `${i}|${ph.parked ?? 'move'}` : '';
+    if (ph && stageKey !== lastStage) {
+      lastStage = stageKey;
       lastFollowEv = i;
-      // focus: frame the sender and the receiver; fast: only pan, never zoom
-      const stage = staged(t.evs[i]) ? stageRect(S, i) : null;
-      if (stage) view.focusOn(stage);
-      else {
-        const r = activeHostRect(S);
-        if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
-      }
+      const r = stageRect(S, i, ph.parked === 'read' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both');
+      if (r) view.focusOn(r, ph.parked ? 2.6 : 1.6);
+    } else if (!ph && i !== lastFollowEv && i < t.evs.length) {
+      lastFollowEv = i;
+      lastStage = '';
+      const r = activeHostRect(S);
+      if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
     }
   }
   S.violations = violations();

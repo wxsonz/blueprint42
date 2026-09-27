@@ -77,8 +77,24 @@ let MODE: AnimMode = 'fast';
 export const setAnimMode = (m: AnimMode) => void (MODE = m);
 export const animMode = () => MODE;
 
-const LEAD = 0.14; // focus: share of the event spent flagging the sender
-const LAND = 0.84; // …after this, the data has arrived and the receiver is flagged
+// A focus scene, in seconds at 1×: the data waits at the sender to be read,
+// travels, then stays parked at the receiver while its frame fills in. The
+// more it carries, the longer both waits.
+interface Scene3 { read: number; pass: number; passes: number; hold: number; total: number }
+const sceneCache = new WeakMap<Ev, Scene3>();
+function sceneOf(e: Ev): Scene3 {
+  let hit = sceneCache.get(e);
+  if (hit) return hit;
+  const weigh = (d?: Payload) => (!d ? 1 : d.k === 'struct' ? 1 + Math.min(6, d.fields.length) : 1 + Math.min(3, Math.floor(d.text.length / 16)));
+  const lines = e.k === 'call' ? Math.max(1, e.args.reduce((a, x) => a + weigh(x.data), 0)) : e.k === 'ret' ? weigh(e.data) : 1;
+  const read = Math.max(1, Math.min(4, 0.7 + 0.35 * lines));
+  const hold = Math.max(0.9, Math.min(3, 0.5 + 0.25 * lines));
+  const passes = e.k === 'call' ? 3 : 2;
+  const pass = 0.75;
+  hit = { read, pass, passes, hold, total: read + passes * pass + hold };
+  sceneCache.set(e, hit);
+  return hit;
+}
 
 // Events that get a focus scene.
 export function staged(e: Ev | null): boolean {
@@ -86,12 +102,8 @@ export function staged(e: Ev | null): boolean {
 }
 
 export function evDuration(e: Ev): number {
-  if (MODE === 'focus') {
-    if (e.k === 'call') return 4.2;
-    if (e.k === 'ret') return 3.2;
-    if (e.k === 'write' && e.via !== null) return 2.6;
-    if (e.k === 'step') return 0.16;
-  }
+  if (staged(e)) return sceneOf(e).total;
+  if (MODE === 'focus' && e.k === 'step') return 0.16;
   switch (e.k) {
     case 'call':
     case 'ret':
@@ -136,8 +148,10 @@ export interface Phase {
   switched: boolean; // the state after the event is showing
   before: number; // 0..1 progress up to the switch
   after: number; // 0..1 progress after the switch
-  lead: number; // 0..1 flag on the sender (focus)
-  land: number; // 0..1 flag on the receiver (focus)
+  lead: number; // 0..1 through the wait at the sender (focus)
+  land: number; // 1..0 through the wait at the receiver (focus)
+  parked: 'read' | 'hold' | null; // focus: the data is standing still to be read
+  secs: number; // seconds into the current wait, for blinking
 }
 
 export function phaseOf(e: Ev, t: number): Phase {
@@ -146,19 +160,21 @@ export function phaseOf(e: Ev, t: number): Phase {
     const switched = t >= sw;
     return {
       travel: sw ? Math.min(1, t / sw) : 1, pass: 0, passes: 1, switched,
-      before: sw ? Math.min(1, t / sw) : 1, after: switched ? (sw < 1 ? (t - sw) / (1 - sw) : 1) : 0, lead: 0, land: 0,
+      before: sw ? Math.min(1, t / sw) : 1, after: switched ? (sw < 1 ? (t - sw) / (1 - sw) : 1) : 0, lead: 0, land: 0, parked: null, secs: 0,
     };
   }
-  const passes = e.k === 'call' ? 3 : 2;
-  if (t < LEAD) return { travel: 0, pass: 0, passes, switched: false, before: t / LAND, after: 0, lead: t / LEAD, land: 0 };
-  if (t < LAND) {
-    const k = ((t - LEAD) / (LAND - LEAD)) * passes;
-    const pass = Math.min(passes - 1, Math.floor(k));
+  const T = sceneOf(e);
+  const sec = t * T.total;
+  const arrive = T.read + T.passes * T.pass;
+  if (sec < T.read) return { travel: 0, pass: 0, passes: T.passes, switched: false, before: sec / arrive, after: 0, lead: sec / T.read, land: 0, parked: 'read', secs: sec };
+  if (sec < arrive) {
+    const k = (sec - T.read) / T.pass;
+    const pass = Math.min(T.passes - 1, Math.floor(k));
     // each pass ends with a short dwell at the receiver
-    return { travel: Math.min(1, (k - pass) * 1.15), pass, passes, switched: false, before: t / LAND, after: 0, lead: 0, land: 0 };
+    return { travel: Math.min(1, (k - pass) * 1.15), pass, passes: T.passes, switched: false, before: sec / arrive, after: 0, lead: 0, land: 0, parked: null, secs: 0 };
   }
-  const after = (t - LAND) / (1 - LAND);
-  return { travel: 1, pass: passes - 1, passes, switched: true, before: 1, after, lead: 0, land: 1 - after };
+  const after = (sec - arrive) / T.hold;
+  return { travel: 1, pass: T.passes - 1, passes: T.passes, switched: true, before: 1, after, lead: 0, land: 1 - after, parked: 'hold', secs: sec - arrive };
 }
 
 export function frameAt(trace: Trace, pos: number): { snap: Snap; ev: Ev | null; t: number; i: number; si: number; ph: Phase | null } {
@@ -340,16 +356,18 @@ export function heapSlotRect(layout: Layout, slot: number): Rect | null {
   return pp ? { x: pp.x, y: pp.y + MH + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
 }
 
-// Focus mode: world rects of who sends and who receives event i (a call or
-// a return), for the camera to frame both.
-export function stageRect(s: ViewState, i: number): Rect | null {
+// Focus mode: world rect of who sends ('src'), who receives ('dst'), or
+// both, for event i (a call or a return), for the camera to frame.
+export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both' = 'both'): Rect | null {
   const ev = s.trace?.evs[i];
   if (!s.trace || !ev || (ev.k !== 'call' && ev.k !== 'ret')) return null;
   const scene = buildScene(s.layout, s.model, s.trace);
   const pair = eventPair(s.trace, i, ev, scene);
   if (!pair) return null;
   const rects: Rect[] = [];
-  for (const k of pair) {
+  // a call goes caller → callee, a return callee → caller
+  const [src, dst] = ev.k === 'call' ? pair : [pair[1], pair[0]];
+  for (const k of which === 'src' ? [src] : which === 'dst' ? [dst] : pair) {
     if (k === '') {
       const pp = procPlace(s.layout);
       if (pp) rects.push({ x: pp.x, y: pp.y, w: MW, h: MH });
@@ -1050,7 +1068,7 @@ export class GridView {
         }
       }
       // fade the veil in quickly, out as the receiver takes over
-      const veil = Math.min(1, t / 0.05) * (ph.switched ? 1 - ph.after : 1);
+      const veil = Math.min(1, t / 0.03) * (ph.switched ? Math.min(1, (1 - ph.after) / 0.3) : 1);
       const hole = 10 * z;
       g.save();
       g.globalAlpha = veil;
@@ -1067,9 +1085,10 @@ export class GridView {
       }
       // the sender flashes before the data leaves, the receiver when it lands;
       // both keep a quieter mark while the data goes back and forth
-      const blink = (x: number) => 0.55 + 0.45 * Math.cos(x * Math.PI * 4);
-      const sa = ph.lead > 0 ? blink(ph.lead) : ph.switched ? 0.3 * (1 - ph.after) : 0.4;
-      const da = ph.land > 0 ? blink(1 - ph.land) : ph.switched ? 0 : 0.4;
+      // two quick flashes, then a steady mark for the rest of the wait
+      const blink = (sec: number) => (sec < 0.8 ? 0.55 + 0.45 * Math.cos(sec * Math.PI * 5) : 0.85);
+      const sa = ph.parked === 'read' ? blink(ph.secs) : ph.switched ? 0.3 * (1 - ph.after) : 0.4;
+      const da = ph.parked === 'hold' ? blink(ph.secs) * Math.min(1, (1 - ph.after) / 0.3) : 0.4;
       g.save();
       if (src && sa > 0.02) skin.attention(dc, src, sa);
       if (dst && da > 0.02) skin.attention(dc, dst, da);
@@ -1077,6 +1096,9 @@ export class GridView {
     }
 
     // ---- things in motion ----
+    // In focus mode data is drawn at least full size, however far out the
+    // camera is: it is there to be read.
+    const ddc: Dc = staged(ev) ? { ...dc, z: Math.max(dc.z, 1) } : dc;
     g.save();
     if (ev && trace) {
       const belt = animKey ? scene.belts.find((b) => b.key === animKey) : null;
@@ -1084,37 +1106,51 @@ export class GridView {
         const walk = new PathWalk(belt.pts.map((p) => this.sp(p)));
         const travel = ph!.travel;
         const ease = travel < 0.5 ? 2 * travel * travel : 1 - Math.pow(-2 * travel + 2, 2) / 2;
-        if (travel < 1 && ev.k === 'call') {
+        // In focus the data never blinks out: it stays put while parked, and
+        // sits at the receiver for the short dwell that ends each pass.
+        const shown = travel < 1 || staged(ev);
+        if (shown && ev.k === 'call') {
           if (!ev.args.length) {
-            const p = walk.at(ease * walk.length);
-            skin.plate(dc, p[0], p[1], '()', 'void');
+            const p = walk.at(Math.min(walk.length, cs * 0.4 + ease * (walk.length - cs * 0.8)));
+            skin.plate(ddc, p[0], p[1], '()', 'void');
           }
-          // real data rides the belt: strings as text, structs as crates
+          // Real data rides the belt as a train that always fits on it:
+          // strings as text, structs as crates, every argument visible.
           const after = trace.snaps[fr!.i + 1] ?? null;
+          const unit = ddc.z * CELL_PX; // plates are drawn at ddc's scale
+          const sizes = ev.args.map((a) => (a.data?.k === 'struct' ? unit * 2.6 : unit * 0.8));
+          const L = sizes.reduce((a, b) => a + b, 0);
+          // (fast mode keeps its original run: from the port to the end, spaced as before)
+          const focus = MODE === 'focus';
+          const fit = focus ? Math.min(1, (walk.length * 0.9) / Math.max(1e-6, L)) : 1;
+          const head0 = focus ? (L - sizes[0] * 0.5) * fit : 0;
+          const head1 = focus ? walk.length - sizes[0] * fit * 0.5 : walk.length;
+          const head = head0 + ease * Math.max(0, head1 - head0);
           let gap = 0;
-          ev.args.forEach((a) => {
-            const d = ease * walk.length - gap;
-            gap += a.data?.k === 'struct' ? cs * 2.6 : cs * 0.8;
+          ev.args.forEach((a, k) => {
+            const d = head - gap;
+            gap += focus ? ((sizes[k] + (sizes[k + 1] ?? 0)) / 2) * fit : sizes[k];
             if (d < 0) return;
             const p = walk.at(d);
-            if (a.data?.k === 'struct') skin.crate(dc, p[0], p[1], crateOf(a.data, 'arg'));
-            else if (a.data?.k === 'str') skin.plate(dc, p[0], p[1], clip(a.data.text, 18), 'ptr');
-            else skin.plate(dc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg');
+            if (a.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(a.data, 'arg'));
+            else if (a.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(a.data.text, 18), 'ptr');
+            else skin.plate(ddc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg');
           });
-        } else if (travel < 1 && ev.k === 'ret') {
-          const p = walk.at((1 - ease) * walk.length);
-          if (ev.data?.k === 'struct') skin.crate(dc, p[0], p[1], crateOf(ev.data, 'ret'));
-          else if (ev.data?.k === 'str') skin.plate(dc, p[0], p[1], clip(ev.data.text, 18), 'ret');
-          else skin.plate(dc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
+        } else if (shown && ev.k === 'ret') {
+          const half = (ev.data?.k === 'struct' ? 1.3 : 0.4) * ddc.z * CELL_PX;
+          const p = walk.at(MODE === 'focus' ? Math.min(walk.length - half, Math.max(half, (1 - ease) * walk.length)) : (1 - ease) * walk.length);
+          if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
+          else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret');
+          else skin.plate(ddc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
         }
       }
-      if (ev.k === 'write' && ev.via !== null && !ph!.switched && ph!.travel < 1) {
+      if (ev.k === 'write' && ev.via !== null && ((!ph!.switched && ph!.travel < 1) || ph!.parked)) {
         const a = anchors.get(ev.via);
         const b = anchors.get(ev.cell);
         if (a && b) {
-          const [x, y] = bez(this.wireCurve(a, b), ph!.travel);
-          skin.pulse(dc, x, y);
-          skin.plate(dc, x, y - cs * 0.42, fmtVal(ev.val), 'arg');
+          const [x, y] = bez(this.wireCurve(a, b), Math.max(0.08, Math.min(0.92, ph!.travel)));
+          skin.pulse(ddc, x, y);
+          skin.plate(ddc, x, y - cs * 0.42, fmtVal(ev.val), 'arg');
         }
       }
     }
