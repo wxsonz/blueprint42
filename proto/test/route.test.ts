@@ -25,7 +25,7 @@ const sharesSegment = (p: Seg, q: Seg) => {
 };
 
 describe('routing', () => {
-  for (const key of ['gnl', 'pointer', 'swap', 'recursion']) {
+  for (const key of ['reader', 'pointer', 'swap', 'recursion']) {
     it(`${key}: no two calls share a segment`, () => {
       const m = model(key);
       const l = new Layout();
@@ -38,7 +38,7 @@ describe('routing', () => {
   }
 
   it('starts each belt on its caller and ends on its callee', () => {
-    const m = model('gnl');
+    const m = model('reader');
     const l = new Layout();
     l.sync(m);
     const scene = buildScene(l, m, null);

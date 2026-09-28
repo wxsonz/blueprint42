@@ -5,9 +5,9 @@ import { model, setupParser } from './helpers';
 beforeAll(setupParser);
 
 describe('M2 authoring expressions and suggestions', () => {
-  it('finds GNL’s typed byte buffer and size markers', () => {
-    const shapes = bufferShapes(model('gnl'));
-    expect(shapes).toContainEqual({ type: 't_gnl', data: 'data', markers: ['len', 'cap', 'pos'] });
+  it('finds the line reader’s typed byte buffer and size markers', () => {
+    const shapes = bufferShapes(model('reader'));
+    expect(shapes).toContainEqual({ type: 't_reader', data: 'data', markers: ['len', 'cap', 'pos'] });
   });
 
   it('accepts observation and rejects calls or writes', () => {

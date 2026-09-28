@@ -110,7 +110,7 @@ export function bufferShapes(model: Model): BufferShape[] {
   return out;
 }
 
-// Struct definitions by every name they go by: `struct s_gnl` and `t_gnl`.
+// Struct definitions by every name they go by: `struct s_reader` and `t_reader`.
 export function structTable(trees: Tree[]): Map<string, Var[]> {
   const byTag = new Map<string, Var[]>();
   const aliases = new Map<string, string>(); // typedef name -> "struct tag" (or the body's own key)
@@ -151,7 +151,7 @@ function fieldsIn(body: Node): Var[] {
   return body.namedChildren.filter((c): c is Node => !!c && c.type === 'field_declaration').flatMap((d) => varsOf(d));
 }
 
-// `t_gnl *buf`, `const struct s_x *p`, `t_vars v` → the struct's fields.
+// `t_reader *buf`, `const struct s_x *p`, `t_vars v` → the struct's fields.
 // Arrays and pointers to pointers stay rows of their own.
 export function fieldsOfType(type: string, table: Map<string, Var[]>): Var[] | undefined {
   const t = type.replace(/\b(const|volatile|restrict)\b/g, ' ').replace(/\s+/g, ' ').trim();

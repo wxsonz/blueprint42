@@ -1,6 +1,13 @@
-# ft_blueprint — Specification
+# blueprint42 — Specification
 
 Status: draft v0.1, 2026-09-27. Owner: wachaipr (42 Bangkok).
+
+> **Note (2026-10-02, renamed blueprint42).** The acceptance criteria below
+> were written against the author's own get_next_line (`gnl_*`), which stays
+> private. The public repo's fixture is `samples/line_reader/`, built to the
+> same shape (10 functions, 4 static, a function-local static table of
+> structs, a doubling buffer, reads of `BUFFER_SIZE`); the tests check the
+> same things on it. The tool's folder in a project is `.blueprint42/`.
 
 ---
 

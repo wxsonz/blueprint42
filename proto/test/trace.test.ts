@@ -29,8 +29,8 @@ describe('trace server (cc + gdb)', () => {
     expect(ret && ret.k === 'ret' && ret.val).toEqual({ k: 'int', v: 6 });
   }, 30000);
 
-  it('M3 acceptance: gnl_v3 with BUFFER_SIZE=4 on a 3-line input', async () => {
-    const s = sample('gnl');
+  it('M3 acceptance: the line reader with BUFFER_SIZE=4 on a 3-line input', async () => {
+    const s = sample('reader');
     const { r, t } = await trace(s.src, { stdin: s.stdin, defines: s.defines, files: s.files });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
     expect(r.stdout).toBe(s.stdin); // printed every line back
@@ -43,21 +43,21 @@ describe('trace server (cc + gdb)', () => {
     // the buffer doubles: a later block is twice the first one's size
     const sizes = allocs.map((e) => (e.k === 'alloc' ? e.size : 0));
     expect(sizes).toContain(sizes[0] * 2);
-    // every line get_next_line returns is a heap block main frees
-    const rets = t!.evs.filter((e) => e.k === 'ret' && e.fn === 'get_next_line');
+    // every line read_line returns is a heap block main frees
+    const rets = t!.evs.filter((e) => e.k === 'ret' && e.fn === 'read_line');
     const lineBlocks = rets.map((e) => (e.k === 'ret' && e.val.k === 'ptr' ? e.val.to : null)).filter((x) => x !== null);
     expect(lineBlocks.length).toBe(3);
     for (const c of lineBlocks) expect(frees.some((e) => e.k === 'free' && e.cell === c)).toBe(true);
-    // bufs is seen as the static chest owned by get_next_line
-    expect([...t!.cells.values()].some((c) => c.frame === -1 && c.owner === 'get_next_line' && c.name === 'bufs')).toBe(true);
+    // bufs is seen as the static chest owned by read_line
+    expect([...t!.cells.values()].some((c) => c.frame === -1 && c.owner === 'read_line' && c.name === 'bufs')).toBe(true);
   }, 60000);
 
-  it('M2 bindings: GNL pos follows len and strip capacity doubles', async () => {
-    const s = sample('gnl');
+  it('M2 bindings: the reader’s pos follows len and strip capacity doubles', async () => {
+    const s = sample('reader');
     const m = parse(s.src);
     const bindings: Sprite[] = [
-      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }] },
-      { id: 'pos', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->pos' } },
+      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'lr_fill', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }] },
+      { id: 'pos', kind: 'marker', x: 0, y: 0, binding: { scope: 'fn', fn: 'lr_fill', expr: 'buf->pos' } },
     ];
     const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
@@ -77,19 +77,19 @@ describe('trace server (cc + gdb)', () => {
     expect(t.snaps.at(-1)?.bound?.strip).toEqual({ bound: false });
   }, 60000);
 
-  it('M2 acceptance: the GNL factory table binds and every piece sees real values', async () => {
-    const s = sample('gnl');
+  it('M2 acceptance: the line reader’s factory table binds and every piece sees real values', async () => {
+    const s = sample('reader');
     const m = parse(s.src);
     const fn = (f: string, expr: string) => ({ scope: 'fn' as const, fn: f, expr });
     // bufs chests → buf strip with pos/len/cap → drill → scanner → inserter → line chest
     const table: Sprite[] = [
-      { id: 'bufs', kind: 'chest', x: 0, y: 0, label: 'bufs[fd]', binding: fn('get_next_line', 'bufs[fd].len') },
-      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: fn('gnl_fill_line', 'buf->data'), lengthExpr: 'buf->cap',
+      { id: 'bufs', kind: 'chest', x: 0, y: 0, label: 'bufs[fd]', binding: fn('read_line', 'bufs[fd].len') },
+      { id: 'strip', kind: 'strip', x: 0, y: 0, binding: fn('lr_fill', 'buf->data'), lengthExpr: 'buf->cap',
         markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }, { expr: 'buf->cap', label: 'cap' }] },
-      { id: 'drill', kind: 'drill', x: 0, y: 0, label: 'read()', binding: fn('gnl_append_chunk', 'n_read') },
-      { id: 'scanner', kind: 'marker', x: 0, y: 0, label: 'scanner', binding: fn('gnl_find_delim', 'from') },
-      { id: 'inserter', kind: 'copy', x: 0, y: 0, label: 'inserter', binding: fn('gnl_copy', 'n') },
-      { id: 'line', kind: 'chest', x: 0, y: 0, label: 'line', binding: fn('get_next_line', 'line') },
+      { id: 'drill', kind: 'drill', x: 0, y: 0, label: 'read()', binding: fn('lr_append', 'n_read') },
+      { id: 'scanner', kind: 'marker', x: 0, y: 0, label: 'scanner', binding: fn('lr_find_nl', 'from') },
+      { id: 'inserter', kind: 'copy', x: 0, y: 0, label: 'inserter', binding: fn('lr_copy', 'n') },
+      { id: 'line', kind: 'chest', x: 0, y: 0, label: 'line', binding: fn('read_line', 'line') },
     ];
     const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings: table });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
@@ -104,35 +104,35 @@ describe('trace server (cc + gdb)', () => {
     expect(reads.some((v) => v > 0)).toBe(true);
   }, 60000);
 
-  // The strip the author would put on get_next_line's buffer, with GNL's invariants.
-  const gnlStrip = (): Sprite => ({
-    id: 'buf', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'get_next_line', expr: 'buf->data' }, lengthExpr: 'buf->cap',
+  // The strip the author would put on read_line's buffer, with the reader’s invariants.
+  const readerStrip = (): Sprite => ({
+    id: 'buf', kind: 'strip', x: 0, y: 0, binding: { scope: 'fn', fn: 'read_line', expr: 'buf->data' }, lengthExpr: 'buf->cap',
     markers: [{ expr: 'buf->pos', label: 'pos' }, { expr: 'buf->len', label: 'len' }, { expr: 'buf->cap', label: 'cap' }],
     // the author's own: data[len] and the following sizeof(size_t) - 1 bytes are zero
     invariants: ['pos <= len <= cap', 'on return: zero after len for 8'],
   });
-  const runGnl = async (src: string) => {
-    const s = sample('gnl');
+  const runReader = async (src: string) => {
+    const s = sample('reader');
     const m = parse(src);
-    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings: [gnlStrip()] });
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files, bindings: [readerStrip()] });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
     return convertGdb(r, m, src);
   };
 
-  it('M4: the correct gnl_v3 keeps its invariants (no false alarms)', async () => {
-    const t = await runGnl(sample('gnl').src);
+  it('M4: the correct the line reader keeps its invariants (no false alarms)', async () => {
+    const t = await runReader(sample('reader').src);
     expect(t.snaps.some((snap) => snap.bound?.buf?.bound)).toBe(true);
-    const fa = findViolations(t, [gnlStrip()]);
-    expect(fa, JSON.stringify(fa.map((v) => ({ ...v, lineText: sample("gnl").src.split("\n")[v.line ?? 0] }))) ).toEqual([]);
+    const fa = findViolations(t, [readerStrip()]);
+    expect(fa, JSON.stringify(fa.map((v) => ({ ...v, lineText: sample("reader").src.split("\n")[v.line ?? 0] }))) ).toEqual([]);
   }, 60000);
 
-  it('M4 acceptance: an off-by-one in gnl_consume is caught by pos <= len at the exact step', async () => {
-    const good = sample('gnl').src;
+  it('M4 acceptance: an off-by-one in lr_consume is caught by pos <= len at the exact step', async () => {
+    const good = sample('reader').src;
     const bad = good.replace('buf->pos = line_end;', 'buf->pos = line_end + 1;');
     expect(bad).not.toBe(good);
     const injected = bad.split('\n').findIndex((l) => l.includes('buf->pos = line_end + 1;'));
-    const t = await runGnl(bad);
-    const v = findViolations(t, [gnlStrip()]);
+    const t = await runReader(bad);
+    const v = findViolations(t, [readerStrip()]);
     const first = v.find((x) => x.invariant === 'pos <= len <= cap');
     expect(first, JSON.stringify(v)).toBeDefined();
     expect(first!.line).toBe(injected);

@@ -23,7 +23,7 @@ if (folder) {
   const path = resolve(process.env.INIT_CWD ?? process.cwd(), folder.replace(/^~(?=$|\/)/, process.env.HOME ?? '~'));
   const s = await stat(path).catch(() => null);
   if (!s?.isDirectory()) {
-    console.error(`ft_blueprint: ${path} is not a folder`);
+    console.error(`blueprint42: ${path} is not a folder`);
     process.exit(1);
   }
   process.env.FTB_OPEN = path;

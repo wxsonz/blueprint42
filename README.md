@@ -1,55 +1,106 @@
-# ft_blueprint
+# blueprint42
 
 > See what goes into what.
 
-A keyboard-first code editor for 42 students where the program you type also
-shows up as a **factory on a 2D grid**, Factorio-style: functions are
-machines, calls are belts, buffers are conveyor strips with cursors riding on
-them, heap blocks are chests. Run the code and the factory moves, using values
-from the real execution, not from a diagram someone drew and hoped was right.
-
-## Why
-
-Reading C means building a machine in your head and running it there. For
-straightforward code that's fine. For code that's been optimized hard (a
-get_next_line with SWAR scans, a cursor instead of memmove, doubling growth and
-a zeroed tail invariant), the mental model takes a long time to settle. The
-author ends up writing pages of comments that are really describing a picture:
-*"bytes before `pos` are leftovers…"*, *"re-scans only the bytes that chunk
-just added…"*.
-
-ft_blueprint gives that picture a place to live:
-
-- **The author** places the design that's already in their head, ties it to
-  real variables, and watches it run. If the picture and the run disagree,
-  that's a bug or a misunderstanding, and either way it's worth knowing.
-- **The evaluator** gets a 30-second animation instead of a 20-minute code tour.
-- **The learner** sees pointers, heap lifetimes, `static` state and leaks,
-  which are the parts of C that text hides best.
-
-## Core idea in one line
+A code viewer for 42 students where the C you write also shows up as a
+**factory on a 2D grid**: functions are machines, calls are belts, buffers
+are conveyor strips with cursors riding on them, statics and heap blocks are
+chests. Run the program and the factory moves, with values from the real
+execution (your code compiled with the 42 flags and stepped under gdb), not
+from a diagram someone drew and hoped was right.
 
 **Text is the source of truth; the grid is a live view of it, plus a layout
-the author arranges.** You never program by dragging blocks around. You type C
-(vim keybinds), and the grid keeps up.
+you arrange.** You never program by dragging blocks around. You type C (in
+the built-in editor with optional vim keys, or in Neovim), and the grid keeps
+up.
+
+## What it shows
+
+- **Every function as a machine, from its code.** Each machine holds its
+  storage (parameters and locals, struct fields unfolded), a station per
+  statement, and the memory it can reach. Calls are belts between machines;
+  recursion gets one copy of the machine per level.
+- **The run, statement by statement.** Play, pause and scrub: the running
+  statement lights up in place, what it reads flies in, the expression fills
+  with values (`6 == 8 → false`), and what it writes flies out. Loops count
+  their rounds; ifs show the way they went.
+- **Data in flight.** Arguments ride the belts into the callee and return
+  values ride back, strings as their text and structs as their fields. A
+  panel spells each exchange out: who called whom, with what, on which line.
+- **Real memory.** Heap blocks appear when malloc'd and vanish when freed;
+  byte buffers are drawn as strips with their `pos`/`len`/`cap` markers
+  moving. Leaks are reported at exit, crashes (a segfault, an abort) stop the
+  run at the statement that died.
+- **Your own design on top.** Place strips, markers and chests on the grid,
+  bind them to real expressions (`buf->data` with length `buf->cap`), and
+  state invariants (`pos <= len <= cap`). A violation is flagged at the exact
+  step it first happens.
+- **Whole projects.** Open a folder: one module per `.c` file, calls
+  crossing between them, headers linked the way the compiler does. It builds
+  with the project's own Makefile (sub-makes for libft included), or with a
+  driver `main` kept in `.blueprint42/` for a library.
+- **Live edits from any editor.** The Neovim plugin streams your unsaved
+  buffers and cursor to the page; double-click a machine and nvim jumps to
+  it. Nothing is ever written to disk without an explicit, confirmed Save.
+- **Twenty-six skins.** From Classic Mac and Windows XP to the PlayStation
+  line (the PS3's XMB with its wave, the PS4's twisting ribbon), each
+  drawing the same factory its own way.
+
+## Try it
+
+You need Node 20+, and for real execution `cc` and `gdb` built with Python
+(any Linux distribution's gdb is).
+
+```sh
+cd proto
+npm install
+npm run dev                  # http://localhost:5173
+npm run dev -- ~/42/libft    # …and open that folder, like `code <folder>`
+```
+
+Pick something from **Examples** on the top bar:
+
+| Runs in your browser | Real C under gdb | Projects |
+| --- | --- | --- |
+| pointer in, value out | strings & malloc | line reader (several files) |
+| swap | arrays: bubble sort | libft + Makefile |
+| static counter | structs | |
+| factorial, fibonacci | linked list | |
+| gcd (loops) | a crash, a leak | |
+| | line reader (stdin) | |
+
+The first column runs in the built-in interpreter (ints, pointers, loops,
+recursion, statics), so it also works in the static build (`npm run build`,
+no server). Everything else needs the local server, which compiles and traces
+the program.
+
+### Neovim
+
+Add the plugin from `proto/nvim` (for lazy.nvim:
+`{ dir = '<repo>/proto/nvim', opts = { port = 5173 } }`), start the page with
+`npm run dev`, then `:B42Connect` in nvim. `:B42Open` opens the current
+project in the page.
 
 ## Scope
 
-Deliberately limited to the 42 Common Core: C under the Norminette rules first.
-Its constraints (≤25 lines per function, ≤4 params, ≤5 functions per file,
-no `for`/`switch`/ternary) keep every machine small and uniform, which is what
-makes this possible to draw at all.
-
-## Status
-
-Pre-prototype. Start with [`SPEC.md`](SPEC.md). The current target is
-**Milestone 0 → 1** (sandbox editor plus live grid view, no code execution yet).
+Deliberately limited to the 42 Common Core: C under the Norminette rules.
+Its constraints (at most 25 lines per function, 4 parameters and 5 functions
+per file, no `for`/`switch`/ternary) keep every machine small and uniform,
+which is what makes this possible to draw at all.
 
 ## Layout
 
 ```
-README.md        this file
-SPEC.md          principles, metaphor, architecture, milestones
-CLAUDE.md        working notes for an agent picking this up
-samples/gnl_v3/  first built-in sandbox sample (author's own get_next_line v3)
+README.md             this file
+SPEC.md               principles, metaphor, architecture, milestones
+DECISIONS.md          every decision along the way, with the reason
+CLAUDE.md, HANDOFF.md working notes for an agent picking this up
+samples/line_reader/  a get_next_line-style line reader: an example, and the
+                      fixture the acceptance tests run on
+proto/                the app (Vite + TypeScript, tree-sitter, a gdb tracer)
+```
+
+```sh
+npm run check    # type-check
+npm test         # unit tests, plus integration tests that run cc and gdb
 ```

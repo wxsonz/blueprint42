@@ -116,8 +116,8 @@ html[data-skin='ps5'] {
    and the white ring standing off whatever has focus */
 html[data-skin='ps5'] body { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.05' stroke-width='1'%3E%3Cpath d='M3.5 8l3-5 3 5z'/%3E%3Ccircle cx='19' cy='5.5' r='2.7'/%3E%3Cpath d='M3.5 16.5l5 5M8.5 16.5l-5 5'/%3E%3Crect x='16.3' y='16.3' width='5.4' height='5.4'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(rgba(11,12,16,0.1), rgba(11,12,16,0.6) 55%, rgba(11,12,16,0.96)), radial-gradient(circle at 72% 18%, rgba(46,92,150,0.75), transparent 55%), radial-gradient(circle at 35% 5%, rgba(150,70,60,0.45), transparent 45%), radial-gradient(circle at 90% 55%, rgba(210,140,70,0.28), transparent 40%), #0b0c10; }
 html[data-skin='ps5'] #app, html[data-skin='ps5'] #panes, html[data-skin='ps5'] #top, html[data-skin='ps5'] #playbar, html[data-skin='ps5'] #status { background: transparent; border: none; }
-html[data-skin='ps5'] #samples button, html[data-skin='ps5'] #project-chip button { background: transparent; border: none; box-shadow: none; font-weight: 300; font-size: 16px; color: #d6d8de; padding: 3px 10px; }
-html[data-skin='ps5'] #samples button[aria-pressed='true'], html[data-skin='ps5'] #samples button.on { font-weight: 600; color: #ffffff; background: transparent; }
+html[data-skin='ps5'] #examples, html[data-skin='ps5'] #project-chip button { background: transparent; border: none; box-shadow: none; font-weight: 300; font-size: 16px; color: #d6d8de; padding: 3px 10px; }
+html[data-skin='ps5'] #project-chip button[aria-pressed='true'] { font-weight: 600; color: #ffffff; background: transparent; }
 html[data-skin='ps5'] #top .sysclock { display: inline; font: 300 18px 'Source Sans 3', sans-serif; color: #ffffff; }
 html[data-skin='ps5'] #top .sysclock s { display: none; }
 html[data-skin='ps5'] .pane { backdrop-filter: none; }

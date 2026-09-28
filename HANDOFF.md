@@ -1,8 +1,13 @@
-# Handoff: ft_blueprint
+# Handoff: blueprint42 (formerly ft_blueprint)
 
 For the next agent picking this up. Read in this order: `CLAUDE.md` (rules),
 `SPEC.md` (principles and milestones), `DECISIONS.md` (every deviation and
 why), then this file (current state and the next job).
+
+> **2026-10-02:** renamed blueprint42. The test fixture is now
+> `samples/line_reader/` (the author's GNL stays private); mentions of GNL
+> and `gnl_*` below are history. The tool's project folder is `.blueprint42/`
+> (old `.ft_blueprint/` read as a fallback). Samples are one Examples menu.
 
 ## Where things stand (2026-09-28)
 

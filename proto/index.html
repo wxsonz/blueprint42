@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ft_blueprint</title>
+    <title>blueprint42</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect x=%271%27 y=%273%27 width=%275%27 height=%274%27 fill=%27%2300e000%27/%3E%3Crect x=%2710%27 y=%279%27 width=%275%27 height=%274%27 fill=%27%2300e000%27/%3E%3Cpath d=%27M6 5h2v6h2%27 stroke=%27%2300e000%27 fill=%27none%27/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,11 +18,14 @@
       <header id="top">
         <div class="brand">
           <span class="logo" aria-hidden="true"></span>
-          <span class="name">ft_blueprint</span>
+          <span class="name">blueprint42</span>
         </div>
         <button id="btn-open" class="btn" title="Open a project folder (Ctrl+O)">Open Folder…</button>
         <div id="project-chip" class="seg" hidden></div>
-        <nav id="samples" class="seg" aria-label="Samples"></nav>
+        <div class="examples">
+          <button id="examples" class="btn" aria-haspopup="menu" aria-expanded="false" title="Examples of what the blueprint can show"></button>
+          <div id="example-list" class="example-list" role="menu" hidden></div>
+        </div>
         <span class="grow"></span>
         <span class="sysclock" aria-hidden="true"></span>
         <div id="tints" class="tints" role="radiogroup" aria-label="Theme colour" hidden></div>

@@ -8,7 +8,7 @@ beforeAll(setupParser);
 
 describe('layout', () => {
   it('places every callee right of all its callers (no back-edges)', () => {
-    const m = model('gnl');
+    const m = model('reader');
     const l = new Layout();
     l.sync(m);
     for (const f of m.fns) {
@@ -47,7 +47,7 @@ describe('layout', () => {
   });
 
   it('settles a layout saved when machines were small: no overlaps after', () => {
-    const m = model('gnl');
+    const m = model('reader');
     const l = new Layout();
     l.reset();
     l.sync(m);
@@ -60,22 +60,22 @@ describe('layout', () => {
   });
 
   it('tidies back to the fresh auto layout', () => {
-    const m = model('gnl');
+    const m = model('reader');
     const fresh = new Layout();
     fresh.reset();
     fresh.sync(m);
     const l = new Layout();
     l.reset();
     l.sync(m);
-    l.setPos('func:gnl_copy', 200, 200);
-    l.waypoints.set('get_next_line>gnl_fill_line', { x: 3, y: 3 });
+    l.setPos('func:lr_copy', 200, 200);
+    l.waypoints.set('read_line>lr_fill', { x: 3, y: 3 });
     l.tidy(m);
     expect(l.waypoints.size).toBe(0);
     for (const [id, n] of fresh.nodes) expect([id, l.nodes.get(id)!.place]).toEqual([id, n.place]);
   });
 
   it('closed machines are small, keep their place in the blueprint, and open again', () => {
-    const m = model('gnl');
+    const m = model('reader');
     const l = new Layout();
     l.reset();
     l.sync(m);

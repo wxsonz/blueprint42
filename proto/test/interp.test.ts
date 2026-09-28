@@ -46,9 +46,9 @@ describe('interpreter', () => {
   });
 
   it('refuses what it cannot run instead of inventing values', () => {
-    const gnl = run(model('gnl')); // arrays, read(), malloc(): gdb's job
-    expect(gnl.error).not.toBeNull();
-    expect(gnl.exit).toBeNull();
+    const reader = run(model('reader')); // arrays, read(), malloc(): gdb's job
+    expect(reader.error).not.toBeNull();
+    expect(reader.exit).toBeNull();
     const ext = run(parse('int\tmain(void)\n{\n\treturn (write(1, "x", 1));\n}\n'));
     expect(ext.error?.msg).toMatch(/trace server/);
   });

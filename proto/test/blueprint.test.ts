@@ -6,11 +6,11 @@ describe('blueprint annotation layer', () => {
   it('round trips placements, routes, sprites and bindings without source', () => {
     const blueprint: Blueprint = {
       version: 1,
-      nodes: { 'func:get_next_line': { x: 4, y: -2, pinned: true } },
-      waypoints: { 'main>get_next_line': { x: 3, y: 1 } },
+      nodes: { 'func:read_line': { x: 4, y: -2, pinned: true } },
+      waypoints: { 'main>read_line': { x: 3, y: 1 } },
       sprites: [
-        { id: 'buf', kind: 'strip', x: 7, y: 8, binding: { scope: 'fn', fn: 'gnl_fill_line', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }] },
-        { id: 'ins', kind: 'copy', x: 9, y: 2, label: 'inserter', binding: { scope: 'fn', fn: 'gnl_copy', expr: 'n' } },
+        { id: 'buf', kind: 'strip', x: 7, y: 8, binding: { scope: 'fn', fn: 'lr_fill', expr: 'buf->data' }, lengthExpr: 'buf->cap', markers: [{ expr: 'buf->pos', label: 'pos' }] },
+        { id: 'ins', kind: 'copy', x: 9, y: 2, label: 'inserter', binding: { scope: 'fn', fn: 'lr_copy', expr: 'n' } },
       ],
     };
     const json = serializeBlueprint(blueprint);

@@ -103,7 +103,7 @@ kbd {
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='2' width='6' height='5'/%3E%3Crect x='9' y='9' width='6' height='5'/%3E%3Cpath d='M7 4h3v7h-1V5H7z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .lbl { color: var(--bar-dim, var(--fg-dim)); font-size: 0.92em; }
-#samples { overflow: hidden; }
+
 
 /* ---------- panes ---------- */
 #panes {
@@ -568,3 +568,20 @@ kbd {
 #page-bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 #page-bg[hidden] { display: none; }
 #page-bg:not([hidden]) ~ #app { position: relative; z-index: 1; }
+
+/* the examples: one dropdown on the top bar */
+.examples { position: relative; }
+#examples { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+#examples .cur { opacity: 0.7; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+#examples .caret { font-size: 0.8em; opacity: 0.7; }
+.example-list { position: absolute; left: 0; top: calc(100% + 6px); z-index: 60; width: min(560px, 92vw); max-height: 76vh; overflow: auto; padding: 8px;
+  font-family: var(--label-font, var(--font-ui)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
+.example-list[hidden] { display: none; }
+.example-list section + section { margin-top: 8px; border-top: var(--rule, 1px solid rgba(128,128,128,0.25)); padding-top: 6px; }
+.example-list h3 { margin: 2px 6px 4px; font: 700 calc(11px * var(--label-scale, 1)) var(--label-font, var(--font-ui)); text-transform: uppercase; letter-spacing: 0.06em; }
+.example-list h3 span { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--panel-dim); margin-top: 1px; }
+.example-list button { display: block; width: 100%; text-align: left; padding: 5px 8px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.example-list button:hover { background: color-mix(in srgb, var(--panel-fg) 10%, transparent); }
+.example-list button[aria-checked='true'] { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.example-list button b { font-weight: 600; }
+.example-list button .tag { display: block; font-size: 0.86em; color: var(--panel-dim); }

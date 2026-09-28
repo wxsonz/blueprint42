@@ -64,7 +64,7 @@ const exists = (p) => access(p).then(() => true, () => false);
 // Build a project copy. With a Makefile: `make` with CC carrying -g -O0 (the
 // Makefile keeps its own CFLAGS, -Werror included), then its NAME is the
 // program, or a library the driver links against. Without: cc every .c with
-// the 42 flags. `.ft_blueprint/main.c` is the author's driver, if sent.
+// the 42 flags. `.blueprint42/main.c` is the author's driver, if sent.
 async function buildProject(dir, paths, defines) {
   const defs = defines.map((d) => `-D${d}`);
   const incs = [...new Set(paths.filter((p) => p.endsWith('.h')).map((p) => dirname(p)))].map((d) => `-I${d}`);

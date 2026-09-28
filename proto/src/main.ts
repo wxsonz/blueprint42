@@ -152,7 +152,7 @@ const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: st
   { kind: 'chest', name: 'Chest', c: 'value or storage', live: true, text: 'Drag onto the grid and bind a value.' },
   { kind: 'marker' as IconKind, name: 'Marker', c: 'cursor or index', live: true, text: 'Standalone card showing a bound index. To make a cursor ride a strip, add it in that strip’s Markers field.' },
   { kind: 'drill', name: 'Drill', c: 'input fd', live: true, text: 'Drag onto the grid and bind its source.' },
-  { kind: 'copy', name: 'Inserter', c: 'memcpy / copy loop', live: true, text: 'Drag onto the grid and bind what the copy is moving, e.g. the bytes left (n) in gnl_copy.' },
+  { kind: 'copy', name: 'Inserter', c: 'memcpy / copy loop', live: true, text: 'Drag onto the grid and bind what the copy is moving, e.g. the bytes left (n) in lr_copy.' },
   { kind: 'train', name: 'Train', c: 'linked list', live: true, text: 'Drag onto the grid and bind a pointer.' },
   { kind: 'stack', name: 'Stack', c: 'stack A / B', live: true, text: 'Drag onto the grid and bind a value.' },
 ];
@@ -844,7 +844,7 @@ function closeTab(path: string): void {
   projectSaveSoon();
 }
 
-// Bring the derived .ft_blueprint files up to date with the run settings and
+// Bring the derived .blueprint42 files up to date with the run settings and
 // the author's layout; unchanged content keeps the disk text (not dirty).
 function refreshMeta(): void {
   const p = S.project;
@@ -1009,7 +1009,7 @@ function renderProjectChrome(): void {
     b.setAttribute('aria-pressed', String(p ? b.dataset.id === 'gdb' : b.dataset.id === S.engine));
   });
   if (!p) {
-    document.title = 'ft_blueprint';
+    document.title = 'blueprint42';
     return;
   }
   const dirty = p.readOnly ? [...p.files.values()].filter((f) => isDirty(f) && isSource(f.path)).length : dirtyFiles().length;
@@ -1020,7 +1020,7 @@ function renderProjectChrome(): void {
   });
   chip.querySelector('button')!.addEventListener('click', () => void openFolderDialog());
   $('btn-save').textContent = dirty ? `Save… (${dirty})` : 'Save…';
-  document.title = `${dirty ? '● ' : ''}${p.name} — ft_blueprint`;
+  document.title = `${dirty ? '● ' : ''}${p.name} — blueprint42`;
   // tabs
   const tabs = $('tabs');
   tabs.innerHTML = p.tabs.map((path) => {
@@ -1924,14 +1924,34 @@ function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
 }
 
 // ---------------- panels ----------------
+// The examples: one dropdown on the top bar, grouped by what they need (the
+// browser alone, or gdb through the local server), then the sample projects.
+const EXAMPLE_GROUPS: { id: Sample['group']; name: string; note: string }[] = [
+  { id: 'basics', name: 'Runs in your browser', note: 'the built-in interpreter: ints, pointers, loops, recursion, statics' },
+  { id: 'memory', name: 'Real C, traced under gdb', note: 'arrays, structs, the heap, crashes and leaks (needs npm run dev)' },
+  { id: 'io', name: 'Reading input', note: 'real read() calls on the stdin you give it (gdb)' },
+];
 function renderSampleTabs(): void {
-  const nav = $('samples');
+  const btn = $<HTMLButtonElement>('examples');
+  const list = $('example-list');
   const openSample = S.project?.readOnly ? SAMPLE_PROJECTS.find((x) => x.name === S.project!.name) : undefined;
-  nav.innerHTML = [
-    ...SAMPLES.map((s) => `<button data-key="${s.key}" aria-pressed="${!S.project && s === S.sample}" title="${esc(s.blurb)}">${esc(s.title)}</button>`),
-    ...SAMPLE_PROJECTS.map((s) => `<button data-key="${s.key}" aria-pressed="${openSample === s}" title="${esc(s.blurb)}">${esc(s.title)}</button>`),
+  const current = openSample?.title ?? (S.project ? null : S.sample.title);
+  btn.innerHTML = `Examples${current ? `<span class="cur">${esc(current)}</span>` : ''}<span class="caret">▾</span>`;
+  const item = (key: string, title: string, blurb: string, on: boolean) =>
+    `<button role="menuitemradio" data-key="${esc(key)}" aria-checked="${on}"><b>${esc(title)}</b><span class="tag">${esc(blurb)}</span></button>`;
+  list.innerHTML = [
+    ...EXAMPLE_GROUPS.map((g) => `<section><h3>${esc(g.name)}<span>${esc(g.note)}</span></h3>${SAMPLES.filter((s) => s.group === g.id).map((s) => item(s.key, s.title, s.blurb, !S.project && s === S.sample)).join('')}</section>`),
+    `<section><h3>Projects<span>several files opened as a folder: modules, headers, a Makefile (gdb)</span></h3>${SAMPLE_PROJECTS.map((s) => item(s.key, s.title, s.blurb, openSample === s)).join('')}</section>`,
   ].join('');
-  nav.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => loadSample(b.dataset.key)));
+  list.querySelectorAll<HTMLButtonElement>('button[data-key]').forEach((b) => b.addEventListener('click', () => {
+    list.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    loadSample(b.dataset.key);
+  }));
+  btn.onclick = () => {
+    list.hidden = !list.hidden;
+    btn.setAttribute('aria-expanded', String(!list.hidden));
+  };
 }
 
 function renderDock(): void {
@@ -3012,8 +3032,15 @@ async function boot(): Promise<void> {
   document.addEventListener('pointerdown', (e) => {
     const list = $('skin-list');
     if (!list.hidden && !(e.target as HTMLElement).closest('#skin-list, #skins')) list.hidden = true;
+    const ex = $('example-list');
+    if (!ex.hidden && !(e.target as HTMLElement).closest('#example-list, #examples')) (ex.hidden = true), $('examples').setAttribute('aria-expanded', 'false');
   });
-  document.addEventListener('keydown', (e) => e.key === 'Escape' && ($('skin-list').hidden = true));
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    $('skin-list').hidden = true;
+    $('example-list').hidden = true;
+    $('examples').setAttribute('aria-expanded', 'false');
+  });
   $('feed').addEventListener('click', (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.kf');
     if (row) seek(Number(row.dataset.i));

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Working on ft_blueprint
+# Working on blueprint42 (formerly ft_blueprint)
 
 Read `SPEC.md` first. Principles in §1 override convenience.
 
@@ -10,9 +10,11 @@ Read `SPEC.md` first. Principles in §1 override convenience.
   plugin in `proto/nvim/`). Nothing further is planned; ask the author. M3 came before M2 by the author's decision in `DECISIONS.md`.
 - Record every deviation from the recommended stack, and every answer to an
   open question from SPEC §6, in `DECISIONS.md` (date, decision, why).
-- `samples/gnl_v3/` is the author's real get_next_line. Treat it as a
-  read-only fixture: never "fix" or reformat it. It's the acceptance test
-  input for M1–M4.
+- `samples/line_reader/` is the acceptance-test fixture for M1–M5.5 (a
+  get_next_line-style reader written for this repo; its tests pin exact
+  values from real runs, so treat it as read-only). The author's real
+  get_next_line (`samples/gnl_v3/`, if present locally) is private: never
+  commit, publish or bundle it.
 - Input model (author's call, see `DECISIONS.md`): vim is an optional mode
   of the **editor** only. The canvas is mouse-first like a node editor
   (middle-drag pan, wheel zoom, drag to move/re-route, double-click,
@@ -25,7 +27,9 @@ Read `SPEC.md` first. Principles in §1 override convenience.
   author's files, only inside a folder opened this session, and writes
   happen only after the author confirms the Save dialog. Never auto-save.
   Samples stay bundled at build time. Test projects go in a temp or
-  scratch folder, never in `samples/gnl_v3/`.
+  scratch folder, never in `samples/`. The tool's folder inside a project
+  is `.blueprint42/`; an old `.ft_blueprint/` is read as a fallback and never
+  written.
 - The author uses Arch Linux, nvim, and KDE Plasma on Wayland. Node, npm,
   python3, gdb, and cc are available.
 
@@ -36,7 +40,8 @@ sprites and bindings), M4 (invariants and truth checks), M5 (projects:
 folders, modules, Makefile builds, confirmed saves), M5.5 (machines are
 their insides: statements animated in place with real reads and writes) and
 M6 (live edits and cursor from any editor; `proto/nvim/` is the Neovim
-plugin: `:FtbConnect [port]`, `:FtbOpen`). No linter yet.
+plugin: `:B42Connect [port]`, `:B42Open`; the old `:Ftb…` names still work).
+No linter yet.
 
 ```sh
 cd proto
@@ -80,7 +85,8 @@ trace server (`server/trace.mjs` compiles with the 42 flags in a temp dir;
 `server/tracer.py` steps it under gdb's Python API; `src/gdb.ts` converts
 the result). The app picks one per program (Auto: gdb when the code calls
 functions it doesn't define). Samples can carry `stdin`, `-D` defines and
-read-only support files (`src/samples.ts`).
+read-only support files (`src/samples.ts`); the top bar's Examples menu
+groups them (interpreter / gdb / input) and the sample projects.
 
 Projects (M5): `src/workspace.ts` holds the open project (buffers vs disk,
 run settings, the driver rule); `parse.ts` `parseProject` links files
@@ -124,19 +130,19 @@ editor to its definition; the editor cursor highlights its node).
 - Rename tracking (keeping a machine's position across a rename) is an open
   question in SPEC §6. Pick an approach, record it in `DECISIONS.md`.
 
-## The GNL sample as a parser test
+## The line reader as a parser test
 
-M1 acceptance expects exactly 10 machines from `samples/gnl_v3/`:
-`get_next_line`, `gnl_fill_line`, `gnl_append_chunk`, `gnl_find_delim`,
-`gnl_swar_scan` (get_next_line.c) and `gnl_copy`, `gnl_reserve`,
-`gnl_extract_line`, `gnl_consume`, `gnl_reset` (get_next_line_utils.c).
-Things the extractor has to handle:
+M1 acceptance expects exactly 10 machines from `samples/line_reader/` (plus
+the sandbox `main` the sample appends): `read_line`, `lr_fill`, `lr_append`,
+`lr_find_nl`, `lr_scan` (line_reader.c) and `lr_copy`, `lr_grow`,
+`lr_take_line`, `lr_consume`, `lr_reset` (line_reader_utils.c). Things the
+extractor has to handle:
 
-- Norminette style: tab between return type and name, `static` functions,
-  signatures that wrap across lines (`gnl_swar_scan`).
-- `bufs` is a **function-local** `static t_gnl bufs[GNL_MAX_FD]` inside
-  `get_next_line`, not a file-scope global. It must still become a chest
-  (`static:get_next_line.bufs`).
-- `get_next_line.h` is mostly long `**` design comments plus `#ifndef`-guarded
-  macros (`BUFFER_SIZE`, `LINE`, `GNL_MAX_FD`), `typedef struct s_gnl`, and
-  `typedef enum e_gnl_status`.
+- Norminette style: tab between return type and name, `static` functions
+  (four of them), signatures that wrap across lines (`lr_fill`).
+- `bufs` is a **function-local** `static t_reader bufs[LR_MAX_FD]` inside
+  `read_line`, not a file-scope global. It must still become a chest
+  (`static:read_line.bufs`).
+- `line_reader.h` is a `**` design comment plus `#ifndef`-guarded macros
+  (`BUFFER_SIZE`, `LR_INIT_CAP`), `typedef struct s_reader`, and
+  `typedef enum e_lr_status`.

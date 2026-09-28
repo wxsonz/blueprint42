@@ -11,24 +11,24 @@ import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);
 
-let gnl: { t: Trace; m: Model } | null = null;
-async function gnlTrace() {
-  if (gnl) return gnl;
-  const s = sample('gnl');
+let cached: { t: Trace; m: Model } | null = null;
+async function readerTrace() {
+  if (cached) return cached;
+  const s = sample('reader');
   const m = parse(s.src);
   const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files });
   expect(r.ok, r.error ?? r.compile?.text).toBe(true);
-  gnl = { t: convertGdb(r, m, s.src), m };
-  return gnl;
+  cached = { t: convertGdb(r, m, s.src), m };
+  return cached;
 }
 const text = (m: Model, b: { fn: string; station: number }) => planOf(m.byName.get(b.fn)!).stations[b.station].text;
 
-describe('beats: every statement, in place (gdb, gnl_v3)', () => {
-  it('gnl_consume, first call: pos = line_end reads 6, then 6 == 8 → false', async () => {
-    const { t, m } = await gnlTrace();
-    const fn = m.byName.get('gnl_consume')!;
+describe('beats: every statement, in place (gdb, the line reader)', () => {
+  it('lr_consume, first call: pos = line_end reads 6, then 6 == 8 → false', async () => {
+    const { t, m } = await readerTrace();
+    const fn = m.byName.get('lr_consume')!;
     const tl = timelineOf(t, m);
-    const frame = t.evs.find((e) => e.k === 'call' && e.fn === 'gnl_consume')!.frame!;
+    const frame = t.evs.find((e) => e.k === 'call' && e.fn === 'lr_consume')!.frame!;
     const mine = tl.beats.filter((b) => b.frame === frame);
     expect(mine.map((b) => text(m, b))).toEqual(['buf->pos = line_end;', 'if (buf->pos == buf->len)', '}']);
     const [assign, sw] = mine;
@@ -41,13 +41,13 @@ describe('beats: every statement, in place (gdb, gnl_v3)', () => {
     expect(sw.result).toBe(false);
   }, 60000);
 
-  it('the call that empties the buffer writes each .data byte in turn, ×8', async () => {
-    const { t, m } = await gnlTrace();
-    const fn = m.byName.get('gnl_consume')!;
+  it('the call that empties the buffer writes each .data byte in turn, ×23 (all it held)', async () => {
+    const { t, m } = await readerTrace();
+    const fn = m.byName.get('lr_consume')!;
     const tl = timelineOf(t, m);
-    const frame = tl.beats.find((b) => b.fn === 'gnl_consume' && b.kind === 'switch' && b.result === true)!.frame;
+    const frame = tl.beats.find((b) => b.fn === 'lr_consume' && b.kind === 'switch' && b.result === true)!.frame;
     const body = tl.beats.filter((b) => b.frame === frame && text(m, b).startsWith('buf->data[i++]'));
-    expect(body).toHaveLength(8);
+    expect(body).toHaveLength(23); // hello\n + world of lines\n + !\n
     body.forEach((b, k) => {
       const w = writesOf(b, fn, t);
       expect(w.find((x) => x.key === 'f:buf.data')).toMatchObject({ index: k, text: "'\\0'" });
@@ -56,11 +56,11 @@ describe('beats: every statement, in place (gdb, gnl_v3)', () => {
       expect(computeText(b, fn, t)).toBe("buf->data[i++] = '\\0'"); // i++ stays as written
     });
     const loops = tl.beats.filter((b) => b.frame === frame && planOf(fn).stations[b.station].kind === 'loop');
-    expect(loops.map((b) => b.result)).toEqual([true, true, true, true, true, true, true, true, false]);
+    expect(loops.map((b) => b.result)).toEqual([...Array(23).fill(true), false]);
   }, 60000);
 
   it('covers every machine; calls and returns stay belt events; pace follows the mode', async () => {
-    const { t, m } = await gnlTrace();
+    const { t, m } = await readerTrace();
     const tl = timelineOf(t, m);
     expect(new Set(tl.beats.map((b) => b.fn))).toEqual(new Set(m.fns.map((f) => f.name).filter((n) => tl.beats.some((b) => b.fn === n))));
     expect(tl.beats.some((b) => b.fn === 'main')).toBe(true);
@@ -83,36 +83,36 @@ describe('beats: every statement, in place (gdb, gnl_v3)', () => {
       expect(beatLen(b, 'focus')).toBeGreaterThan(beatLen(b, 'fast') * 2);
     }
     // a statement that calls: its reads come first, its write after the call returns
-    const withCall = tl.beats.find((b) => b.fn === 'get_next_line' && b.calls && writesOf(b, m.byName.get(b.fn)!, t).length > 0)!;
+    const withCall = tl.beats.find((b) => b.fn === 'read_line' && b.calls && writesOf(b, m.byName.get(b.fn)!, t).length > 0)!;
     const ownAfter = [...Array(withCall.to - withCall.from + 1).keys()].map((q) => withCall.from + q).filter((i) => tl.beatAt[i] === tl.beats.indexOf(withCall));
     expect(t.evs.slice(withCall.from, withCall.to + 1).some((e) => e.k === 'call')).toBe(true);
     expect(tl.p1[ownAfter[0]]).toBeLessThan(1);
-    // the if around gnl_fill_line: its changes land with the return, after the call
-    const fill = tl.beats.find((b) => b.fn === 'get_next_line' && text(m, b).includes('gnl_fill_line'))!;
+    // the if around lr_fill: its changes land with the return, after the call
+    const fill = tl.beats.find((b) => b.fn === 'read_line' && text(m, b).includes('lr_fill'))!;
     expect(t.evs[fill.lastRet].k).toBe('ret');
     expect(tl.beatAt[fill.lastRet]).toBe(tl.beats.indexOf(fill));
     expect(tl.p0[fill.lastRet]).toBeGreaterThan(0.5);
     // mid-read of the if: the phase says so
-    const sw = tl.beats.find((b) => b.fn === 'gnl_consume' && b.kind === 'switch')!;
+    const sw = tl.beats.find((b) => b.fn === 'lr_consume' && b.kind === 'switch')!;
     expect(beatNow(t, m, sw.from + 0.1)?.phase).toBe('read');
   }, 60000);
 });
 
 describe('machines are their insides', () => {
   it('sizes a machine from its code, and calls leave at their statement', () => {
-    const m = parse(sample('gnl').src);
-    const consume = m.byName.get('gnl_consume')!;
-    const gnlFn = m.byName.get('get_next_line')!;
+    const m = parse(sample('reader').src);
+    const consume = m.byName.get('lr_consume')!;
+    const readFn = m.byName.get('read_line')!;
     const g = geomOf(consume);
     expect(g.memory.keys).toEqual(['f:buf.data']); // the only char * it can reach
     expect(machineSize(consume).w).toBeGreaterThan(10);
-    expect(machineSize(gnlFn).h).toBeGreaterThan(machineSize(consume).h);
-    // get_next_line calls gnl_fill_line from one statement: the belt leaves at that row
-    const site = gnlFn.calls.find((c) => c.callee === 'gnl_fill_line')!;
-    const y = callPortY(gnlFn, site.line)!;
-    const plan = planOf(gnlFn);
-    expect(plan.stations[plan.byLine.get(site.line)!].text).toContain('gnl_fill_line');
-    expect(y).toBeGreaterThan(geomOf(gnlFn).stations.y);
+    expect(machineSize(readFn).h).toBeGreaterThan(machineSize(consume).h);
+    // read_line calls lr_fill from one statement: the belt leaves at that row
+    const site = readFn.calls.find((c) => c.callee === 'lr_fill')!;
+    const y = callPortY(readFn, site.line)!;
+    const plan = planOf(readFn);
+    expect(plan.stations[plan.byLine.get(site.line)!].text).toContain('lr_fill');
+    expect(y).toBeGreaterThan(geomOf(readFn).stations.y);
   });
 
   it('beats on the interpreter too: evals give switch results, writes come from events', () => {

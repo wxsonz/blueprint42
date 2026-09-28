@@ -13,27 +13,27 @@ import { setupParser } from './helpers';
 
 beforeAll(setupParser);
 
-const gnlFiles = (withDriver = false): SourceFile[] =>
+const readerFiles = (withDriver = false): SourceFile[] =>
   Object.entries(SAMPLE_PROJECTS[0].files)
-    .filter(([p]) => !p.endsWith('.json') && (withDriver || !p.startsWith('.ft_blueprint/')))
+    .filter(([p]) => !p.endsWith('.json') && (withDriver || !p.startsWith('.blueprint42/')))
     .map(([path, text]) => ({ path, text }));
 
 const overlaps = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 describe('project model (M5)', () => {
-  it('links gnl_v3 across its two .c files', () => {
-    const m = parseProject(gnlFiles());
+  it('links the line reader across its two .c files', () => {
+    const m = parseProject(readerFiles());
     expect(m.project).toBe(true);
     expect(m.fns).toHaveLength(10);
-    expect(m.files).toEqual(['get_next_line.c', 'get_next_line_utils.c']);
-    expect(m.byName.get('gnl_copy')!.file).toBe('get_next_line_utils.c');
-    // get_next_line.c reaches into utils.c: cross-file call sites resolve, not external
-    const cross = m.fns.filter((f) => f.file === 'get_next_line.c').flatMap((f) => f.calls.filter((c) => m.byName.get(c.callee)!.file !== f.file));
+    expect(m.files).toEqual(['line_reader.c', 'line_reader_utils.c']);
+    expect(m.byName.get('lr_copy')!.file).toBe('line_reader_utils.c');
+    // line_reader.c reaches into utils.c: cross-file call sites resolve, not external
+    const cross = m.fns.filter((f) => f.file === 'line_reader.c').flatMap((f) => f.calls.filter((c) => m.byName.get(c.callee)!.file !== f.file));
     expect(cross.length).toBeGreaterThan(0);
     expect(m.fns.every((f) => f.externals.every((x) => !m.byName.has(x)))).toBe(true);
     // header prototypes make doors "declared"
-    expect(m.byName.get('get_next_line')!.declared).toBe(true);
+    expect(m.byName.get('read_line')!.declared).toBe(true);
   });
 
   it('keys colliding statics by file and resolves calls the way the linker does', () => {
@@ -64,45 +64,45 @@ describe('project model (M5)', () => {
 
 describe('modules (M5)', () => {
   it('starts collapsed except the module with main, and never overlaps', () => {
-    const m = parseProject(gnlFiles(true));
+    const m = parseProject(readerFiles(true));
     const l = new Layout();
     l.sync(m);
-    expect([...l.modules.keys()].sort()).toEqual(['.ft_blueprint/main.c', 'get_next_line.c', 'get_next_line_utils.c']);
-    expect(l.modules.get('.ft_blueprint/main.c')!.collapsed).toBe(false);
-    expect(l.modules.get('get_next_line.c')!.collapsed).toBe(true);
+    expect([...l.modules.keys()].sort()).toEqual(['.blueprint42/main.c', 'line_reader.c', 'line_reader_utils.c']);
+    expect(l.modules.get('.blueprint42/main.c')!.collapsed).toBe(false);
+    expect(l.modules.get('line_reader.c')!.collapsed).toBe(true);
     const rects = [...l.modules.keys()].map((f) => l.moduleRect(f));
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) expect(overlaps(rects[i], rects[j])).toBe(false);
   });
 
   it('draws calls between collapsed modules as one trunk that counts its call sites', () => {
-    const m = parseProject(gnlFiles(true));
+    const m = parseProject(readerFiles(true));
     const l = new Layout();
     l.sync(m);
     const scene = buildScene(l, m, null);
-    const trunk = scene.belts.find((b) => b.fromHost === moduleKey('get_next_line.c') && b.toHost === moduleKey('get_next_line_utils.c'))!;
-    const sites = m.fns.filter((f) => f.file === 'get_next_line.c').flatMap((f) => f.calls.filter((c) => m.byName.get(c.callee)!.file === 'get_next_line_utils.c'));
+    const trunk = scene.belts.find((b) => b.fromHost === moduleKey('line_reader.c') && b.toHost === moduleKey('line_reader_utils.c'))!;
+    const sites = m.fns.filter((f) => f.file === 'line_reader.c').flatMap((f) => f.calls.filter((c) => m.byName.get(c.callee)!.file === 'line_reader_utils.c'));
     expect(trunk.lines).toHaveLength(sites.length);
     expect(new Set(trunk.callees)).toEqual(new Set(sites.map((c) => c.callee)));
     // no belt stays inside a collapsed module
     expect(scene.belts.some((b) => b.fromHost === b.toHost)).toBe(false);
-    // main (open) calls get_next_line (collapsed): its belt lands on the block
-    expect(scene.belts.some((b) => b.from === 'main' && b.toHost === moduleKey('get_next_line.c'))).toBe(true);
+    // main (open) calls read_line (collapsed): its belt lands on the block
+    expect(scene.belts.some((b) => b.from === 'main' && b.toHost === moduleKey('line_reader.c'))).toBe(true);
   });
 
   it('opening a module routes to its machines and pushes only auto-placed modules', () => {
-    const m = parseProject(gnlFiles(true));
+    const m = parseProject(readerFiles(true));
     const l = new Layout();
     l.sync(m);
-    l.moveModule('.ft_blueprint/main.c', -30, -20); // the author pins main's module
-    const pinned = { ...l.modules.get('.ft_blueprint/main.c')! };
-    l.setCollapsed('get_next_line.c', false, m);
-    l.setCollapsed('get_next_line_utils.c', false, m);
-    expect(l.modules.get('.ft_blueprint/main.c')).toEqual(pinned);
+    l.moveModule('.blueprint42/main.c', -30, -20); // the author pins main's module
+    const pinned = { ...l.modules.get('.blueprint42/main.c')! };
+    l.setCollapsed('line_reader.c', false, m);
+    l.setCollapsed('line_reader_utils.c', false, m);
+    expect(l.modules.get('.blueprint42/main.c')).toEqual(pinned);
     const rects = [...l.modules.keys()].map((f) => l.moduleRect(f));
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) expect(overlaps(rects[i], rects[j])).toBe(false);
     const scene = buildScene(l, m, null);
     expect(scene.walls).toHaveLength(3);
-    expect(scene.belts.some((b) => b.from === 'gnl_fill_line' || b.to === 'gnl_copy')).toBe(true);
+    expect(scene.belts.some((b) => b.from === 'lr_fill' || b.to === 'lr_copy')).toBe(true);
     expect(scene.belts.every((b) => !b.toHost.startsWith('mod:'))).toBe(true);
     // every open machine sits inside its own wall
     for (const n of l.nodes.values()) {
@@ -110,8 +110,8 @@ describe('modules (M5)', () => {
       expect(n.place.x >= w.x && n.place.y >= w.y && n.place.x + 4 <= w.x + w.w).toBe(true);
     }
     // collapse again: machines hidden, wall gone, block back
-    l.setCollapsed('get_next_line_utils.c', true, m);
-    expect(buildScene(l, m, null).hosts.has(moduleKey('get_next_line_utils.c'))).toBe(true);
+    l.setCollapsed('line_reader_utils.c', true, m);
+    expect(buildScene(l, m, null).hosts.has(moduleKey('line_reader_utils.c'))).toBe(true);
   });
 
   it('keeps a libft-sized project (50 files) readable and fast', () => {
@@ -167,7 +167,7 @@ describe('file server (M5)', () => {
 
   it('rejects paths that could leave the project', () => {
     for (const bad of ['../x.c', '/etc/passwd', 'a/../../x.c', '.git/config', '', 'a//b.c', 'x\\\\y.c']) expect(safeRel(bad)).toBe(false);
-    for (const ok of ['main.c', 'src/a.c', '.ft_blueprint/blueprint.json', 'libft/ft_strlen.c']) expect(safeRel(ok)).toBe(true);
+    for (const ok of ['main.c', 'src/a.c', '.blueprint42/blueprint.json', 'libft/ft_strlen.c']) expect(safeRel(ok)).toBe(true);
   });
 
   it('reads sources, headers and Makefiles only', async () => {
@@ -192,11 +192,35 @@ describe('file server (M5)', () => {
     // poll sees the outside edit
     const polled = await pollProject(p.root, { 'main.c': main.mtime, 'src/a.c': p.files.find((f) => f.path === 'src/a.c')!.mtime, Makefile: 0 });
     expect(polled.changed.map((f) => f.path).sort()).toEqual(['Makefile', 'main.c']);
-    // a new blueprint file goes into .ft_blueprint/
-    const ok = await saveFiles(p.root, [{ path: '.ft_blueprint/blueprint.json', text: '{}', base: null }]);
+    // a new blueprint file goes into .blueprint42/
+    const ok = await saveFiles(p.root, [{ path: '.blueprint42/blueprint.json', text: '{}', base: null }]);
     expect(ok.saved).toHaveLength(1);
     await expect(saveFiles(p.root, [{ path: 'link/victim.c', text: 'pwned', base: null }])).rejects.toThrow(/outside/);
     await expect(saveFiles(p.root, [{ path: 'notes.txt', text: 'x', base: null }])).rejects.toThrow();
     expect(await readFile(join(outside, 'victim.c'), 'utf8')).toBe('untouched');
+  });
+
+  it('reads a project saved before the rename: .ft_blueprint/ stands in for .blueprint42/, and is never written', async () => {
+    const old = await mkdtemp(join(tmpdir(), 'ftb-legacy-'));
+    try {
+      await writeFile(join(old, 'main.c'), 'int\tmain(void)\n{\n\treturn (0);\n}\n');
+      await mkdir(join(old, '.ft_blueprint'));
+      await writeFile(join(old, '.ft_blueprint', 'run.json'), '{"stdin":"old"}');
+      await writeFile(join(old, '.ft_blueprint', 'blueprint.json'), '{"old":true}');
+      await mkdir(join(old, '.blueprint42'));
+      await writeFile(join(old, '.blueprint42', 'blueprint.json'), '{"new":true}');
+      const p = await openProject(old);
+      const byPath = Object.fromEntries(p.files.map((f) => [f.path, f]));
+      expect(Object.keys(byPath).sort()).toEqual(['.blueprint42/blueprint.json', '.blueprint42/run.json', 'main.c']);
+      expect(byPath['.blueprint42/run.json']).toMatchObject({ text: '{"stdin":"old"}', mtime: null }); // not yet on disk under the new name
+      expect(byPath['.blueprint42/blueprint.json'].text).toBe('{"new":true}'); // the new one wins
+      // saving the run settings creates the new file and leaves the old one alone
+      const r = await saveFiles(p.root, [{ path: '.blueprint42/run.json', text: '{"stdin":"new"}', base: null }]);
+      expect(r.saved).toHaveLength(1);
+      expect(await readFile(join(old, '.ft_blueprint', 'run.json'), 'utf8')).toBe('{"stdin":"old"}');
+      await expect(saveFiles(p.root, [{ path: '.ft_blueprint/run.json', text: 'x', base: null }])).rejects.toThrow();
+    } finally {
+      await rm(old, { recursive: true, force: true });
+    }
   });
 });

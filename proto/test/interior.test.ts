@@ -15,16 +15,16 @@ beforeAll(setupParser);
 
 describe('inside a machine (M5.5)', () => {
   it('turns every statement into a station, conditions into switches', () => {
-    const m = parse(sample('gnl').src);
-    const p = planOf(m.byName.get('gnl_consume')!);
+    const m = parse(sample('reader').src);
+    const p = planOf(m.byName.get('lr_consume')!);
     expect(p.stations.map((s) => [s.kind, s.depth, s.text])).toEqual([
       ['do', 0, 'buf->pos = line_end;'],
       ['if', 0, 'if (buf->pos == buf->len)'],
+      ['do', 1, 'i = 0;'],
+      ['loop', 1, 'while (i < buf->len)'],
+      ['do', 2, "buf->data[i++] = '\\0';"],
       ['do', 1, 'buf->pos = 0;'],
       ['do', 1, 'buf->len = 0;'],
-      ['do', 1, 'i = 0;'],
-      ['loop', 1, 'while (i < sizeof(size_t))'],
-      ['do', 2, "buf->data[i++] = '\\0';"],
       ['end', 0, '}'],
     ]);
     // into the if's branch and back out, into the loop's body; round the if; the loop's way back
@@ -33,17 +33,17 @@ describe('inside a machine (M5.5)', () => {
     expect(p.tracks.filter((t) => t.kind === 'back').length).toBe(1);
   });
 
-  it('M5.5 acceptance: gnl_consume reads 6 == 8 → false, and its zeroing loop runs 8 times (gdb)', async () => {
-    const s = sample('gnl');
+  it('M5.5 acceptance: lr_consume reads 6 == 8 → false, and its zeroing loop runs 23 times (gdb)', async () => {
+    const s = sample('reader');
     const m = parse(s.src);
     const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines, files: s.files });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
     const t = convertGdb(r, m, s.src);
-    const fn = m.byName.get('gnl_consume')!;
+    const fn = m.byName.get('lr_consume')!;
     const p = planOf(fn);
     const sw = p.stations.findIndex((x) => x.kind === 'if');
     const loop = p.stations.findIndex((x) => x.kind === 'loop');
-    const calls = t.evs.map((e, i) => [e, i] as const).filter(([e]) => e.k === 'call' && e.fn === 'gnl_consume');
+    const calls = t.evs.map((e, i) => [e, i] as const).filter(([e]) => e.k === 'call' && e.fn === 'lr_consume');
     const endOf = (frame: number) => t.evs.findIndex((e) => e.k === 'ret' && e.frame === frame);
 
     // first call: pos 6, len 8, the switch goes the false way and the loop never runs
@@ -55,12 +55,12 @@ describe('inside a machine (M5.5)', () => {
     expect(st1.decided.has(loop)).toBe(false);
     expect(st1.visited.has(sw + 1)).toBe(false);
 
-    // the call that empties the buffer: true, then the loop zeroes 8 bytes
+    // the call that empties the buffer: true, then the loop zeroes the 23 bytes it held
     const full = calls.map(([e]) => e.frame!).find((f) => interiorAt(t, p, f, endOf(f)).decided.get(sw)?.d.result === true)!;
     const st3 = interiorAt(t, p, full, endOf(full));
-    expect(st3.decided.get(loop)!.count).toBe(8);
+    expect(st3.decided.get(loop)!.count).toBe(23);
     expect(st3.decided.get(loop)!.d.result).toBe(false); // it has finished
-    expect(readoutOf(p.stations[loop], t, t.snaps[st3.decided.get(loop)!.d.snap], full, fn.name)).toBe('8 < sizeof(size_t)');
+    expect(readoutOf(p.stations[loop], t, t.snaps[st3.decided.get(loop)!.d.snap], full, fn.name)).toBe('23 < 23');
 
     // mid-loop: the token is on the loop's body, the count so far
     const mid = t.evs.findIndex((e, i) => i > calls.find(([e]) => e.frame === full)![1] && e.k === 'step' && e.frame === full && e.line === p.stations[loop + 1].line);
@@ -90,10 +90,10 @@ describe('inside a machine (M5.5)', () => {
   });
 
   it('still reads a blueprint from M5.5 that has opened machines (now ignored)', () => {
-    const bp = parseBlueprint({ version: 1, nodes: {}, waypoints: {}, sprites: [], opened: ['gnl_consume'] });
-    expect(bp.opened).toEqual(['gnl_consume']);
+    const bp = parseBlueprint({ version: 1, nodes: {}, waypoints: {}, sprites: [], opened: ['lr_consume'] });
+    expect(bp.opened).toEqual(['lr_consume']);
     const l = new Layout();
-    const m = parse(sample('gnl').src);
+    const m = parse(sample('reader').src);
     l.reset();
     l.sync(m);
     const before = JSON.stringify([...l.nodes.values()].map((n) => n.place));

@@ -244,7 +244,7 @@ export class Layout {
 
   // `full`: every position (the browser's own backup). Otherwise only what
   // the author decided — pinned machines and modules, open/closed modules
-  // that differ from the default, routes — so .ft_blueprint/blueprint.json
+  // that differ from the default, routes — so .blueprint42/blueprint.json
   // doesn't churn when auto-placement moves things. Node positions are
   // relative to their module in a project (v2).
   toBlueprint(sprites: Sprite[], full: boolean, mainFile?: string): Blueprint {

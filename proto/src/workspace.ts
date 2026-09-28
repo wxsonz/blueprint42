@@ -5,7 +5,7 @@
 import type { EditorState } from '@codemirror/state';
 import { parseProject, type Model } from './parse';
 
-export const META = '.ft_blueprint';
+export const META = '.blueprint42'; // the tool's folder in a project (read from .ft_blueprint/ before the rename)
 export const RUN_JSON = `${META}/run.json`;
 export const BP_JSON = `${META}/blueprint.json`;
 export const DRIVER = `${META}/main.c`;
@@ -35,7 +35,7 @@ export interface Project {
   run: RunCfg;
   readOnly: boolean;
   truncated: boolean;
-  driverIgnored: boolean; // .ft_blueprint/main.c set aside: the project has its own main
+  driverIgnored: boolean; // .blueprint42/main.c set aside: the project has its own main
 }
 
 export const isSource = (p: string) => /\.[ch]$/.test(p);
@@ -71,7 +71,7 @@ export function fromFiles(root: string | null, name: string, files: { path: stri
 
 // ---------------- the model ----------------
 
-// The driver main in .ft_blueprint/ stands in for a program the project
+// The driver main in .blueprint42/ stands in for a program the project
 // doesn't have (a library like libft or gnl). If the project has its own
 // main, the driver is set aside rather than linked twice.
 export function projectModel(p: Project): Model {
@@ -95,7 +95,7 @@ export function buildFiles(p: Project): Record<string, string> {
   return out;
 }
 
-// ---------------- run settings (.ft_blueprint/run.json) ----------------
+// ---------------- run settings (.blueprint42/run.json) ----------------
 
 export function parseRun(text: string | undefined): RunCfg {
   const run: RunCfg = { stdin: '', args: [], defines: [] };

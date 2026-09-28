@@ -1,6 +1,8 @@
 // M5: open a real project. This is the only code that reads or writes the
 // author's files. Reads cover C sources, headers, Makefiles and the
-// .ft_blueprint/ folder; writes happen only when the page asks after the
+// .blueprint42/ folder (and, for projects from before the rename, the old
+// .ft_blueprint/ one, read as if it were .blueprint42/ and never written);
+// writes happen only when the page asks after the
 // author confirmed a save, only inside a folder opened this session, only to
 // those same kinds of files, and never over a file that changed on disk
 // since it was loaded (unless the author chose to overwrite).
@@ -8,7 +10,10 @@ import { lstat, mkdir, readdir, readFile, realpath, stat, writeFile } from 'node
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 
-export const META = '.ft_blueprint';
+export const META = '.blueprint42';
+// the folder's name before the project was renamed: still read, never written
+export const LEGACY = '.ft_blueprint';
+const isMeta = (p) => p === META || p === LEGACY;
 const MAX_FILES = 800;
 const MAX_FILE = 1 << 20;
 const MAX_TOTAL = 16 << 20;
@@ -22,7 +27,7 @@ const opened = new Set(); // real paths of folders opened this session
 export function wanted(rel) {
   const parts = rel.split('/');
   const name = parts[parts.length - 1];
-  if (parts[0] === META) return parts.length === 2 && (/^[\w.-]+\.json$/.test(name) || name === 'main.c');
+  if (isMeta(parts[0])) return parts.length === 2 && (/^[\w.-]+\.json$/.test(name) || name === 'main.c');
   return /\.[ch]$/.test(name) || MAKEFILES.has(name);
 }
 
@@ -31,7 +36,7 @@ export function wanted(rel) {
 export function safeRel(rel) {
   if (typeof rel !== 'string' || !rel || rel.length > 400 || rel.includes('\\') || rel.includes('\0')) return false;
   const parts = rel.split('/');
-  return parts.every((p, i) => p && p !== '.' && p !== '..' && (!p.startsWith('.') || (i === 0 && p === META)) && /^[\w.+@ -]+$/.test(p));
+  return parts.every((p, i) => p && p !== '.' && p !== '..' && (!p.startsWith('.') || (i === 0 && isMeta(p))) && /^[\w.+@ -]+$/.test(p));
 }
 
 const inside = (root, full) => full === root || full.startsWith(root + sep);
@@ -52,7 +57,7 @@ async function walk(root) {
     for (const e of entries) {
       const path = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
-        if (SKIP.has(e.name) || (e.name.startsWith('.') && !(e.name === META && !rel)) || depth >= MAX_DEPTH) continue;
+        if (SKIP.has(e.name) || (e.name.startsWith('.') && !(isMeta(e.name) && !rel)) || depth >= MAX_DEPTH) continue;
         queue.push([path, depth + 1]);
       } else if (e.isFile() && safeRel(path) && wanted(path)) {
         const s = await stat(join(root, path));
@@ -63,7 +68,23 @@ async function walk(root) {
       }
     }
   }
-  return { files: out, truncated: false };
+  return { files: legacy(out), truncated: false };
+}
+
+// Old .ft_blueprint/ files stand in for missing .blueprint42/ ones: shown
+// under the new name, as not yet on disk (so a save creates the new file and
+// leaves the old folder alone); where both exist the new one wins.
+function legacy(files) {
+  const have = new Set(files.map((f) => f.path));
+  const out = [];
+  for (const f of files) {
+    if (!f.path.startsWith(`${LEGACY}/`)) out.push(f);
+    else {
+      const path = META + f.path.slice(LEGACY.length);
+      if (!have.has(path)) out.push({ path, mtime: null, size: f.size, from: f.path });
+    }
+  }
+  return out;
 }
 
 export async function listDir(dir) {
@@ -80,7 +101,7 @@ export async function openProject(dir) {
   if (!(await stat(root)).isDirectory()) throw new Error('not a folder');
   const { files, truncated } = await walk(root);
   opened.add(root);
-  const withText = await Promise.all(files.map(async (f) => ({ ...f, text: await readFile(join(root, f.path), 'utf8') })));
+  const withText = await Promise.all(files.map(async ({ from, ...f }) => ({ ...f, text: await readFile(join(root, from ?? f.path), 'utf8') })));
   return { root, name: basename(root), files: withText, truncated };
 }
 
@@ -102,9 +123,9 @@ export async function pollProject(root, known) {
   const { files } = await walk(root);
   const changed = [];
   const seen = new Set();
-  for (const f of files) {
+  for (const { from, ...f } of files) {
     seen.add(f.path);
-    if (known?.[f.path] === f.mtime) continue;
+    if (known?.[f.path] === f.mtime || from) continue; // an old-folder stand-in: read once, at open
     changed.push({ ...f, text: await readFile(join(root, f.path), 'utf8') });
   }
   const removed = Object.keys(known ?? {}).filter((p) => !seen.has(p));
@@ -120,7 +141,7 @@ export async function saveFiles(root, writes, force = false) {
   const plan = [];
   const conflicts = [];
   for (const w of writes) {
-    if (!w || !safeRel(w.path) || !wanted(w.path) || typeof w.text !== 'string' || w.text.length > MAX_FILE) throw new Error(`cannot write ${String(w?.path)}`);
+    if (!w || !safeRel(w.path) || !wanted(w.path) || w.path.startsWith(`${LEGACY}/`) || typeof w.text !== 'string' || w.text.length > MAX_FILE) throw new Error(`cannot write ${String(w?.path)}`);
     const full = join(root, w.path);
     if (!inside(root, full)) throw new Error(`cannot write ${w.path}`);
     // The folder chain must stay inside the project (no symlinked escape).

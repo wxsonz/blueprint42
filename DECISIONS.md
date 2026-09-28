@@ -1335,3 +1335,32 @@ questions. Newest last.
   into clumps and it reads as a crescent most of the time. The ends now
   fade by angle around the arc's circle (a conic gradient), which follows
   the curve; the fade along the chord cut strongly bent ends off hard.
+
+## 2026-10-02: renamed blueprint42, examples, a fixture of our own
+
+- The project is **blueprint42** (the name, the page title, the package, the
+  nvim plugin: `:B42Connect`/`:B42Open`/`:B42Disconnect`, with the old
+  `:Ftb…` commands and `require('ft_blueprint')` kept as aliases).
+- The tool's folder in a project is `.blueprint42/`. A project saved before
+  the rename still opens: `.ft_blueprint/` files stand in for missing
+  `.blueprint42/` ones (shown under the new name as not yet on disk, so a
+  save creates the new file); the old folder is never written. Tested.
+- The samples on the top bar are one **Examples** dropdown, grouped by what
+  they need: the browser alone (pointer, swap, static counter, factorial,
+  fibonacci, gcd), real C under gdb (strings & malloc, bubble sort, structs,
+  a linked list, a crash, a leak), reading input (the line reader on stdin),
+  and projects (the line reader as three files with a driver main; a small
+  libft built by its own Makefile's sub-make). Each shows one thing the
+  blueprint can do. All fifteen were run in the page: the interpreter ones
+  and gdb ones finish with the expected exit codes, the crash stops on
+  SIGSEGV, the leak reports its one block.
+- The author's get_next_line is private: it's out of the examples, out of
+  the bundle and untracked (kept locally, ignored). The acceptance tests
+  moved to `samples/line_reader/`, a get_next_line-style reader written for
+  this repo to the same shape (10 functions, 4 static, a function-local
+  static table of `t_reader`, a doubling buffer zero past its text, reads of
+  BUFFER_SIZE), so every test still checks what it did; values that differ
+  for this reader (its reset zeroes the 23 bytes it held) were taken from
+  real runs. The invariant test caught a real transient in the first draft:
+  resetting `len` before `pos` left `pos > len` for one statement; `pos` is
+  reset first now.

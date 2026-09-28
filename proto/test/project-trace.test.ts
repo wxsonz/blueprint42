@@ -25,23 +25,23 @@ const LIBFT = {
 };
 
 describe('project trace (M5)', () => {
-  it('runs gnl_v3 as a project with its driver main: stops in both files, same answer', async () => {
+  it('runs the line reader as a project with its driver main: stops in both files, same answer', async () => {
     const all = SAMPLE_PROJECTS[0].files;
     const files = Object.fromEntries(Object.entries(all).filter(([p]) => !p.endsWith('.json')));
-    const run = JSON.parse(all['.ft_blueprint/run.json']);
+    const run = JSON.parse(all['.blueprint42/run.json']);
     const { m, r } = await traceProject(files, { stdin: run.stdin, defines: run.defines });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
     expect(r.exit).toBe(3);
     expect(r.stdout).toBe(run.stdin);
     const t = convertGdb(r, m, files);
     const stepFiles = new Set(t.evs.filter((e) => e.k === 'step').map((e) => e.file));
-    expect(stepFiles).toEqual(new Set(['.ft_blueprint/main.c', 'get_next_line.c', 'get_next_line_utils.c']));
+    expect(stepFiles).toEqual(new Set(['.blueprint42/main.c', 'line_reader.c', 'line_reader_utils.c']));
     // every call lands on a function the model knows, and in the right file
     const calls = t.evs.filter((e) => e.k === 'call');
     for (const c of calls) expect(m.byName.has(c.fn), c.fn).toBe(true);
-    const copy = calls.find((c) => c.fn === 'gnl_copy')!;
-    expect(copy.file).toBe('get_next_line_utils.c');
-    const def = m.byName.get('gnl_copy')!;
+    const copy = calls.find((c) => c.fn === 'lr_copy')!;
+    expect(copy.file).toBe('line_reader_utils.c');
+    const def = m.byName.get('lr_copy')!;
     expect(copy.line).toBeGreaterThan(def.startLine); // gdb's first stop is the first statement inside
     expect(copy.line).toBeLessThanOrEqual(def.endLine);
   });
@@ -66,7 +66,7 @@ describe('project trace (M5)', () => {
     expect(called).toContain('ft_strlen:libft/ft_strlen.c');
   });
 
-  it('links a library NAME against the driver in .ft_blueprint/main.c', async () => {
+  it('links a library NAME against the driver in .blueprint42/main.c', async () => {
     const lib = {
       Makefile: 'NAME = libx.a\nSRCS = x.c\nOBJS = $(SRCS:.c=.o)\nCFLAGS = -Wall -Wextra -Werror\n\nall: $(NAME)\n\n$(NAME): $(OBJS)\n\tar rcs $(NAME) $(OBJS)\n\n%.o: %.c\n\t$(CC) $(CFLAGS) -c $< -o $@\n',
       'x.h': 'int\tx_twice(int n);\n',
@@ -74,8 +74,8 @@ describe('project trace (M5)', () => {
     };
     const without = await traceProject(lib);
     expect(without.r.ok).toBe(false);
-    expect(without.r.error).toMatch(/libx\.a is a library.*\.ft_blueprint\/main\.c/);
-    const { r } = await traceProject({ ...lib, '.ft_blueprint/main.c': '#include "x.h"\n\nint\tmain(void)\n{\n\treturn (x_twice(21));\n}\n' });
+    expect(without.r.error).toMatch(/libx\.a is a library.*\.blueprint42\/main\.c/);
+    const { r } = await traceProject({ ...lib, '.blueprint42/main.c': '#include "x.h"\n\nint\tmain(void)\n{\n\treturn (x_twice(21));\n}\n' });
     expect(r.ok, r.error ?? r.compile?.text).toBe(true);
     expect(r.exit).toBe(42);
   });
