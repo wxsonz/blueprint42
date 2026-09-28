@@ -1108,3 +1108,7 @@ questions. Newest last.
   keys: their own graphite face, a lit top edge, a shadow under them.
   Pressed and primary (playing) buttons sink in with an inset shadow. No
   grain on buttons.
+- **Decision (author: the white grain looks unnatural; remove the corner
+  edges):** The canvas grain is dark pits only (no light specks, which
+  read as dust). The right-angle corner lines are gone from machine
+  windows and from the page's panes; windows keep a faint hairline.

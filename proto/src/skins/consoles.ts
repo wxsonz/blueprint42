@@ -319,13 +319,13 @@ function ps2Grain(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
     const cg = c.getContext('2d')!;
     const img = cg.createImageData(128, 128);
     for (let i = 0; i < 128 * 128; i++) {
-      // 2 px specks (a coarse sandblast), mostly dark pits, a few catching light
+      // 2 px specks (a coarse sandblast), dark pits only: light specks
+      // read as dust on a dark screen
       const x = (i % 128) >> 1;
       const y = Math.floor(i / 128) >> 1;
       const r = hash(x * 131 + y * 977 + 3);
-      const light = r > 0.86;
-      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = light ? 255 : 0;
-      img.data[i * 4 + 3] = light ? (r - 0.86) * 7 * 16 : (0.86 - r) * 90;
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = 0;
+      img.data[i * 4 + 3] = r * 80;
     }
     cg.putImageData(img, 0, 0);
     ps2GrainTile = c;
@@ -347,18 +347,6 @@ function ridges(g: CanvasRenderingContext2D, x: number, y: number, w: number, h:
     g.fillStyle = 'rgba(0,0,0,0.6)';
     g.fillRect(x, yy + 1, w, 1);
   }
-}
-// thin blue lines that turn at right angles, at each corner of r
-function brackets(g: CanvasRenderingContext2D, r: Rect, len: number, lw: number, colour: string): void {
-  g.strokeStyle = colour;
-  g.lineWidth = lw;
-  g.beginPath();
-  const o = lw / 2;
-  g.moveTo(r.x + o, r.y + len); g.lineTo(r.x + o, r.y + o); g.lineTo(r.x + len, r.y + o);
-  g.moveTo(r.x + r.w - len, r.y + o); g.lineTo(r.x + r.w - o, r.y + o); g.lineTo(r.x + r.w - o, r.y + len);
-  g.moveTo(r.x + r.w - o, r.y + r.h - len); g.lineTo(r.x + r.w - o, r.y + r.h - o); g.lineTo(r.x + r.w - len, r.y + r.h - o);
-  g.moveTo(r.x + len, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - len);
-  g.stroke();
 }
 // The boot screen ("Sony Computer Entertainment"): black space with a
 // low-resolution blue fog in the middle, glass cubes tumbling in it,
@@ -655,9 +643,7 @@ export const ps2Theme: Theme = {
       g.strokeStyle = 'rgba(255,255,255,0.06)';
       g.lineWidth = 1;
       g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      const len = Math.min(r.w, r.h) * 0.22;
       // focus isn't an outline: the power and eject lights say it (titleBar)
-      brackets(g, r, len, Math.max(1, 1.2 * dc.z), 'rgba(150,150,165,0.3)');
       // a machine is the console standing up: the raised side block down its
       // right edge, with two columns of short vertical slits
       if (kind === 'machine' && r.h > 60 * dc.z) {
