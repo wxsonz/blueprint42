@@ -44,7 +44,10 @@ up.
   it. Nothing is ever written to disk without an explicit, confirmed Save.
 - **Twenty-six skins.** From Classic Mac and Windows XP to the PlayStation
   line (the PS3's XMB with its wave, the PS4's twisting ribbon), each
-  drawing the same factory its own way.
+  drawing the same factory its own way. Some are still works in progress
+  and marked ⚠ in the picker: Windows 8, the Macs after Leopard (Yosemite,
+  Big Sur, Tahoe), the PS5, and the Nintendo ones (Game Boy, GameCube, Wii,
+  Switch). They draw everything, but haven't had their polish pass yet.
 
 ## Try it
 

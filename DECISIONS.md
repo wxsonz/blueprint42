@@ -1376,3 +1376,8 @@ questions. Newest last.
   band's sweep, a few hundred pixels a second, jumped ~20 px a frame. The
   band itself costs ~0.2 ms a frame, so the jumps, not the drawing, were
   the lag.
+- Skins still in progress are marked: a ⚠ badge at the top right of their
+  thumbnail in the picker (with a tooltip), and listed in the README. The
+  list is `WIP` in `skins/index.ts`: Windows 8, Yosemite, Big Sur, Tahoe,
+  PS5, Game Boy, GameCube, Wii, Switch (a light/dark variant shares its
+  base's mark). Remove an id when its polish pass is done.

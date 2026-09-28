@@ -19,7 +19,7 @@ import {
   BP_JSON, DRIVER, META, RUN_JSON, buildFiles, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, projectModel,
   runEmpty, save, serializeRun, splitArgs, type Listing, type Opened, type PFile, type Project,
 } from './workspace';
-import { SKINS, SKIN_FONTS, SKIN_GROUPS, otherMode } from './skins';
+import { SKINS, SKIN_FONTS, SKIN_GROUPS, isWip, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import './styles/base.css';
 import './styles/amp.css';
@@ -1829,7 +1829,7 @@ function renderSkinPicker(): void {
       .map((g) => ({ ...g, skins: g.ids.map((id) => bases.find((s) => s.id === id)).filter((s): s is Skin => !!s) }))
       .filter((g) => g.skins.length);
     const card = (s: Skin) =>
-      `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt=""><span class="nm">${esc(s.name)}${otherMode(s) ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
+      `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt="">${isWip(s) ? '<span class="wip" title="Work in progress: this skin isn’t polished yet" aria-label="work in progress">⚠</span>' : ''}<span class="nm">${esc(s.name)}${otherMode(s) ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
     list.innerHTML =
       `<nav class="grp-jump">${groups.map((g, i) => `<button data-g="${i}"${g.skins.some((s) => s.id === base) ? ' class="on"' : ''}>${esc(g.name)}</button>`).join('')}</nav>` +
       groups.map((g, i) => `<h5 class="grp" id="skin-grp-${i}">${esc(g.name)}${g.blurb ? ` <span>${esc(g.blurb)}</span>` : ''}</h5>${g.skins.map(card).join('')}`).join('');

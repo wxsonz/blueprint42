@@ -70,3 +70,9 @@ export const SKIN_FONTS: Record<string, string[]> = {
   bigsur: ['500 12px Inter', '700 12px Inter'],
   tahoe: ['500 12px Inter', '700 12px Inter'],
 };
+
+// Skins still being worked on: they draw everything, but aren't polished
+// yet. The picker marks them (a warning on the thumbnail); a skin's other
+// mode shares its base's mark.
+const WIP = new Set(['ps5', 'gameboy', 'gamecube', 'wii', 'switch', 'yosemite', 'bigsur', 'tahoe', 'metro']);
+export const isWip = (skin: Skin): boolean => WIP.has(skin.variantOf ?? skin.id);
