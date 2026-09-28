@@ -1103,3 +1103,8 @@ questions. Newest last.
     The PS2 sets it, its pulses and its argument trails to its blue.
   - PS2 cards draw no glowing borders: a hairline, and plates keep their
     colour.
+- **Decision (author: buttons should be solid, like real buttons, not
+  transparent over the grille):** PS2 buttons are solid black-plastic
+  keys: their own graphite face, a lit top edge, a shadow under them.
+  Pressed and primary (playing) buttons sink in with an inset shadow. No
+  grain on buttons.
