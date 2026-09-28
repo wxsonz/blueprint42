@@ -345,12 +345,13 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.textAlign = 'left';
     g.textBaseline = 'top';
     g.fillStyle = DIM;
-    const more = hiddenLines(p.out, 2);
+    const room = p.lines ?? 2;
+    const more = hiddenLines(p.out, room);
     const moreText = more ? `+${more} ↑` : '';
     const moreW = more ? g.measureText(moreText).width + px(dc, 6) : 0;
     g.fillText(fitText(g, `$ ./${argLine(p.args)}`, MONO, px(dc, 12, 7), r.w - pad * 2 - moreW, 6), r.x + pad, r.y + pad);
     if (more) (g.textAlign = 'right'), g.fillText(moreText, r.x + r.w - pad, r.y + pad), (g.textAlign = 'left');
-    const out = tailLines(p.out, 2);
+    const out = tailLines(p.out, room);
     g.font = MONO(px(dc, 10.5, 7));
     g.fillStyle = FG;
     out.forEach((l, i) => g.fillText(fitText(g, l, MONO, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));

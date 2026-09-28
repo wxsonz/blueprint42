@@ -380,13 +380,14 @@ export function makeSkin(t: Theme): Skin {
       g.textBaseline = 'top';
       g.fillStyle = p.dim;
       g.font = t.mono(px(dc, 12, 7));
-      const more = hiddenLines(pr.out, 2);
+      const room = pr.lines ?? 2;
+      const more = hiddenLines(pr.out, room);
       // the command as it ran; if the output is longer than fits, how many lines are above
       const moreText = more ? `+${more} ↑` : '';
       const moreW = more ? g.measureText(moreText).width + px(dc, 6) : 0;
       g.fillText(fitText(g, `$ ./${argLine(pr.args)}`, t.mono, px(dc, 12, 7), r.w - pad * 2 - moreW, 6), r.x + pad, r.y + pad);
       if (more) (g.textAlign = 'right'), g.fillText(moreText, r.x + r.w - pad, r.y + pad), (g.textAlign = 'left');
-      const out = tailLines(pr.out, 2);
+      const out = tailLines(pr.out, room);
       g.fillStyle = p.fg;
       out.forEach((l, i) => g.fillText(fitText(g, l, t.mono, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
       const dy = out.length ? px(dc, 13) * out.length - px(dc, 4) : 0;

@@ -1402,3 +1402,8 @@ questions. Newest last.
   - `(void)ac;` stayed "never reached": the compiler drops it, so gdb never
     stops there. A plain statement is now counted as run when the frame
     reaches the next statement in its block (no goto under the Norminette).
+- The process box grows with what the program printed, so the whole
+  output shows: 13 px per line past the first two, up to 12 lines (past
+  that, a count of the lines above). Its height comes from the run's
+  output, so routing, clicks, the heap shelf under it and focus framing
+  all use it (`procH` in `machine.ts`).

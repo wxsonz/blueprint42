@@ -77,6 +77,7 @@ export interface ProcInfo {
   exit: string | null;
   out?: string; // what the program printed (shown once it has finished)
   args?: string[]; // its command-line arguments, for the prompt line
+  lines?: number; // how many lines of output the box has room for (it grows with them)
   selected: boolean;
   hovered: boolean;
 }

@@ -6,7 +6,7 @@
 // placed in reserved slots next to the home, so recursion reads as a chain of
 // factories rather than one machine talking to itself.
 import { MH, MW, footprint, type Layout, type NodeState } from './layout';
-import { callPortY, geomOf, machineSize } from './machine';
+import { callPortY, geomOf, machineSize, procH } from './machine';
 //
 // Modules (M5): a collapsed module is one host (key "mod:<file>"). Calls
 // from outside land on it; all calls between the same two hosts share one
@@ -161,7 +161,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     obstacles.push(r);
   }
   const pp = procPlace(layout);
-  const procRect: Rect | null = pp ? { x: pp.x, y: pp.y, w: MW, h: MH } : null;
+  const procRect: Rect | null = pp ? { x: pp.x, y: pp.y, w: MW, h: procH(trace?.stdout) } : null;
   if (procRect) obstacles.push(procRect);
 
   // ---- reserve copy slots next to each recursive function ----

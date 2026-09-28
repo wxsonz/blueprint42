@@ -3,7 +3,7 @@
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatDuration, beatNow, computeText, readsOf, READ_END, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, shut, slotsOf, slotY } from './machine';
+import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
 import type { Model } from './parse';
@@ -440,7 +440,7 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
     if (wx >= h.x && wx < h.x + h.w && wy >= h.y && wy < h.y + h.h) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
   }
   const pp = procPlace(s.layout);
-  if (pp && wx >= pp.x && wx < pp.x + MW && wy >= pp.y && wy < pp.y + MH) return { k: 'proc' };
+  if (pp && wx >= pp.x && wx < pp.x + MW && wy >= pp.y && wy < pp.y + procH(s.trace?.stdout)) return { k: 'proc' };
   let best: Belt | null = null;
   let bestD = 0.3;
   for (const b of scene.belts) {
@@ -452,9 +452,9 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
 }
 
 // Heap blocks sit on a shelf under the process, one row per slot.
-export function heapSlotRect(layout: Layout, slot: number): Rect | null {
+export function heapSlotRect(layout: Layout, slot: number, out?: string): Rect | null {
   const pp = procPlace(layout);
-  return pp ? { x: pp.x, y: pp.y + MH + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
+  return pp ? { x: pp.x, y: pp.y + procH(out) + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
 }
 
 // Focus mode: world rect of who sends ('src'), who receives ('dst'), or
@@ -467,7 +467,7 @@ export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both'
   const hostR = (k: string): Rect | null => {
     if (k === '') {
       const pp = procPlace(s.layout);
-      return pp ? { x: pp.x, y: pp.y, w: MW, h: MH } : null;
+      return pp ? { x: pp.x, y: pp.y, w: MW, h: procH(s.trace?.stdout) } : null;
     }
     const h = scene.hosts.get(k);
     return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
@@ -489,7 +489,7 @@ export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both'
     src = via ? hostR(hosts.get(via.id) ?? '') : null;
     const to = frameOf(ev.cell);
     if (to) dst = hostR(hosts.get(to.id) ?? '');
-    else if (s.trace.heapSlots?.has(ev.cell)) dst = heapSlotRect(s.layout, s.trace.heapSlots.get(ev.cell)!);
+    else if (s.trace.heapSlots?.has(ev.cell)) dst = heapSlotRect(s.layout, s.trace.heapSlots.get(ev.cell)!, s.trace.stdout);
     else {
       const c = s.trace.cells.get(ev.cell);
       const n = c ? s.layout.visible().find((x) => x.name === c.owner) : undefined;
@@ -822,7 +822,7 @@ export class GridView {
     for (const w of scene.walls) grow(w.rect.x, w.rect.y, w.rect.w, w.rect.h);
     for (const b of scene.belts) for (const [x, y] of b.pts) grow(x - 0.5, y - 0.5, 1, 1);
     const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
-    const shelf = slots >= 0 ? heapSlotRect(s.layout, slots) : null;
+    const shelf = slots >= 0 ? heapSlotRect(s.layout, slots, s.trace?.stdout) : null;
     if (shelf) grow(shelf.x, shelf.y, 4, 1);
     const sample = s.trace?.evs.length ? frameAt(s.trace, s.pos).snap : s.trace?.snaps[0];
     for (const sprite of s.sprites ?? []) {
@@ -1048,11 +1048,12 @@ export class GridView {
     const pp = procPlace(s.layout);
     if (pp) {
       g.save();
-      skin.proc(dc, this.rectW(pp.x, pp.y, MW, MH), {
+      skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(trace?.stdout)), {
         state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
         exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
         out: finished ? trace?.stdout : undefined,
         args: trace?.args,
+        lines: Math.max(2, procLines(trace?.stdout)),
         selected: selKey === 'p',
         hovered: hovKey === 'p',
       });
@@ -1115,7 +1116,7 @@ export class GridView {
       const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
       for (const c of shown.values()) {
         const slot = trace.heapSlots.get(c.id);
-        const w = slot !== undefined ? heapSlotRect(s.layout, slot) : null;
+        const w = slot !== undefined ? heapSlotRect(s.layout, slot, s.trace?.stdout) : null;
         if (!w) continue;
         const r = this.rectW(w.x + 0.12, w.y + 0.12, 0.76, 0.76);
         g.save();
@@ -1226,7 +1227,7 @@ export class GridView {
     // ---- focus mode: veil everything but the sender and the receiver ----
     if (ev && ph && trace && staged(ev)) {
       const hostRect = (k: string): Rect | null => {
-        if (k === '') return pp ? this.rectW(pp.x, pp.y, MW, MH) : null;
+        if (k === '') return pp ? this.rectW(pp.x, pp.y, MW, procH(trace.stdout)) : null;
         const h = scene.hosts.get(k);
         return h ? this.rectW(h.x, h.y, h.w, h.h + h.inv) : null;
       };

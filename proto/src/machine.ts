@@ -12,6 +12,16 @@ export const SLOT_PX = 20;
 export const INV_HEAD_PX = 20;
 export const CELL_PX = 40;
 
+// The process box grows with what the program printed, so the whole output
+// shows (up to PROC_LINES lines, 13 px each; past that, a count of the rest).
+export const PROC_LINES = 12;
+export function procLines(out: string | undefined): number {
+  return out ? Math.min(PROC_LINES, out.replace(/\n$/, '').split('\n').length) : 0;
+}
+export function procH(out: string | undefined): number {
+  return MH + (Math.max(0, procLines(out) - 2) * 13) / CELL_PX;
+}
+
 // Struct variables unfold into their fields under their own row. Folded
 // ones ("fnKey.var") show just the one row. Open by default: seeing the
 // struct is the point.

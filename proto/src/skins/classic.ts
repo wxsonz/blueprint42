@@ -484,8 +484,9 @@ export const classic: Skin = {
     g.fillStyle = FACE;
     g.textAlign = 'left';
     g.textBaseline = 'top';
-    const more = hiddenLines(p.out, 3);
-    const lines = [`C:\\>${argLine(p.args)}`, ...(more ? [`... ${more} more line${more === 1 ? '' : 's'}`] : []), ...tailLines(p.out, more ? 2 : 3)];
+    const room = Math.max(3, (p.lines ?? 2) + 1);
+    const more = hiddenLines(p.out, room);
+    const lines = [`C:\\>${argLine(p.args)}`, ...(more ? [`... ${more} more line${more === 1 ? '' : 's'}`] : []), ...tailLines(p.out, more ? room - 1 : room)];
     if (p.state === 'done' && p.exit !== null) lines.push(`exit ${p.exit}`, 'C:\\>');
     if (p.state === 'crashed') lines.push('Abnormal program', 'termination');
     lines.forEach((l, i) => g.fillText(fitText(g, l, MONO, fs, body.w - 6), body.x + 3, body.y + 3 + i * (fs + 2)));

@@ -542,8 +542,9 @@ export const aqua: Skin = {
     g.fillStyle = '#111';
     g.textAlign = 'left';
     g.textBaseline = 'top';
-    const more = hiddenLines(p.out, 3);
-    const lines = [`[localhost:~] % ./${argLine(p.args)}`, ...(more ? [`… ${more} more line${more === 1 ? '' : 's'}`] : []), ...tailLines(p.out, more ? 2 : 3)];
+    const room = Math.max(3, (p.lines ?? 2) + 1);
+    const more = hiddenLines(p.out, room);
+    const lines = [`[localhost:~] % ./${argLine(p.args)}`, ...(more ? [`… ${more} more line${more === 1 ? '' : 's'}`] : []), ...tailLines(p.out, more ? room - 1 : room)];
     if (p.state === 'done' && p.exit !== null) lines.push(`exit ${p.exit}`);
     if (p.state === 'crashed') lines.push('Bus error');
     lines.forEach((l, i) => g.fillText(fitText(g, l, MONO, fs, body.w - 10, 6), body.x + 5, body.y + 4 + i * (fs + 3)));
