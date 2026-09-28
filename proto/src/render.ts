@@ -939,7 +939,7 @@ export class GridView {
       const m = s.layout.modules.get(w.file);
       g.save();
       skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), {
-        name: w.file, fns: s.layout.nodesOf(w.file).length, live: liveFiles.has(w.file), pinned: !!m?.pinned,
+        name: w.file, fns: s.layout.nodesOf(w.file).length, kind: 'module', live: liveFiles.has(w.file), pinned: !!m?.pinned,
         selected: selKey === `m:${w.file}`, hovered: hovKey === `m:${w.file}`,
         head: this.rectW(w.rect.x, w.rect.y, w.rect.w, 1.2),
       });
@@ -1447,7 +1447,7 @@ export class GridView {
     const R = this.rectW(h.x, h.y, h.w, h.h);
     // very far out: just the shell, lit if it's working
     if (cs < 8) {
-      skin.wall(dc, R, { name: '', fns: 0, note: '', live: state === 'running', pinned: false, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: 0 } });
+      skin.wall(dc, R, { name: '', fns: 0, note: '', kind: 'machine', live: state === 'running', pinned: false, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: 0 } });
       return;
     }
     const closed = shut.has(fn.name);
@@ -1461,7 +1461,7 @@ export class GridView {
     g.restore();
     const headH = (geo?.head ?? 0.8) * cs;
     const note = state === 'running' ? 'running' : state === 'waiting' ? 'waiting on a call' : state === 'error' ? 'crashed here' : frame ? '' : returned ? 'done' : '';
-    skin.wall(dc, R, { name, fns: 0, note, live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });
+    skin.wall(dc, R, { name, fns: 0, note, kind: 'machine', live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });
     const m = closed || !geo ? { x: 1, y: 1, w: MW, h: MH } : geo.motor;
     let waitingOn: string | null = null;
     if (state === 'waiting' && frame && trace) {

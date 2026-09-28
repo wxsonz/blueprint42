@@ -30,6 +30,9 @@ import './styles/blueprint.css';
 import './styles/factory.css';
 import './styles/gameboy.css';
 import './styles/synthwave.css';
+import './styles/xp.css';
+import './styles/seven.css';
+import './styles/metro.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 

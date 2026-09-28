@@ -6,9 +6,12 @@ import { blueprint } from './blueprint';
 import { factory } from './factory';
 import { gameboy } from './gameboy';
 import { synthwave } from './synthwave';
+import { xp } from './xp';
+import { seven } from './seven';
+import { metro } from './metro';
 import type { Skin } from './types';
 
-export const SKINS: Skin[] = [amp, classic, aqua, minimal, blueprint, factory, gameboy, synthwave];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, aqua, minimal, blueprint, factory, gameboy, synthwave];
 
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
@@ -20,4 +23,7 @@ export const SKIN_FONTS: Record<string, string[]> = {
   factory: ['600 12px Rajdhani', '700 12px Rajdhani', '12px "IBM Plex Mono"', '600 12px "IBM Plex Mono"'],
   gameboy: ['8px "Press Start 2P"', '16px VT323'],
   synthwave: ['500 12px Orbitron', '700 12px Orbitron', '12px "Share Tech Mono"'],
+  xp: [],
+  seven: ['12px "Open Sans"', '600 12px "Open Sans"'],
+  metro: ['300 12px "Open Sans"', '600 12px "Open Sans"'],
 };

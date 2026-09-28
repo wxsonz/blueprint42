@@ -45,6 +45,18 @@ export interface Theme {
   nodeDecor?(dc: Dc, r: Rect, n: NodeInfo, t: Theme): void;
   wallDecor?(dc: Dc, r: Rect, head: Rect, live: boolean, t: Theme): void;
   pulseColor?: string;
+  // desktop themes: machines and files are windows
+  window?: WindowStyle;
+}
+
+export interface WindowStyle {
+  border: number; // frame thickness, px at zoom 1
+  titleH: number; // title bar height, px at zoom 1
+  face: string; // a machine's client area
+  workspace: string; // a file's client area (behind its machines)
+  frame(dc: Dc, r: Rect, active: boolean, client: string): void; // the whole window: frame and client fill
+  titleBar(dc: Dc, r: Rect, title: string, active: boolean, buttons: boolean): void;
+  progress(dc: Dc, r: Rect, fill: number, anim: boolean): void;
 }
 
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
@@ -149,6 +161,17 @@ export function makeSkin(t: Theme): Skin {
     wall(dc, r0, w) {
       const g = dc.g;
       const r = snapR(r0);
+      if (t.window) {
+        const W = t.window;
+        const b = Math.max(1, W.border * dc.z);
+        W.frame(dc, r, w.live, w.kind === 'module' ? W.workspace : W.face);
+        if (w.head.h <= 0) return;
+        const th = Math.max(8, Math.min(w.head.h - b, W.titleH * dc.z));
+        const note = w.note ? ` - ${w.note[0].toUpperCase()}${w.note.slice(1)}` : '';
+        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, `${w.name}${note}${w.pinned ? ' (pinned)' : ''}`, w.live, true);
+        if (w.selected || w.hovered) outline(dc, r, w.selected);
+        return;
+      }
       t.card(dc, r, { fill: 'transparent', stroke: w.live ? p.accent : p.line, lw: 1.2, glow: w.live ? p.accent : null, kind: 'wall' });
       const h = w.head;
       t.wallDecor?.(dc, r, h, w.live, t);
@@ -192,6 +215,32 @@ export function makeSkin(t: Theme): Skin {
     node(dc, r0, n) {
       const g = dc.g;
       const r = snapR(r0);
+      if (t.window) {
+        const W = t.window;
+        const active = n.state === 'running' || n.state === 'error';
+        const b = Math.max(1, W.border * dc.z);
+        W.frame(dc, r, active, W.face);
+        const th = Math.max(8, W.titleH * dc.z);
+        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, n.stale ? `${n.name} (Not Responding)` : n.name, active, true);
+        const pad = px(dc, 8, 3);
+        let cy = r.y + b + th + px(dc, 7);
+        const status = n.stale ? 'Not responding' : n.state === 'running' ? 'Running…' : n.state === 'waiting' ? `Waiting for ${n.waitingOn ?? '…'}` : n.state === 'error' ? 'Stopped working' : 'Ready';
+        g.fillStyle = n.state === 'error' ? p.err : p.fg;
+        g.textAlign = 'left';
+        g.textBaseline = 'top';
+        g.fillText(fitText(g, status, (x) => t.ui(x), px(dc, 11, 7), r.w - pad * 2 - b * 2, 6), r.x + b + pad, cy);
+        cy += px(dc, 18, 9);
+        W.progress(dc, { x: r.x + b + pad, y: cy, w: r.w - 2 * (b + pad), h: px(dc, 14, 6) }, n.state === 'waiting' ? 0.45 : n.state === 'running' ? 1 : 0, n.state === 'running');
+        g.fillStyle = p.dim;
+        g.textBaseline = 'alphabetic';
+        const meta = [`${n.params} param${n.params === 1 ? '' : 's'}`, n.isStatic ? 'static' : '', n.frames > 1 ? `×${n.frames}` : '', n.pinned ? 'pinned' : ''].filter(Boolean).join(' · ');
+        g.fillText(fitText(g, meta, (x) => t.ui(x), px(dc, 10, 6), r.w - pad * 2 - b * 2, 6), r.x + b + pad, r.y + r.h - b - px(dc, 5));
+        if (n.editing) (g.fillStyle = p.accent), g.fillRect(r.x + b, r.y + b + th, px(dc, 3, 2), r.h - th - 2 * b);
+        t.nodeDecor?.(dc, r, n, t);
+        ports(dc, r, n.inPorts, n.outPorts, active ? p.accent : p.line);
+        if (n.selected || n.hovered) outline(dc, r, n.selected);
+        return;
+      }
       t.card(dc, r, { fill: p.card, stroke: n.state === 'running' ? p.accent : n.state === 'error' ? p.err : n.hovered ? p.dim : p.line, lw: n.state === 'running' ? 2 : 1.2, glow: glowOf(n.state), kind: 'node' });
       if (n.stale) g.globalAlpha = 0.5;
       const pad = px(dc, 11);
@@ -446,5 +495,29 @@ export function plainCard(dc: Dc, r: Rect, radius: number, o: { fill: string; st
   g.strokeStyle = o.stroke;
   g.lineWidth = o.lw;
   g.stroke();
+  g.restore();
+}
+
+// A screen-sized backdrop (a wallpaper) painted once per size and pixel
+// ratio, then copied each frame: gradients over the whole canvas are costly.
+const backdrops = new Map<string, HTMLCanvasElement>();
+export function backdrop(dc: Dc, id: string, paint: (g: CanvasRenderingContext2D, W: number, H: number) => void): void {
+  const g = dc.g;
+  const dpr = g.getTransform().a || 1;
+  const key = `${id}|${Math.round(dc.vw)}x${Math.round(dc.vh)}@${dpr}`;
+  let c = backdrops.get(key);
+  if (!c) {
+    if (backdrops.size > 8) backdrops.clear();
+    c = document.createElement('canvas');
+    c.width = Math.round(dc.vw * dpr);
+    c.height = Math.round(dc.vh * dpr);
+    const cg = c.getContext('2d')!;
+    cg.scale(dpr, dpr);
+    paint(cg, dc.vw, dc.vh);
+    backdrops.set(key, c);
+  }
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(c, 0, 0);
   g.restore();
 }

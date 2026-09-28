@@ -138,6 +138,7 @@ export interface WallInfo {
   name: string;
   fns: number;
   note?: string; // replaces the function count (a machine's wall: its state)
+  kind?: 'module' | 'machine'; // a file's wall, or a machine (a function's inside)
   live: boolean; // a frame is running inside
   pinned: boolean;
   selected: boolean;

@@ -269,17 +269,18 @@ export const classic: Skin = {
   wall(dc, r0, w) {
     const g = dc.g;
     const r = snapRect(r0);
-    g.fillStyle = 'rgba(0,0,0,0.10)';
-    g.fillRect(r.x, r.y, r.w, r.h);
-    // etched frame
-    g.strokeStyle = w.live ? NAVY : '#004848';
-    g.lineWidth = 1;
-    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 2, r.h - 2);
-    g.strokeStyle = '#40a0a0';
-    g.strokeRect(r.x + 1.5, r.y + 1.5, r.w - 2, r.h - 2);
+    // a real window: raised frame, a title bar across the whole top, and a
+    // client area — gray for a machine, the dark app workspace for a file
+    // (an MDI parent holding its functions' windows)
+    raised(g, r);
     const h = snapRect(w.head);
-    const tb = { x: h.x + 4, y: h.y + 4, w: Math.min(h.w - 8, px(dc, 260)), h: h.h - 8 };
-    titleBar(dc, tb, `${w.name}${w.pinned ? ' (pinned)' : ''}`, w.live, false);
+    if (h.h <= 0) return;
+    const th = Math.min(h.h - 6, px(dc, 20, 10));
+    const tb = { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: th };
+    const client = { x: r.x + 3, y: tb.y + th + 2, w: r.w - 6, h: r.h - th - 8 };
+    if (w.kind === 'module') sunken(g, client, SHADOW);
+    const title = `${w.name}${w.note ? ` - ${w.note[0].toUpperCase()}${w.note.slice(1)}` : ''}${w.pinned ? ' (pinned)' : ''}`;
+    titleBar(dc, tb, title, w.live, true);
     if (w.hovered && !w.selected) focusRect(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, HI);
     if (w.selected) handles(g, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 }, px(dc, 6, 4));
   },
