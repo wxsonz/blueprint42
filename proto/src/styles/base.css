@@ -463,6 +463,14 @@ kbd {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; padding: 10px;
   background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
 .skin-list[hidden] { display: none; }
+/* groups: a row of jump chips on top, then a heading per group; both stay put while the list scrolls */
+.skin-list .grp-jump { grid-column: 1 / -1; position: sticky; top: -10px; z-index: 2; margin: -10px -10px 0; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 4px;
+  background: var(--panel-bg); border-bottom: var(--rule, 1px solid rgba(128,128,128,0.25)); }
+.skin-list .grp-jump button { font: 600 11.5px var(--font-ui); padding: 3px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--panel-fg) 25%, transparent); background: transparent; color: inherit; cursor: pointer; }
+.skin-list .grp-jump button.on { border-color: var(--accent); color: var(--accent); }
+.skin-list .grp-jump button:hover { background: var(--menu-hover-bg); color: var(--menu-hover-fg); }
+.skin-list .grp { grid-column: 1 / -1; margin: 8px 2px 0; font: 700 11px var(--font-ui); text-transform: uppercase; letter-spacing: 0.1em; color: var(--panel-dim); }
+.skin-list .grp span { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; opacity: 0.8; }
 .skin-list .sk { display: grid; grid-template-columns: 72px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
   padding: 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
 .skin-list .sk:hover { background: var(--menu-hover-bg); color: var(--menu-hover-fg); }

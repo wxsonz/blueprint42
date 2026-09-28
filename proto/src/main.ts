@@ -19,7 +19,7 @@ import {
   BP_JSON, DRIVER, META, RUN_JSON, buildFiles, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, projectModel,
   runEmpty, save, serializeRun, splitArgs, type Listing, type Opened, type PFile, type Project,
 } from './workspace';
-import { SKINS, SKIN_FONTS, otherMode } from './skins';
+import { SKINS, SKIN_FONTS, SKIN_GROUPS, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import './styles/base.css';
 import './styles/amp.css';
@@ -1759,12 +1759,27 @@ function renderSkinPicker(): void {
   };
   box.onclick = () => {
     if (!list.hidden) return void (list.hidden = true);
-    list.innerHTML = SKINS.filter((s) => !s.variantOf).map((s) => {
-      const both = !!otherMode(s);
-      return `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt=""><span class="nm">${esc(s.name)}${both ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
-    }).join('');
+    const bases = SKINS.filter((s) => !s.variantOf);
+    const placed = new Set(SKIN_GROUPS.flatMap((g) => g.ids));
+    const groups = [...SKIN_GROUPS, { name: 'Other', blurb: '', ids: bases.filter((s) => !placed.has(s.id)).map((s) => s.id) }]
+      .map((g) => ({ ...g, skins: g.ids.map((id) => bases.find((s) => s.id === id)).filter((s): s is Skin => !!s) }))
+      .filter((g) => g.skins.length);
+    const card = (s: Skin) =>
+      `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt=""><span class="nm">${esc(s.name)}${otherMode(s) ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
+    list.innerHTML =
+      `<nav class="grp-jump">${groups.map((g, i) => `<button data-g="${i}"${g.skins.some((s) => s.id === base) ? ' class="on"' : ''}>${esc(g.name)}</button>`).join('')}</nav>` +
+      groups.map((g, i) => `<h5 class="grp" id="skin-grp-${i}">${esc(g.name)}${g.blurb ? ` <span>${esc(g.blurb)}</span>` : ''}</h5>${g.skins.map(card).join('')}`).join('');
     list.querySelectorAll<HTMLButtonElement>('.sk').forEach((b) => b.addEventListener('click', () => pick(b.dataset.id!)));
+    list.querySelectorAll<HTMLButtonElement>('.grp-jump button').forEach((b) =>
+      b.addEventListener('click', () => {
+        const h = list.querySelector<HTMLElement>(`#skin-grp-${b.dataset.g}`);
+        const nav = list.querySelector<HTMLElement>('.grp-jump');
+        if (h) list.scrollTo({ top: h.offsetTop - (nav?.offsetHeight ?? 0) - 8, behavior: 'smooth' });
+      }),
+    );
     list.hidden = false;
+    // open at the current skin's group
+    list.querySelector<HTMLElement>('.sk.on')?.scrollIntoView({ block: 'nearest' });
   };
   const btn = $<HTMLButtonElement>('skin-mode');
   const other = otherMode(S.skin);

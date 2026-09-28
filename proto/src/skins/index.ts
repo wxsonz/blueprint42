@@ -18,6 +18,17 @@ import type { Skin } from './types';
 // picker lists only bases, and the ☀/☾ button flips between the two.
 export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave, ps1, ps2, ps3, ps4, ps5, wii, wiiDark, gamecube, n64, nswitch, nswitchDark, snes, gba];
 
+// How the picker groups the base skins. A skin missing here still shows,
+// under "Other".
+export const SKIN_GROUPS: { name: string; blurb: string; ids: string[] }[] = [
+  { name: 'Simple', blurb: 'quiet and fast', ids: ['minimal', 'barebone'] },
+  { name: 'Windows', blurb: '3.1 to 8', ids: ['classic', 'xp', 'seven', 'metro'] },
+  { name: 'Mac', blurb: 'System 7 to Tahoe', ids: ['system7', 'platinum', 'aqua', 'leopard', 'yosemite', 'bigsur', 'tahoe'] },
+  { name: 'PlayStation', blurb: 'PS1 to PS5', ids: ['ps1', 'ps2', 'ps3', 'ps4', 'ps5'] },
+  { name: 'Nintendo', blurb: 'Game Boy to Switch', ids: ['gameboy', 'gba', 'snes', 'n64', 'gamecube', 'wii', 'switch'] },
+  { name: 'Just for fun', blurb: 'players, drawings, machines, neon', ids: ['amp', 'blueprint', 'factory', 'synthwave'] },
+];
+
 // The other mode of a skin, if it has one.
 export function otherMode(skin: Skin): Skin | undefined {
   return skin.variantOf ? SKINS.find((s) => s.id === skin.variantOf) : SKINS.find((s) => s.variantOf === skin.id);

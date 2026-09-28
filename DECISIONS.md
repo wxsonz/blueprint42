@@ -779,3 +779,11 @@ questions. Newest last.
 
   Checked headlessly: close-ups, duel title contrast (all at least
   4.6:1) and the text-size audit.
+- **Decision (author: the skin list is overwhelming):** The picker groups
+  base skins by family (`SKIN_GROUPS` in `skins/index.ts`): Simple,
+  Windows, Mac, PlayStation, Nintendo, Just for fun. A skin missing from
+  the groups still shows, under "Other".
+  - The list has a sticky row of jump chips, a heading per group, and
+    opens scrolled to the current skin's group.
+  - `test/skins.test.ts` checks that every base skin is in exactly one
+    group and that no light/dark twin is listed.

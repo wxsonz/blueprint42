@@ -477,7 +477,7 @@ function tahoeOf(dark: boolean): Theme {
   const cardTint = dark ? 'rgba(40,44,54,0.72)' : 'rgba(255,255,255,0.62)';
   const panelTint = dark ? 'rgba(24,27,34,0.86)' : 'rgba(255,255,255,0.82)';
   return {
-    id: dark ? 'tahoe-dark' : 'tahoe', name: 'macOS Tahoe', blurb: dark ? 'Liquid Glass at night' : 'Liquid Glass over the lake at dusk',
+    id: dark ? 'tahoe-dark' : 'tahoe', name: 'macOS Tahoe', blurb: dark ? 'frosted glass at night' : 'frosted glass over the lake at dusk',
     radius: 14, spotlight: 'rgba(6,14,34,0.5)',
     ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
     p: dark ? {
