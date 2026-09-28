@@ -922,3 +922,27 @@ questions. Newest last.
 - **Decision (author and friends: drop SNES, N64 and GBA):** Removed. They
   had no system UI to reference, and hardware colours alone read as a
   recolour. The Chakra Petch font went with the N64.
+- **Decision (author and friends: the PlayStations don't feel right; use
+  their console visual language and promotional graphics):**
+  - **PS1**, after Teiyu Goto's plain grey console, Manabu Sakamoto's logo
+    (a red P over an S in yellow, green and blue: `#e4002b`, `#f9b51b`,
+    `#00a651`, `#0072ce`), the controller's four symbols, black jewel
+    cases with ridged spines, and the black boot screen:
+    - the page is the boot screen with the four colours faint from below;
+    - the top bar and playbar are the grey console, with the logo stripe
+      under the top bar;
+    - buttons are like POWER and RESET, with a green power light on Play;
+    - panes are black jewel cases with a ridged spine;
+    - machine windows are bevelled grey plastic, with the stripe under a
+      dark title bar and △○✕□ as its buttons.
+  - **PS2**, after Goto's account (Kill Screen; SUPERJUMP): the thin blue
+    logo on black is the Earth small in space; a jet-black monolith of
+    stacked, squared-off ridges; lines bending at 90° like a laser
+    through prisms; a blue gradient stand:
+    - the canvas: black space, the Earth's blue from below, the towers far
+      off; black slabs with ridged heads and electric-blue (`#2f8cff`)
+      right-angle brackets; capital Orbitron titles; the progress bar is
+      one line turning up at its end;
+    - the chrome: ridged black bars with a thin blue rule, square outlined
+      buttons that fill with the stand's gradient when on, and panes with
+      blue corner brackets.

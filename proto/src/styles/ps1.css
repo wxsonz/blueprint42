@@ -110,9 +110,18 @@ html[data-skin='ps1'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
-html[data-skin='ps1'] #playbar .lcd, html[data-skin='ps1'] #top .btn { box-shadow: inset 1px 1px 0 rgba(255,255,255,0.5); }
-
-/* the BIOS menu's sphere behind the chrome too */
-html[data-skin='ps1'] body { background: radial-gradient(circle at 44% 40%, #b9a8ff 0, #6a54d6 12%, #2a2390 30%, #120f45 42%, transparent 43%), radial-gradient(circle at 50% 50%, rgba(90,70,200,0.25), transparent 65%), #05050b; }
+/* the PlayStation: the black boot screen, the grey console around it, the
+   logo's four colours as a stripe, black jewel cases with ridged spines */
+html[data-skin='ps1'] body { background: radial-gradient(ellipse 25% 40% at 20% 105%, #e4002b30, transparent), radial-gradient(ellipse 25% 40% at 40% 105%, #f9b51b30, transparent), radial-gradient(ellipse 25% 40% at 60% 105%, #00a65130, transparent), radial-gradient(ellipse 25% 40% at 80% 105%, #0072ce30, transparent), #000000; }
 html[data-skin='ps1'] #app, html[data-skin='ps1'] #panes { background: transparent; }
-html[data-skin='ps1'] .pane { box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
+html[data-skin='ps1'] #top { background: linear-gradient(#d2d1cc, #b6b5b0); color: #1c1c20; border-bottom: 3px solid; border-image: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%) 3; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+html[data-skin='ps1'] #playbar { background: linear-gradient(#c9c8c3, #adaca7); border-top: 1px solid #77766f; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+html[data-skin='ps1'] .btn, html[data-skin='ps1'] .seg button, html[data-skin='ps1'] .pb-buttons button { border-radius: 4px; background: linear-gradient(#e0dfda, #bdbcb7); border: 1px solid #75746e; box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 0 rgba(0,0,0,0.25); color: #2a2a30; }
+html[data-skin='ps1'] .seg button[aria-pressed='true'] { background: linear-gradient(#3a3a40, #26262b); color: #f2f2f2; box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); }
+/* the power light */
+html[data-skin='ps1'] .pb-buttons button.primary { position: relative; }
+html[data-skin='ps1'] .pb-buttons button.primary::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: #3dff6a; box-shadow: 0 0 5px #3dff6a; }
+/* panes as black jewel cases: a ridged spine down the left */
+html[data-skin='ps1'] .pane { background: repeating-linear-gradient(90deg, #202024 0 2px, #0b0b0d 2px 4px) left / 12px 100% no-repeat, #0b0b0d; padding-left: 12px; border-color: #2a2a2e; box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
+html[data-skin='ps1'] .pane-head { background: #111114; color: #f2f2f2; border-bottom: 2px solid; border-image: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%) 2; }
+html[data-skin='ps1'] #status { background: #111114; color: #b8b8bf; }

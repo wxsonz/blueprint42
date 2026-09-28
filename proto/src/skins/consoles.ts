@@ -115,7 +115,22 @@ function cardOf(radius: number, ring: string) {
 
 // ---------------- PlayStation ----------------
 
+// The PlayStation (1994), from its own visual language: Teiyu Goto's plain
+// light-grey console, Manabu Sakamoto's logo (a red P over an S in yellow,
+// green and blue), the controller's four symbols (△ green: a viewpoint;
+// ○ red and ✕ blue: yes and no; □ pink: a sheet of paper), black jewel
+// cases with ridged spines, and the black boot screen.
 const PS_SYM = { tri: '#3ed6a0', circ: '#ff4d5e', cross: '#6aa8ff', sq: '#ff85c0' };
+const PS_LOGO = ['#e4002b', '#f9b51b', '#00a651', '#0072ce'];
+
+// the logo's four colours as a thin stripe
+function logoStripe(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const q = w / 4;
+  PS_LOGO.forEach((c, k) => {
+    g.fillStyle = c;
+    g.fillRect(x + k * q, y, q + 0.5, h);
+  });
+}
 
 function psSymbol(g: CanvasRenderingContext2D, kind: keyof typeof PS_SYM, x: number, y: number, s: number): void {
   g.beginPath();
@@ -127,50 +142,47 @@ function psSymbol(g: CanvasRenderingContext2D, kind: keyof typeof PS_SYM, x: num
 }
 
 const ps1P: Palette = {
-  bg: '#0a0b14', card: '#f1efe8', panel: '#e3e1d9', line: '#8f8d86',
-  fg: '#1d1d22', dim: '#55555c', faint: '#8d8b85', accent: '#2f6fd6', ptr: '#c9337a', ret: '#16946a', wait: '#c77d00', err: '#d9303f',
-  param: '#2f6fd6', cell: '#d2dcf0', track: '#ffffff',
+  bg: '#000000', card: '#f1f0ec', panel: '#e4e3de', line: '#9b9a95',
+  fg: '#1c1c20', dim: '#55555c', faint: '#8d8b85', accent: '#0072ce', ptr: '#c9337a', ret: '#00864a', wait: '#c77d00', err: '#d9303f',
+  param: '#0063b3', cell: '#d2dcf0', track: '#ffffff',
 };
 export const ps1Theme: Theme = {
-  id: 'ps1', name: 'PlayStation', blurb: 'the BIOS menu: the purple sphere, grey memory-card panels, △○✕□',
-  p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,8,0.62)',
+  id: 'ps1', name: 'PlayStation', blurb: 'the grey console, the black boot screen, the four colours and △○✕□',
+  p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),
+  // the boot screen: black, the logo's four colours faintly lighting the floor
   background(dc) {
-    // the BIOS menu: a big glowing purple-blue sphere behind everything, on near-black
-    backdrop(dc, 'ps1', (g, W, H) => {
-      g.fillStyle = '#05050b';
+    backdrop(dc, 'ps1-boot', (g, W, H) => {
+      g.fillStyle = '#000000';
       g.fillRect(0, 0, W, H);
-      const cx = W * 0.5;
-      const cy = H * 0.52;
-      const R = Math.min(W, H) * 0.46;
-      const halo = g.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 1.5);
-      halo.addColorStop(0, 'rgba(90,70,200,0.25)');
-      halo.addColorStop(1, 'rgba(90,70,200,0)');
-      g.fillStyle = halo;
-      g.fillRect(0, 0, W, H);
-      const ball = g.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R);
-      ball.addColorStop(0, '#b9a8ff');
-      ball.addColorStop(0.25, '#6a54d6');
-      ball.addColorStop(0.7, '#2a2390');
-      ball.addColorStop(1, '#120f45');
-      g.fillStyle = ball;
-      g.beginPath();
-      g.arc(cx, cy, R, 0, Math.PI * 2);
-      g.fill();
+      PS_LOGO.forEach((c, k) => {
+        const x = W * (0.2 + k * 0.2);
+        const glow = g.createRadialGradient(x, H * 1.05, 0, x, H * 1.05, H * 0.55);
+        glow.addColorStop(0, c + '38');
+        glow.addColorStop(1, c + '00');
+        g.fillStyle = glow;
+        g.fillRect(0, 0, W, H);
+      });
     });
   },
   window: {
-    border: 5, corner: 3, titleH: 22, face: '#f1efe8', workspace: 'rgba(255,255,255,0.05)',
+    border: 5, corner: 4, titleH: 24, face: '#f1f0ec', workspace: 'rgba(255,255,255,0.04)',
+    // the console's grey plastic, bevelled, with the logo's colours under a dark title bar
     frame(dc, r, active, face) {
-      plastic(dc, r, Math.max(1, 3 * dc.z), active ? '#c3c1b9' : '#a9a7a0', '#ecEAe2', '#6f6d67');
-      client(dc, r, Math.max(2, 5 * dc.z), 22 * dc.z, face, 0, '#8f8d86');
+      softShadow(dc, r, 4, 8, 'rgba(0,0,0,0.7)', 3 * dc.z);
+      plastic(dc, r, Math.max(1, 4 * dc.z), active ? '#c8c7c2' : '#b0afaa', '#eeede8', '#6f6e69');
+      client(dc, r, Math.max(2, 5 * dc.z), 24 * dc.z, face, 0, '#8f8e89');
     },
     titleBar(dc, r, title, active, buttons) {
       const g = dc.g;
-      const bar = { x: r.x + 3 * dc.z, y: r.y + 3 * dc.z, w: r.w - 6 * dc.z, h: r.h - 5 * dc.z };
-      g.fillStyle = active ? '#2a2a30' : '#5b5b61';
+      const bar = { x: r.x + 3 * dc.z, y: r.y + 3 * dc.z, w: r.w - 6 * dc.z, h: r.h - 8 * dc.z };
+      g.fillStyle = active ? '#26262b' : '#57575c';
       g.fillRect(bar.x, bar.y, bar.w, bar.h);
+      // the logo's four colours along its lower edge
+      const k = Math.max(1, 2.5 * dc.z);
+      if (active) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
+      else (g.fillStyle = '#77767a'), g.fillRect(bar.x, bar.y + bar.h - k, bar.w, k);
       let right = bar.x + bar.w - 6 * dc.z;
       if (buttons && r.w > 150 * dc.z) {
         const s = Math.max(2.5, 4.2 * dc.z);
@@ -189,19 +201,56 @@ export const ps1Theme: Theme = {
   },
 };
 
+// The PlayStation 2 (2000), after Teiyu Goto's own account: "the thin blue
+// logo on the large black background" is the Earth, small in the vastness of
+// space; a jet-black monolith of stacked, squared-off ridges; the logo's
+// single blue lines bending at right angles "as if prisms were refracting a
+// laser"; a blue gradient stand; and the boot towers.
+const PS2_BLUE = '#2f8cff';
+const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
-  bg: '#02040c', card: '#0f1d3a', panel: '#0b1630', line: '#2f5f9e',
-  fg: '#dbe8ff', dim: '#8fa6cc', faint: '#566b90', accent: '#4fb3ff', ptr: '#b48cff', ret: '#58e0c0', wait: '#ffcc55', err: '#ff5a6e',
-  param: '#7cc4ff', cell: '#16305c', track: '#060d1e',
+  bg: '#000000', card: '#0b0d12', panel: '#07080c', line: '#1f3f73',
+  fg: '#d7e6ff', dim: '#8aa0c4', faint: '#4f6488', accent: PS2_BLUE, ptr: '#9fb4ff', ret: '#5fd0ff', wait: '#ffcc55', err: '#ff5a6e',
+  param: '#7cc4ff', cell: '#10223f', track: '#05070c',
 };
+// the ridges: stacked, squared-off grooves across a black slab
+function ridges(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, step: number): void {
+  for (let yy = y + step / 2; yy < y + h; yy += step) {
+    g.fillStyle = 'rgba(255,255,255,0.05)';
+    g.fillRect(x, yy, w, 1);
+    g.fillStyle = 'rgba(0,0,0,0.6)';
+    g.fillRect(x, yy + 1, w, 1);
+  }
+}
+// thin blue lines that turn at right angles, at each corner of r
+function brackets(g: CanvasRenderingContext2D, r: Rect, len: number, lw: number, colour: string): void {
+  g.strokeStyle = colour;
+  g.lineWidth = lw;
+  g.beginPath();
+  const o = lw / 2;
+  g.moveTo(r.x + o, r.y + len); g.lineTo(r.x + o, r.y + o); g.lineTo(r.x + len, r.y + o);
+  g.moveTo(r.x + r.w - len, r.y + o); g.lineTo(r.x + r.w - o, r.y + o); g.lineTo(r.x + r.w - o, r.y + len);
+  g.moveTo(r.x + r.w - o, r.y + r.h - len); g.lineTo(r.x + r.w - o, r.y + r.h - o); g.lineTo(r.x + r.w - len, r.y + r.h - o);
+  g.moveTo(r.x + len, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - len);
+  g.stroke();
+}
 export const ps2Theme: Theme = {
-  id: 'ps2', name: 'PlayStation 2', blurb: 'the boot towers, deep blue glass, cyan light',
-  p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 5, spotlight: 'rgba(0,2,10,0.6)',
-  pulseColor: 'rgba(79,179,255,0.9)',
-  card: cardOf(5, '#4fb3ff'),
-  // the towers: columns of blue light standing on a dark floor, reflected
+  id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith: ridges, a thin blue line, the Earth in space',
+  p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 0, spotlight: 'rgba(0,0,0,0.65)',
+  pulseColor: 'rgba(47,140,255,0.9)',
+  card(dc, r, o) {
+    const g = dc.g;
+    if (o.fill !== 'transparent') {
+      g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.35)' : o.kind === 'frame' || o.kind === 'plate' ? ps2P.panel : ps2P.card;
+      g.fillRect(r.x, r.y, r.w, r.h);
+    }
+    g.strokeStyle = o.glow ? PS2_BLUE : 'rgba(47,140,255,0.22)';
+    g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  },
+  // space, with the Earth's blue rising from below (the stand), the towers far off
   background(dc) {
-    backdrop(dc, 'ps2', (g, W, H) => {
+    backdrop(dc, 'ps2-monolith', (g, W, H) => {
       const hz = H * 0.64;
       const sky = g.createLinearGradient(0, 0, 0, H);
       sky.addColorStop(0, '#000105');
@@ -232,48 +281,54 @@ export const ps2Theme: Theme = {
       }
       g.fillStyle = 'rgba(120,190,255,0.35)';
       g.fillRect(0, hz, W, 1);
+      // the Earth's blue, rising from under the monolith, like the stand
+      const earth = g.createLinearGradient(0, H * 0.78, 0, H);
+      earth.addColorStop(0, 'rgba(20,90,220,0)');
+      earth.addColorStop(1, 'rgba(20,90,220,0.35)');
+      g.fillStyle = earth;
+      g.fillRect(0, H * 0.78, W, H * 0.22);
     });
   },
   window: {
-    border: 2, corner: 6, titleH: 24, face: '#0a1428', workspace: 'rgba(79,179,255,0.05)',
+    border: 2, corner: 0, titleH: 26, face: '#07080c', workspace: 'rgba(47,140,255,0.03)',
+    // a black slab: stacked ridges along the head, thin blue lines turning at the corners
     frame(dc, r, active, face) {
       const g = dc.g;
-      const rad = Math.max(2, 6 * dc.z);
-      rrect(g, r.x, r.y, r.w, r.h, rad);
-      g.fillStyle = 'rgba(8,18,40,0.94)';
-      g.fill();
+      softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
+      g.fillStyle = '#0a0b10';
+      g.fillRect(r.x, r.y, r.w, r.h);
+      ridges(g, r.x, r.y, r.w, 26 * dc.z, Math.max(3, 5 * dc.z));
+      g.fillStyle = face;
+      g.fillRect(r.x + 2 * dc.z, r.y + 26 * dc.z, r.w - 4 * dc.z, Math.max(0, r.h - 28 * dc.z));
+      g.strokeStyle = 'rgba(255,255,255,0.06)';
+      g.lineWidth = 1;
+      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      const len = Math.min(r.w, r.h) * 0.22;
+      brackets(g, r, len, Math.max(1, (active ? 2 : 1.2) * dc.z), active ? PS2_BLUE : 'rgba(47,140,255,0.45)');
       if (active) {
-        g.strokeStyle = 'rgba(79,179,255,0.35)';
-        g.lineWidth = Math.max(3, 6 * dc.z);
-        g.stroke();
+        // the line glows faintly where it runs
+        g.fillStyle = 'rgba(47,140,255,0.1)';
+        g.fillRect(r.x, r.y + r.h - 3 * dc.z, r.w, 3 * dc.z);
       }
-      g.strokeStyle = active ? '#4fb3ff' : 'rgba(79,179,255,0.4)';
-      g.lineWidth = Math.max(1, 1.2 * dc.z);
-      g.stroke();
-      client(dc, r, Math.max(1, 2 * dc.z), 24 * dc.z, face, Math.max(1, 3 * dc.z));
     },
     titleBar(dc, r, title, active) {
-      const g = dc.g;
-      const head = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-      head.addColorStop(0, active ? '#1d4f9c' : '#15284a');
-      head.addColorStop(1, active ? '#0a1f45' : '#0b1530');
-      rrect(g, r.x + 1, r.y + 1, r.w - 2, r.h - 1, [Math.max(2, 5 * dc.z), Math.max(2, 5 * dc.z), 0, 0]);
-      g.fillStyle = head;
-      g.fill();
-      g.fillStyle = active ? 'rgba(140,210,255,0.7)' : 'rgba(140,210,255,0.2)';
-      g.fillRect(r.x + 6 * dc.z, r.y + 1, r.w - 12 * dc.z, 1);
-      // a little crystal cube
-      const s = Math.max(3, 5 * dc.z);
-      const cx = r.x + 12 * dc.z;
-      const cy = r.y + r.h / 2;
-      g.beginPath();
-      g.moveTo(cx, cy - s); g.lineTo(cx + s, cy - s / 2); g.lineTo(cx + s, cy + s / 2); g.lineTo(cx, cy + s); g.lineTo(cx - s, cy + s / 2); g.lineTo(cx - s, cy - s / 2); g.closePath();
-      g.fillStyle = active ? 'rgba(120,200,255,0.8)' : 'rgba(120,200,255,0.35)';
-      g.fill();
-      text(dc, r, title, EXO, 12.5, active ? '#e6f1ff' : '#8fa6cc', { w: 600, x: cx + 11 * dc.z });
+      text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#6fb2ff' : '#51678c', { w: 500, x: r.x + 10 * dc.z });
     },
+    // one thin blue line, turning up at its end
     progress(dc, r, fill, anim) {
-      bar(dc, r, fill, anim, '#060d1e', '#4fb3ff');
+      const g = dc.g;
+      const y = r.y + r.h / 2;
+      g.fillStyle = 'rgba(47,140,255,0.18)';
+      g.fillRect(r.x, y, r.w, 1);
+      const x = anim ? r.x + r.w * ((dc.time * 0.45) % 1) : r.x + r.w * fill;
+      if (x <= r.x + 1) return;
+      g.strokeStyle = PS2_BLUE;
+      g.lineWidth = Math.max(1, 1.5 * dc.z);
+      g.beginPath();
+      g.moveTo(r.x, y);
+      g.lineTo(x, y);
+      g.lineTo(x, y - r.h / 2);
+      g.stroke();
     },
   },
 };

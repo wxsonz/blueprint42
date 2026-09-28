@@ -37,7 +37,7 @@ export function otherMode(skin: Skin): Skin | undefined {
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
   ps1: ['500 12px Rubik', '12px "Share Tech Mono"'],
-  ps2: ['600 12px "Exo 2"', '12px "Share Tech Mono"'],
+  ps2: ['600 12px "Exo 2"', '500 11px Orbitron', '12px "Share Tech Mono"'],
   ps3: ['400 12px "M PLUS Rounded 1c"', '12px "JetBrains Mono"'],
   ps4: ['300 12px "Source Sans 3"', '400 12px "Source Sans 3"', '12px "JetBrains Mono"'],
   ps5: ['300 12px "Source Sans 3"', '600 12px "Source Sans 3"', '12px "JetBrains Mono"'],
