@@ -354,167 +354,199 @@ export const yosemiteTheme: Theme = {
   },
 };
 
-// ---------------- macOS Big Sur ----------------
+// ---------------- macOS Big Sur (light and dark) ----------------
 
 const INTER = SANS('"SF Pro Text", Inter, "DejaVu Sans", sans-serif');
-export const bigSurTheme: Theme = {
-  id: 'bigsur', name: 'macOS Big Sur', blurb: 'big rounded windows over coastal waves',
-  radius: 10, spotlight: 'rgba(12,16,40,0.5)',
-  ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
-  p: {
-    bg: '#3b5da8', card: '#f5f5f7', panel: '#ffffff', line: '#d2d2d7',
-    fg: '#1d1d1f', dim: '#6e6e73', faint: '#a1a1a6', accent: '#007aff', ptr: '#0066d6', ret: '#28a745', wait: '#ff9500', err: '#ff3b30',
-    param: '#0066d6', cell: '#d8e9ff', track: '#ffffff',
-  },
-  pulseColor: 'rgba(0,122,255,0.8)',
-  card(dc, r, o) {
-    plainCard(dc, r, o.kind === 'plate' ? 8 : 9, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : '#f5f5f7' });
-  },
-  // the Big Sur coast: layered waves from warm to deep blue
-  background(dc) {
-    backdrop(dc, 'bigsur', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#f39c6b'); sky.addColorStop(0.35, '#e86f8a'); sky.addColorStop(0.6, '#6b5bc4'); sky.addColorStop(1, '#1d3b8f');
-      g.fillStyle = sky; g.fillRect(0, 0, W, H);
-      const bands = ['rgba(255,170,120,0.55)', 'rgba(230,100,150,0.5)', 'rgba(130,90,210,0.55)', 'rgba(60,90,200,0.6)', 'rgba(20,50,140,0.75)'];
-      bands.forEach((c, k) => {
-        g.fillStyle = c;
-        const y0 = H * (0.35 + k * 0.13);
-        g.beginPath(); g.moveTo(0, y0);
-        g.bezierCurveTo(W * 0.3, y0 - H * 0.12, W * 0.6, y0 + H * 0.1, W, y0 - H * 0.05);
-        g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+function bigSurOf(dark: boolean): Theme {
+  const face = dark ? '#2a2a2c' : '#f5f5f7';
+  const white = dark ? '#1f1f21' : '#ffffff';
+  return {
+    id: dark ? 'bigsur-dark' : 'bigsur', name: 'macOS Big Sur', blurb: dark ? 'Big Sur in dark mode' : 'big rounded windows over coastal waves',
+    radius: 10, spotlight: 'rgba(12,16,40,0.5)',
+    ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
+    p: dark ? {
+      bg: '#1b2244', card: face, panel: white, line: '#3a3a3c',
+      fg: '#f5f5f7', dim: '#a1a1a6', faint: '#636366', accent: '#0a84ff', ptr: '#64a8ff', ret: '#32d74b', wait: '#ff9f0a', err: '#ff453a',
+      param: '#64a8ff', cell: '#1d3557', track: '#161618',
+    } : {
+      bg: '#3b5da8', card: face, panel: white, line: '#d2d2d7',
+      fg: '#1d1d1f', dim: '#6e6e73', faint: '#a1a1a6', accent: '#007aff', ptr: '#0066d6', ret: '#28a745', wait: '#ff9500', err: '#ff3b30',
+      param: '#0066d6', cell: '#d8e9ff', track: '#ffffff',
+    },
+    pulseColor: 'rgba(10,132,255,0.8)',
+    card(dc, r, o) {
+      plainCard(dc, r, o.kind === 'plate' ? 8 : 9, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? white : face });
+    },
+    // the Big Sur coast: layered waves (at night in dark mode)
+    background(dc) {
+      backdrop(dc, dark ? 'bigsur-dark' : 'bigsur', (g, W, H) => {
+        const sky = g.createLinearGradient(0, 0, 0, H);
+        const stops = dark ? ['#2a1d4a', '#3b2a6b', '#1c2c6b', '#0a1433'] : ['#f39c6b', '#e86f8a', '#6b5bc4', '#1d3b8f'];
+        [0, 0.35, 0.6, 1].forEach((t, k) => sky.addColorStop(t, stops[k]));
+        g.fillStyle = sky; g.fillRect(0, 0, W, H);
+        const bands = dark
+          ? ['rgba(120,70,160,0.45)', 'rgba(80,60,150,0.45)', 'rgba(40,60,140,0.5)', 'rgba(20,40,110,0.6)', 'rgba(8,18,60,0.75)']
+          : ['rgba(255,170,120,0.55)', 'rgba(230,100,150,0.5)', 'rgba(130,90,210,0.55)', 'rgba(60,90,200,0.6)', 'rgba(20,50,140,0.75)'];
+        bands.forEach((c, k) => {
+          g.fillStyle = c;
+          const y0 = H * (0.35 + k * 0.13);
+          g.beginPath(); g.moveTo(0, y0);
+          g.bezierCurveTo(W * 0.3, y0 - H * 0.12, W * 0.6, y0 + H * 0.1, W, y0 - H * 0.05);
+          g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+        });
       });
-    });
-  },
-  window: {
-    border: 1, corner: 10, titleH: 30, face: '#f5f5f7', workspace: 'rgba(255,255,255,0.18)',
-    frame(dc, r, active, client) {
-      const g = dc.g;
-      rrect(g, r.x, r.y, r.w, r.h, Math.max(3, 10 * dc.z));
-      g.fillStyle = client; g.fill();
-      g.strokeStyle = active ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.14)'; g.lineWidth = 1; g.stroke();
     },
-    titleBar(dc, r, title, active) {
-      const g = dc.g;
-      rrect(g, r.x, r.y, r.w, r.h, [Math.max(3, 10 * dc.z), Math.max(3, 10 * dc.z), 0, 0]);
-      g.fillStyle = active ? 'rgba(236,236,238,0.97)' : 'rgba(246,246,248,0.97)'; g.fill();
-      g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(r.x, r.y + r.h - 1, r.w, 1);
-      const d = Math.max(6, Math.min(r.h - 14 * dc.z, 12 * dc.z));
-      const left = trafficLights(dc, r.x + 12 * dc.z, r.y + r.h / 2, d, active, 'flat');
-      // Big Sur titles sit left, after the lights, in bold
-      const t = fitText(g, title, (s) => INTER(s, 600), Math.max(7, 13 * dc.z), r.x + r.w - left - 20 * dc.z);
-      g.fillStyle = active ? '#1d1d1f' : '#a1a1a6';
-      g.textAlign = 'left'; g.textBaseline = 'middle';
-      g.fillText(t, left + 14 * dc.z, r.y + r.h / 2);
+    window: {
+      border: 1, corner: 10, titleH: 30, face, workspace: dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.18)',
+      frame(dc, r, active, client) {
+        const g = dc.g;
+        rrect(g, r.x, r.y, r.w, r.h, Math.max(3, 10 * dc.z));
+        g.fillStyle = client; g.fill();
+        g.strokeStyle = dark ? (active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)') : active ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.14)';
+        g.lineWidth = 1; g.stroke();
+      },
+      titleBar(dc, r, title, active) {
+        const g = dc.g;
+        rrect(g, r.x, r.y, r.w, r.h, [Math.max(3, 10 * dc.z), Math.max(3, 10 * dc.z), 0, 0]);
+        g.fillStyle = dark ? (active ? 'rgba(58,58,60,0.97)' : 'rgba(44,44,46,0.97)') : active ? 'rgba(236,236,238,0.97)' : 'rgba(246,246,248,0.97)';
+        g.fill();
+        g.fillStyle = dark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.08)'; g.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+        const d = Math.max(6, Math.min(r.h - 14 * dc.z, 12 * dc.z));
+        const left = trafficLights(dc, r.x + 12 * dc.z, r.y + r.h / 2, d, active, 'flat');
+        // Big Sur titles sit left, after the lights, in bold
+        const t = fitText(g, title, (x) => INTER(x, 600), Math.max(7, 13 * dc.z), r.x + r.w - left - 20 * dc.z);
+        g.fillStyle = dark ? (active ? '#f5f5f7' : '#8e8e93') : active ? '#1d1d1f' : '#a1a1a6';
+        g.textAlign = 'left'; g.textBaseline = 'middle';
+        g.fillText(t, left + 14 * dc.z, r.y + r.h / 2);
+      },
+      progress(dc, r, fill, anim) {
+        const g = dc.g;
+        const h = Math.max(4, r.h * 0.45), y = r.y + (r.h - h) / 2;
+        rrect(g, r.x, y, r.w, h, h / 2); g.fillStyle = dark ? '#3a3a3c' : '#e5e5ea'; g.fill();
+        const w = anim ? r.w * (0.3 + 0.7 * ((dc.time * 0.35) % 1)) : r.w * fill;
+        if (w > 0) (rrect(g, r.x, y, w, h, h / 2), (g.fillStyle = dark ? '#0a84ff' : '#007aff'), g.fill());
+      },
     },
-    progress(dc, r, fill, anim) {
-      const g = dc.g;
-      const h = Math.max(4, r.h * 0.45), y = r.y + (r.h - h) / 2;
-      rrect(g, r.x, y, r.w, h, h / 2); g.fillStyle = '#e5e5ea'; g.fill();
-      const w = anim ? r.w * (0.3 + 0.7 * ((dc.time * 0.35) % 1)) : r.w * fill;
-      if (w > 0) (rrect(g, r.x, y, w, h, h / 2), (g.fillStyle = '#007aff'), g.fill());
-    },
-  },
-};
+  };
+}
+export const bigSurTheme = bigSurOf(false);
 
-// ---------------- macOS Tahoe (Liquid Glass) ----------------
+// ---------------- macOS Tahoe, Liquid Glass (light and dark) ----------------
 
 // Glass: a translucent body that lets the backdrop through, a bright rim
 // where light catches the edge, and a soft inner highlight near the top.
-function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean): void {
+function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean, dark = false): void {
   const g = dc.g;
   rrect(g, r.x, r.y, r.w, r.h, rad);
   g.fillStyle = tint;
   g.fill();
   const hi = g.createLinearGradient(0, r.y, 0, r.y + Math.min(r.h, 60 * dc.z));
-  hi.addColorStop(0, strong ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)');
+  const a = (dark ? 0.35 : 1) * (strong ? 0.55 : 0.35);
+  hi.addColorStop(0, `rgba(255,255,255,${a})`);
   hi.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = hi;
   g.fill();
   const rim = g.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
-  rim.addColorStop(0, 'rgba(255,255,255,0.95)');
-  rim.addColorStop(0.5, 'rgba(255,255,255,0.25)');
-  rim.addColorStop(1, 'rgba(255,255,255,0.8)');
+  rim.addColorStop(0, dark ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.95)');
+  rim.addColorStop(0.5, dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.25)');
+  rim.addColorStop(1, dark ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.8)');
   g.strokeStyle = rim;
   g.lineWidth = Math.max(1, 1.5 * dc.z);
   g.stroke();
 }
 
-export const tahoeTheme: Theme = {
-  id: 'tahoe', name: 'macOS Tahoe', blurb: 'Liquid Glass over the lake at dusk',
-  radius: 14, spotlight: 'rgba(6,14,34,0.5)',
-  ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
-  p: {
-    bg: '#23466e', card: 'rgba(255,255,255,0.72)', panel: 'rgba(255,255,255,0.86)', line: 'rgba(255,255,255,0.7)',
-    fg: '#111418', dim: '#4a5260', faint: '#8a92a0', accent: '#0a84ff', ptr: '#0a6fe0', ret: '#1f9d55', wait: '#ff9f0a', err: '#ff453a',
-    param: '#0a6fe0', cell: 'rgba(10,132,255,0.2)', track: 'rgba(255,255,255,0.7)',
-  },
-  pulseColor: 'rgba(10,132,255,0.85)',
-  card(dc, r, o) {
-    if (o.kind === 'wall') return liquidGlass(dc, r, Math.max(4, 18 * dc.z), 'rgba(255,255,255,0.12)', false);
-    liquidGlass(dc, r, Math.max(3, (o.kind === 'plate' ? r.h / 2 / Math.max(dc.z, 0.01) : 12) * dc.z), o.kind === 'frame' || o.kind === 'plate' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.62)', !!o.glow);
-    if (o.glow) {
-      const g = dc.g;
-      rrect(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, Math.max(4, 14 * dc.z));
-      g.strokeStyle = 'rgba(10,132,255,0.55)'; g.lineWidth = Math.max(2, 3 * dc.z); g.stroke();
-    }
-  },
-  // Lake Tahoe at dusk: blue mountains over still water
-  background(dc) {
-    backdrop(dc, 'tahoe', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H * 0.55);
-      sky.addColorStop(0, '#16325c'); sky.addColorStop(0.6, '#4c7fb8'); sky.addColorStop(1, '#a9c7e6');
-      g.fillStyle = sky; g.fillRect(0, 0, W, H * 0.56);
-      const ridge = (y: number, amp: number, col: string, seed: number) => {
-        g.fillStyle = col;
-        g.beginPath(); g.moveTo(0, H * 0.56);
-        for (let x = 0; x <= W; x += W / 24) g.lineTo(x, H * y - Math.abs(Math.sin(x / W * 7 + seed)) * H * amp - Math.sin(x / W * 17 + seed) * H * amp * 0.25);
-        g.lineTo(W, H * 0.56); g.closePath(); g.fill();
-      };
-      ridge(0.5, 0.14, '#3a5f8f', 1.3);
-      ridge(0.54, 0.09, '#2a4a74', 4.1);
-      const lake = g.createLinearGradient(0, H * 0.56, 0, H);
-      lake.addColorStop(0, '#6d97c7'); lake.addColorStop(1, '#0f2748');
-      g.fillStyle = lake; g.fillRect(0, H * 0.56, W, H * 0.44);
-      g.fillStyle = 'rgba(255,255,255,0.12)';
-      for (let k = 0; k < 18; k++) g.fillRect(W * ((k * 0.37) % 1), H * (0.6 + (k % 7) * 0.05), W * 0.08, 1);
-    });
-  },
-  window: {
-    border: 1, corner: 18, titleH: 34, face: 'rgba(250,251,253,0.9)', workspace: 'rgba(255,255,255,0.1)',
-    frame(dc, r, active, client) {
-      liquidGlass(dc, r, Math.max(4, 18 * dc.z), client, active);
+function tahoeOf(dark: boolean): Theme {
+  const glassFace = dark ? 'rgba(28,32,40,0.82)' : 'rgba(250,251,253,0.9)';
+  const cardTint = dark ? 'rgba(40,44,54,0.72)' : 'rgba(255,255,255,0.62)';
+  const panelTint = dark ? 'rgba(24,27,34,0.86)' : 'rgba(255,255,255,0.82)';
+  return {
+    id: dark ? 'tahoe-dark' : 'tahoe', name: 'macOS Tahoe', blurb: dark ? 'Liquid Glass at night' : 'Liquid Glass over the lake at dusk',
+    radius: 14, spotlight: 'rgba(6,14,34,0.5)',
+    ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
+    p: dark ? {
+      bg: '#0b1a30', card: cardTint, panel: panelTint, line: 'rgba(255,255,255,0.25)',
+      fg: '#f2f4f8', dim: '#aab2c0', faint: '#6b7384', accent: '#0a84ff', ptr: '#64a8ff', ret: '#30d158', wait: '#ff9f0a', err: '#ff453a',
+      param: '#64a8ff', cell: 'rgba(10,132,255,0.3)', track: 'rgba(0,0,0,0.35)',
+    } : {
+      bg: '#23466e', card: cardTint, panel: panelTint, line: 'rgba(255,255,255,0.7)',
+      fg: '#111418', dim: '#4a5260', faint: '#8a92a0', accent: '#0a84ff', ptr: '#0a6fe0', ret: '#1f9d55', wait: '#ff9f0a', err: '#ff453a',
+      param: '#0a6fe0', cell: 'rgba(10,132,255,0.2)', track: 'rgba(255,255,255,0.7)',
     },
-    titleBar(dc, r, title, active) {
-      const g = dc.g;
-      const d = Math.max(6, Math.min(r.h - 16 * dc.z, 13 * dc.z));
-      const left = trafficLights(dc, r.x + 14 * dc.z, r.y + r.h / 2, d, active, 'glass');
-      // the title rides a small glass pill
-      const fs = Math.max(7, 13 * dc.z);
-      const t = fitText(g, title, (s) => INTER(s, 600), fs, r.x + r.w - left - 40 * dc.z);
-      const w = g.measureText(t).width + 22 * dc.z;
-      const pill = { x: left + 14 * dc.z, y: r.y + r.h * 0.18, w, h: r.h * 0.64 };
-      liquidGlass(dc, pill, pill.h / 2, active ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)', active);
-      g.fillStyle = active ? '#111418' : '#8a92a0';
-      g.textAlign = 'left'; g.textBaseline = 'middle';
-      g.fillText(t, pill.x + 11 * dc.z, r.y + r.h / 2);
+    pulseColor: 'rgba(10,132,255,0.85)',
+    card(dc, r, o) {
+      if (o.kind === 'wall') return liquidGlass(dc, r, Math.max(4, 18 * dc.z), dark ? 'rgba(20,24,32,0.3)' : 'rgba(255,255,255,0.12)', false, dark);
+      liquidGlass(dc, r, Math.max(3, (o.kind === 'plate' ? r.h / 2 / Math.max(dc.z, 0.01) : 12) * dc.z), o.kind === 'frame' || o.kind === 'plate' ? panelTint : cardTint, !!o.glow, dark);
+      if (o.glow) {
+        const g = dc.g;
+        rrect(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, Math.max(4, 14 * dc.z));
+        g.strokeStyle = 'rgba(10,132,255,0.55)'; g.lineWidth = Math.max(2, 3 * dc.z); g.stroke();
+      }
     },
-    progress(dc, r, fill, anim) {
-      const g = dc.g;
-      liquidGlass(dc, r, r.h / 2, 'rgba(255,255,255,0.5)', false);
-      const w = anim ? r.w * (0.3 + 0.7 * ((dc.time * 0.35) % 1)) : r.w * fill;
-      if (w <= 2) return;
-      rrect(g, r.x + 2, r.y + 2, w - 4, r.h - 4, (r.h - 4) / 2);
-      const blue = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-      blue.addColorStop(0, '#6cb4ff'); blue.addColorStop(1, '#0a84ff');
-      g.fillStyle = blue; g.fill();
+    // Lake Tahoe: blue mountains over still water, at dusk or at night
+    background(dc) {
+      backdrop(dc, dark ? 'tahoe-dark' : 'tahoe', (g, W, H) => {
+        const sky = g.createLinearGradient(0, 0, 0, H * 0.55);
+        const st = dark ? ['#050b1a', '#12264a', '#2b4a78'] : ['#16325c', '#4c7fb8', '#a9c7e6'];
+        sky.addColorStop(0, st[0]); sky.addColorStop(0.6, st[1]); sky.addColorStop(1, st[2]);
+        g.fillStyle = sky; g.fillRect(0, 0, W, H * 0.56);
+        if (dark) {
+          g.fillStyle = 'rgba(255,255,255,0.75)';
+          for (let k = 0; k < 70; k++) g.fillRect((k * 937) % W, ((k * 613) % Math.round(H * 0.45)), 1, 1);
+        }
+        const ridge = (y: number, amp: number, col: string, seed: number) => {
+          g.fillStyle = col;
+          g.beginPath(); g.moveTo(0, H * 0.56);
+          for (let x = 0; x <= W; x += W / 24) g.lineTo(x, H * y - Math.abs(Math.sin(x / W * 7 + seed)) * H * amp - Math.sin(x / W * 17 + seed) * H * amp * 0.25);
+          g.lineTo(W, H * 0.56); g.closePath(); g.fill();
+        };
+        ridge(0.5, 0.14, dark ? '#16294a' : '#3a5f8f', 1.3);
+        ridge(0.54, 0.09, dark ? '#0e1d36' : '#2a4a74', 4.1);
+        const lake = g.createLinearGradient(0, H * 0.56, 0, H);
+        lake.addColorStop(0, dark ? '#1f3a63' : '#6d97c7'); lake.addColorStop(1, dark ? '#030916' : '#0f2748');
+        g.fillStyle = lake; g.fillRect(0, H * 0.56, W, H * 0.44);
+        g.fillStyle = `rgba(255,255,255,${dark ? 0.07 : 0.12})`;
+        for (let k = 0; k < 18; k++) g.fillRect(W * ((k * 0.37) % 1), H * (0.6 + (k % 7) * 0.05), W * 0.08, 1);
+      });
     },
-  },
-};
+    window: {
+      border: 1, corner: 18, titleH: 34, face: glassFace, workspace: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)',
+      frame(dc, r, active, client) {
+        liquidGlass(dc, r, Math.max(4, 18 * dc.z), client, active, dark);
+      },
+      titleBar(dc, r, title, active) {
+        const g = dc.g;
+        const d = Math.max(6, Math.min(r.h - 16 * dc.z, 13 * dc.z));
+        const left = trafficLights(dc, r.x + 14 * dc.z, r.y + r.h / 2, d, active, 'glass');
+        // the title rides a small glass pill
+        const fs = Math.max(7, 13 * dc.z);
+        const t = fitText(g, title, (x) => INTER(x, 600), fs, r.x + r.w - left - 40 * dc.z);
+        const w = g.measureText(t).width + 22 * dc.z;
+        const pill = { x: left + 14 * dc.z, y: r.y + r.h * 0.18, w, h: r.h * 0.64 };
+        liquidGlass(dc, pill, pill.h / 2, dark ? (active ? 'rgba(70,76,90,0.8)' : 'rgba(50,54,64,0.6)') : active ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)', active, dark);
+        g.fillStyle = dark ? (active ? '#f2f4f8' : '#8a92a0') : active ? '#111418' : '#8a92a0';
+        g.textAlign = 'left'; g.textBaseline = 'middle';
+        g.fillText(t, pill.x + 11 * dc.z, r.y + r.h / 2);
+      },
+      progress(dc, r, fill, anim) {
+        const g = dc.g;
+        liquidGlass(dc, r, r.h / 2, dark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.5)', false, dark);
+        const w = anim ? r.w * (0.3 + 0.7 * ((dc.time * 0.35) % 1)) : r.w * fill;
+        if (w <= 2) return;
+        rrect(g, r.x + 2, r.y + 2, w - 4, r.h - 4, (r.h - 4) / 2);
+        const blue = g.createLinearGradient(0, r.y, 0, r.y + r.h);
+        blue.addColorStop(0, '#6cb4ff'); blue.addColorStop(1, '#0a84ff');
+        g.fillStyle = blue; g.fill();
+      },
+    },
+  };
+}
+export const tahoeTheme = tahoeOf(false);
 
 export const system7 = makeSkin(system7Theme);
 export const platinum = makeSkin(platinumTheme);
 export const leopard = makeSkin(leopardTheme);
 export const yosemite = makeSkin(yosemiteTheme);
-export const bigsur = makeSkin(bigSurTheme);
-export const tahoe = makeSkin(tahoeTheme);
+export const bigsur = { ...makeSkin(bigSurTheme), mode: 'light' as const };
+export const tahoe = { ...makeSkin(tahoeTheme), mode: 'light' as const };
+export const bigsurDark = { ...makeSkin(bigSurOf(true)), variantOf: 'bigsur', mode: 'dark' as const };
+export const tahoeDark = { ...makeSkin(tahoeOf(true)), variantOf: 'tahoe', mode: 'dark' as const };

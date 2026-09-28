@@ -631,3 +631,14 @@ questions. Newest last.
   that stays up ≥1.5 s, and it's cheaper than the two live views it
   replaced.
 
+## 2026-09-28: light and dark modes
+
+- **Decision (author):** Skins whose originals had both looks get both:
+  Barebone (dark ↔ light), Windows 8 (dark ↔ light), macOS Big Sur and
+  macOS Tahoe (light ↔ dark). The picker lists one entry per skin; a ☀/☾
+  button next to it appears only when the skin has both, and the chosen
+  mode (`ftb.mode`) carries over to the next skin that has both. A
+  variant is its own skin (`variantOf`, `mode`) built from the same theme
+  builder, with its own stylesheet. Skins whose originals had one look
+  (XP, 7, System 7, OS 9, Aqua, Leopard, Yosemite, Game Boy…) stay single.
+

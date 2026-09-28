@@ -19,7 +19,7 @@ import {
   BP_JSON, DRIVER, META, RUN_JSON, buildFiles, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, projectModel,
   runEmpty, save, serializeRun, splitArgs, type Listing, type Opened, type PFile, type Project,
 } from './workspace';
-import { SKINS, SKIN_FONTS } from './skins';
+import { SKINS, SKIN_FONTS, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import './styles/base.css';
 import './styles/amp.css';
@@ -27,6 +27,10 @@ import './styles/classic.css';
 import './styles/aqua.css';
 import './styles/minimal.css';
 import './styles/barebone.css';
+import './styles/barebone-light.css';
+import './styles/metro-light.css';
+import './styles/bigsur-dark.css';
+import './styles/tahoe-dark.css';
 import './styles/blueprint.css';
 import './styles/factory.css';
 import './styles/gameboy.css';
@@ -1693,11 +1697,31 @@ async function applySkin(skin: Skin): Promise<void> {
   lastPbKey = '';
 }
 
+// One entry per skin; skins that come in light and dark get a ☀/☾ button,
+// and the chosen mode carries over to the next skin that has both.
 function renderSkinPicker(): void {
   const box = $<HTMLSelectElement>('skins');
-  box.innerHTML = SKINS.map((s) => `<option value="${s.id}"${s === S.skin ? ' selected' : ''} title="${esc(s.blurb)}">${esc(s.name)}</option>`).join('');
+  const base = S.skin.variantOf ?? S.skin.id;
+  box.innerHTML = SKINS.filter((s) => !s.variantOf).map((s) => `<option value="${s.id}"${s.id === base ? ' selected' : ''} title="${esc(s.blurb)}">${esc(s.name)}</option>`).join('');
   box.title = S.skin.blurb;
-  box.onchange = () => void applySkin(SKINS.find((s) => s.id === box.value)!);
+  box.onchange = () => {
+    let next = SKINS.find((s) => s.id === box.value)!;
+    const other = otherMode(next);
+    const want = store.get('mode');
+    if (other && want && next.mode !== want) next = other;
+    void applySkin(next);
+  };
+  const btn = $<HTMLButtonElement>('skin-mode');
+  const other = otherMode(S.skin);
+  btn.hidden = !other;
+  if (other) {
+    btn.textContent = S.skin.mode === 'dark' ? '☀' : '☾';
+    btn.title = S.skin.mode === 'dark' ? 'Light mode' : 'Dark mode';
+    btn.onclick = () => {
+      store.set('mode', other.mode ?? '');
+      void applySkin(other);
+    };
+  }
 }
 
 // ---------------- vim toggle ----------------

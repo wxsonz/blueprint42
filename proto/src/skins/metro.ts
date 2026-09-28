@@ -9,10 +9,11 @@ const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 300} ${px}px "Segoe UI",
 const TILES = ['#2d89ef', '#00a300', '#ff0097', '#9f00a7', '#da532c', '#1e7145', '#b91d47', '#00aba9', '#603cba', '#e3a21a'];
 const tileOf = (s: string) => TILES[Math.floor(hash(s.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 9973) * TILES.length)];
 const BG = '#1f0a4f';
+const BG_LIGHT = '#e8e4f2';
 
-function glyph(dc: Dc, r: Rect, kind: 'min' | 'max' | 'close'): void {
+function glyph(dc: Dc, r: Rect, kind: 'min' | 'max' | 'close', color = '#ffffff'): void {
   const g = dc.g;
-  g.strokeStyle = '#ffffff';
+  g.strokeStyle = color;
   g.lineWidth = Math.max(1, 1.3 * dc.z);
   const c = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
   const d = Math.min(r.w, r.h) * 0.2;
@@ -23,18 +24,25 @@ function glyph(dc: Dc, r: Rect, kind: 'min' | 'max' | 'close'): void {
   g.stroke();
 }
 
-export const metroTheme: Theme = {
-  id: 'metro',
+function metroOf(dark: boolean): Theme {
+  const bg = dark ? BG : BG_LIGHT;
+  const face = dark ? '#1d1d1d' : '#ffffff';
+  return {
+  id: dark ? 'metro' : 'metro-light',
   name: 'Windows 8',
-  blurb: 'Metro: flat tiles, bold colour',
+  blurb: dark ? 'Metro: flat tiles, bold colour' : 'Metro, light: white windows, bold tiles',
   radius: 0,
-  spotlight: 'rgba(10,2,30,0.72)',
+  spotlight: dark ? 'rgba(10,2,30,0.72)' : 'rgba(240,238,248,0.75)',
   ui: UI,
   mono: (px, w = 400) => `${w >= 600 ? 600 : 400} ${px}px Consolas, "DejaVu Sans Mono", monospace`,
-  p: {
-    bg: BG, card: '#1d1d1d', panel: '#262626', line: '#3a3a3a',
+  p: dark ? {
+    bg, card: face, panel: '#262626', line: '#3a3a3a',
     fg: '#ffffff', dim: '#bdbdbd', faint: '#7a7a7a', accent: '#2d89ef', ptr: '#00aba9', ret: '#99cc00', wait: '#e3a21a', err: '#ee1111',
     param: '#9fc6f5', cell: '#3a3a3a', track: '#141414',
+  } : {
+    bg, card: '#f3f3f3', panel: face, line: '#d0d0d0',
+    fg: '#1a1a1a', dim: '#555555', faint: '#9a9a9a', accent: '#2d89ef', ptr: '#00807f', ret: '#4a8f00', wait: '#b87d00', err: '#d01010',
+    param: '#1b5fb4', cell: '#dce9fa', track: '#ffffff',
   },
   pulseColor: 'rgba(45,137,239,0.85)',
 
@@ -44,11 +52,11 @@ export const metroTheme: Theme = {
 
   background(dc, camX, camY) {
     const g = dc.g;
-    g.fillStyle = BG;
+    g.fillStyle = bg;
     g.fillRect(0, 0, dc.vw, dc.vh);
     if (dc.cs < 16) return;
     // faint square tile seams
-    g.strokeStyle = 'rgba(255,255,255,0.04)';
+    g.strokeStyle = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
     g.lineWidth = 1;
     g.beginPath();
     const s = 2;
@@ -61,13 +69,13 @@ export const metroTheme: Theme = {
     border: 1,
     corner: 0,
     titleH: 26,
-    face: '#1d1d1d',
-    workspace: 'rgba(255,255,255,0.04)',
+    face,
+    workspace: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
     frame(dc, r, active, client) {
       const g = dc.g;
       g.fillStyle = client;
       g.fillRect(r.x, r.y, r.w, r.h);
-      g.strokeStyle = active ? '#ffffff' : '#555555';
+      g.strokeStyle = dark ? (active ? '#ffffff' : '#555555') : active ? '#2d89ef' : '#c8c8c8';
       g.lineWidth = 1;
       g.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
     },
@@ -75,26 +83,26 @@ export const metroTheme: Theme = {
       const g = dc.g;
       // the tile colour comes from the name: each machine keeps its own
       const name = title.replace(/[( ].*$/, '');
-      g.fillStyle = active ? tileOf(name) : '#2b2b2b';
+      g.fillStyle = active ? tileOf(name) : dark ? '#2b2b2b' : '#e1e1e1';
       g.fillRect(r.x, r.y, r.w, r.h);
       let right = r.x + r.w;
       if (buttons && r.w > 140 * dc.z) {
         const bw = r.h * 1.3;
         for (const k of ['close', 'max', 'min'] as const) {
           if (k === 'close' && active) (g.fillStyle = '#c7372f'), g.fillRect(right - bw, r.y, bw, r.h);
-          glyph(dc, { x: right - bw, y: r.y, w: bw, h: r.h }, k);
+          glyph(dc, { x: right - bw, y: r.y, w: bw, h: r.h }, k, active || dark ? '#ffffff' : '#333333');
           right -= bw;
         }
       }
       const fs = Math.max(7, 14 * dc.z);
-      g.fillStyle = '#ffffff';
+      g.fillStyle = active || dark ? '#ffffff' : '#333333';
       g.textAlign = 'left';
       g.textBaseline = 'middle';
       g.fillText(fitText(g, title.toLowerCase(), UI, fs, right - r.x - 16 * dc.z), r.x + 10 * dc.z, r.y + r.h / 2);
     },
     progress(dc, r, fill, anim) {
       const g = dc.g;
-      g.fillStyle = '#333333';
+      g.fillStyle = dark ? '#333333' : '#dddddd';
       g.fillRect(r.x, r.y + r.h * 0.35, r.w, r.h * 0.3);
       g.fillStyle = '#2d89ef';
       if (anim) {
@@ -108,5 +116,9 @@ export const metroTheme: Theme = {
     },
   },
 };
+}
 
-export const metro = makeSkin(metroTheme);
+export const metroTheme = metroOf(true);
+
+export const metro = { ...makeSkin(metroTheme), mode: 'dark' as const };
+export const metroLight = { ...makeSkin(metroOf(false)), variantOf: 'metro', mode: 'light' as const };

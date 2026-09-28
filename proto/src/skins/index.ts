@@ -6,14 +6,21 @@ import { blueprint } from './blueprint';
 import { factory } from './factory';
 import { gameboy } from './gameboy';
 import { synthwave } from './synthwave';
-import { barebone } from './barebone';
+import { bareboneDark, bareboneLight } from './barebone';
 import { xp } from './xp';
 import { seven } from './seven';
-import { metro } from './metro';
-import { bigsur, leopard, platinum, system7, tahoe, yosemite } from './macos';
+import { metro, metroLight } from './metro';
+import { bigsur, bigsurDark, leopard, platinum, system7, tahoe, tahoeDark, yosemite } from './macos';
 import type { Skin } from './types';
 
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, system7, platinum, aqua, leopard, yosemite, bigsur, tahoe, minimal, barebone, blueprint, factory, gameboy, synthwave];
+// A skin with a variantOf is the other mode (light/dark) of that skin: the
+// picker lists only bases, and the ☀/☾ button flips between the two.
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave];
+
+// The other mode of a skin, if it has one.
+export function otherMode(skin: Skin): Skin | undefined {
+  return skin.variantOf ? SKINS.find((s) => s.id === skin.variantOf) : SKINS.find((s) => s.variantOf === skin.id);
+}
 
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
@@ -27,6 +34,10 @@ export const SKIN_FONTS: Record<string, string[]> = {
   synthwave: ['500 12px Orbitron', '700 12px Orbitron', '12px "Share Tech Mono"'],
   xp: [],
   barebone: [],
+  'barebone-light': [],
+  'metro-light': ['300 12px "Open Sans"', '600 12px "Open Sans"'],
+  'bigsur-dark': ['500 12px Inter', '700 12px Inter'],
+  'tahoe-dark': ['500 12px Inter', '700 12px Inter'],
   seven: ['12px "Open Sans"', '600 12px "Open Sans"'],
   metro: ['300 12px "Open Sans"', '600 12px "Open Sans"'],
   system7: ['12px "Pixelify Sans"', '700 12px "Pixelify Sans"'],
