@@ -1009,3 +1009,23 @@ questions. Newest last.
   The top bar, pane heads, the duel, the return card, the inspector,
   storage and stations lose the stripe; they use plain dark or grey
   rules.
+
+## 2026-09-28: the PS2 boot screen, animated
+- **Decision (author: make the PS2 dramatic with the menu's dancing lights,
+  light trails, the era's stacked-frame blur; then: sharp trails as in the
+  "Sony Computer Entertainment" screen, low-res fog, glass cubes):** The PS2
+  background is that boot screen, animated:
+  - Black space with a blue fog in the middle: two tiny value-noise
+    textures (96×60) scaled up and drifting against each other.
+  - Six dark glass cubes tumbling, drawn at an eighth of the resolution
+    so they come out soft.
+  - Four coloured lights (red, green, violet, blue) sweeping through in
+    3D, each with a glowing head and a hairline trail drawn at full
+    resolution.
+  - It's stateless. A trail is the light's own path sampled back in
+    time, so it looks the same at the idle 15 fps, at 60 fps, and in the
+    picker's still preview. Reduced motion freezes it. It costs about
+    0.5 ms a frame.
+  - The towers and Earth glow are gone. Machine windows are smoked (80%)
+    instead of solid, so the lights pass behind them; storage and
+    stations stay opaque under text.

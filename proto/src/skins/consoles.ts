@@ -325,8 +325,171 @@ function brackets(g: CanvasRenderingContext2D, r: Rect, len: number, lw: number,
   g.moveTo(r.x + len, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - o); g.lineTo(r.x + o, r.y + r.h - len);
   g.stroke();
 }
+// The boot screen ("Sony Computer Entertainment"): black space with a
+// low-resolution blue fog in the middle, dim glass cubes tumbling in it,
+// and a few coloured lights sweeping through, each glowing at its head
+// and dragging an ultra-sharp hairline trail. The fog and cubes are
+// soft (small textures scaled up); the trails are drawn at full
+// resolution. Stateless: a trail is the light's own path sampled back in
+// time, so it looks the same at 15 or 60 frames a second and in the
+// still preview.
+const ps2Still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// the fog: value noise on a tiny grid, a few octaves, inside a soft oval
+function ps2FogTex(seed: number): HTMLCanvasElement {
+  const W = 96;
+  const H = 60;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(W, H);
+  const noise = (x: number, y: number, s: number) => {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const fx = x - xi;
+    const fy = y - yi;
+    const h = (i: number, j: number) => hash(i * 131 + j * 977 + s * 7919);
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const a = h(xi, yi) + (h(xi + 1, yi) - h(xi, yi)) * sx;
+    const b = h(xi, yi + 1) + (h(xi + 1, yi + 1) - h(xi, yi + 1)) * sx;
+    return a + (b - a) * sy;
+  };
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      let n = 0;
+      let amp = 0.55;
+      for (let o = 0; o < 4; o++) (n += amp * noise((x / W) * 5 * 2 ** o, (y / H) * 3 * 2 ** o, seed + o)), (amp /= 2);
+      const dx = (x / W - 0.5) / 0.42;
+      const dy = (y / H - 0.47) / 0.42;
+      const mask = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy));
+      const d = Math.max(0, n - 0.3) * 2.2 * mask ** 1.2;
+      const k = (y * W + x) * 4;
+      img.data[k] = 30 + 36 * d;
+      img.data[k + 1] = 40 + 44 * d;
+      img.data[k + 2] = 160 + 80 * d;
+      img.data[k + 3] = Math.min(255, 255 * d * 0.9);
+    }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+let ps2Fogs: HTMLCanvasElement[] | null = null;
+const ps2Cubes = Array.from({ length: 6 }, (_, i) => ({
+  x: [-0.34, 0.36, -0.1, 0.18, -0.42, 0.44][i], y: [-0.28, -0.3, -0.05, 0.2, 0.3, 0.26][i],
+  s: 0.06 + 0.06 * hash(i * 5 + 1), rx: 0.05 + 0.08 * hash(i * 7 + 2), ry: 0.04 + 0.07 * hash(i * 11 + 3), p: Math.PI * 2 * hash(i * 13 + 4),
+}));
+const CUBE_V = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
+const CUBE_F = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4]];
+let ps2Buf: { c: HTMLCanvasElement; g: CanvasRenderingContext2D } | null = null;
+const ps2Lights = [
+  { col: '#ff4a5e', a: 0.23, b: 0.31, c: 0.17, p: [0.3, 1.9, 4.1, 0.7] },
+  { col: '#3dff72', a: 0.29, b: 0.19, c: 0.23, p: [2.4, 0.2, 1.3, 2.9] },
+  { col: '#9b7dff', a: 0.19, b: 0.27, c: 0.29, p: [4.6, 3.3, 0.4, 5.1] },
+  { col: '#4aa8ff', a: 0.26, b: 0.23, c: 0.2, p: [1.1, 5.2, 2.7, 3.8] },
+];
+const ps2Sprites = new Map<string, HTMLCanvasElement>();
+function ps2Sprite(col: string): HTMLCanvasElement {
+  let c = ps2Sprites.get(col);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d')!;
+    const r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    r.addColorStop(0, 'rgba(255,255,255,1)');
+    r.addColorStop(0.12, col);
+    r.addColorStop(0.35, col + '66');
+    r.addColorStop(1, col + '00');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 32, 32);
+    ps2Sprites.set(col, c);
+  }
+  return c;
+}
+function ps2Boot(dc: Dc): void {
+  const g = dc.g;
+  const t = ps2Still || !dc.time ? 40 : dc.time;
+  const W = dc.vw;
+  const H = dc.vh;
+  g.save();
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  // the fog: two layers drifting against each other, breathing a little
+  ps2Fogs ??= [ps2FogTex(1), ps2FogTex(9)];
+  for (let i = 0; i < 2; i++) {
+    const dir = i ? -1 : 1;
+    const ox = Math.sin(t * 0.045 + i * 2) * W * 0.04 * dir;
+    const oy = Math.cos(t * 0.037 + i) * H * 0.03;
+    g.globalAlpha = i ? 0.55 + 0.1 * Math.sin(t * 0.3) : 0.85;
+    g.drawImage(ps2Fogs[i], -W * 0.08 + ox, -H * 0.08 + oy, W * 1.16, H * 1.16);
+  }
+  g.globalAlpha = 1;
+  // the glass cubes, at an eighth of the resolution so they come out soft
+  const Q = 8;
+  const bw = Math.max(8, Math.ceil(W / Q));
+  const bh = Math.max(8, Math.ceil(H / Q));
+  ps2Buf ??= (() => { const c = document.createElement('canvas'); return { c, g: c.getContext('2d')! }; })();
+  const B = ps2Buf;
+  if (B.c.width !== bw || B.c.height !== bh) (B.c.width = bw), (B.c.height = bh);
+  const b = B.g;
+  b.clearRect(0, 0, bw, bh);
+  b.lineJoin = 'round';
+  const u = Math.min(bw, bh);
+  for (const C of ps2Cubes) {
+    const ax = C.p + t * C.rx;
+    const ay = C.p * 0.7 + t * C.ry;
+    const pts = CUBE_V.map(([x, y, z]) => {
+      const y1 = y * Math.cos(ax) - z * Math.sin(ax);
+      const z1 = y * Math.sin(ax) + z * Math.cos(ax);
+      const x2 = x * Math.cos(ay) + z1 * Math.sin(ay);
+      const z2 = -x * Math.sin(ay) + z1 * Math.cos(ay);
+      const k = 3 / (4 - z2 * 0.6);
+      return [bw / 2 + C.x * bw + x2 * C.s * u * k, bh * 0.47 + C.y * bh + y1 * C.s * u * k];
+    });
+    for (const f of CUBE_F) {
+      b.beginPath();
+      f.forEach((v, n) => (n ? b.lineTo(pts[v][0], pts[v][1]) : b.moveTo(pts[v][0], pts[v][1])));
+      b.closePath();
+      b.fillStyle = 'rgba(4,6,20,0.2)';
+      b.fill();
+      b.strokeStyle = 'rgba(120,140,220,0.07)';
+      b.lineWidth = 1;
+      b.stroke();
+    }
+  }
+  g.drawImage(B.c, 0, 0, W, H);
+  // the lights: a glowing head, a hairline trail
+  g.globalCompositeOperation = 'lighter';
+  g.lineCap = 'round';
+  const at = (L: (typeof ps2Lights)[number], tt: number) => {
+    const x3 = Math.sin(L.a * tt * 2.2 + L.p[0]) * (0.7 + 0.3 * Math.sin(0.11 * tt + L.p[3]));
+    const y3 = Math.sin(L.b * tt * 2.2 + L.p[1]);
+    const z3 = Math.cos(L.c * tt * 2.2 + L.p[2]);
+    const k = 1.6 / (2.6 - z3);
+    return { x: W / 2 + x3 * W * 0.46 * k, y: H * 0.47 + y3 * H * 0.36 * k, k };
+  };
+  const N = 90;
+  for (const L of ps2Lights) {
+    let prev = at(L, t - N * 0.018);
+    for (let n = N - 1; n >= 0; n--) {
+      const cur = at(L, t - n * 0.018);
+      g.globalAlpha = (1 - n / N) ** 1.6 * 0.9;
+      g.strokeStyle = L.col;
+      g.lineWidth = n < 8 ? 1.4 : 1;
+      g.beginPath();
+      g.moveTo(prev.x, prev.y);
+      g.lineTo(cur.x, cur.y);
+      g.stroke();
+      prev = cur;
+    }
+    const d = 26 * prev.k;
+    g.globalAlpha = 1;
+    g.drawImage(ps2Sprite(L.col), prev.x - d / 2, prev.y - d / 2, d, d);
+  }
+  g.restore();
+}
+
 export const ps2Theme: Theme = {
-  id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith: ridges, a thin blue line, the Earth in space',
+  id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith and the boot screen: blue fog, glass cubes, sharp trails of light',
   p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 0, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(47,140,255,0.9)',
   card(dc, r, o) {
@@ -339,54 +502,22 @@ export const ps2Theme: Theme = {
     g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
-  // space, with the Earth's blue rising from below (the stand), the towers far off
+  // the boot screen: black space, the fog, the cubes and the lights
   background(dc) {
-    backdrop(dc, 'ps2-monolith', (g, W, H) => {
-      const hz = H * 0.64;
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#000105');
-      sky.addColorStop(0.64, '#061536');
-      sky.addColorStop(1, '#010308');
-      g.fillStyle = sky;
+    backdrop(dc, 'ps2-space', (g, W, H) => {
+      g.fillStyle = '#000003';
       g.fillRect(0, 0, W, H);
-      const glow = g.createRadialGradient(W * 0.5, hz, 0, W * 0.5, hz, W * 0.6);
-      glow.addColorStop(0, 'rgba(60,130,255,0.28)');
-      glow.addColorStop(1, 'rgba(60,130,255,0)');
-      g.fillStyle = glow;
-      g.fillRect(0, 0, W, H);
-      for (let k = 0; k < 46; k++) {
-        const x = W * hash(k * 17 + 3);
-        const depth = 0.35 + 0.65 * hash(k * 5 + 11);
-        const h = H * (0.08 + 0.42 * hash(k * 29 + 7)) * depth;
-        const w = (5 + 16 * hash(k * 3 + 1)) * depth;
-        const tower = g.createLinearGradient(0, hz - h, 0, hz);
-        tower.addColorStop(0, 'rgba(90,170,255,0)');
-        tower.addColorStop(1, `rgba(90,170,255,${0.18 + 0.3 * depth})`);
-        g.fillStyle = tower;
-        g.fillRect(x, hz - h, w, h);
-        const refl = g.createLinearGradient(0, hz, 0, hz + h * 0.5);
-        refl.addColorStop(0, `rgba(90,170,255,${0.1 * depth})`);
-        refl.addColorStop(1, 'rgba(90,170,255,0)');
-        g.fillStyle = refl;
-        g.fillRect(x, hz, w, h * 0.5);
-      }
-      g.fillStyle = 'rgba(120,190,255,0.35)';
-      g.fillRect(0, hz, W, 1);
-      // the Earth's blue, rising from under the monolith, like the stand
-      const earth = g.createLinearGradient(0, H * 0.78, 0, H);
-      earth.addColorStop(0, 'rgba(20,90,220,0)');
-      earth.addColorStop(1, 'rgba(20,90,220,0.35)');
-      g.fillStyle = earth;
-      g.fillRect(0, H * 0.78, W, H * 0.22);
     });
+    ps2Boot(dc);
   },
   window: {
-    border: 2, corner: 0, titleH: 26, face: '#07080c', workspace: 'rgba(47,140,255,0.03)',
+    border: 2, corner: 0, titleH: 26, face: 'rgba(4,5,9,0.25)', workspace: 'rgba(47,140,255,0.03)',
     // a black slab: stacked ridges along the head, thin blue lines turning at the corners
     frame(dc, r, active, face) {
       const g = dc.g;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
-      g.fillStyle = '#0a0b10';
+      // smoked, not solid: the dancing lights glow through between the panels
+      g.fillStyle = 'rgba(8,9,14,0.8)';
       g.fillRect(r.x, r.y, r.w, r.h);
       ridges(g, r.x, r.y, r.w, 26 * dc.z, Math.max(3, 5 * dc.z));
       g.fillStyle = face;
