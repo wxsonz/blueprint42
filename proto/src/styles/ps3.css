@@ -3,7 +3,7 @@ html[data-skin='ps3'] {
   --font-ui: 'M PLUS Rounded 1c', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 13.5px;
-  --bg: #061a4f;
+  --bg: #123a80;
   --fg: #ffffff;
   --fg-dim: #b8c6e6;
   --accent: #8fd3ff;
@@ -31,28 +31,28 @@ html[data-skin='ps3'] {
   --sw-on: #8fd3ff;
   --sw-knob: #ffffff;
   --panes-bg: transparent;
-  --pane-bg: rgba(0,0,0,0.3);
-  --pane-border: transparent;
-  --pane-radius: 6px;
+  --pane-bg: rgba(8,40,96,0.28);
+  --pane-border: rgba(255,255,255,0.28);
+  --pane-radius: 3px;
   --head-h: 34px;
   --head-bg: transparent;
   --head-fg: #b8c6e6;
   --head-fg-active: #ffffff;
   --head-font: 400 14px 'M PLUS Rounded 1c', sans-serif;
-  --panel-bg: rgba(0,0,0,0.72);
+  --panel-bg: rgba(10,48,108,0.62);
   --panel-fg: #ffffff;
   --panel-dim: #b8c6e6;
-  --panel-border: 1px solid rgba(255,255,255,0.35);
-  --panel-radius: 4px;
-  --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
-  --ptitle-bg: linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.02));
+  --panel-border: 1px solid rgba(255,255,255,0.4);
+  --panel-radius: 3px;
+  --panel-shadow: 0 10px 30px rgba(0,16,50,0.45);
+  --ptitle-bg: transparent;
   --ptitle-fg: #ffffff;
-  --ptitle-border: none;
+  --ptitle-border: 1px solid rgba(255,255,255,0.85);
   --ptitle-pad: 8px 12px;
-  --field-bg: rgba(0,0,0,0.35);
+  --field-bg: rgba(4,26,70,0.35);
   --field-fg: #ffffff;
   --field-border: 1px solid rgba(255,255,255,0.25);
-  --field-radius: 4px;
+  --field-radius: 3px;
   --rule: 1px solid rgba(255,255,255,0.12);
   --pb-bg: transparent;
   --pb-border: 1px solid rgba(255,255,255,0.18);
@@ -64,7 +64,7 @@ html[data-skin='ps3'] {
   --lcd-fn: #8fd3ff;
   --lcd-ptr: #ffb86b;
   --lcd-ret: #8ff0a4;
-  --tl-bg: rgba(0,0,0,0.25);
+  --tl-bg: rgba(4,26,72,0.3);
   --tl-border: none;
   --tl-call: #8fd3ff;
   --tl-ret: #8ff0a4;
@@ -73,7 +73,7 @@ html[data-skin='ps3'] {
   --tl-eval: #333333;
   --tl-err: #ff7a7a;
   --tl-head: #ffffff;
-  --st-bg: rgba(0,0,0,0.3);
+  --st-bg: transparent;
   --st-fg: #b8c6e6;
   --st-border: none;
   --st-font: 12px 'Open Sans', 'DejaVu Sans', sans-serif;
@@ -84,12 +84,12 @@ html[data-skin='ps3'] {
   --menu-hover-bg: #8fd3ff;
   --menu-hover-fg: #082a78;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: rgba(0,0,0,0.42);
+  --ed-bg: rgba(4,26,72,0.4);
   --ed-fg: #ffffff;
   --ed-font: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
   --ed-cursor: #8fd3ff;
-  --ed-gutter: #030c2a;
+  --ed-gutter: rgba(2,16,50,0.35);
   --ed-gutter-fg: #7488b4;
   --ed-gutter-active: #ffffff;
   --ed-active: rgba(255,255,255,0.05);
@@ -111,18 +111,39 @@ html[data-skin='ps3'] {
   --syn-punct: #9aa3b4;
 }
 
-/* the XMB: the date's colour (--xmb, set by the clock, walking toward next month's) with the wave over it;
-   the chrome is white text on nothing, the active item glows */
+/* the XMB in its classic blue (the canvas draws the wave and sparkles over
+   the same sky). Panes and panels are plain frosted rectangles with a white
+   hairline under their titles; the top and play bars are set off by white
+   hairlines as a settings page is; buttons are jelly. */
 html[data-skin='ps3'] body { background:
-  repeating-linear-gradient(170deg, transparent 0 7px, rgba(255,255,255,0.05) 7px 8px) 0 55% / 100% 22% no-repeat,
-  radial-gradient(ellipse 90% 18% at 50% 58%, rgba(255,255,255,0.14), transparent 70%),
-  linear-gradient(color-mix(in srgb, var(--xmb, #2f7fd0) 88%, white), var(--xmb, #2f7fd0) 40%, color-mix(in srgb, var(--xmb, #2f7fd0) 38%, black)); }
-html[data-skin='ps3'] #app, html[data-skin='ps3'] #panes, html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status { background: transparent; border: none; box-shadow: none; }
-html[data-skin='ps3'] .btn, html[data-skin='ps3'] .seg button { color: rgba(255,255,255,0.8); }
-html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.06)); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
-html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseline; gap: 0; font: 300 15px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; text-shadow: 0 0 6px rgba(0,0,0,0.3); }
+  radial-gradient(ellipse 60% 50% at 85% 0%, rgba(90,180,200,0.45), transparent 70%),
+  radial-gradient(ellipse 50% 40% at 70% 100%, rgba(40,40,140,0.4), transparent 70%),
+  linear-gradient(170deg, #3a8fae, #1d64a0 42%, #122a78); }
+html[data-skin='ps3'] #app, html[data-skin='ps3'] #panes, html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status { background: transparent; box-shadow: none; }
+html[data-skin='ps3'] #top { border: none; border-bottom: 1px solid rgba(255,255,255,0.75); box-shadow: 0 1px 6px -2px rgba(255,255,255,0.5); }
+html[data-skin='ps3'] #playbar { border: none; border-top: 1px solid rgba(255,255,255,0.75); box-shadow: 0 -1px 6px -2px rgba(255,255,255,0.5); }
+html[data-skin='ps3'] #status { border: none; }
+html[data-skin='ps3'] .pane { background: rgba(8,40,96,0.22); border: 1px solid rgba(255,255,255,0.28); border-radius: 3px; backdrop-filter: blur(14px); box-shadow: none; }
+html[data-skin='ps3'] .pane.focused { border-color: rgba(255,255,255,0.6); }
+html[data-skin='ps3'] .pane-head { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.45); }
+html[data-skin='ps3'] .pane.focused .pane-head { border-bottom-color: #ffffff; box-shadow: 0 1px 5px -2px rgba(255,255,255,0.8); }
+html[data-skin='ps3'] #duel, html[data-skin='ps3'] #stage-card, html[data-skin='ps3'] #inspector { backdrop-filter: blur(16px); }
+html[data-skin='ps3'] #duel .d-say { box-shadow: 0 1px 5px -2px rgba(255,255,255,0.8); text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
+html[data-skin='ps3'] #duel .d-card { background: rgba(4,26,72,0.45); }
+html[data-skin='ps3'] #duel .d-role, html[data-skin='ps3'] #duel .d-head { background: transparent; }
+/* jelly: pale cyan, lit from above, a soft rim, a shadow under it */
+html[data-skin='ps3'] #duel .d-head .ico { border-radius: 6px; color: #ffffff; text-shadow: 0 1px 1px rgba(0,0,0,0.4); background-image: linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0) 55%); box-shadow: inset 0 0 0 1px rgba(230,250,255,0.7), 0 1px 3px rgba(0,24,70,0.5); }
+html[data-skin='ps3'] #duel .chip { background: linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0) 55%), linear-gradient(#a6dcf0, #3f8fc6); color: #ffffff; text-shadow: 0 1px 2px rgba(0,30,80,0.6); box-shadow: inset 0 0 0 1px rgba(230,250,255,0.6), 0 2px 5px rgba(0,24,70,0.45); }
+html[data-skin='ps3'] .btn, html[data-skin='ps3'] .seg button { color: rgba(255,255,255,0.85); border-radius: 3px; }
+html[data-skin='ps3'] .btn:hover, html[data-skin='ps3'] .seg button:hover { background: rgba(255,255,255,0.12); }
+html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.28), rgba(255,255,255,0.05)); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
+html[data-skin='ps3'] .pb-buttons button { background: transparent; border: none; box-shadow: none; }
+html[data-skin='ps3'] .pb-buttons button svg { fill: #b4e3f4; filter: drop-shadow(0 -0.5px 0 rgba(255,255,255,0.8)) drop-shadow(0 1px 2px rgba(0,24,70,0.7)); }
+html[data-skin='ps3'] .pb-buttons button:hover svg { fill: #d8f3fc; }
+html[data-skin='ps3'] .pb-buttons button.primary { width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(ellipse 70% 45% at 50% 22%, rgba(255,255,255,0.75), rgba(255,255,255,0) 70%), radial-gradient(circle at 50% 60%, #3fb2f0, #0a62c4 75%); box-shadow: inset 0 0 0 1px rgba(200,240,255,0.6), inset 0 -3px 6px rgba(0,30,90,0.4), 0 2px 8px rgba(0,20,70,0.55); }
+html[data-skin='ps3'] .pb-buttons button.primary svg { fill: #ffffff; filter: drop-shadow(0 1px 1px rgba(0,30,90,0.6)); }
+html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseline; gap: 0; font: 300 15px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
 html[data-skin='ps3'] #top .sysclock i { font-size: 1em; margin-left: 0.25em; }
-html[data-skin='ps3'] .pane.focused { box-shadow: 0 0 0 1px rgba(255,255,255,0.55), 0 0 18px rgba(255,255,255,0.25); }
 html[data-skin='ps3'] #top .sysclock s { order: -1; margin-right: 10px; }
-html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status, html[data-skin='ps3'] .pane-head { text-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.4); }
+html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status, html[data-skin='ps3'] .pane-head { text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
 html[data-skin='ps3'] #top .lbl { color: rgba(255,255,255,0.85); }

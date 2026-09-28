@@ -434,22 +434,26 @@ function ps2Sprite(col: string): HTMLCanvasElement {
 // motion (fog least, then the lights, the cubes most, each at its own
 // depth), and zooms by a small power of the grid's zoom. Cubes wrap around;
 // the fog and lights ease to a stop so they never leave the screen.
-const ps2Pan = { x: 0, y: 0, cx: NaN, cy: NaN, vw: 0, vh: 0 };
+type Pan = { x: number; y: number; cx: number; cy: number; vw: number; vh: number };
+const newPan = (): Pan => ({ x: 0, y: 0, cx: NaN, cy: NaN, vw: 0, vh: 0 });
+// how far the grid has moved on screen, added up frame by frame: a zoom
+// (anchored at the mouse) moves the grid at most the mouse's distance
+// from the middle, so zooming far out or in never flings the layers
+function trackPan(P: Pan, dc: Dc, camX: number, camY: number): void {
+  const cx = camX + dc.vw / 2 / dc.cs;
+  const cy = camY + dc.vh / 2 / dc.cs;
+  if (P.vw === dc.vw && P.vh === dc.vh && Number.isFinite(P.cx)) (P.x += (cx - P.cx) * dc.cs), (P.y += (cy - P.cy) * dc.cs);
+  Object.assign(P, { cx, cy, vw: dc.vw, vh: dc.vh });
+}
+const ps2Pan = newPan();
 function ps2Boot(dc: Dc, camX: number, camY: number): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 40 : dc.time;
   const W = dc.vw;
   const H = dc.vh;
-  // how far the grid has moved on screen, added up frame by frame: a zoom
-  // (anchored at the mouse) moves the grid at most the mouse's distance
-  // from the middle, so zooming far out or in never flings the layers
-  const cx = camX + W / 2 / dc.cs;
-  const cy = camY + H / 2 / dc.cs;
-  const P = ps2Pan;
-  if (P.vw === W && P.vh === H && Number.isFinite(P.cx)) (P.x += (cx - P.cx) * dc.cs), (P.y += (cy - P.cy) * dc.cs);
-  Object.assign(P, { cx, cy, vw: W, vh: H });
-  const panX = P.x;
-  const panY = P.y;
+  trackPan(ps2Pan, dc, camX, camY);
+  const panX = ps2Pan.x;
+  const panY = ps2Pan.y;
   const soft = (v: number, lim: number) => lim * Math.tanh(v / lim);
   const zoomOf = (zf: number) => Math.min(1.8, Math.max(0.7, dc.z ** zf));
   const layer = (k: number, zf: number, lim: number) => {
@@ -810,110 +814,292 @@ export const ps2Theme: Theme = {
   },
 };
 
-// PS3, the XrossMediaBar: the backdrop's colour follows the month (walking
-// from one month's colour to the next, as the console does), a ribbon of
-// thin light waves across it, items with no window chrome at all: white
-// rounded Rodin type on soft dark panels, the selected one on a soft white
-// highlight band.
-export const XMB_MONTHS = ['#b8bcc4', '#c9a634', '#69a83a', '#e083b0', '#2f9e4e', '#8a5cc2', '#23a4a8', '#2f7fd0', '#b0409f', '#e39a22', '#8a5a34', '#c22e2e'];
-function mix(hex: string, to: number, f: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const c = (v: number) => Math.round(v + (to - v) * f);
-  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
-}
-export function xmbColour(d = new Date()): { top: string; mid: string; bot: string } {
-  const m = d.getMonth();
-  const days = new Date(d.getFullYear(), m + 1, 0).getDate();
-  const f = (d.getDate() - 1) / days; // part of the way to next month's colour
-  const a = parseInt(XMB_MONTHS[m].slice(1), 16);
-  const b = parseInt(XMB_MONTHS[(m + 1) % 12].slice(1), 16);
-  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - f) + ((b >> sh) & 255) * f);
-  const hex = `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
-  return { top: mix(hex, 255, 0.12), mid: hex, bot: mix(hex, 0, 0.62) };
-}
+// PS3, the XrossMediaBar in its classic blue: teal at the top sinking to
+// navy, a ribbon of translucent sheets twisting across the middle, and white
+// sparkles drifting through, all animated (stateless in time, like the PS2's
+// boot screen) with a little parallax. Windows are plain frosted rectangles
+// with a white hairline under the title; the things you touch (values in
+// flight, the progress bead, the icons) are jelly: glossy pale-cyan blobs.
 const ps3P: Palette = {
-  bg: '#2f7fd0', card: 'rgba(0,0,0,0.3)', panel: 'rgba(0,0,0,0.42)', line: 'rgba(255,255,255,0.22)',
-  fg: '#ffffff', dim: 'rgba(255,255,255,0.72)', faint: 'rgba(255,255,255,0.45)', accent: '#ffffff', ptr: '#ffe08a', ret: '#b8ffb0', wait: '#ffe08a', err: '#ff9a9a',
-  param: '#e6f2ff', cell: 'rgba(255,255,255,0.16)', track: 'rgba(0,0,0,0.3)',
+  bg: '#1a5b98', card: 'rgba(6,34,86,0.42)', panel: 'rgba(6,30,78,0.5)', line: 'rgba(255,255,255,0.3)',
+  fg: '#ffffff', dim: 'rgba(255,255,255,0.75)', faint: 'rgba(255,255,255,0.45)', accent: '#ffffff', ptr: '#ffe08a', ret: '#b8ffb0', wait: '#ffe08a', err: '#ff9a9a',
+  param: '#e6f2ff', cell: 'rgba(255,255,255,0.14)', track: 'rgba(0,20,60,0.35)',
 };
+const ps3Pan = newPan();
+// the sparkles: most gather around the ribbon, the rest anywhere; a few are
+// big soft bokeh
+const ps3Dust = Array.from({ length: 170 }, (_, i) => {
+  const near = hash(i * 17 + 2) < 0.6;
+  const big = i % 23 === 0;
+  return {
+    x: hash(i * 3 + 1), y: near ? 0.55 + (hash(i * 5 + 7) - 0.5) * 0.36 : hash(i * 5 + 7),
+    v: 0.003 + 0.009 * hash(i * 7 + 3), r: big ? 2.5 + 3 * hash(i * 11 + 5) : 0.5 + 1.2 * hash(i * 11 + 5) ** 3,
+    a: big ? 0.16 : 0.3 + 0.6 * hash(i * 13 + 9), f: 0.6 + 2.2 * hash(i * 19 + 4), ph: 6.28 * hash(i * 29 + 8), depth: 0.03 + 0.07 * hash(i * 31 + 1),
+  };
+});
+let ps3Spark: HTMLCanvasElement | null = null;
+let ps3Rib: HTMLCanvasElement | null = null;
+let ps3RibKey = '';
+let ps3RibT = 0;
+function ps3Xmb(dc: Dc, camX: number, camY: number): void {
+  const g = dc.g;
+  const t = ps2Still || !dc.time ? 30 : dc.time;
+  const W = dc.vw;
+  const H = dc.vh;
+  trackPan(ps3Pan, dc, camX, camY);
+  const soft = (v: number, lim: number) => lim * Math.tanh(v / lim);
+  const sc = Math.min(1.4, Math.max(0.8, dc.z ** 0.12));
+  g.save();
+  // the ribbon: N lines across a bundle whose width swings through zero, so
+  // it twists; neighbouring lines are joined by faint sheets. It is soft, so
+  // it's drawn at half the size and scaled up.
+  const ox = -soft(ps3Pan.x * 0.02, W * 0.05);
+  const oy = -soft(ps3Pan.y * 0.02, H * 0.06);
+  const RS = 0.5;
+  const rw = Math.ceil(W * RS);
+  const rh = Math.ceil(H * RS);
+  ps3Rib ??= document.createElement('canvas');
+  if (ps3Rib.width !== rw || ps3Rib.height !== rh) (ps3Rib.width = rw), (ps3Rib.height = rh);
+  const rg = ps3Rib.getContext('2d')!;
+  // it moves slowly: repaint it about 24 times a second, or when the view moves
+  const key = `${rw}x${rh} ${ox.toFixed(1)} ${oy.toFixed(1)} ${sc.toFixed(3)}`;
+  const fresh = key === ps3RibKey && Math.abs(t - ps3RibT) < 1 / 24;
+  if (!fresh) {
+    ps3RibKey = key;
+    ps3RibT = t;
+    rg.clearRect(0, 0, rw, rh);
+    const N = 22;
+    const step = Math.max(6, rw / 56);
+    const xs: number[] = [];
+    for (let x = -step; x <= rw + step; x += step) xs.push(x);
+    const rows: number[][] = [];
+    for (let i = 0; i < N; i++) {
+      const o = -1 + (2 * i) / (N - 1);
+      rows.push(xs.map((x) => {
+        const u = x / rw;
+        const yc = rh * (0.56 + 0.06 * Math.sin(6.28 * 0.55 * u + 0.9 + 0.11 * t) + 0.025 * Math.sin(6.28 * 1.3 * u + 2 - 0.19 * t));
+        const a = rh * (0.02 + 0.08 * Math.sin(6.28 * 0.62 * u + 1 + 0.14 * t));
+        const w = rh * 0.01 * Math.sin(6.28 * 1.7 * u + i * 0.6 + 0.33 * t);
+        return rh / 2 + (yc + o * a + w + oy * RS - rh / 2) * sc;
+      }));
+    }
+    const X = (x: number) => rw / 2 + (x + ox * RS - rw / 2) * sc;
+    const shade = rg.createLinearGradient(0, 0, rw, 0);
+    shade.addColorStop(0, 'rgba(190,220,255,0.6)');
+    shade.addColorStop(0.45, 'rgba(205,230,255,1)');
+    shade.addColorStop(1, 'rgba(195,235,255,0.85)');
+    rg.fillStyle = shade;
+    rg.strokeStyle = shade;
+    // a soft glow along the middle, then the sheets, blurred, then the lines
+    rg.globalAlpha = 0.035;
+    rg.lineCap = 'round';
+    for (const lw of [0.11, 0.07, 0.035]) {
+      rg.lineWidth = rh * lw;
+      rg.beginPath();
+      rows[N >> 1].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
+      rg.stroke();
+    }
+    for (let i = 0; i + 2 < N; i += 2) {
+      rg.globalAlpha = 0.06 + 0.09 * hash(i * 7 + 1);
+      rg.beginPath();
+      rows[i].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
+      for (let k = xs.length - 1; k >= 0; k--) rg.lineTo(X(xs[k]), rows[i + 2][k]);
+      rg.closePath();
+      rg.fill();
+    }
+    rg.lineWidth = 0.8;
+    for (let i = 0; i < N; i++) {
+      rg.globalAlpha = 0.1 + 0.25 * hash(i * 11 + 3) + (i === 0 || i === N - 1 ? 0.2 : 0);
+      rg.beginPath();
+      rows[i].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
+      rg.stroke();
+    }
+  }
+  g.imageSmoothingEnabled = true;
+  g.drawImage(ps3Rib, 0, 0, rw, rh, 0, 0, W, H);
+  // the sparkles: drifting right, bobbing, twinkling; nearer ones pan more
+  if (!ps3Spark) {
+    ps3Spark = document.createElement('canvas');
+    ps3Spark.width = ps3Spark.height = 32;
+    const sg = ps3Spark.getContext('2d')!;
+    const r = sg.createRadialGradient(16, 16, 0, 16, 16, 16);
+    r.addColorStop(0, 'rgba(255,255,255,1)');
+    r.addColorStop(0.25, 'rgba(235,245,255,0.8)');
+    r.addColorStop(1, 'rgba(210,235,255,0)');
+    sg.fillStyle = r;
+    sg.fillRect(0, 0, 32, 32);
+  }
+  const wrap = (v: number, span: number) => ((v % span) + span) % span;
+  for (const d of ps3Dust) {
+    const x = wrap(d.x * W * 1.2 + t * d.v * W - ps3Pan.x * d.depth, W * 1.2) - W * 0.1;
+    const y = wrap(d.y * H + Math.sin(t * 0.3 + d.ph) * H * 0.01 - ps3Pan.y * d.depth, H * 1.1) - H * 0.05;
+    g.globalAlpha = d.a * (0.55 + 0.45 * Math.sin(t * d.f + d.ph));
+    const r = d.r * 3 * sc;
+    g.drawImage(ps3Spark, W / 2 + (x - W / 2) * sc - r, H / 2 + (y - H / 2) * sc - r, r * 2, r * 2);
+  }
+  g.restore();
+}
+// jelly: a rounded blob, pale cyan, lit from above, with a soft rim and a shadow
+function jelly(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rad: number, glow = false): void {
+  g.save();
+  rrect(g, x, y, w, h, rad);
+  g.shadowColor = 'rgba(0,24,70,0.45)';
+  g.shadowBlur = Math.min(8, h * 0.4);
+  g.shadowOffsetY = Math.min(2, h * 0.08);
+  const body = g.createLinearGradient(0, y, 0, y + h);
+  body.addColorStop(0, glow ? 'rgba(170,232,250,0.95)' : 'rgba(140,210,236,0.85)');
+  body.addColorStop(1, glow ? 'rgba(70,165,215,0.95)' : 'rgba(55,135,195,0.85)');
+  g.fillStyle = body;
+  g.fill();
+  g.shadowColor = 'transparent';
+  g.clip();
+  // the inner rim: brighter near the edge, like light caught in gel
+  g.strokeStyle = 'rgba(225,248,255,0.7)';
+  g.lineWidth = Math.max(1, h * 0.12);
+  rrect(g, x, y, w, h, rad);
+  g.stroke();
+  // the gloss on top
+  const gl = g.createLinearGradient(0, y, 0, y + h * 0.55);
+  gl.addColorStop(0, 'rgba(255,255,255,0.55)');
+  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gl;
+  rrect(g, x + h * 0.12, y + h * 0.06, w - h * 0.24, h * 0.5, Math.max(0, rad - h * 0.1));
+  g.fill();
+  g.restore();
+}
+// an icon as jelly: the flat icon, thickened, filled pale cyan, glossed
+function jellyIcon(g: CanvasRenderingContext2D, s: number, draw: (h: CanvasRenderingContext2D) => void): void {
+  const k = g.getTransform().a || 1;
+  const S = Math.ceil(s * k);
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    return c;
+  };
+  const flat = mk();
+  const fg = flat.getContext('2d')!;
+  fg.scale(k, k);
+  draw(fg);
+  const blob = mk();
+  const bg = blob.getContext('2d')!;
+  const d = Math.max(1, S / 22);
+  for (let a = 0; a < 8; a++) bg.drawImage(flat, Math.cos(a * 0.785) * d, Math.sin(a * 0.785) * d);
+  bg.drawImage(flat, 0, 0);
+  bg.globalCompositeOperation = 'source-in';
+  const body = bg.createLinearGradient(0, 0, 0, S);
+  body.addColorStop(0, '#d2f1fb');
+  body.addColorStop(1, '#63b4d8');
+  bg.fillStyle = body;
+  bg.fillRect(0, 0, S, S);
+  bg.globalCompositeOperation = 'source-atop';
+  // the icon's own lines, pressed into the gel
+  bg.globalAlpha = 0.3;
+  bg.drawImage(flat, 0, 0);
+  bg.globalAlpha = 1;
+  const gl = bg.createLinearGradient(0, 0, 0, S * 0.5);
+  gl.addColorStop(0, 'rgba(255,255,255,0.6)');
+  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  bg.fillStyle = gl;
+  bg.fillRect(0, 0, S, S * 0.5);
+  g.save();
+  g.shadowColor = 'rgba(0,24,70,0.55)';
+  g.shadowBlur = 3 * k;
+  g.shadowOffsetY = 1 * k;
+  g.drawImage(blob, 0, 0, s, s);
+  g.restore();
+}
 export const ps3Theme: Theme = {
-  id: 'ps3', name: 'PlayStation 3', blurb: "the XMB: this month's colour, the wave, white type on nothing",
-  p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 6, spotlight: 'rgba(0,0,0,0.45)',
-  pulseColor: 'rgba(255,255,255,0.95)',
+  id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB in blue: the wave, the sparkles, frosted panes and jelly icons',
+  p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 3, spotlight: 'rgba(0,16,50,0.5)',
+  pulseColor: 'rgba(255,255,255,0.95)', flow: '#d6f2ff',
   card(dc, r, o) {
     const g = dc.g;
-    rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 6 * dc.z));
+    if (o.kind === 'plate') {
+      // values in flight and counts: jelly beads
+      jelly(g, r.x, r.y, r.w, r.h, r.h / 2, !!o.glow);
+      return;
+    }
+    rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
     if (o.fill !== 'transparent') {
-      g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.12)' : o.kind === 'frame' || o.kind === 'plate' ? ps3P.panel : ps3P.card;
+      g.fillStyle = o.kind === 'wall' ? 'rgba(4,24,64,0.16)' : o.kind === 'frame' ? ps3P.panel : ps3P.card;
       g.fill();
     }
-    if (o.glow) {
-      g.strokeStyle = 'rgba(255,255,255,0.85)';
-      g.lineWidth = Math.max(1.5, 2 * dc.z);
-      g.stroke();
-    }
+    g.strokeStyle = o.glow ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.22)';
+    g.lineWidth = 1;
+    g.stroke();
   },
-  background(dc) {
-    const c = xmbColour();
-    backdrop(dc, `ps3-${c.mid}`, (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, c.top);
-      sky.addColorStop(0.45, c.mid);
-      sky.addColorStop(1, c.bot);
+  panel(dc, r, head, title, live) {
+    const g = dc.g;
+    g.fillStyle = 'rgba(4,26,70,0.34)';
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.fillStyle = live ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+    g.fillRect(r.x, head.y + head.h - 1, r.w, 1);
+    text(dc, head, title, RODIN_R, 11.5, live ? '#ffffff' : 'rgba(255,255,255,0.75)', { w: 400, x: head.x + 8 * dc.z });
+  },
+  background(dc, camX, camY) {
+    backdrop(dc, 'ps3-blue', (g, W, H) => {
+      const sky = g.createLinearGradient(0, 0, W * 0.25, H);
+      sky.addColorStop(0, '#3a8fae');
+      sky.addColorStop(0.42, '#1d64a0');
+      sky.addColorStop(1, '#122a78');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      // the ribbon: a bundle of thin light waves, brighter where they gather
-      const band = g.createLinearGradient(0, H * 0.4, 0, H * 0.72);
-      band.addColorStop(0, 'rgba(255,255,255,0)');
-      band.addColorStop(0.5, 'rgba(255,255,255,0.1)');
-      band.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = band;
-      g.fillRect(0, H * 0.4, W, H * 0.32);
-      for (let k = 0; k < 26; k++) {
-        g.strokeStyle = `rgba(255,255,255,${0.05 + 0.2 * hash(k * 7 + 3)})`;
-        g.lineWidth = 0.6 + 1.4 * hash(k * 11 + 1);
-        g.beginPath();
-        for (let x = -10; x <= W + 10; x += 10) {
-          const u = x / W;
-          const y = H * 0.56 + Math.sin(u * Math.PI * 2 * 0.85 + k * 0.16) * H * (0.06 + k * 0.0035) + Math.sin(u * Math.PI * 4.5 + k * 0.35) * H * 0.018;
-          if (x < 0) g.moveTo(x, y);
-          else g.lineTo(x, y);
-        }
-        g.stroke();
-      }
+      const tl = g.createRadialGradient(W * 0.85, 0, 0, W * 0.85, 0, W * 0.6);
+      tl.addColorStop(0, 'rgba(90,180,200,0.45)');
+      tl.addColorStop(1, 'rgba(90,180,200,0)');
+      g.fillStyle = tl;
+      g.fillRect(0, 0, W, H);
+      const br = g.createRadialGradient(W * 0.7, H, 0, W * 0.7, H, W * 0.5);
+      br.addColorStop(0, 'rgba(40,40,140,0.4)');
+      br.addColorStop(1, 'rgba(40,40,140,0)');
+      g.fillStyle = br;
+      g.fillRect(0, 0, W, H);
     });
+    ps3Xmb(dc, camX, camY);
   },
   window: {
-    border: 0, corner: 6, titleH: 28, face: 'rgba(0,0,0,0.32)', workspace: 'rgba(0,0,0,0.08)',
+    border: 0, corner: 3, titleH: 28, face: 'rgba(6,32,84,0.4)', workspace: 'rgba(4,24,64,0.12)',
+    // a plain frosted rectangle: a pale veil over a dark one, a faint white edge
     frame(dc, r, active, face) {
       const g = dc.g;
-      rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 6 * dc.z));
+      rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
       g.fillStyle = face;
       g.fill();
+      const veil = g.createLinearGradient(0, r.y, 0, r.y + Math.min(r.h, 160 * dc.z));
+      veil.addColorStop(0, 'rgba(160,210,240,0.14)');
+      veil.addColorStop(1, 'rgba(160,210,240,0.03)');
+      g.fillStyle = veil;
+      g.fill();
+      g.strokeStyle = active ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.22)';
+      g.lineWidth = 1;
+      g.stroke();
     },
+    // the title in white Rodin over a white hairline, the way a settings
+    // page heads itself; brighter and glowing when active
     titleBar(dc, r, title, active) {
       const g = dc.g;
+      text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.78)', { w: 400, x: r.x + 10 * dc.z, halo: active ? 'rgba(255,255,255,0.35)' : 'rgba(0,20,60,0.5)' });
+      g.save();
+      const y = r.y + r.h - 1;
       if (active) {
-        // the XMB's highlight: a soft white band behind the selected item
-        const hl = g.createLinearGradient(r.x, 0, r.x + r.w, 0);
-        hl.addColorStop(0, 'rgba(255,255,255,0.32)');
-        hl.addColorStop(0.55, 'rgba(255,255,255,0.12)');
-        hl.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = hl;
-        g.fillRect(r.x, r.y + r.h * 0.12, r.w, r.h * 0.76);
+        g.shadowColor = 'rgba(255,255,255,0.8)';
+        g.shadowBlur = 6;
       }
-      text(dc, r, title, RODIN_R, active ? 15 : 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.72)', { w: 400, x: r.x + 10 * dc.z, halo: active ? 'rgba(255,255,255,0.22)' : undefined });
+      g.fillStyle = active ? '#ffffff' : 'rgba(255,255,255,0.45)';
+      g.fillRect(r.x, y, r.w, 1);
+      g.restore();
     },
+    // a white hairline and a jelly bead riding it
     progress(dc, r, fill, anim) {
       const g = dc.g;
-      g.fillStyle = 'rgba(255,255,255,0.28)';
-      g.fillRect(r.x, r.y + r.h / 2 - 0.5, r.w, 1);
+      const y = r.y + r.h / 2;
+      g.fillStyle = 'rgba(255,255,255,0.25)';
+      g.fillRect(r.x, y - 0.5, r.w, 1);
       const x = anim ? r.x + r.w * ((dc.time * 0.4) % 1) : r.x + r.w * fill;
-      g.fillStyle = '#ffffff';
-      g.fillRect(r.x, r.y + r.h / 2 - 1, x - r.x, 2);
-      g.beginPath();
-      g.arc(x, r.y + r.h / 2, Math.max(2, r.h * 0.3), 0, Math.PI * 2);
-      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      g.fillRect(r.x, y - 1, x - r.x, 2);
+      const d = Math.max(7, r.h * 0.9);
+      jelly(g, x - d / 2, y - d / 2, d, d, d / 2, true);
     },
   },
 };
@@ -1365,6 +1551,10 @@ export const switchTheme = switchOf(false);
 export const ps1 = { ...makeSkin(ps1Theme), mode: 'dark' as const };
 export const ps2 = makeSkin(ps2Theme);
 export const ps3 = makeSkin(ps3Theme);
+{
+  const flat = ps3.icon;
+  ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));
+}
 export const ps4 = makeSkin(ps4Theme);
 export const ps5 = makeSkin(ps5Theme);
 export const wii = { ...makeSkin(wiiTheme), mode: 'light' as const };
