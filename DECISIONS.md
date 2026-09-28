@@ -1321,3 +1321,9 @@ questions. Newest last.
   layering where they overlap. Culling cut it into crescent-like creases
   and made the edge line flicker as its visible stretches switched on and
   off segment by segment; the line now runs the whole length too.
+- The prism read as fading in and out rather than moving: it now travels
+  in and out past the edges (a wider sweep, fading only in the first and
+  last 15% of a pass), and its twist varies: a steady turn plus two waves
+  of extra turn travelling along it at their own speeds and ways, the spin
+  speeding and slowing, each pass with its own rates; head and tail flare
+  by different amounts and the body's thickness swells and eases along it.

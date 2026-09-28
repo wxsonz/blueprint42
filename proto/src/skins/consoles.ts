@@ -1391,7 +1391,10 @@ const ps4P: Palette = {
 // middle (so near the middle it all but melts in), the third fainter, each
 // one see-through shape the whole length; one edge carries a thick line of
 // the top colour. All faded toward the ends by one gradient along the
-// chord: no banding, nothing flickering on and off as it spins, and cheap. It sweeps across in about
+// chord: no banding, nothing flickering on and off as it spins, and cheap.
+// Its twist varies: a steady turn plus two waves of extra turn travelling
+// along it, the spin speeding and slowing, each pass with its own rates;
+// it travels in and out past the edges, fading only at a pass's ends. It sweeps across in about
 // 12 s, spinning as it goes, fading in and out. Stateless in time.
 function ps4Prism(dc: Dc): void {
   const g = dc.g;
@@ -1402,7 +1405,10 @@ function ps4Prism(dc: Dc): void {
   const n = Math.floor(t / P);
   const p = t / P - n;
   const hh = (k: number) => hash(n * 97 + k * 13 + 5);
-  const fade = Math.sin(Math.PI * p) ** 0.7;
+  // it travels in and out past the edges; the fade only softens the very
+  // start and end of a pass
+  const ramp = (x: number) => Math.min(1, Math.max(0, x)) ** 2 * (3 - 2 * Math.min(1, Math.max(0, x)));
+  const fade = ramp(p / 0.15) * ramp((1 - p) / 0.15);
   // the arc: a slice of a circle centred off beyond one side of the view
   const diag = Math.hypot(W, H);
   const phi = hh(1) * Math.PI * 2;
@@ -1412,12 +1418,21 @@ function ps4Prism(dc: Dc): void {
   const oy = H / 2 + Math.sin(phi) * D;
   const way = hh(4) < 0.5 ? -1 : 1;
   const span = 1.9 + 0.5 * hh(5);
-  const mid = phi + Math.PI + way * (-0.6 + 1.2 * p);
+  const mid = phi + Math.PI + way * (-1.05 + 2.1 * p);
   // flared at head and tail, pinched in the body (the ends fade out anyway)
+  // flared at head and tail (each by its own amount), pinched in the body,
+  // its thickness swelling and easing along the length as it goes
   const rmin = H * (0.035 + 0.02 * hh(6));
-  const rmax = H * (0.16 + 0.06 * hh(9));
-  const spin = t * 0.45 * (hh(7) < 0.5 ? -1 : 1);
-  const twist = (1.0 + 1.0 * hh(8)) * Math.PI;
+  const rHead = H * (0.12 + 0.1 * hh(9));
+  const rTail = H * (0.12 + 0.1 * hh(10));
+  // the twist: a steady turn along the length, plus two waves of extra turn
+  // running along it at their own speeds and ways; the spin speeds and slows
+  const sgn = hh(7) < 0.5 ? -1 : 1;
+  const spin = sgn * (t * 0.4 + 0.9 * Math.sin(t * 0.23 + hh(11) * 6.28));
+  const twist = (0.6 + 1.6 * hh(8)) * Math.PI * (hh(12) < 0.3 ? -1 : 1);
+  const w1 = { a: 0.6 + 1.2 * hh(13), f: 0.5 + 1.2 * hh(14), v: (0.3 + 0.6 * hh(15)) * (hh(16) < 0.5 ? -1 : 1), ph: hh(17) * 6.28 };
+  const w2 = { a: 0.3 + 0.8 * hh(18), f: 1.4 + 1.6 * hh(19), v: (0.5 + 0.8 * hh(20)) * (hh(21) < 0.5 ? -1 : 1), ph: hh(22) * 6.28 };
+  const bulge = 0.15 + 0.25 * hh(23);
   const N = 72;
   const ring: { x: number; y: number }[][] = [];
   const ang: number[] = [];
@@ -1426,8 +1441,9 @@ function ps4Prism(dc: Dc): void {
     const th = mid - span / 2 + span * s;
     const cx = ox + Math.cos(th) * R, cy = oy + Math.sin(th) * R;
     const nx = -Math.cos(th), ny = -Math.sin(th);
-    const r = rmin + (rmax - rmin) * Math.abs(Math.cos(Math.PI * s)) ** 1.6;
-    const tw = spin + twist * s;
+    const flare = (1 - s) ** 2.2 * rHead + s ** 2.2 * rTail;
+    const r = (rmin + flare) * (1 + bulge * Math.sin(Math.PI * 2 * 1.3 * s + t * 0.37 + n));
+    const tw = spin + twist * s + w1.a * Math.sin(Math.PI * 2 * w1.f * s + w1.v * t + w1.ph) + w2.a * Math.sin(Math.PI * 2 * w2.f * s + w2.v * t + w2.ph);
     ang.push(tw);
     const tri: { x: number; y: number }[] = [];
     for (let k = 0; k < 3; k++) {
