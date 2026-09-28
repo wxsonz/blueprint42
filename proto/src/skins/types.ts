@@ -180,6 +180,9 @@ export interface Skin {
   variantOf?: string; // the other mode (light/dark) of this skin: its id; the picker lists only the base
   mode?: 'light' | 'dark'; // set on skins that come in both modes
   background(dc: Dc, camX: number, camY: number): void;
+  // its background is the whole page's: painted once behind every panel, and
+  // the grid draws on a clear canvas over it (PS3)
+  fullBleed?: boolean;
   belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean; count: number }): void;
   node(dc: Dc, r: Rect, n: NodeInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;

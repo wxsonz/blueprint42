@@ -2768,6 +2768,27 @@ function stepUiZoom(dir: 1 | -1): void {
   if (next !== undefined) setUiZoom(next);
 }
 
+// ---------------- the page's background ----------------
+// Skins whose background is the whole page (PS3's XMB) paint it on a canvas
+// behind every panel; the grid's canvas is left clear over it.
+const pageBg = $<HTMLCanvasElement>('page-bg');
+function paintPage(now: number): void {
+  const on = !!S.skin.fullBleed;
+  if (pageBg.hidden === on) pageBg.hidden = !on;
+  if (!on) return;
+  const dpr = view.pixelScale;
+  const w = pageBg.clientWidth;
+  const h = pageBg.clientHeight;
+  const W = Math.round(w * dpr);
+  const H = Math.round(h * dpr);
+  if (pageBg.width !== W || pageBg.height !== H) (pageBg.width = W), (pageBg.height = H);
+  const g = pageBg.getContext('2d')!;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.save();
+  S.skin.background({ g, z: 1, cs: 40, time: now / 1000, vw: w, vh: h }, 0, 0);
+  g.restore();
+}
+
 // ---------------- main loop ----------------
 let lastT = performance.now();
 let lastFollowEv = -1;
@@ -2896,6 +2917,7 @@ function frame(now: number): void {
     }
   }
   S.violations = violations();
+  paintPage(now);
   view.draw(S, S.skin, now);
   renderStageCard();
   renderPlaybar();

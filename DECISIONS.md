@@ -1194,3 +1194,11 @@ questions. Newest last.
   mix of it. The kit's sprite palette (memory strips, storage) and `casing`
   now read the palette live instead of copying it at load, so a theme that
   changes colours at run time is followed everywhere.
+- Fifth pass: a file's or machine's frame is a barely-there outline (the
+  title's line part of it) with one light running slowly around it, a
+  fading tail behind (a lap in about 14 s; brighter on the active window;
+  each window starts at its own point). The XMB is the whole page's
+  background, not just the grid's: a skin can say `fullBleed`, and then
+  main.ts paints its background on one fixed canvas behind every panel
+  (`#page-bg`) and the grid clears its canvas instead of painting a floor,
+  so the wave runs behind the editor and the bars too.

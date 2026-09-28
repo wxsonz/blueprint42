@@ -1204,9 +1204,12 @@ export const ps3Theme: Theme = {
     // files and machines have no pane at all: the window is its title and
     // line, and what's inside (storage, stations, the function box) floats
     // on the sky; only the function box itself is a tinted panel
-    frame(dc, r, _active, _face, kind) {
-      if (kind !== 'node') return;
+    frame(dc, r, active, _face, kind) {
       const g = dc.g;
+      if (kind !== 'node') {
+        ps3Loop(dc, r, active);
+        return;
+      }
       rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
       g.fillStyle = ps3P.card;
       g.fill();
@@ -1214,7 +1217,9 @@ export const ps3Theme: Theme = {
     // the title in white Rodin over a white line that fades out at both ends
     titleBar(dc, r, title, active) {
       text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.75)', { w: 400, x: r.x + 10 * dc.z });
-      ps3Rule(dc.g, r.x, r.y + r.h - 1, r.w, active ? 1 : 0.45, active);
+      // the line under the title is part of the frame's faint shape; the
+      // bright one runs around the frame (ps3Loop)
+      ps3Rule(dc.g, r.x, r.y + r.h - 1, r.w, active ? 0.3 : 0.16, false);
     },
     // the install bar: a see-through capsule, a glossy fill; running, a soft
     // light slides along it
@@ -1258,6 +1263,44 @@ export const ps3Theme: Theme = {
     },
   },
 };
+// A file's or machine's frame: its outline, barely there, and a light that
+// runs slowly around it, a fading tail behind it (one lap in about 14 s at
+// zoom 1; brighter on the active window). Each window starts somewhere else.
+function ps3Loop(dc: Dc, r: Rect, active: boolean): void {
+  const g = dc.g;
+  g.save();
+  g.lineWidth = 1;
+  g.strokeStyle = `rgba(255,255,255,${active ? 0.12 : 0.07})`;
+  g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  const w = new Walk([[r.x + 0.5, r.y + 0.5], [r.x + r.w - 0.5, r.y + 0.5], [r.x + r.w - 0.5, r.y + r.h - 0.5], [r.x + 0.5, r.y + r.h - 0.5], [r.x + 0.5, r.y + 0.5]]);
+  const L = w.length;
+  if (L < 8) return void g.restore();
+  const time = ps2Still ? 20 : dc.time || 0;
+  const seed = hash(Math.round((r.w + 3 * r.h) / dc.z));
+  const head = (seed * L + time * 60 * dc.z) % L;
+  const tail = Math.min(L * 0.35, Math.max(60, r.w * 0.7));
+  const N = 28;
+  const a = active ? 0.95 : 0.5;
+  g.lineCap = 'round';
+  let prev = w.at((head - tail + L) % L);
+  for (let k = 1; k <= N; k++) {
+    const q = w.at((head - tail + (tail * k) / N + L) % L);
+    const f = (k / N) ** 1.8;
+    // across a corner the two samples sit on different sides: step through it
+    g.beginPath();
+    g.moveTo(prev.x, prev.y);
+    if (Math.abs(prev.x - q.x) > 0.5 && Math.abs(prev.y - q.y) > 0.5) g.lineTo(prev.dx ? q.x : prev.x, prev.dx ? prev.y : q.y);
+    g.lineTo(q.x, q.y);
+    g.strokeStyle = `rgba(255,255,255,${f * a * 0.18})`;
+    g.lineWidth = Math.max(2.5, 4 * dc.z);
+    g.stroke();
+    g.strokeStyle = `rgba(255,255,255,${f * a})`;
+    g.lineWidth = 1;
+    g.stroke();
+    prev = q;
+  }
+  g.restore();
+}
 // a white rule that fades out at both ends; lit, a faint band around it
 // (no shadow blur: too costly)
 function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a: number, glow: boolean): void {
@@ -1727,6 +1770,7 @@ export const ps3 = makeSkin(ps3Theme);
 {
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));
+  ps3.fullBleed = true;
   ps3.tints = PS3_TINTS;
   ps3.tint = (id, instant) => {
     const to = skyOf(id);

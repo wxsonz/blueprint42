@@ -563,3 +563,8 @@ kbd {
 
 /* theme colours a skin offers (PS3): a row of swatches on the top bar */
 .tints:not([hidden]) { display: inline-flex; align-items: center; gap: 5px; margin: 0 6px; }
+
+/* a skin whose background is the whole page (PS3): one canvas behind every panel */
+#page-bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+#page-bg[hidden] { display: none; }
+#page-bg:not([hidden]) ~ #app { position: relative; z-index: 1; }

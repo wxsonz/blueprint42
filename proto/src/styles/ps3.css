@@ -174,3 +174,5 @@ html[data-skin='ps3'] .tints:not(:hover):not(:focus-within) button:not([aria-che
 html[data-skin='ps3'] .tints > .row { position: absolute; right: 0; top: 0; height: 20px; display: flex; align-items: center; flex-direction: row-reverse; padding: 0 2px; border-radius: 10px; transition: background 0.2s, box-shadow 0.2s; }
 html[data-skin='ps3'] .tints:hover > .row, html[data-skin='ps3'] .tints:focus-within > .row { background: color-mix(in srgb, var(--xmb-deep) 80%, transparent); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
 html[data-skin='ps3'] .tints button[aria-checked='true'] { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 0 0 2px #ffffff, 0 0 8px rgba(255,255,255,0.7); }
+/* the grid is the page: its pane is see-through, the XMB behind all of it */
+html[data-skin='ps3'] #grid-pane, html[data-skin='ps3'] #grid-wrap { background: transparent; }

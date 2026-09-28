@@ -880,9 +880,12 @@ export class GridView {
     const cs = this.cs;
     const z = this.cam.zoom;
     const dc: Dc = { g, z, cs, time: now / 1000, vw: this.w, vh: this.h };
-    g.save();
-    skin.background(dc, this.cam.x, this.cam.y);
-    g.restore();
+    if (skin.fullBleed) g.clearRect(0, 0, this.w, this.h); // the page behind shows through
+    else {
+      g.save();
+      skin.background(dc, this.cam.x, this.cam.y);
+      g.restore();
+    }
 
     const trace = s.trace;
     const fr = trace && trace.evs.length ? frameAt(trace, s.pos) : null;
