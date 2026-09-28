@@ -1269,3 +1269,8 @@ questions. Newest last.
   wallpaper leaves room for its logo). Stateless in time; painted at half
   size with a 1.4 px blur (which also hides the shading steps between its
   quads) at most 24 times a second, over the cached sky.
+- The PS4's duel and feed follow the PS3's pattern with the PS4's own
+  trophy notification: a dark charcoal box with large rounded corners and
+  no border, a square tile with a thin edge holding the icon, the title in
+  white SST and grey beneath. The duel's value box is the PS4's input field
+  (navy, white edge), as values on the grid are.

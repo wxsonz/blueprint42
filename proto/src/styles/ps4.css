@@ -125,3 +125,37 @@ html[data-skin='ps4'] .pane-head { border-bottom: 1px solid rgba(150,190,255,0.3
 html[data-skin='ps4'] .pane.focused { box-shadow: 0 0 0 2px #ffffff; }
 html[data-skin='ps4'] .seg button[aria-pressed='true'], html[data-skin='ps4'] .seg button.on { box-shadow: inset 0 0 0 2px #ffffff; }
 html[data-skin='ps4'] .btn:focus-visible, html[data-skin='ps4'] .seg button:focus-visible { outline: 3px solid #ffffff; outline-offset: -3px; }
+
+/* the duel and the feed are the PS4's trophy notification: a dark charcoal
+   box with large rounded corners and no border, a square tile with a thin
+   edge holding the icon, the title in white SST and a grey line under it */
+html[data-skin='ps4'] #duel, html[data-skin='ps4'] #feed .kf {
+  background: rgba(34,34,38,0.96); border: none; border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0,8,50,0.4); }
+html[data-skin='ps4'] #duel::before { background: none; }
+html[data-skin='ps4'] #duel { padding: 0 14px 14px; }
+html[data-skin='ps4'] #duel .d-say { background: none; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; margin: 0 -14px;
+  display: flex; align-items: center; gap: 14px; padding: 12px 18px; font: 400 17px 'Source Sans 3', sans-serif; color: #ffffff; }
+html[data-skin='ps4'] #duel .d-say::before { content: '→'; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 3px;
+  background: #3a3a40; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); color: #ffffff; font: 600 18px 'Source Sans 3', sans-serif; }
+html[data-skin='ps4'] #duel.ret .d-say::before { content: '↩'; }
+html[data-skin='ps4'] #duel.write .d-say::before { content: '✎'; }
+html[data-skin='ps4'] #duel .d-say .t { overflow: hidden; text-overflow: ellipsis; }
+html[data-skin='ps4'] #duel .d-say b.v { background: #3a3a40; }
+html[data-skin='ps4'] #duel .d-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; }
+html[data-skin='ps4'] #duel .d-role, html[data-skin='ps4'] #duel .d-head { background: transparent; }
+html[data-skin='ps4'] #duel .d-role b { color: rgba(255,255,255,0.9) !important; }
+html[data-skin='ps4'] #duel .d-verb, html[data-skin='ps4'] #duel.call .d-verb, html[data-skin='ps4'] #duel.ret .d-verb, html[data-skin='ps4'] #duel.write .d-verb { color: #ffffff; font: 400 14px 'Source Sans 3', sans-serif; letter-spacing: 0.03em; }
+html[data-skin='ps4'] #duel .d-track { border-top: 1px solid rgba(255,255,255,0.25); }
+html[data-skin='ps4'] #duel .d-what { color: #9a9aa2; }
+html[data-skin='ps4'] #feed .kf { grid-template-columns: auto auto auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 1px; padding: 8px 16px 8px 8px; font: 400 15px 'Source Sans 3', sans-serif; }
+html[data-skin='ps4'] #feed .kf .act { grid-column: 1; grid-row: 1 / span 2; width: 36px; height: 36px; border-radius: 3px; background: #3a3a40; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); color: #ffffff !important; }
+html[data-skin='ps4'] #feed .kf .act svg { width: 20px; height: 15px; }
+html[data-skin='ps4'] #feed .kf .fn { grid-row: 1; font-weight: 400; color: #ffffff; }
+html[data-skin='ps4'] #feed .kf .act + .fn { grid-column: 3; }
+html[data-skin='ps4'] #feed .kf .act + .fn::before { content: '›'; color: #9a9aa2; margin-right: 3px; }
+html[data-skin='ps4'] #feed .kf .ico { border-radius: 2px; }
+html[data-skin='ps4'] #feed .kf .data { grid-column: 2 / -1; grid-row: 2; font: 400 13px 'Source Sans 3', sans-serif; color: #9a9aa2; }
+html[data-skin='ps4'] #feed .kf .data b { color: #c4c4ca; font-weight: 400; }
+/* the value in flight: the input field, as on the grid */
+html[data-skin='ps4'] #duel .chip { background: #03052a; color: #ffffff; border-radius: 0; box-shadow: inset 0 0 0 1px #dfe8ff; font-weight: 400; }
