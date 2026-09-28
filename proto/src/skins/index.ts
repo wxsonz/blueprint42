@@ -6,13 +6,14 @@ import { blueprint } from './blueprint';
 import { factory } from './factory';
 import { gameboy } from './gameboy';
 import { synthwave } from './synthwave';
+import { barebone } from './barebone';
 import { xp } from './xp';
 import { seven } from './seven';
 import { metro } from './metro';
 import { bigsur, leopard, platinum, system7, tahoe, yosemite } from './macos';
 import type { Skin } from './types';
 
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, system7, platinum, aqua, leopard, yosemite, bigsur, tahoe, minimal, blueprint, factory, gameboy, synthwave];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, system7, platinum, aqua, leopard, yosemite, bigsur, tahoe, minimal, barebone, blueprint, factory, gameboy, synthwave];
 
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
@@ -25,6 +26,7 @@ export const SKIN_FONTS: Record<string, string[]> = {
   gameboy: ['8px "Press Start 2P"', '16px VT323'],
   synthwave: ['500 12px Orbitron', '700 12px Orbitron', '12px "Share Tech Mono"'],
   xp: [],
+  barebone: [],
   seven: ['12px "Open Sans"', '600 12px "Open Sans"'],
   metro: ['300 12px "Open Sans"', '600 12px "Open Sans"'],
   system7: ['12px "Pixelify Sans"', '700 12px "Pixelify Sans"'],

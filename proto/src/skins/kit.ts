@@ -422,6 +422,12 @@ export function makeSkin(t: Theme): Skin {
       const g = dc.g;
       const r = px(dc, 9, 5);
       const c = t.pulseColor ?? p.ptr;
+      if (/^#[0-9a-f]{6}$/i.test(c)) {
+        // a plain dot (Barebone): no gradient to fill
+        g.fillStyle = c;
+        g.beginPath(); g.arc(x, y, r * 0.5, 0, Math.PI * 2); g.fill();
+        return;
+      }
       g.save();
       g.globalAlpha = 0.85;
       const grad = g.createRadialGradient(x, y, 0, x, y, r * 2);

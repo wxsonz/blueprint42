@@ -93,6 +93,8 @@ interface Scene3 { lead: number; pass: number; hold: number; total: number }
 const sceneCache = new WeakMap<Ev, Scene3>();
 const cardLines = new WeakMap<Ev, number>(); // filled by prepareStage()
 const clampS = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+interface DuelEnd { at: Pt; rect: Rect | null; name: string }
+interface Duel { key: string; kind: 'call' | 'ret' | 'write'; left: DuelEnd & { verb: string }; right: DuelEnd & { verb: string }; p: number; label: string }
 const clipCode = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
 function sceneOf(e: Ev): Scene3 {
   let hit = sceneCache.get(e);
@@ -648,7 +650,7 @@ export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; l
 }
 
 // A pointer argument shows what it points at when that is a plain value (→a = 3).
-function argLabel(v: V, text: string, trace: Trace, snap: Snap | null): string {
+export function argLabel(v: V, text: string, trace: Trace, snap: Snap | null): string {
   if (v.k === 'ptr') {
     if (v.to === null) return 'NULL';
     const name = v.label ?? pointeeName(trace, v.to, null).split('.').pop();
@@ -665,7 +667,7 @@ function crateOf(d: Extract<Payload, { k: 'struct' }>, kind: 'arg' | 'ret'): Cra
   return { title: d.type, via: d.via, rows: d.fields.slice(0, MAX).map((f) => ({ name: f.name, value: f.text.startsWith('"') ? clip(f.text, 18) : f.text })), more: Math.max(0, d.fields.length - MAX), kind };
 }
 
-function retLabel(v: V, trace: Trace): string {
+export function retLabel(v: V, trace: Trace): string {
   if (v.k === 'ptr') return v.to === null ? 'NULL' : `→${pointeeName(trace, v.to, null)}`;
   return fmtVal(v);
 }
@@ -1350,32 +1352,33 @@ export class GridView {
       if (b) skin.beltHandle(dc, this.sp(beltHandle(b)));
     }
 
-    // ---- lenses: the far end of what's happening, when it's off screen ----
+    // ---- the duel: a transfer whose sender or receiver is off screen pops up
+    // side by side, sender on the left, receiver on the right ----
     if (!this.lens && trace && fr) {
-      const far: { at: Pt; title: string }[] = [];
       const off = (p: Pt) => { const [x, y] = this.sp(p); return x < 0 || y < 0 || x > this.w || y > this.h; };
-      if (ev && (ev.k === 'call' || ev.k === 'ret') && animKey) {
+      let duel: Duel | null = null;
+      const hostRectW = (k: string): Rect | null => { const h = scene.hosts.get(k); return h ? { x: h.x, y: h.y, w: h.w, h: h.h } : null; };
+      if (ev && (ev.k === 'call' || ev.k === 'ret') && animKey && animPair) {
         const belt = scene.belts.find((b) => b.key === animKey);
         if (belt) {
-          // look inside: at the calling statement, and just past the callee's entry door
+          // inside: the calling statement, and just past the callee's entry door
           const [a0, b0] = [belt.pts[0], belt.pts[belt.pts.length - 1]];
-          const a: Pt = [a0[0] - 7, a0[1]];
-          const b: Pt = [b0[0] + 4.5, b0[1] + 1.5];
-          const caller = belt.from || 'the process';
-          if (ev.k === 'call') {
-            if (off(a)) far.push({ at: a, title: `${caller} calls` });
-            if (off(b)) far.push({ at: b, title: `→ ${ev.fn}` });
-          } else {
-            if (off(b)) far.push({ at: b, title: `${ev.fn} returns` });
-            if (off(a)) far.push({ at: a, title: `→ back to ${caller}` });
-          }
+          const caller: DuelEnd = { at: [a0[0] - 7, a0[1]], rect: hostRectW(animPair[0]), name: belt.from || 'process' };
+          const callee: DuelEnd = { at: [b0[0] + 4.5, b0[1] + 1.5], rect: hostRectW(animPair[1]), name: ev.fn };
+          const snapNow = trace.snaps[Math.min(fr.i + 1, trace.snaps.length - 1)];
+          const label = ev.k === 'call'
+            ? ev.args.map((x) => `${x.name} = ${argLabel(x.val, x.text, trace, snapNow)}`).join(', ') || '()'
+            : ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace);
+          duel = ev.k === 'call'
+            ? { key: `c${fr.i}`, kind: 'call', left: { ...caller, verb: 'calls' }, right: { ...callee, verb: 'called' }, p: ph?.travel ?? 0, label }
+            : { key: `r${fr.i}`, kind: 'ret', left: { ...callee, verb: 'returns' }, right: { ...caller, verb: 'gets it back' }, p: ph?.travel ?? 0, label };
         }
       }
       // a statement writing into memory another machine owns
-      if (now_ && now_.phase === 'write') {
+      if (!duel && now_ && now_.phase === 'write') {
         const b = now_.beat;
         const hosts = frameHosts(trace.snaps[Math.min(b.after, trace.snaps.length - 1)], scene);
-        for (let i = b.from; i <= b.to && far.length < 2; i++) {
+        for (let i = b.from; i <= b.to && !duel; i++) {
           const e = trace.evs[i];
           if (e.k !== 'write') continue;
           const info = trace.cells.get(e.cell);
@@ -1384,49 +1387,107 @@ export class GridView {
           const hk = info.frame === -1 ? owner : hosts.get(info.frame);
           const h = hk ? scene.hosts.get(hk) : undefined;
           const fn = owner ? s.model?.byName.get(owner) : undefined;
-          if (!h || !fn || fn.broken) continue;
+          const wk = hosts.get(b.frame);
+          const wh = wk ? scene.hosts.get(wk) : undefined;
+          const wfn = s.model?.byName.get(b.fn);
+          if (!h || !fn || fn.broken || !wh || !wfn) continue;
           const idx = slotsOf(fn).findIndex((sl) => sl.key === `${info.frame === -1 ? 's' : 'c'}:${info.name}`);
           const at: Pt = shut.has(fn.name) || idx < 0 ? [h.x + h.w / 2, h.y + h.h / 2] : [h.x + geomOf(fn).store.x + geomOf(fn).store.w * 0.6, h.y + slotY(geomOf(fn), idx)];
-          if (off(at) && !far.some((f) => f.title.includes(info.name))) far.push({ at, title: `→ ${fn.cname} · ${info.name} changes` });
+          const plan = planOf(wfn);
+          const g2 = geomOf(wfn);
+          const from: Pt = shut.has(wfn.name) ? [wh.x + wh.w / 2, wh.y + wh.h / 2] : [wh.x + g2.stations.x + 4, wh.y + g2.stations.y + (rowMid(plan.stations[b.station].row) * g2.stations.zoom) / CELL_PX];
+          duel = {
+            key: `w${b.from}|${i}`, kind: 'write', p: now_.landed, label: `${info.name} = ${fmtVal(e.val)}`,
+            left: { at: from, rect: { x: wh.x, y: wh.y, w: wh.w, h: wh.h }, name: wfn.cname, verb: 'writes' },
+            right: { at, rect: { x: h.x, y: h.y, w: h.w, h: h.h }, name: fn.cname, verb: `${info.name} changes` },
+          };
         }
       }
-      this.drawLenses(s, skin, now, dc, far.slice(0, 2));
+      if (duel && (off(duel.left.at) || off(duel.right.at))) this.drawDuel(s, skin, now, dc, duel);
+      else this.duelKey = '';
     }
   }
 
   private lensViews: GridView[] = [];
   private lensKey = '';
   private lensAt = 0;
-  // Small live views of far-away places, in the pane's bottom-right corner.
-  private drawLenses(s: ViewState, skin: Skin, now: number, dc: Dc, far: { at: Pt; title: string }[]): void {
-    const W = Math.min(320, this.w * 0.3);
+  private duelKey = '';
+  private duelAt = 0;
+
+  // The duel overlay: two live views side by side. Each slides in from where
+  // its machine really is, its camera starting on the whole machine and
+  // gliding to the spot; the payload crosses from left to right.
+  private drawDuel(s: ViewState, skin: Skin, now: number, dc: Dc, d: Duel): void {
+    const g = this.g;
+    const fresh = d.key !== this.duelKey;
+    if (fresh) (this.duelKey = d.key), (this.duelAt = now);
+    const k = Math.min(1, (now - this.duelAt) / 320);
+    const ease = 1 - Math.pow(1 - k, 3);
+    const W = Math.min(340, this.w * 0.34);
     const H = W * 0.62;
-    const head = 22;
-    far.forEach((f, k) => {
-      let v = this.lensViews[k];
-      if (!v) this.lensViews[k] = v = new GridView(document.createElement('canvas'), true);
+    const head = 24;
+    const gap = Math.max(70, this.w * 0.08);
+    const total = W * 2 + gap;
+    const x0 = (this.w - total) / 2;
+    const y0 = this.h - H - head - 104;
+    const slots = [{ x: x0, y: y0 }, { x: x0 + W + gap, y: y0 }];
+    [d.left, d.right].forEach((end, n) => {
+      let v = this.lensViews[n];
+      if (!v) this.lensViews[n] = v = new GridView(document.createElement('canvas'), true);
       v.setSize(W, H, this.dpr);
-      const zoom = 0.7;
-      v.cam.zoom = v.target.zoom = zoom;
-      v.cam.x = v.target.x = f.at[0] - W / (2 * CELL_PX * zoom);
-      v.cam.y = v.target.y = f.at[1] - H / (2 * CELL_PX * zoom);
-      // a whole scene each: repaint ~15 times a second (or when it looks elsewhere)
-      const key = `${f.title}|${f.at[0].toFixed(1)},${f.at[1].toFixed(1)}|${skin.id}`;
-      if (key !== v.lensKey || now - v.lensAt > 66) {
+      const zoom = 0.75;
+      const tx = end.at[0] - W / (2 * CELL_PX * zoom);
+      const ty = end.at[1] - H / (2 * CELL_PX * zoom);
+      if (fresh) {
+        // start framing the whole machine, then glide in to the spot
+        const r = end.rect ?? { x: end.at[0] - 4, y: end.at[1] - 3, w: 8, h: 6 };
+        const z0 = Math.max(0.2, Math.min(0.75, W / ((r.w + 2) * CELL_PX), H / ((r.h + 2) * CELL_PX)));
+        v.cam.zoom = z0;
+        v.cam.x = r.x + r.w / 2 - W / (2 * CELL_PX * z0);
+        v.cam.y = r.y + r.h / 2 - H / (2 * CELL_PX * z0);
+      }
+      v.target.zoom = zoom;
+      v.target.x = tx;
+      v.target.y = ty;
+      const moving = !v.settled();
+      const key = `${d.key}|${skin.id}`;
+      if (moving || key !== v.lensKey || now - v.lensAt > 66) {
         v.draw(s, skin, now);
         v.lensKey = key;
         v.lensAt = now;
       }
-      const x = this.w - (W + 14) * (k + 1);
-      const y = this.h - H - head - 96;
-      const g = this.g;
+      // slide in from the machine's real direction
+      const real = end.rect ? this.sp([end.rect.x + end.rect.w / 2, end.rect.y + end.rect.h / 2]) : this.sp(end.at);
+      const cx = slots[n].x + W / 2, cy = slots[n].y + (H + head) / 2;
+      let dx = real[0] - cx, dy = real[1] - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const reach = Math.min(len, Math.max(this.w, this.h) * 0.6);
+      dx = (dx / len) * reach;
+      dy = (dy / len) * reach;
+      const x = slots[n].x + dx * (1 - ease), y = slots[n].y + dy * (1 - ease);
       g.save();
+      g.globalAlpha = 0.25 + 0.75 * ease;
       g.fillStyle = skin.casing;
       g.fillRect(x, y, W, H + head);
       g.drawImage(v.canvas, x, y + head, W, H);
-      skin.wall(dc, { x, y, w: W, h: H + head }, { name: f.title, fns: 0, note: '', live: true, pinned: false, selected: false, hovered: false, head: { x, y, w: W, h: head } });
+      skin.wall(dc, { x, y, w: W, h: H + head }, { name: `${end.name} · ${end.verb}`, fns: 0, note: '', kind: 'machine', live: true, pinned: false, selected: false, hovered: false, head: { x, y, w: W, h: head } });
       g.restore();
     });
+    if (ease < 1) return;
+    // the payload crosses the gap, left to right
+    const ax = slots[0].x + W, bx = slots[1].x;
+    const y = y0 + head + H / 2;
+    const u = Math.max(0, Math.min(1, d.p));
+    const zdc: Dc = { ...dc, z: 1, cs: CELL_PX };
+    g.save();
+    g.strokeStyle = skin.casing === '#000' ? '#888' : 'rgba(128,128,128,0.8)';
+    g.setLineDash([4, 4]);
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(ax + 6, y); g.lineTo(bx - 6, y); g.stroke();
+    g.setLineDash([]);
+    g.restore();
+    skin.pulse(zdc, ax + (bx - ax) * u, y);
+    skin.plate(zdc, ax + (bx - ax) * u, y - 22, clipCode(d.label, 44), d.kind === 'ret' ? 'ret' : d.kind === 'write' ? 'ptr' : 'arg');
   }
 
   // A machine is its inside: storage (variables) on the left, stations

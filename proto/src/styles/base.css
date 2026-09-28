@@ -437,3 +437,21 @@ kbd {
   padding: 3px 8px; cursor: pointer;
 }
 .skin-pick option { color: #111; background: #fff; }
+
+/* ---------- the kill feed: who sent what to whom ---------- */
+#feed { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; max-width: min(46%, 460px); pointer-events: none; }
+#feed .kf { pointer-events: auto; cursor: pointer; background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px);
+  box-shadow: var(--panel-shadow, none); padding: 4px 8px; font: 12px var(--font-ui, sans-serif); display: grid; grid-template-columns: auto auto auto; column-gap: 7px; align-items: center;
+  transition: opacity 0.25s; animation: kf-in 0.22s ease-out; max-width: 100%; }
+#feed .kf:hover { filter: brightness(1.08); }
+#feed .kf .fn { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; white-space: nowrap; }
+#feed .kf .ico { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: #fff; font: 700 9.5px var(--font-mono, monospace); text-transform: lowercase; flex: none; }
+#feed .kf .act { display: inline-grid; place-items: center; width: 22px; height: 16px; }
+#feed .kf .act svg { width: 18px; height: 14px; }
+#feed .kf.call .act { color: var(--tl-call, #4a90e2); }
+#feed .kf.ret .act { color: var(--tl-ret, #3fb950); }
+#feed .kf.write .act { color: var(--tl-ptr, #e0a040); }
+#feed .kf .data { grid-column: 1 / -1; font: 11px var(--font-mono, monospace); color: var(--panel-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#feed .kf .data b { color: var(--panel-fg); font-weight: 600; }
+#feed .kf .data i { font-style: normal; opacity: 0.75; }
+@keyframes kf-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; } }

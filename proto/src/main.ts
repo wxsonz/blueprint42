@@ -12,7 +12,7 @@ import { doorsOf, folded, footprint, Layout, shut } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, argLabel, retLabel, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -26,6 +26,7 @@ import './styles/amp.css';
 import './styles/classic.css';
 import './styles/aqua.css';
 import './styles/minimal.css';
+import './styles/barebone.css';
 import './styles/blueprint.css';
 import './styles/factory.css';
 import './styles/gameboy.css';
@@ -2326,6 +2327,82 @@ function drawTimeline(): void {
   }
 }
 
+// ---------------- the kill feed: who sent what to whom ----------------
+// Calls, returns, and writes into memory another function owns, newest on
+// top, each with its type and the value that went across. Built once per
+// trace; redrawn only when the newest one changes.
+interface Transfer { i: number; kind: 'call' | 'ret' | 'write'; from: string; to: string; data: string }
+let transfers: { rev: number; list: Transfer[] } = { rev: -1, list: [] };
+const FEED_COLORS = ['#2d89ef', '#00a300', '#e3008c', '#9f00a7', '#da532c', '#1e7145', '#b91d47', '#00aba9', '#603cba', '#e3a21a'];
+const FEED_ACT = {
+  call: '<svg viewBox="0 0 18 14" aria-label="calls"><path d="M1 7h14M10 2l5 5-5 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ret: '<svg viewBox="0 0 18 14" aria-label="returns to"><path d="M16 2v5H4M8 3L3 7l5 4" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  write: '<svg viewBox="0 0 18 14" aria-label="writes into"><path d="M3 12l1.2-3.6L12 1.5l2.8 2.8L7 11.2zM3 12l3.6-1.2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></svg>',
+};
+const clipFeed = (v: string, n = 28) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
+
+function transfersOf(t: Trace): Transfer[] {
+  if (transfers.rev === traceRevision) return transfers.list;
+  const list: Transfer[] = [];
+  const name = (fn: string | null | undefined) => (!fn ? 'process' : S.model?.byName.get(fn)?.cname ?? fn);
+  // the way C writes it: type, name, value
+  const typed = (type: string | undefined, v: string, nm = '') => `${type ? `<i>${esc(type)}</i> ` : ''}${nm ? `${esc(nm)} = ` : ''}<b>${esc(clipFeed(v))}</b>`;
+  t.evs.forEach((e, i) => {
+    if (e.k === 'call') {
+      const fn = S.model?.byName.get(e.fn);
+      const snap = t.snaps[i + 1];
+      const args = e.args.map((a, k) => typed(fn?.params[k]?.type, a.data ? payloadText(a.data) : argLabel(a.val, a.text, t, snap), a.name));
+      list.push({ i, kind: 'call', from: name(e.caller), to: name(e.fn), data: args.join(' · ') || '<i>no arguments</i>' });
+    } else if (e.k === 'ret') {
+      const fn = S.model?.byName.get(e.fn);
+      const v = e.data ? payloadText(e.data) : e.val.k === 'void' ? 'void' : retLabel(e.val, t);
+      list.push({ i, kind: 'ret', from: name(e.fn), to: name(e.caller), data: typed(fn?.ret, v) });
+    } else if (e.k === 'write' && e.frame !== null) {
+      // only writes that land in memory another function owns
+      const info = t.cells.get(e.cell);
+      if (!info || info.frame === e.frame || info.frame === -2) return;
+      const writer = t.snaps[i].stack.find((f) => f.id === e.frame)?.fn;
+      const owner = info.frame === -1 ? info.owner : t.snaps[i + 1]?.stack.find((f) => f.id === info.frame)?.fn;
+      if (!writer || !owner || writer === owner) return;
+      list.push({ i, kind: 'write', from: name(writer), to: name(owner), data: `${esc(info.name)} = <b>${esc(clipFeed(fmtVal(e.val), 36))}</b>` });
+    }
+  });
+  transfers = { rev: traceRevision, list };
+  return list;
+}
+
+function feedIcon(n: string): string {
+  let h = 7;
+  for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const parts = n.split('_').filter(Boolean);
+  const initials = (parts.length > 1 ? parts[0][0] + parts[1][0] : n.slice(0, 2)) || '?';
+  return `<span class="fn"><span class="ico" style="background:${FEED_COLORS[h % FEED_COLORS.length]}">${esc(initials)}</span>${esc(n)}</span>`;
+}
+
+let feedKey = '';
+function renderFeed(): void {
+  const el = $('feed');
+  const t = S.trace;
+  if (!t || !t.evs.length) {
+    if (feedKey) (el.innerHTML = ''), (feedKey = '');
+    return;
+  }
+  const list = transfersOf(t);
+  const at = Math.floor(S.pos);
+  let lo = 0, hi = list.length - 1, last = -1;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    if (list[m].i <= at) (last = m), (lo = m + 1);
+    else hi = m - 1;
+  }
+  const key = `${traceRevision}|${last}`;
+  if (key === feedKey) return;
+  feedKey = key;
+  const rows = list.slice(Math.max(0, last - 4), last + 1).reverse();
+  const fade = [1, 0.82, 0.66, 0.5, 0.36];
+  el.innerHTML = rows.map((r, n) => `<div class="kf ${r.kind}" data-i="${r.i}" style="opacity:${fade[n]}" title="jump here">${feedIcon(r.from)}<span class="act">${FEED_ACT[r.kind]}</span>${feedIcon(r.to)}<span class="data">${r.data}</span></div>`).join('');
+}
+
 // ---------------- focus mode: a return's card ----------------
 // Over the veiled grid, before the result travels back: what the function
 // was called with and what it hands back — its return value, and whatever it
@@ -2491,6 +2568,7 @@ function frame(now: number): void {
   view.draw(S, S.skin, now);
   renderStageCard();
   renderPlaybar();
+  renderFeed();
   renderInspector();
   renderLiveStatus();
   requestAnimationFrame(frame);
@@ -2568,6 +2646,10 @@ async function boot(): Promise<void> {
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
   $('btn-tidy').addEventListener('click', tidy);
+  $('feed').addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.kf');
+    if (row) seek(Number(row.dataset.i));
+  });
   document.querySelectorAll<HTMLButtonElement>('#insides button').forEach((b) => b.addEventListener('click', () => setAllShut(b.dataset.v === 'hide')));
   const followBtn = $('btn-follow');
   followBtn.setAttribute('aria-pressed', String(S.follow));

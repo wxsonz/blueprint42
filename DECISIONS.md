@@ -591,3 +591,24 @@ questions. Newest last.
   on XP). Skins that paint whole windows set `solidMachines`, so the engine
   doesn't lay its square floor behind rounded corners.
 
+## 2026-09-28: kill feed, the duel, Barebone
+
+- **Decision (author):** Transfers between functions get a kill feed
+  (top-right of the Blueprint pane). Each call, return, and write into
+  memory another function owns is one row: a coloured icon with the
+  function's initials, an action icon (➜ call, ↩ return, ✎ write), and a
+  short payload written the C way (`int fd = 0 · t_gnl * buf = {…}`,
+  `t_gnl_status GNL_LINE_READY`, `bufs = …`). Newest on top, older rows
+  fade; click a row to jump there. It's built once per trace and redrawn
+  only when the newest row changes.
+- **Decision (author):** The corner lenses become the duel. When a
+  transfer's sender or receiver is off screen, an overlay pops up with the
+  sender on the left and the receiver on the right. Each view slides in
+  from where its machine really is, its camera starting on the whole
+  machine and gliding to the spot. The payload crosses from left to right.
+- **Decision (author):** A Barebone skin for speed: flat fills and 1 px
+  lines, no gradients, glow, blur, shadows or floor pattern, belts that
+  change colour instead of animating, system fonts. Measured at 2× with
+  the paint forced to finish: 5 ms a frame (Minimal 6.4, Tahoe 11.7, Amp
+  17.4).
+
