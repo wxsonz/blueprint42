@@ -18,6 +18,12 @@ export const CELL_PX = 40;
 export const MAX_FIELDS = 6;
 export const folded = new Set<string>();
 
+// Machines the author closed (by function key): just the motor and the line
+// it's on. Everything else shows its inside.
+export const shut = new Set<string>();
+export const SHUT_W = MW + 2;
+export const SHUT_H = 6;
+
 export interface FrameRow {
   name: string; // variable, or field under `parent`
   param: boolean;
@@ -126,6 +132,7 @@ export function geomOf(fn: FnInfo): Geom {
 
 export function machineSize(fn: FnInfo | null): { w: number; h: number } {
   if (!fn || fn.broken) return { w: MW + 2, h: MH + 1 };
+  if (shut.has(fn.name)) return { w: SHUT_W, h: SHUT_H };
   const g = geomOf(fn);
   return { w: Math.ceil(g.w), h: Math.ceil(g.h) };
 }
@@ -138,6 +145,7 @@ export function slotY(g: Geom, index: number): number {
 // Where a call made on `line` leaves the machine (its right side): the row
 // of the statement that makes it.
 export function callPortY(fn: FnInfo, line: number): number | null {
+  if (shut.has(fn.name)) return null; // no stations showing: ports spread along the side
   const plan = planOf(fn);
   const s = plan.byLine.get(line);
   if (s === undefined) return null;

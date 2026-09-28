@@ -33,6 +33,7 @@ export interface Blueprint {
   sprites: Sprite[];
   folded?: string[]; // struct rows the author folded ("fnKey.var")
   opened?: string[]; // M5.5's in-place interiors: still accepted from older files, ignored
+  shut?: string[]; // machines the author closed (just the motor), by function key
 }
 
 const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);
@@ -79,6 +80,11 @@ export function parseBlueprint(input: unknown): Blueprint {
     if (!Array.isArray(data.folded) || data.folded.length > 2000 || !data.folded.every((k) => typeof k === 'string' && k.length <= 400)) throw new Error('Invalid folded rows');
     folded = [...new Set(data.folded as string[])];
   }
+  let shutK: string[] | undefined;
+  if (data.shut !== undefined) {
+    if (!Array.isArray(data.shut) || data.shut.length > 2000 || !data.shut.every((k) => typeof k === 'string' && k.length <= 400)) throw new Error('Invalid closed machines');
+    shutK = [...new Set(data.shut as string[])];
+  }
   let opened: string[] | undefined;
   if (data.opened !== undefined) {
     if (!Array.isArray(data.opened) || data.opened.length > 2000 || !data.opened.every((k) => typeof k === 'string' && k.length <= 400)) throw new Error('Invalid opened machines');
@@ -121,7 +127,7 @@ export function parseBlueprint(input: unknown): Blueprint {
     }
     return sprite;
   });
-  const fold = { ...(folded?.length ? { folded } : {}), ...(opened?.length ? { opened } : {}) };
+  const fold = { ...(folded?.length ? { folded } : {}), ...(opened?.length ? { opened } : {}), ...(shutK?.length ? { shut: shutK } : {}) };
   return data.version === 2 ? { version: 2, nodes, ...(modules ? { modules } : {}), waypoints, sprites, ...fold } : { version: 1, nodes, waypoints, sprites, ...fold };
 }
 

@@ -8,11 +8,11 @@ import { Vim } from '@replit/codemirror-vim';
 import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Payload, type Trace } from './interp';
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { doorsOf, folded, footprint, Layout } from './layout';
+import { doorsOf, folded, footprint, Layout, shut } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, setAnimMode, stationAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -144,11 +144,22 @@ const decl = (type: string, name: string) => (type.endsWith('*') ? type + name :
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 let toastTimer = 0;
-function toast(msg: string): void {
+function toast(msg: string, action?: { label: string; run: () => void }): void {
   toastEl.textContent = msg;
+  toastEl.classList.toggle('act', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'btn sm';
+    b.textContent = action.label;
+    b.addEventListener('click', () => {
+      toastEl.hidden = true;
+      action.run();
+    });
+    toastEl.append(' ', b);
+  }
   toastEl.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toastEl.hidden = true), 2000);
+  toastTimer = window.setTimeout(() => (toastEl.hidden = true), action ? 6000 : 2000);
 }
 
 // ---------------- analysis ----------------
@@ -303,6 +314,7 @@ interface Saved {
   waypoints: [string, number, number][];
   sprites?: Sprite[];
   folded?: string[];
+  shut?: string[];
 }
 
 function readSaved(key: string): Saved | null {
@@ -326,6 +338,7 @@ function saveSoon(): void {
     waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
     sprites: structuredClone(S.sprites),
     folded: [...folded],
+    shut: [...shut],
   };
   saveTimers.set(key, window.setTimeout(() => {
     store.set(`sample.${key}`, JSON.stringify(saved));
@@ -340,10 +353,70 @@ function applySavedLayout(saved: Saved): void {
     if (n) n.place = { x, y, pinned };
   }
   for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
-  if (saved.folded?.length) {
-    for (const k of saved.folded) folded.add(k);
+  for (const k of saved.shut ?? []) shut.add(k);
+  if (saved.folded?.length || saved.shut?.length) {
+    for (const k of saved.folded ?? []) folded.add(k);
     if (S.model) layout.reflow(S.model);
   }
+  settle();
+}
+
+// A layout saved when machines were smaller can overlap now: lay it out again.
+function settle(): void {
+  renderInsides();
+  if (!S.model) return;
+  const moved = layout.settle(S.model);
+  if (moved) toast(`rearranged ${moved} machine${moved === 1 ? '' : 's'} that overlapped`);
+}
+
+// Back to the auto layout (with an undo for a few seconds).
+function tidy(): void {
+  if (!S.model) return;
+  const was = new Map([...layout.nodes].map(([id, n]) => [id, { ...n.place }]));
+  const wp = new Map(layout.waypoints);
+  const mods = new Map([...layout.modules].map(([f, m]) => [f, { ...m }]));
+  layout.tidy(S.model);
+  saveSoon();
+  view.fit(S);
+  toast('tidied: every machine back to its auto place', {
+    label: 'Undo',
+    run: () => {
+      for (const [id, p] of was) {
+        const n = layout.nodes.get(id);
+        if (n) n.place = p;
+      }
+      layout.waypoints.clear();
+      for (const [k, v] of wp) layout.waypoints.set(k, v);
+      for (const [f, m] of mods) layout.modules.set(f, m);
+      saveSoon();
+    },
+  });
+}
+
+// Show or hide the insides of one machine, or of all of them.
+function toggleShut(fn: string): void {
+  if (!S.model) return;
+  if (shut.has(fn)) shut.delete(fn);
+  else shut.add(fn);
+  layout.reflow(S.model);
+  lastInspectorKey = '';
+  saveSoon();
+  renderInsides();
+}
+function setAllShut(closed: boolean): void {
+  if (!S.model) return;
+  for (const f of S.model.fns) {
+    if (closed) shut.add(f.name);
+    else shut.delete(f.name);
+  }
+  layout.reflow(S.model);
+  saveSoon();
+  renderInsides();
+  view.fit(S);
+}
+function renderInsides(): void {
+  const all = !!S.model?.fns.length && S.model.fns.every((f) => shut.has(f.name));
+  document.querySelectorAll<HTMLButtonElement>('#insides button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === 'hide' ? all : !all)));
 }
 
 function blueprint(): Blueprint {
@@ -370,7 +443,7 @@ async function importBlueprint(file: File): Promise<void> {
   try {
     if (file.size > 200_000) throw new Error('Blueprint is too large');
     const bp = parseBlueprint(await file.text());
-    if (S.project && S.model) layout.applyBlueprint(bp, S.model, false);
+    if (S.project && S.model) (layout.applyBlueprint(bp, S.model, false), settle());
     else {
       for (const [id, p] of Object.entries(bp.nodes)) {
         const n = layout.nodes.get(id);
@@ -610,6 +683,8 @@ function loadProject(p: Project): void {
     }
   }
   if (S.sprites.length) bindingsChanged();
+  settle();
+  renderInsides();
   view.home(S, true);
   renderProjectChrome();
   renderAlerts();
@@ -1463,6 +1538,9 @@ function bindMouse(): void {
       const at = stationAt(S, wx, wy);
       const fn = at ? S.model?.byName.get(at.fn) : undefined;
       if (at && fn) return openAt(fn.file, at.line, 0);
+      // its title or motor: show or hide the inside
+      const head = machineHeadAt(S, wx, wy);
+      if (head) return toggleShut(head);
     }
     gotoCode(hit);
   });
@@ -1489,6 +1567,8 @@ function bindMouse(): void {
     const items: [string, () => void][] = [];
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
+      const nm = layout.nodes.get(hit.id)?.name;
+      if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
     } else if (hit?.k === 'sprite') {
       items.push(['Bind…', () => { S.selected = hit; lastInspectorKey = ''; renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
@@ -1505,6 +1585,11 @@ function bindMouse(): void {
     // a machine inside an open module can close its module from here too
     const inFile = hit?.k === 'node' ? layout.nodes.get(hit.id)?.file : undefined;
     if (inFile && !layout.modules.get(inFile)?.collapsed) items.push([`Close ${inFile.slice(inFile.lastIndexOf('/') + 1)}`, () => toggleModule(inFile)]);
+    if (!hit) {
+      items.push(['Tidy layout', tidy]);
+      items.push(['Show all insides', () => setAllShut(false)]);
+      items.push(['Hide all insides', () => setAllShut(true)]);
+    }
     if (!hit && layout.modules.size) {
       items.push(['Open all modules', () => setAllModules(false)]);
       items.push(['Close all modules', () => setAllModules(true)]);
@@ -2398,6 +2483,8 @@ async function boot(): Promise<void> {
     }
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
+  $('btn-tidy').addEventListener('click', tidy);
+  document.querySelectorAll<HTMLButtonElement>('#insides button').forEach((b) => b.addEventListener('click', () => setAllShut(b.dataset.v === 'hide')));
   const followBtn = $('btn-follow');
   followBtn.setAttribute('aria-pressed', String(S.follow));
   followBtn.addEventListener('click', () => {

@@ -3,7 +3,7 @@
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatDuration, beatNow, computeText, readsOf, READ_END, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, slotsOf } from './machine';
+import { geomOf, shut, slotsOf } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
 import type { Model } from './parse';
@@ -515,7 +515,7 @@ export function activeHostRect(s: ViewState): Rect | null {
   if (!h) return null;
   // a big machine: keep the statement it's on in view, with its storage
   const fn = h.module ? null : s.model?.byName.get(h.fn);
-  if (!fn || fn.broken) return { x: h.x, y: h.y, w: h.w, h: h.h };
+  if (!fn || fn.broken || shut.has(fn.name)) return { x: h.x, y: h.y, w: h.w, h: h.h };
   const g = geomOf(fn);
   const plan = planOf(fn);
   const cur = interiorAt(s.trace, plan, id, Math.floor(s.pos)).current;
@@ -601,7 +601,7 @@ export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name
   const scene = sceneAt(s);
   for (const h of scene.hosts.values()) {
     const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
-    if (!fn || fn.broken) continue;
+    if (!fn || fn.broken || shut.has(fn.name)) continue;
     const g = geomOf(fn);
     if (wx < h.x + g.store.x || wx >= h.x + g.store.x + g.store.w) continue;
     const rows = frameRows(fn);
@@ -612,12 +612,28 @@ export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name
   return null;
 }
 
+// A machine's title bar or motor (where a double-click opens or closes it).
+export function machineHeadAt(s: ViewState, wx: number, wy: number): string | null {
+  const scene = sceneAt(s);
+  for (const h of scene.hosts.values()) {
+    const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
+    if (!fn || wx < h.x || wx >= h.x + h.w || wy < h.y || wy >= h.y + h.h) continue;
+    if (shut.has(fn.name)) return fn.name;
+    const g = fn.broken ? null : geomOf(fn);
+    if (!g) return fn.name;
+    const m = g.motor;
+    if (wy < h.y + g.head + 0.2 || (wx >= h.x + m.x && wx < h.x + m.x + m.w && wy >= h.y + m.y && wy < h.y + m.y + m.h)) return fn.name;
+    return null;
+  }
+  return null;
+}
+
 // The statement a point inside a machine is on: its function and line.
 export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number } | null {
   const scene = sceneAt(s);
   for (const h of scene.hosts.values()) {
     const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
-    if (!fn || fn.broken) continue;
+    if (!fn || fn.broken || shut.has(fn.name)) continue;
     const g = geomOf(fn);
     const lx = (wx - h.x - g.stations.x) * CELL_PX / g.stations.zoom;
     const ly = (wy - h.y - g.stations.y) * CELL_PX / g.stations.zoom;
@@ -1312,6 +1328,7 @@ export class GridView {
     const cs = this.cs;
     const trace = s.trace;
     const R = this.rectW(h.x, h.y, h.w, h.h);
+    const closed = shut.has(fn.name);
     const geo = fn.broken ? null : geomOf(fn);
     const shown = frame ?? returned;
     const name = `${fn.cname}(${fn.params.map((p) => p.name).join(', ')})${h.copy > 1 ? ` #${h.copy}` : ''}`;
@@ -1323,7 +1340,7 @@ export class GridView {
     const headH = (geo?.head ?? 0.8) * cs;
     const note = state === 'running' ? 'running' : state === 'waiting' ? 'waiting on a call' : state === 'error' ? 'crashed here' : frame ? '' : returned ? 'done' : '';
     skin.wall(dc, R, { name, fns: 0, note, live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });
-    const m = geo?.motor ?? { x: 0.3, y: 0.9, w: MW, h: MH };
+    const m = closed || !geo ? { x: 1, y: 1, w: MW, h: MH } : geo.motor;
     let waitingOn: string | null = null;
     if (state === 'waiting' && frame && trace) {
       const st = frameAt(trace, s.pos).snap.stack;
@@ -1343,12 +1360,27 @@ export class GridView {
     const ist = shown ? interiorAt(trace, plan, shown.id, act ? (act.beat.kind === 'switch' && act.landed >= 1 ? act.beat.to + 1 : act.beat.from) : evI) : null;
     const liveMode: InteriorInfo['mode'] = frame ? 'live' : returned ? 'returned' : 'none';
 
+    // ---- closed: the line it's on (with its values while it runs) ----
+    if (closed && cs >= 20) {
+      const cur = frame && ist?.current != null ? plan.stations[ist.current] : null;
+      if (cur) {
+        const hot = act && act.phase !== 'read' ? computeText(act.beat, fn, trace) : '';
+        const line = act && act.beat.kind === 'switch' && act.landed >= 1 ? `${hot} → ${act.beat.result}` : hot || cur.text;
+        skin.plate(dc, R.x + R.w / 2, this.sy(h.y + m.y + MH + 0.9), clipCode(line, 30), act ? 'ptr' : 'void');
+      }
+      return;
+    }
     // ---- zoomed out: its name and the line it's on, readable ----
     if (cs < 20) {
+      const cur = frame && ist?.current != null ? plan.stations[ist.current].text : null;
+      if (closed) {
+        // small already: the motor says its name; only the running line, if any
+        if (cur && state === 'running') skin.plate({ ...dc, z: Math.max(z, 0.6) }, R.x + R.w / 2, R.y + R.h + 8, clipCode(cur, 24), 'ptr');
+        return;
+      }
       const big: Dc = { ...dc, z: 1, cs: CELL_PX };
       const cx = R.x + R.w / 2;
       skin.plate(big, cx, R.y + R.h * 0.42, fn.cname, state === 'running' ? 'arg' : 'void');
-      const cur = frame && ist?.current != null ? plan.stations[ist.current].text : null;
       if (cur && R.h > 40) skin.plate(big, cx, R.y + R.h * 0.42 + 24, clipCode(cur, 30), state === 'running' ? 'ptr' : 'void');
       return;
     }

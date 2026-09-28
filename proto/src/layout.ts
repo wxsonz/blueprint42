@@ -8,8 +8,8 @@
 import type { FnInfo, Model } from './parse';
 import type { Blueprint, Sprite } from './blueprint';
 
-export { CELL_PX, folded, type FrameRow, frameRows, INV_HEAD_PX, MAX_FIELDS, MH, MW, SLOT_PX } from './machine';
-import { folded, machineSize, MH } from './machine';
+export { CELL_PX, folded, type FrameRow, frameRows, INV_HEAD_PX, MAX_FIELDS, MH, MW, shut, SLOT_PX } from './machine';
+import { folded, machineSize, MH, shut } from './machine';
 export const MOD_W = 6; // collapsed module block width, cells
 export const MOD_DOORS = 6; // doors listed on a collapsed block before "+n more"
 const COL_GAP = 5; // cells between module columns, room for belts
@@ -77,6 +77,7 @@ export class Layout {
   reset(): void {
     this.graph = '';
     folded.clear();
+    shut.clear();
     this.nodes.clear();
     this.modules.clear();
     this.waypoints.clear();
@@ -255,7 +256,7 @@ export class Layout {
       nodes[n.id] = { x: n.place.x - (m?.x ?? 0), y: n.place.y - (m?.y ?? 0), pinned: n.place.pinned };
     }
     const waypoints = Object.fromEntries([...this.waypoints].map(([k, p]) => [k, { x: p.x, y: p.y }]));
-    const fold = folded.size ? { folded: [...folded].sort() } : {};
+    const fold = { ...(folded.size ? { folded: [...folded].sort() } : {}), ...(shut.size ? { shut: [...shut].sort() } : {}) };
     if (!project) return { version: 1, nodes, waypoints, sprites, ...fold };
     const modules: NonNullable<Blueprint['modules']> = {};
     for (const m of this.modules.values()) {
@@ -268,6 +269,8 @@ export class Layout {
   applyBlueprint(bp: Blueprint, model: Model, full: boolean): void {
     folded.clear();
     for (const k of bp.folded ?? []) folded.add(k);
+    shut.clear();
+    for (const k of bp.shut ?? []) shut.add(k);
     for (const [file, b] of Object.entries(bp.modules ?? {})) {
       const m = this.modules.get(file);
       if (!m) continue;
@@ -293,6 +296,49 @@ export class Layout {
     if (!full && model.project) this.pack(model);
   }
 
+  // Back to the auto layout: nothing pinned, no hand-routed belts. (The
+  // author's sprites stay where they are.)
+  tidy(model: Model): void {
+    for (const n of this.nodes.values()) n.place.pinned = false;
+    for (const m of this.modules.values()) m.pinned = false;
+    this.waypoints.clear();
+    this.graph = '';
+    this.reflow(model);
+  }
+
+  // Machines whose footprints overlap (pairs of ids), among those shown.
+  overlaps(): [string, string][] {
+    const ns = this.visible();
+    const out: [string, string][] = [];
+    for (let i = 0; i < ns.length; i++) {
+      for (let j = i + 1; j < ns.length; j++) {
+        const a = footprint(ns[i]);
+        const b = footprint(ns[j]);
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) out.push([ns[i].id, ns[j].id]);
+      }
+    }
+    return out;
+  }
+
+  // A saved layout from smaller machines can overlap: lay the auto-placed
+  // ones out again, then free pinned ones that still collide. Returns how
+  // many machines moved.
+  settle(model: Model): number {
+    if (!this.overlaps().length) return 0;
+    const before = new Map([...this.nodes].map(([id, n]) => [id, `${n.place.x},${n.place.y}`]));
+    this.reflow(model);
+    for (let round = 0; round < 3; round++) {
+      const pairs = this.overlaps();
+      if (!pairs.length) break;
+      for (const [, b] of pairs) {
+        const n = this.nodes.get(b);
+        if (n) n.place.pinned = false;
+      }
+      this.reflow(model);
+    }
+    return [...this.nodes].filter(([id, n]) => before.get(id) !== `${n.place.x},${n.place.y}`).length;
+  }
+
   // A frame changed height (a struct folded or unfolded): lay the auto-placed
   // machines out again, per module, from the same origin. Pinned ones stay.
   reflow(model: Model): void {
@@ -308,9 +354,13 @@ export class Layout {
         const w = fresh.wall(file);
         if (m && w) (ox = m.x - w.x), (oy = m.y - w.y);
       } else {
-        // keep the layout where it was: anchor on the first auto machine
-        const a = fns.find((f) => !this.nodes.get(f.id)!.place.pinned);
-        if (a) (ox = this.nodes.get(a.id)!.place.x - fresh.nodes.get(a.id)!.place.x), (oy = this.nodes.get(a.id)!.place.y - fresh.nodes.get(a.id)!.place.y);
+        // keep the layout where it was: its auto machines' top-left corner stays put
+        const auto = fns.filter((f) => !this.nodes.get(f.id)!.place.pinned);
+        if (auto.length) {
+          const min = (l: Layout, k: 'x' | 'y') => Math.min(...auto.map((f) => l.nodes.get(f.id)!.place[k]));
+          ox = min(this, 'x') - min(fresh, 'x');
+          oy = min(this, 'y') - min(fresh, 'y');
+        }
       }
       for (const f of fns) {
         const n = this.nodes.get(f.id)!;

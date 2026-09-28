@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Layout } from '../src/layout';
+import { Layout, shut } from '../src/layout';
+import { parseBlueprint } from '../src/blueprint';
 import { parse } from '../src/parse';
 import { model, sample, setupParser } from './helpers';
 
@@ -43,5 +44,51 @@ describe('layout', () => {
     expect(l.setPos('func:step', main.x, main.y)).toBe(false);
     expect(l.setPos('func:step', main.x, main.y + 20)).toBe(true);
     expect(l.nodes.get('func:step')!.place.pinned).toBe(true);
+  });
+
+  it('settles a layout saved when machines were small: no overlaps after', () => {
+    const m = model('gnl');
+    const l = new Layout();
+    l.reset();
+    l.sync(m);
+    // positions from the 4×3-cell days: 7 cells apart, pinned by the author
+    let k = 0;
+    for (const n of l.nodes.values()) n.place = { x: (k % 3) * 7, y: Math.floor(k++ / 3) * 6, pinned: k % 2 === 0 };
+    expect(l.overlaps().length).toBeGreaterThan(0);
+    expect(l.settle(m)).toBeGreaterThan(0);
+    expect(l.overlaps()).toEqual([]);
+  });
+
+  it('tidies back to the fresh auto layout', () => {
+    const m = model('gnl');
+    const fresh = new Layout();
+    fresh.reset();
+    fresh.sync(m);
+    const l = new Layout();
+    l.reset();
+    l.sync(m);
+    l.setPos('func:gnl_copy', 200, 200);
+    l.waypoints.set('get_next_line>gnl_fill_line', { x: 3, y: 3 });
+    l.tidy(m);
+    expect(l.waypoints.size).toBe(0);
+    for (const [id, n] of fresh.nodes) expect([id, l.nodes.get(id)!.place]).toEqual([id, n.place]);
+  });
+
+  it('closed machines are small, keep their place in the blueprint, and open again', () => {
+    const m = model('gnl');
+    const l = new Layout();
+    l.reset();
+    l.sync(m);
+    const w0 = Math.max(...[...l.nodes.values()].map((n) => n.place.x));
+    for (const f of m.fns) shut.add(f.name);
+    l.reflow(m);
+    expect(Math.max(...[...l.nodes.values()].map((n) => n.place.x))).toBeLessThan(w0);
+    expect(l.overlaps()).toEqual([]);
+    const bp = parseBlueprint(JSON.parse(JSON.stringify(l.toBlueprint([], false))));
+    expect(bp.shut?.length).toBe(m.fns.length);
+    shut.clear();
+    l.applyBlueprint(bp, m, false);
+    expect(shut.size).toBe(m.fns.length);
+    shut.clear();
   });
 });
