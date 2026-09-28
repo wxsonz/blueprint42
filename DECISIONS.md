@@ -1327,3 +1327,11 @@ questions. Newest last.
   of extra turn travelling along it at their own speeds and ways, the spin
   speeding and slowing, each pass with its own rates; head and tail flare
   by different amounts and the body's thickness swells and eases along it.
+- The prism's placement is no longer random: each pass takes one of ten
+  placements read off the author's video (enter, middle and leave points;
+  the arc is the circle through them), never the same twice running, and
+  slides a little along it. Its twist is capped (at most 1.6π of turn along
+  its length, the travelling waves scaled down to fit) so turns never bunch
+  into clumps and it reads as a crescent most of the time. The ends now
+  fade by angle around the arc's circle (a conic gradient), which follows
+  the curve; the fade along the chord cut strongly bent ends off hard.

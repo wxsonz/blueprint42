@@ -1392,10 +1392,25 @@ const ps4P: Palette = {
 // one see-through shape the whole length; one edge carries a thick line of
 // the top colour. All faded toward the ends by one gradient along the
 // chord: no banding, nothing flickering on and off as it spins, and cheap.
-// Its twist varies: a steady turn plus two waves of extra turn travelling
-// along it, the spin speeding and slowing, each pass with its own rates;
-// it travels in and out past the edges, fading only at a pass's ends. It sweeps across in about
+// Each pass takes one of the placements seen on the console (PS4_PLACES),
+// sliding a little along its arc; its twist is a steady turn plus gentle
+// waves travelling along it, the spin speeding and slowing, the turn rate
+// capped so it never bunches into clumps. It sweeps across in about
 // 12 s, spinning as it goes, fading in and out. Stateless in time.
+// Where the PS4's band lies, as seen in its welcome screen (frames of the
+// author's video): enter, middle and leave points, as fractions of the view.
+const PS4_PLACES: number[][] = [
+  [0.36, 1.02, 0.5, 0.45, 0.78, -0.02], // a slash rising from the bottom middle to the top right
+  [0.45, 1.02, 0.62, 0.3, 1.02, 0.02], // the same, bending over into the top right corner
+  [0.35, 0.35, 0.7, 0.03, 1.05, 0.1], // a hump over the top right
+  [0.15, 1.02, 0.45, 0.15, 1.02, 0.2], // a rainbow over the top from the bottom left
+  [0.05, 1.02, 0.5, 0.55, 1.02, 0.42], // a low arch rising across to the right
+  [0.3, 1.02, 0.7, 0.65, 1.02, 0.72], // a low arch along the bottom right
+  [-0.02, 1.05, 0.25, 0.85, 0.55, 0.6], // a short sweep up out of the bottom left corner
+  [1.02, 0.1, 0.9, 0.6, 0.45, 1.02], // down the right side into the bottom
+  [0.35, 1.02, 0.7, 0.95, 1.02, 0.75], // skimming the bottom right
+  [0.12, -0.02, 0.04, 0.35, -0.02, 0.75], // down the left edge from the top
+];
 function ps4Prism(dc: Dc): void {
   const g = dc.g;
   const W = dc.vw;
@@ -1409,59 +1424,81 @@ function ps4Prism(dc: Dc): void {
   // start and end of a pass
   const ramp = (x: number) => Math.min(1, Math.max(0, x)) ** 2 * (3 - 2 * Math.min(1, Math.max(0, x)));
   const fade = ramp(p / 0.15) * ramp((1 - p) / 0.15);
-  // the arc: a slice of a circle centred off beyond one side of the view
-  const diag = Math.hypot(W, H);
-  const phi = hh(1) * Math.PI * 2;
-  const D = diag * (0.8 + 0.3 * hh(2));
-  const R = D * (0.9 + 0.2 * hh(3));
-  const ox = W / 2 + Math.cos(phi) * D;
-  const oy = H / 2 + Math.sin(phi) * D;
-  const way = hh(4) < 0.5 ? -1 : 1;
-  const span = 1.9 + 0.5 * hh(5);
-  const mid = phi + Math.PI + way * (-1.05 + 2.1 * p);
-  // flared at head and tail, pinched in the body (the ends fade out anyway)
+  // where it lies: one of the placements seen on the console (each three
+  // points along the band: where it enters, its middle, where it leaves),
+  // never the same twice running; the arc is the circle through them,
+  // reaching a little past the ends so the faded tips sit off the view, and
+  // it slides a little along that circle over the pass
+  const prev = Math.floor(hash((n - 1) * 97 + 5) * PS4_PLACES.length);
+  let pick = Math.floor(hh(0) * PS4_PLACES.length);
+  if (pick === prev) pick = (pick + 1 + Math.floor(hh(24) * (PS4_PLACES.length - 1))) % PS4_PLACES.length;
+  const [ax, ay, bx, by, ex, ey] = PS4_PLACES[pick].map((v, i) => v * (i % 2 ? H : W));
+  let det = 2 * (ax * (by - ey) + bx * (ey - ay) + ex * (ay - by));
+  if (Math.abs(det) < 1e-6) det = 1e-6;
+  const sq = (x: number, y: number) => x * x + y * y;
+  const ox = (sq(ax, ay) * (by - ey) + sq(bx, by) * (ey - ay) + sq(ex, ey) * (ay - by)) / det;
+  const oy = (sq(ax, ay) * (ex - bx) + sq(bx, by) * (ax - ex) + sq(ex, ey) * (bx - ax)) / det;
+  const R = Math.hypot(ax - ox, ay - oy);
+  const a0 = Math.atan2(ay - oy, ax - ox);
+  const am = Math.atan2(by - oy, bx - ox);
+  const a1 = Math.atan2(ey - oy, ex - ox);
+  const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x));
+  let sweep = wrap(a1 - a0);
+  const tm = wrap(am - a0);
+  if (Math.sign(tm) !== Math.sign(sweep) || Math.abs(tm) > Math.abs(sweep)) sweep -= Math.sign(sweep) * Math.PI * 2;
+  const EXT = 0.2;
+  const slide = (p - 0.5) * 0.22 * sweep;
+  const thAt = (s: number) => a0 + sweep * (-EXT + (1 + 2 * EXT) * s) + slide;
   // flared at head and tail (each by its own amount), pinched in the body,
-  // its thickness swelling and easing along the length as it goes
+  // its thickness easing a little along the length as it goes
   const rmin = H * (0.035 + 0.02 * hh(6));
   const rHead = H * (0.12 + 0.1 * hh(9));
   const rTail = H * (0.12 + 0.1 * hh(10));
-  // the twist: a steady turn along the length, plus two waves of extra turn
-  // running along it at their own speeds and ways; the spin speeds and slows
+  const bulge = 0.08 + 0.12 * hh(23);
+  // the twist: a steady turn along the length plus a gentle wave of extra
+  // turn running along it, the spin speeding and slowing. Capped: the turn
+  // rate along the band never passes MAXTURN radians per length, so turns
+  // never bunch into clumps and it reads as a crescent most of the time
+  const MAXTURN = 1.6 * Math.PI;
   const sgn = hh(7) < 0.5 ? -1 : 1;
-  const spin = sgn * (t * 0.4 + 0.9 * Math.sin(t * 0.23 + hh(11) * 6.28));
-  const twist = (0.6 + 1.6 * hh(8)) * Math.PI * (hh(12) < 0.3 ? -1 : 1);
-  const w1 = { a: 0.6 + 1.2 * hh(13), f: 0.5 + 1.2 * hh(14), v: (0.3 + 0.6 * hh(15)) * (hh(16) < 0.5 ? -1 : 1), ph: hh(17) * 6.28 };
-  const w2 = { a: 0.3 + 0.8 * hh(18), f: 1.4 + 1.6 * hh(19), v: (0.5 + 0.8 * hh(20)) * (hh(21) < 0.5 ? -1 : 1), ph: hh(22) * 6.28 };
-  const bulge = 0.15 + 0.25 * hh(23);
+  const spin = sgn * (t * 0.35 + 0.8 * Math.sin(t * 0.21 + hh(11) * 6.28));
+  const twist = (0.4 + 0.6 * hh(8)) * Math.PI * (hh(12) < 0.3 ? -1 : 1);
+  const w1 = { a: 0.3 + 0.4 * hh(13), f: 0.3 + 0.4 * hh(14), v: (0.25 + 0.4 * hh(15)) * (hh(16) < 0.5 ? -1 : 1), ph: hh(17) * 6.28 };
+  const w2 = { a: 0.1 + 0.2 * hh(18), f: 0.8 + 0.4 * hh(19), v: (0.4 + 0.5 * hh(20)) * (hh(21) < 0.5 ? -1 : 1), ph: hh(22) * 6.28 };
+  const waveRate = w1.a * Math.PI * 2 * w1.f + w2.a * Math.PI * 2 * w2.f;
+  const room = Math.max(0, MAXTURN - Math.abs(twist));
+  const k = waveRate > room ? room / waveRate : 1;
   const N = 72;
   const ring: { x: number; y: number }[][] = [];
   const ang: number[] = [];
   for (let i = 0; i <= N; i++) {
     const s = i / N;
-    const th = mid - span / 2 + span * s;
+    const th = thAt(s);
     const cx = ox + Math.cos(th) * R, cy = oy + Math.sin(th) * R;
     const nx = -Math.cos(th), ny = -Math.sin(th);
     const flare = (1 - s) ** 2.2 * rHead + s ** 2.2 * rTail;
     const r = (rmin + flare) * (1 + bulge * Math.sin(Math.PI * 2 * 1.3 * s + t * 0.37 + n));
-    const tw = spin + twist * s + w1.a * Math.sin(Math.PI * 2 * w1.f * s + w1.v * t + w1.ph) + w2.a * Math.sin(Math.PI * 2 * w2.f * s + w2.v * t + w2.ph);
+    const tw = spin + twist * s + k * (w1.a * Math.sin(Math.PI * 2 * w1.f * s + w1.v * t + w1.ph) + w2.a * Math.sin(Math.PI * 2 * w2.f * s + w2.v * t + w2.ph));
     ang.push(tw);
     const tri: { x: number; y: number }[] = [];
-    for (let k = 0; k < 3; k++) {
-      const a = tw + (k * 2 * Math.PI) / 3;
-      tri.push({ x: cx + nx * r * Math.cos(a), y: cy + ny * r * Math.cos(a) });
+    for (let j = 0; j < 3; j++) {
+      const q = tw + (j * 2 * Math.PI) / 3;
+      tri.push({ x: cx + nx * r * Math.cos(q), y: cy + ny * r * Math.cos(q) });
     }
     ring.push(tri);
   }
   // the colours: the top of the sky and its middle, faded to nothing toward
-  // the head and tail along the shape's chord
-  const th0 = mid - span / 2, th1 = mid + span / 2;
-  const x0 = ox + Math.cos(th0) * R, y0 = oy + Math.sin(th0) * R;
-  const x1 = ox + Math.cos(th1) * R, y1 = oy + Math.sin(th1) * R;
+  // the head and tail by angle around the arc's circle (a conic gradient
+  // follows the curve, where one along the chord cut strongly bent ends)
+  const th0 = thAt(0), th1 = thAt(1);
+  const lo = Math.min(th0, th1);
+  const L = Math.abs(th1 - th0) / (Math.PI * 2);
   const along = (rgb: string, a: number) => {
-    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    const gr = g.createConicGradient(lo, ox, oy);
     gr.addColorStop(0, `rgba(${rgb},0)`);
-    gr.addColorStop(0.3, `rgba(${rgb},${a * fade})`);
-    gr.addColorStop(0.7, `rgba(${rgb},${a * fade})`);
+    gr.addColorStop(0.22 * L, `rgba(${rgb},${a * fade})`);
+    gr.addColorStop(0.78 * L, `rgba(${rgb},${a * fade})`);
+    gr.addColorStop(L, `rgba(${rgb},0)`);
     gr.addColorStop(1, `rgba(${rgb},0)`);
     return gr;
   };
