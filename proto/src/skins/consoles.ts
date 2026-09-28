@@ -1387,11 +1387,11 @@ const ps4P: Palette = {
 // The background, after the PS4's welcome screen: one long twisted
 // triangular prism at a time, following a slow arc across the view, flared
 // at its head and tail but faded to nothing there, so only its pinched body
-// shows. Of its three faces one is the sky's top colour, one the sky's
-// middle (so near the middle it all but melts in) and the third isn't drawn;
-// one edge carries a thick line of the top colour. Each face is one flat
-// shape per stretch where it faces the viewer, faded toward the ends by one
-// gradient along the chord: no banding, and cheap. It sweeps across in about
+// shows. Its faces are glass: one in the sky's top colour, one in the sky's
+// middle (so near the middle it all but melts in), the third fainter, each
+// one see-through shape the whole length; one edge carries a thick line of
+// the top colour. All faded toward the ends by one gradient along the
+// chord: no banding, nothing flickering on and off as it spins, and cheap. It sweeps across in about
 // 12 s, spinning as it goes, fading in and out. Stateless in time.
 function ps4Prism(dc: Dc): void {
   const g = dc.g;
@@ -1406,13 +1406,13 @@ function ps4Prism(dc: Dc): void {
   // the arc: a slice of a circle centred off beyond one side of the view
   const diag = Math.hypot(W, H);
   const phi = hh(1) * Math.PI * 2;
-  const D = diag * (0.7 + 0.3 * hh(2));
-  const R = D * (0.8 + 0.2 * hh(3));
+  const D = diag * (0.8 + 0.3 * hh(2));
+  const R = D * (0.9 + 0.2 * hh(3));
   const ox = W / 2 + Math.cos(phi) * D;
   const oy = H / 2 + Math.sin(phi) * D;
   const way = hh(4) < 0.5 ? -1 : 1;
-  const span = 1.2 + 0.4 * hh(5);
-  const mid = phi + Math.PI + way * (-0.8 + 1.6 * p);
+  const span = 1.9 + 0.5 * hh(5);
+  const mid = phi + Math.PI + way * (-0.6 + 1.2 * p);
   // flared at head and tail, pinched in the body (the ends fade out anyway)
   const rmin = H * (0.035 + 0.02 * hh(6));
   const rmax = H * (0.16 + 0.06 * hh(9));
@@ -1451,42 +1451,28 @@ function ps4Prism(dc: Dc): void {
   };
   const TOP = '10,95,174';
   const MID = '6,62,192';
-  // a face's visible stretches: where its outward normal turns to the viewer
-  const faceRuns = (k: number) => {
-    const runs: [number, number][] = [];
-    let start = -1;
-    for (let i = 0; i < N; i++) {
-      const a = (ang[i] + ang[i + 1]) / 2 + ((k + 0.5) * 2 * Math.PI) / 3;
-      const vis = Math.sin(a) > 0;
-      if (vis && start < 0) start = i;
-      if (!vis && start >= 0) runs.push([start, i]), (start = -1);
-    }
-    if (start >= 0) runs.push([start, N]);
-    return runs;
-  };
   g.save();
-  // face 0 the sky's top colour, face 1 its middle; face 2 isn't drawn
-  for (const [k, rgb, a] of [[1, MID, 0.8], [0, TOP, 0.75]] as const) {
+  // the faces are glass: each drawn see-through along the whole length (one
+  // fill, so a face that turns edge-on and flips never doubles up), the
+  // third fainter; where faces overlap they layer, like strands
+  for (const [k, rgb, a] of [[2, TOP, 0.18], [1, MID, 0.5], [0, TOP, 0.45]] as const) {
     g.fillStyle = along(rgb, a);
     g.beginPath();
-    for (const [i0, i1] of faceRuns(k)) {
-      g.moveTo(ring[i0][k].x, ring[i0][k].y);
-      for (let i = i0 + 1; i <= i1; i++) g.lineTo(ring[i][k].x, ring[i][k].y);
-      for (let i = i1; i >= i0; i--) g.lineTo(ring[i][(k + 1) % 3].x, ring[i][(k + 1) % 3].y);
-      g.closePath();
-    }
+    g.moveTo(ring[0][k].x, ring[0][k].y);
+    for (let i = 1; i <= N; i++) g.lineTo(ring[i][k].x, ring[i][k].y);
+    for (let i = N; i >= 0; i--) g.lineTo(ring[i][(k + 1) % 3].x, ring[i][(k + 1) % 3].y);
+    g.closePath();
     g.fill();
   }
-  // one edge carries a thick line of the top colour, where it shows
-  g.strokeStyle = along(TOP, 0.9);
+  // one edge a thick line of the top colour, the whole length (faded at the
+  // ends with the rest), so nothing switches on and off as it spins
+  g.strokeStyle = along(TOP, 0.8);
   g.lineWidth = Math.max(2, H / 260);
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.beginPath();
-  for (const [i0, i1] of faceRuns(0)) {
-    g.moveTo(ring[i0][0].x, ring[i0][0].y);
-    for (let i = i0 + 1; i <= i1; i++) g.lineTo(ring[i][0].x, ring[i][0].y);
-  }
+  g.moveTo(ring[0][0].x, ring[0][0].y);
+  for (let i = 1; i <= N; i++) g.lineTo(ring[i][0].x, ring[i][0].y);
   g.stroke();
   g.restore();
 }

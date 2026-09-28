@@ -1315,3 +1315,9 @@ questions. Newest last.
   top colour. Each face is now a flat shape per visible stretch with one
   fade gradient along the chord, which ends the banding of per-quad shading
   and makes it far less readable. ~0.2 ms a frame headless.
+- The prism is longer (an arc of 1.9–2.4 rad on a circle beyond the view,
+  so it runs across the whole screen), and its faces are glass instead of
+  culled: each is one see-through shape the whole length, the third fainter,
+  layering where they overlap. Culling cut it into crescent-like creases
+  and made the edge line flicker as its visible stretches switched on and
+  off segment by segment; the line now runs the whole length too.
