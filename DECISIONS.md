@@ -1003,3 +1003,9 @@ questions. Newest last.
     or `node`), so the PS1 draws the console's vent grille down the left
     side of each machine, as if the function were the console's top. The
     grille is gone from the playbar.
+- **Decision (author: the four-colour line is overused noise):** The
+  logo's colours appear in only two places: the brand logo and the title
+  bar of the active window (running or selected), where they mark focus.
+  The top bar, pane heads, the duel, the return card, the inspector,
+  storage and stations lose the stripe; they use plain dark or grey
+  rules.

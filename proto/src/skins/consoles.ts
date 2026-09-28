@@ -169,16 +169,14 @@ export const ps1Theme: Theme = {
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),
   // storage and stations as the windows are built: bevelled grey plastic under
-  // a dark title bar with the logo's colours along its edge
+  // a dark title bar (the logo's colours are kept for the active window)
   panel(dc, r, head, title, live) {
     const g = dc.g;
     plastic(dc, r, Math.max(1, 3 * dc.z), '#e4e3de', '#f6f5f1', '#8f8e89');
     const bar = { x: r.x + 2 * dc.z, y: r.y + 2 * dc.z, w: r.w - 4 * dc.z, h: Math.max(6, head.h - 2 * dc.z) };
     g.fillStyle = live ? '#26262b' : '#6f6e72';
     g.fillRect(bar.x, bar.y, bar.w, bar.h);
-    const k = Math.max(1, 2 * dc.z);
-    if (live) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
-    text(dc, { ...bar, h: bar.h - k }, title.toUpperCase(), RUBIK, 10, live ? '#f2f2f2' : '#d6d6d9', { w: 600, x: bar.x + 6 * dc.z });
+    text(dc, bar, title.toUpperCase(), RUBIK, 10, live ? '#f2f2f2' : '#d6d6d9', { w: 600, x: bar.x + 6 * dc.z });
   },
   // the PAL BIOS: a grey blocked background, each block bevelled, then
   // quantised to 15-bit colour with the PS1's 4×4 ordered dither (once, cached)
@@ -236,7 +234,8 @@ export const ps1Theme: Theme = {
       const bar = { x: r.x + 3 * dc.z, y: r.y + 3 * dc.z, w: r.w - 6 * dc.z, h: r.h - 8 * dc.z };
       g.fillStyle = active ? '#26262b' : '#57575c';
       g.fillRect(bar.x, bar.y, bar.w, bar.h);
-      // the logo's four colours along its lower edge
+      // the logo's four colours along its lower edge, only on the active
+      // window so they mark focus instead of decorating everything
       const k = Math.max(1, 2.5 * dc.z);
       if (active) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
       else (g.fillStyle = '#77767a'), g.fillRect(bar.x, bar.y + bar.h - k, bar.w, k);

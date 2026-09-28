@@ -135,7 +135,7 @@ html[data-skin='ps1'] {
 html[data-skin='ps1'] body { background: linear-gradient(90deg, rgba(255,255,255,0.4) 0 1px, transparent 1px calc(100% - 1px), rgba(0,0,0,0.3) calc(100% - 1px)) 0 0 / 48px 48px, linear-gradient(rgba(255,255,255,0.4) 0 1px, transparent 1px calc(100% - 1px), rgba(0,0,0,0.3) calc(100% - 1px)) 0 0 / 48px 48px, linear-gradient(135deg, #b3b2ad, #8f8e89); }
 html[data-skin='ps1'] #app, html[data-skin='ps1'] #panes { background: transparent; }
 html[data-skin='ps1'] .brand .logo { background: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%); }
-html[data-skin='ps1'] #top { background: linear-gradient(#d2d1cc, #b6b5b0); color: #1c1c20; border-bottom: 3px solid; border-image: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%) 3; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+html[data-skin='ps1'] #top { background: linear-gradient(#d2d1cc, #b6b5b0); color: #1c1c20; border-bottom: 2px solid #26262b; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
 html[data-skin='ps1'] .btn, html[data-skin='ps1'] .seg button { border-radius: 4px; background: linear-gradient(#e0dfda, #bdbcb7); border: 1px solid #75746e; box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 0 rgba(0,0,0,0.25); color: #2a2a30; }
 html[data-skin='ps1'] .seg button[aria-pressed='true'] { background: linear-gradient(#3a3a40, #26262b); color: #f2f2f2; box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); }
 /* round buttons, like the console's lid button: convex grey */
@@ -145,7 +145,7 @@ html[data-skin='ps1'] .pb-buttons button:active { box-shadow: inset 0 2px 3px rg
 html[data-skin='ps1'] .pb-buttons button.primary { color: #e4002b; box-shadow: 0 0 0 2px #e4002b, 0 2px 0 rgba(0,0,0,0.3); }
 html[data-skin='ps1'] .pb-buttons button.primary.playing { color: #00a651; box-shadow: 0 0 0 2px #00a651, 0 2px 0 rgba(0,0,0,0.3); }
 html[data-skin='ps1'] .pane { box-shadow: 3px 3px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.6); }
-html[data-skin='ps1'] .pane-head { border-bottom: 2px solid; border-image: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%) 2; }
+html[data-skin='ps1'] .pane-head { border-bottom: 1px solid #8f8e89; }
 html[data-skin='ps1'] #status { background: #bdbcb7; color: #1c1c20; border-top: 1px solid #8f8e89; }
 
 /* the PS1's ordered dither, only where the console would show it: on shaded
@@ -155,9 +155,8 @@ html[data-skin='ps1'] #playbar { background: url("data:image/svg+xml,%3Csvg xmln
 html[data-skin='ps1'] .pb-buttons button { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='rgb%28100%2C100%2C100%29'/%3E%3Crect x='2' y='0' width='2' height='2' fill='rgb%28130%2C130%2C130%29'/%3E%3Crect x='4' y='0' width='2' height='2' fill='rgb%28107%2C107%2C107%29'/%3E%3Crect x='6' y='0' width='2' height='2' fill='rgb%28137%2C137%2C137%29'/%3E%3Crect x='0' y='2' width='2' height='2' fill='rgb%28145%2C145%2C145%29'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgb%28115%2C115%2C115%29'/%3E%3Crect x='4' y='2' width='2' height='2' fill='rgb%28152%2C152%2C152%29'/%3E%3Crect x='6' y='2' width='2' height='2' fill='rgb%28122%2C122%2C122%29'/%3E%3Crect x='0' y='4' width='2' height='2' fill='rgb%28111%2C111%2C111%29'/%3E%3Crect x='2' y='4' width='2' height='2' fill='rgb%28141%2C141%2C141%29'/%3E%3Crect x='4' y='4' width='2' height='2' fill='rgb%28104%2C104%2C104%29'/%3E%3Crect x='6' y='4' width='2' height='2' fill='rgb%28134%2C134%2C134%29'/%3E%3Crect x='0' y='6' width='2' height='2' fill='rgb%28156%2C156%2C156%29'/%3E%3Crect x='2' y='6' width='2' height='2' fill='rgb%28126%2C126%2C126%29'/%3E%3Crect x='4' y='6' width='2' height='2' fill='rgb%28149%2C149%2C149%29'/%3E%3Crect x='6' y='6' width='2' height='2' fill='rgb%28119%2C119%2C119%29'/%3E%3C/svg%3E") 0 0 / 8px 8px, radial-gradient(circle at 35% 30%, #f1f0eb, #c3c2bd 55%, #9d9c97); background-blend-mode: overlay, normal; }
 
 /* panels (the duel, the return card, the inspector) match the windows: the
-   dark title with the logo's colours under it, and colours that read on grey */
+   dark title bar, and colours that read on grey */
 html[data-skin='ps1'] { --tl-call: #0063b3; --tl-ret: #00864a; --tl-ptr: #b0307a; --ok: #00864a; }
-html[data-skin='ps1'] #duel .d-say, html[data-skin='ps1'] #stage-card .sc-title, html[data-skin='ps1'] .ins-title { border-bottom: 3px solid; border-image: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%) 3; }
 html[data-skin='ps1'] #duel .d-code .val, html[data-skin='ps1'] #duel .d-say b.v { color: #00864a; }
 html[data-skin='ps1'] #duel .d-say b.v { color: #7fe0a8; }
 html[data-skin='ps1'] #duel .d-card { box-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
