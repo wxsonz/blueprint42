@@ -1287,3 +1287,14 @@ questions. Newest last.
   Möbius strip is now grey laid over it in soft-light, so it is literally
   lighter and darker sky; the grid's pane is see-through so the sky shows
   untinted.
+- The Möbius strip is replaced by what the PS4's welcome screen actually
+  shows (studied from the author's video, frames at 2 fps with the median
+  frame subtracted so only the moving parts remain): crescent ribbons, thin
+  at both ends, each a slice of a circle about the screen's size, made of
+  three strands that slide and sometimes cross (a wide soft lighter sheet,
+  a thin bright edge, a darker band). One sweeps across in a slow arc over
+  about 9 s, entering and leaving by the edges, thickness breathing, fading
+  in and out; a second runs half a pass behind. Grey in soft light (only
+  lighter and darker sky); half size, soft strands blurred, bright edges
+  sharp, at most 24 times a second. Cheaper than the Möbius (~2.7 ms
+  headless against ~4.7).

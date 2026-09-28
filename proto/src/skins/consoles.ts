@@ -1384,21 +1384,21 @@ const ps4P: Palette = {
   fg: '#ffffff', dim: '#c6d6ff', faint: '#8aa6e8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
-// The background's Möbius strip: the real surface (a band that turns half
-// over as it goes round), in perspective, shaded only in darker and lighter
-// blues by how each part faces the light (|facing|: it has one side), with
-// a pale rim along its single edge. It moves: it keeps turning (its tilt
-// and heading drift) and spinning (the band rolls along itself, so the twist
-// travels), and it frames itself each time to the rule of thirds: scaled so
-// it bleeds past the top and bottom, centred on the left third line and
-// drifting slowly between the upper and lower thirds, leaving the right two
-// thirds open. Stateless in time. It's soft, so it's painted at half size,
-// blurred a touch, at most 24 times a second, and laid over the sky.
-let ps4Mob: HTMLCanvasElement | null = null;
-let ps4MobSoft: HTMLCanvasElement | null = null;
-let ps4MobKey = '';
-let ps4MobT = -1;
-function ps4Mobius(dc: Dc): void {
+// The background, after the PS4's welcome screen (studied frame by frame):
+// crescent ribbons, thin at both ends and thickest in the middle, each a
+// slice of a circle about the screen's size. A ribbon is three strands that
+// slide against each other and now and then cross: a wide soft lighter
+// sheet, a thin bright edge, a darker band alongside. One sweeps across in
+// a slow arc (its circle turning), entering and leaving by the edges, its
+// thickness breathing, fading in and out; a second one is half a pass
+// behind, so they overlap as one leaves. Only lighter and darker sky: the
+// strands are grey laid over the sky in soft light. Stateless in time;
+// painted at half size, the soft strands blurred, at most 24 times a second.
+let ps4Rib: HTMLCanvasElement | null = null;
+let ps4RibSoft: HTMLCanvasElement | null = null;
+let ps4RibKey = '';
+let ps4RibT = -1;
+function ps4Ribbons(dc: Dc): void {
   const g = dc.g;
   const W = dc.vw;
   const H = dc.vh;
@@ -1407,99 +1407,78 @@ function ps4Mobius(dc: Dc): void {
   const w = Math.ceil(W * RS);
   const h = Math.ceil(H * RS);
   const key = `${w}x${h}`;
-  if (key !== ps4MobKey || Math.abs(t - ps4MobT) >= 1 / 24) {
-    ps4MobKey = key;
-    ps4MobT = t;
-    ps4Mob ??= document.createElement('canvas');
-    ps4MobSoft ??= document.createElement('canvas');
-    for (const c of [ps4Mob, ps4MobSoft]) if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
-    const m = ps4Mob.getContext('2d')!;
+  if (key !== ps4RibKey || Math.abs(t - ps4RibT) >= 1 / 24) {
+    ps4RibKey = key;
+    ps4RibT = t;
+    ps4Rib ??= document.createElement('canvas');
+    ps4RibSoft ??= document.createElement('canvas');
+    for (const c of [ps4Rib, ps4RibSoft]) if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
+    const m = ps4Rib.getContext('2d')!;
+    const sg = ps4RibSoft.getContext('2d')!;
     m.clearRect(0, 0, w, h);
-    const HW = 0.5; // the band's half-width, the loop's radius being 1
-    const NU = 120;
-    const NV = 7;
-    const spin = t * 0.045;
-    const ax = 0.95 + 0.25 * Math.sin(t * 0.031);
-    const ay = 0.55 + 0.35 * Math.sin(t * 0.023 + 1);
-    const az = -0.35 + t * 0.012;
-    const [cxa, sxa, cya, sya, cza, sza] = [Math.cos(ax), Math.sin(ax), Math.cos(ay), Math.sin(ay), Math.cos(az), Math.sin(az)];
-    const F = 4.5;
-    // the surface in view space, projected at unit scale about the origin
-    const at = (u: number, v: number) => {
-      const r = 1 + v * Math.cos(u / 2);
-      const x = r * Math.cos(u + spin), y = r * Math.sin(u + spin), z = v * Math.sin(u / 2);
-      let y1 = y * cxa - z * sxa;
-      let z1 = y * sxa + z * cxa;
-      const x2 = x * cya + z1 * sya;
-      z1 = -x * sya + z1 * cya;
-      const x3 = x2 * cza - y1 * sza;
-      y1 = x2 * sza + y1 * cza;
-      const f = F / (F + z1);
-      return { x: x3 * f, y: y1 * f, z: z1, p: [x3, y1, z1] };
-    };
-    const grid: ReturnType<typeof at>[][] = [];
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (let i = 0; i <= NU; i++) {
-      const row: ReturnType<typeof at>[] = [];
-      for (let j = 0; j <= NV; j++) {
-        const q = at((i / NU) * Math.PI * 2, -HW + (2 * HW * j) / NV);
-        row.push(q);
-        x0 = Math.min(x0, q.x), x1 = Math.max(x1, q.x), y0 = Math.min(y0, q.y), y1 = Math.max(y1, q.y);
-      }
-      grid.push(row);
-    }
-    // framing: bleed past the top and bottom, on the left third line
-    const S = Math.min((1.25 * h) / (y1 - y0), (1.1 * w) / (x1 - x0));
-    const ox = w / 3 - ((x0 + x1) / 2) * S;
-    const oy = h * (0.5 + (1 / 6) * Math.sin(t * 0.018)) - ((y0 + y1) / 2) * S;
-    const X = (q: { x: number }) => ox + q.x * S;
-    const Y = (q: { y: number }) => oy + q.y * S;
-    const L = [-0.35, -0.6, 0.72];
-    const quads: { q: ReturnType<typeof at>[]; z: number; b: number }[] = [];
-    for (let i = 0; i < NU; i++)
-      for (let j = 0; j < NV; j++) {
-        const a = grid[i][j], b = grid[i + 1][j], c = grid[i + 1][j + 1], d = grid[i][j + 1];
-        const e1 = [b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]];
-        const e2 = [d.p[0] - a.p[0], d.p[1] - a.p[1], d.p[2] - a.p[2]];
-        const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-        const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-        quads.push({ q: [a, b, c, d], z: (a.z + b.z + c.z + d.z) / 4, b: Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl) });
-      }
-    quads.sort((p, q) => q.z - p.z);
-    // grey, laid over the sky in soft light: only darker and lighter sky
-    const dark = [70, 70, 70];
-    const lite = [215, 215, 215];
-    m.lineWidth = 1;
-    for (const { q, b } of quads) {
-      const f = b ** 1.2;
-      m.fillStyle = m.strokeStyle = `rgb(${dark.map((d, i) => Math.round(d + (lite[i] - d) * f)).join(',')})`;
-      m.beginPath();
-      m.moveTo(X(q[0]), Y(q[0]));
-      for (let k = 1; k < 4; k++) m.lineTo(X(q[k]), Y(q[k]));
-      m.closePath();
-      m.fill();
-      m.stroke();
-    }
-    // the rim along its one edge: twice round
-    m.strokeStyle = 'rgba(255,255,255,0.8)';
-    m.lineWidth = 0.75;
-    m.beginPath();
-    for (let i = 0; i <= NU * 2; i++) {
-      const q = at((i / NU) * Math.PI * 2, HW);
-      if (i) m.lineTo(X(q), Y(q));
-      else m.moveTo(X(q), Y(q));
-    }
-    m.stroke();
-    const sg = ps4MobSoft.getContext('2d')!;
     sg.clearRect(0, 0, w, h);
+    const P = 9; // seconds a pass takes
+    const N = 64;
+    const edges: (() => void)[] = [];
+    for (let r = 0; r < 2; r++) {
+      const tt = t + r * P * 0.5;
+      const n = Math.floor(tt / P) * 2 + r;
+      const p = tt / P - Math.floor(tt / P);
+      const hh = (k: number) => hash(n * 97 + k * 13 + 5);
+      const fade = Math.sin(Math.PI * p) ** 0.8;
+      // the circle: its centre off beyond one side, the arc crossing the view
+      const diag = Math.hypot(w, h);
+      const phi = hh(1) * Math.PI * 2;
+      const D = diag * (0.75 + 0.35 * hh(2));
+      const R = D * (0.78 + 0.22 * hh(3));
+      const cx = w / 2 + Math.cos(phi) * D;
+      const cy = h / 2 + Math.sin(phi) * D;
+      const way = hh(4) < 0.5 ? -1 : 1;
+      const span = 0.9 + 0.5 * hh(5);
+      const mid = phi + Math.PI + way * (-0.75 + 1.5 * p);
+      const thick = h * (0.07 + 0.06 * hh(6)) * (0.75 + 0.25 * Math.sin(tt * 0.5 + n)) * (0.6 + 0.4 * fade);
+      // a strand: its offset from the circle and width, both along s (0..1)
+      const strand = (off: (s: number) => number, wid: number, fill: string) => {
+        const outer: number[][] = [];
+        const inner: number[][] = [];
+        for (let i = 0; i <= N; i++) {
+          const s = i / N;
+          const ang = mid - span / 2 + span * s;
+          const taper = Math.sin(Math.PI * s) ** 0.9;
+          const o = off(s) * thick * taper;
+          const half = (wid * thick * taper) / 2;
+          outer.push([cx + Math.cos(ang) * (R + o + half), cy + Math.sin(ang) * (R + o + half)]);
+          inner.push([cx + Math.cos(ang) * (R + o - half), cy + Math.sin(ang) * (R + o - half)]);
+        }
+        return () => {
+          m.beginPath();
+          outer.forEach(([x, y], i) => (i ? m.lineTo(x, y) : m.moveTo(x, y)));
+          for (let i = inner.length - 1; i >= 0; i--) m.lineTo(inner[i][0], inner[i][1]);
+          m.closePath();
+          m.fillStyle = fill;
+          m.fill();
+        };
+      };
+      // the strands slide: their offsets wave along the arc and in time, so
+      // now and then one crosses another
+      const ph = tt * 0.35 + hh(7) * 6.28;
+      strand((s) => 0.15 * Math.sin(ph + s * 2.2), 1, `rgba(205,205,205,${0.65 * fade})`)();
+      strand((s) => -0.75 + 0.6 * Math.sin(ph * 0.8 + 1.7 + s * 3), 0.55, `rgba(35,35,35,${0.5 * fade})`)();
+      const edge = strand((s) => 0.5 + 0.55 * Math.sin(ph * 1.2 + 3.1 + s * 2.6), 0.07, `rgba(255,255,255,${0.85 * fade})`);
+      edges.push(edge);
+    }
+    // the soft strands blurred; the bright edges drawn sharp over them
     sg.filter = 'blur(1.4px)';
-    sg.drawImage(ps4Mob, 0, 0);
+    sg.drawImage(ps4Rib, 0, 0);
     sg.filter = 'none';
+    m.clearRect(0, 0, w, h);
+    for (const e of edges) e();
+    sg.drawImage(ps4Rib, 0, 0);
   }
   g.save();
   g.globalCompositeOperation = 'soft-light';
   g.imageSmoothingEnabled = true;
-  g.drawImage(ps4MobSoft!, 0, 0, w, h, 0, 0, W, H);
+  g.drawImage(ps4RibSoft!, 0, 0, w, h, 0, 0, W, H);
   g.restore();
 }
 // A belt as the PS4's progress bar: a flat track; live, a white fill runs
@@ -1657,8 +1636,8 @@ export const ps4Theme: Theme = {
       g.fillStyle = glow;
       g.fillRect(0, 0, W, H);
     });
-    // a Möbius strip, in shades of the blue only, turning and spinning
-    ps4Mobius(dc);
+    // crescent ribbons sweeping through, in shades of the sky only
+    ps4Ribbons(dc);
   },
   window: {
     border: 0, corner: 0, titleH: 28, face: 'rgba(3,30,76,0.8)', workspace: 'rgba(255,255,255,0.05)',
