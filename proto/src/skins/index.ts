@@ -9,9 +9,10 @@ import { synthwave } from './synthwave';
 import { xp } from './xp';
 import { seven } from './seven';
 import { metro } from './metro';
+import { bigsur, leopard, platinum, system7, tahoe, yosemite } from './macos';
 import type { Skin } from './types';
 
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, aqua, minimal, blueprint, factory, gameboy, synthwave];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, system7, platinum, aqua, leopard, yosemite, bigsur, tahoe, minimal, blueprint, factory, gameboy, synthwave];
 
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
@@ -26,4 +27,10 @@ export const SKIN_FONTS: Record<string, string[]> = {
   xp: [],
   seven: ['12px "Open Sans"', '600 12px "Open Sans"'],
   metro: ['300 12px "Open Sans"', '600 12px "Open Sans"'],
+  system7: ['12px "Pixelify Sans"', '700 12px "Pixelify Sans"'],
+  platinum: ['12px "Pixelify Sans"', '700 12px "Pixelify Sans"', '12px "Open Sans"'],
+  leopard: ['12px "Open Sans"', '700 12px "Open Sans"'],
+  yosemite: ['500 12px Inter', '700 12px Inter'],
+  bigsur: ['500 12px Inter', '700 12px Inter'],
+  tahoe: ['500 12px Inter', '700 12px Inter'],
 };

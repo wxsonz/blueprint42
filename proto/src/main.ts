@@ -33,6 +33,12 @@ import './styles/synthwave.css';
 import './styles/xp.css';
 import './styles/seven.css';
 import './styles/metro.css';
+import './styles/system7.css';
+import './styles/platinum.css';
+import './styles/leopard.css';
+import './styles/yosemite.css';
+import './styles/bigsur.css';
+import './styles/tahoe.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 

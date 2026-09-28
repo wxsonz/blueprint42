@@ -573,3 +573,14 @@ questions. Newest last.
   Bliss, Harmony, and the Metro start purple. Metro gives each machine its
   own tile colour from its name.
 
+## 2026-09-28: the Mac eras
+
+- **Decision (author):** Mac skins alongside the Windows ones: System 7,
+  Mac OS 9 (Platinum), Mac OS X Leopard, OS X Yosemite, macOS Big Sur and
+  macOS Tahoe (Liquid Glass). The existing Aqua skin covers 10.0–10.4.
+  They're theme-kit specs in `skins/macos.ts`, sharing traffic lights,
+  centred titles and title-bar stripes. Wallpapers are drawn, not copied
+  images: the gray pattern, OS 9 blue, Aurora, a dusk mountain, coastal
+  waves, and the lake. The skin list is ordered Windows, then Mac by era,
+  then the rest.
+

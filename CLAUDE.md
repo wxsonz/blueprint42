@@ -62,9 +62,10 @@ and after each one) → `render.ts` (engine: camera, routing, hit-testing;
 fractional playback position; all drawing is delegated to the active skin) →
 `main.ts` (state, playback loop, mouse and keys, DOM panels).
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
-editor via CSS variables on `html[data-skin]`. Eleven skins: amp, classic,
-aqua, minimal (hand-written), and xp, seven, metro, blueprint, factory,
-gameboy, synthwave (specs for `skins/kit.ts` `makeSkin`, the quickest way
+editor via CSS variables on `html[data-skin]`. Seventeen skins: amp, classic,
+aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in
+`skins/macos.ts` (system7, platinum, leopard, yosemite, bigsur, tahoe),
+blueprint, factory, gameboy, synthwave (specs for `skins/kit.ts` `makeSkin`, the quickest way
 to add a theme; `Theme.window` gives desktop-style window chrome). `editor.ts` is CodeMirror
 with vim in a toggleable compartment.
 
