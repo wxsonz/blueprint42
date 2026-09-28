@@ -172,7 +172,7 @@ export const minimal: Skin = {
     g.font = MONO(px(dc, 10, 6));
     g.fillStyle = FAINT;
     g.textAlign = 'right';
-    g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
+    g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
     if (w.selected || w.hovered) outline(g, r, rad, w.selected);
   },
 

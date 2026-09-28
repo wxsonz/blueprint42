@@ -2,13 +2,15 @@
 // in route.ts; every pixel is delegated to the active skin (skins/*.ts).
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
-import { roomScene, roomTimeline, slotsOf, slotValue } from './room';
+import { beatDuration, beatNow, computeText, readsOf, READ_END, slotValue, writesOf, type BeatNow } from './beats';
+import { geomOf, slotsOf } from './machine';
 import type { FnInfo } from './parse';
+import type { Host } from './route';
 import type { Model } from './parse';
 import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, hostKey, isModuleKey, procPlace, type Belt, type Scene } from './route';
 import { clip, fieldValue, pointeeName, staticCellId, valueOf } from './values';
-import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo, StripInfo, ValueKind } from './skins/types';
+import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo, StripInfo } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
 
@@ -36,7 +38,6 @@ export interface ViewState {
   editorFn: string | null;
   sprites?: Sprite[];
   violations?: Violation[];
-  room?: string | null; // the function whose machine the author has entered
 }
 
 // World footprint is shared by drawing, fitting and hit testing. A sampled
@@ -92,7 +93,7 @@ interface Scene3 { lead: number; pass: number; hold: number; total: number }
 const sceneCache = new WeakMap<Ev, Scene3>();
 const cardLines = new WeakMap<Ev, number>(); // filled by prepareStage()
 const clampS = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const ROOM_MS = 340; // entering or leaving a machine
+const clipCode = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
 function sceneOf(e: Ev): Scene3 {
   let hit = sceneCache.get(e);
   if (hit) return hit;
@@ -201,18 +202,15 @@ export function prepareStage(trace: Trace | null): void {
 
 // Events that get a focus scene.
 export function staged(e: Ev | null): boolean {
-  return MODE === 'focus' && !!e && (e.k === 'call' || e.k === 'ret' || (e.k === 'write' && e.via !== null));
+  return MODE === 'focus' && !!e && (e.k === 'call' || e.k === 'ret');
 }
 
-// The room (a function the author entered) paces its own statements and
-// skips everything else; otherwise each event has its kind's duration.
-export function roomOf(s: { room?: string | null; model: Model | null }): { fn: FnInfo; plan: Plan } | null {
-  const fn = s.room ? s.model?.byName.get(s.room) : undefined;
-  return fn && !fn.broken ? { fn, plan: planOf(fn) } : null;
-}
-
-export function durationAt(trace: Trace, i: number, room: { fn: FnInfo; plan: Plan } | null): number {
-  return room ? roomTimeline(trace, room.fn, room.plan).dur[i] : evDuration(trace.evs[i]);
+// How long event i takes at 1×: a statement's share of its beat (every
+// machine animates its statements), or the event kind's own time (calls and
+// returns ride the belts).
+export function durationAt(trace: Trace, model: Model | null, i: number): number {
+  const b = model ? beatDuration(trace, model, i, MODE) : null;
+  return b ?? evDuration(trace.evs[i]);
 }
 
 export function evDuration(e: Ev): number {
@@ -437,16 +435,7 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
   const live = new Set(frameHosts(fr?.snap ?? null, scene).values());
   for (const h of scene.hosts.values()) {
     if (h.copy < 2 || !live.has(h.key)) continue;
-    const fn = s.model?.byName.get(h.fn) ?? null;
-    const hh = MH + (fn ? (INV_HEAD_PX + frameRows(fn).length * SLOT_PX + 6) / CELL_PX : 0);
-    if (wx >= h.x && wx < h.x + MW && wy >= h.y && wy < h.y + hh) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
-  }
-  for (const n of s.layout.visible()) {
-    const st = n.fn?.statics ?? [];
-    for (let i = 0; i < st.length; i++) {
-      const cx = n.place.x + i, cy = n.place.y - 2;
-      if (wx >= cx && wx < cx + 1 && wy >= cy && wy < cy + 1) return { k: 'static', fn: n.name, name: st[i].name };
-    }
+    if (wx >= h.x && wx < h.x + h.w && wy >= h.y && wy < h.y + h.h) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
   }
   const pp = procPlace(s.layout);
   if (pp && wx >= pp.x && wx < pp.x + MW && wy >= pp.y && wy < pp.y + MH) return { k: 'proc' };
@@ -523,7 +512,16 @@ export function activeHostRect(s: ViewState): Rect | null {
   if (fr.ev?.k === 'call') (snap = s.trace.snaps[fr.i + 1]), (id = fr.ev.frame);
   if (id === null) return null;
   const h = scene.hosts.get(frameHosts(snap, scene).get(id) ?? '');
-  return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
+  if (!h) return null;
+  // a big machine: keep the statement it's on in view, with its storage
+  const fn = h.module ? null : s.model?.byName.get(h.fn);
+  if (!fn || fn.broken) return { x: h.x, y: h.y, w: h.w, h: h.h };
+  const g = geomOf(fn);
+  const plan = planOf(fn);
+  const cur = interiorAt(s.trace, plan, id, Math.floor(s.pos)).current;
+  const sy = cur !== null ? g.stations.y + (rowMid(plan.stations[cur].row) * g.stations.zoom) / CELL_PX : g.entryY;
+  const y0 = Math.min(0, sy - 3);
+  return { x: h.x, y: h.y + y0, w: h.w, h: Math.max(sy + 3, Math.min(h.h, 8)) - y0 };
 }
 
 // ---------------- M5.5: inside a machine ----------------
@@ -602,12 +600,33 @@ function interiorInfo(
 export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name: string } | null {
   const scene = sceneAt(s);
   for (const h of scene.hosts.values()) {
-    if (h.module || wx < h.x || wx >= h.x + MW) continue;
-    const fn = s.model?.byName.get(h.fn) ?? null;
+    const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
+    if (!fn || fn.broken) continue;
+    const g = geomOf(fn);
+    if (wx < h.x + g.store.x || wx >= h.x + g.store.x + g.store.w) continue;
     const rows = frameRows(fn);
-    const top = h.y + MH + 6 / CELL_PX + INV_HEAD_PX / CELL_PX;
+    const top = h.y + g.store.y + INV_HEAD_PX / CELL_PX;
     const i = Math.floor((wy - top) / (SLOT_PX / CELL_PX));
     if (i >= 0 && i < rows.length && rows[i].fold) return { fn: h.fn, name: rows[i].name };
+  }
+  return null;
+}
+
+// The statement a point inside a machine is on: its function and line.
+export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number } | null {
+  const scene = sceneAt(s);
+  for (const h of scene.hosts.values()) {
+    const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
+    if (!fn || fn.broken) continue;
+    const g = geomOf(fn);
+    const lx = (wx - h.x - g.stations.x) * CELL_PX / g.stations.zoom;
+    const ly = (wy - h.y - g.stations.y) * CELL_PX / g.stations.zoom;
+    const plan = planOf(fn);
+    if (lx < 0 || lx > plan.w || ly < HEAD || ly > plan.h) continue;
+    const row = Math.floor((ly - HEAD) / ROW);
+    let hit: Station | null = null;
+    for (const st of plan.stations) if (st.row <= row && st.kind !== 'else') hit = st;
+    return hit ? { fn: fn.name, line: hit.line } : null;
   }
   return null;
 }
@@ -735,6 +754,20 @@ export class GridView {
     const cs = CELL_PX * this.target.zoom;
     this.target.x = r.x + r.w / 2 - this.w / (2 * cs);
     this.target.y = r.y + r.h / 2 - (top + (this.h - top - bottom) / 2) / cs;
+  }
+
+  // Where a run starts, close enough to read the machines' insides: the
+  // process and main, at the left. Falls back to fitting everything.
+  home(s: ViewState, instant = false): void {
+    const pp = procPlace(s.layout);
+    if (!pp) return this.fit(s, instant);
+    const zoom = Math.max(0.6, Math.min(1, this.h / (14 * CELL_PX)));
+    const cs = CELL_PX * zoom;
+    this.target.zoom = zoom;
+    this.target.x = pp.x - 0.8;
+    this.target.y = pp.y - 1.2;
+    void cs;
+    if (instant) Object.assign(this.cam, this.target);
   }
 
   fit(s: ViewState, instant = false): void {
@@ -871,7 +904,7 @@ export class GridView {
     for (const h of scene.hosts.values()) {
       if (h.copy !== 2 || liveHosts.has(h.key)) continue;
       g.save();
-      skin.ghost(dc, this.rectW(h.x, h.y, MW, MH), `spawns ${h.fn} #2`);
+      skin.ghost(dc, this.rectW(h.x, h.y, h.w, h.h), `spawns ${h.fn} #2`);
       g.restore();
     }
 
@@ -964,33 +997,17 @@ export class GridView {
       g.restore();
     }
 
-    // ---- nodes: homes, plus live (or fading) recursive copies ----
+    // ---- machines: homes, plus live (or fading) recursive copies ----
+    // (their insides are drawn further down, once values are known)
+    const hostsToDraw = [...scene.hosts.values()].filter((h) => !h.module && (h.copy === 1 || liveHosts.has(h.key)));
     const portsOf = (hk: string) => {
       const p = scene.ports.get(hk);
       return { inPorts: (p?.in ?? []).map((y) => this.sy(y)), outPorts: (p?.out ?? []).map((y) => this.sy(y)) };
     };
-    const hostsToDraw = [...scene.hosts.values()].filter((h) => h.copy === 1 || liveHosts.has(h.key));
-    for (const h of hostsToDraw) {
-      const node = s.layout.nodes.get(`func:${h.fn}`);
-      if (!node) continue;
+    const stateOf = (h: Host): RunState => {
       const frames = framesOnHost.get(h.key) ?? [];
-      const state: RunState = errHost === h.key || (errHost === h.fn && h.copy === 1) ? 'error' : topHost === h.key ? 'running' : frames.length ? 'waiting' : 'idle';
-      let waitingOn: string | null = null;
-      if (state === 'waiting') waitingOn = st[st.indexOf(frames[frames.length - 1]) + 1]?.fn ?? null;
-      const selectedHere = selKey === `n:${node.id}` && ((s.selected as { copy?: number }).copy ?? 1) === h.copy;
-      const hoveredHere = hovKey === `n:${node.id}` && ((s.hovered as { copy?: number }).copy ?? 1) === h.copy;
-      g.save();
-      if (fading?.host === h.key) g.globalAlpha = fading.alpha;
-      skin.node(dc, this.rectW(h.x, h.y, MW, MH), {
-        name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn,
-        state, waitingOn, frames: frames.length, stale: node.stale, pinned: h.copy === 1 && node.place.pinned,
-        isStatic: !!node.fn?.isStatic, params: node.fn?.params.length ?? 0,
-        selected: selectedHere, hovered: hoveredHere,
-        editing: h.copy === 1 && s.editorFn === h.fn, hasFrame: !!node.fn && node.fn.params.length + node.fn.locals.length > 0,
-        copy: h.copy, ...portsOf(h.key),
-      });
-      g.restore();
-    }
+      return errHost === h.key || (errHost === h.fn && h.copy === 1) ? 'error' : topHost === h.key ? 'running' : frames.length ? 'waiting' : 'idle';
+    };
 
     // ---- collapsed modules (M5): one block per file, doors listed ----
     for (const h of scene.hosts.values()) {
@@ -1023,31 +1040,6 @@ export class GridView {
     const live = new Set<number>();
     for (const f of st) for (const c of f.cells) live.add(c.id);
     for (const c of snap?.statics ?? []) live.add(c.id);
-
-    for (const n of s.layout.visible()) {
-      (n.fn?.statics ?? []).forEach((v, i) => {
-        const r = this.rectW(n.place.x + i + 0.12, n.place.y - 2 + 0.12, 0.76, 0.76);
-        const id = staticCellId(trace, n.name, v.name);
-        const cell = id !== null ? snap?.statics.find((c) => c.id === id) ?? null : null;
-        g.save();
-        g.strokeStyle = 'rgba(128,128,128,0.55)';
-        g.lineWidth = Math.max(1, 2 * z);
-        g.beginPath();
-        g.moveTo(r.x + r.w / 2, r.y + r.h);
-        g.lineTo(r.x + r.w / 2, this.sy(n.place.y));
-        g.stroke();
-        skin.chest(dc, r, {
-          name: v.name,
-          value: cell ? valueOf(cell, null, trace, null).text : null,
-          flash: flash && id === flash.cell ? flash.a : 0,
-          recent: id !== null && id === recent,
-          selected: selKey === `s:${n.name}.${v.name}`,
-          hovered: hovKey === `s:${n.name}.${v.name}`,
-        });
-        g.restore();
-        if (id !== null) anchors.set(id, { y: r.y + r.h / 2, left: r.x, right: r.x + r.w });
-      });
-    }
 
     // ---- heap shelf (gdb engine): live blocks, the one being freed, leaks ----
     if (trace?.heapSlots && pp) {
@@ -1093,51 +1085,19 @@ export class GridView {
       }
     }
 
-    const prevSnap = trace && fr ? trace.snaps[Math.max(0, fr.si - 1)] : null;
+    const now_ = trace && fr ? beatNow(trace, s.model!, s.pos) : null;
     for (const h of hostsToDraw) {
+      const node = s.layout.nodes.get(`func:${h.fn}`);
       const fn = s.model?.byName.get(h.fn);
-      const frows = frameRows(fn ?? null);
-      const count = frows.length;
-      if (!fn || !count) continue;
-      if (fading?.host === h.key && ev?.k === 'call') continue; // frame appears when the argument lands
+      if (!node || !fn) continue;
       const frames = framesOnHost.get(h.key) ?? [];
       const frame = frames[frames.length - 1] ?? null;
       const returned = !frame && h.copy === 1 && trace && fr ? lastReturned(trace, h.fn, fr.si) : null;
-      const shown = frame ?? returned;
-      const X = this.sx(h.x);
-      const Y = this.sy(h.y + MH) + 6 * z;
-      const W = MW * cs;
-      const panel: Rect = { x: X, y: Y, w: W, h: (INV_HEAD_PX + count * SLOT_PX + 6) * z };
-      const byName = new Map(shown?.cells.map((c) => [c.name, c]) ?? []);
-      const rows: RowInfo[] = frows.map((row, i) => {
-        const rect: Rect = { x: X, y: Y + (INV_HEAD_PX + i * SLOT_PX) * z, w: W, h: SLOT_PX * z };
-        if (row.depth === 1) {
-          // a struct field: live value, lit when it changed on this step
-          const parent = byName.get(row.parent!) ?? null;
-          const f = row.more ? undefined : parent?.fields?.find((x) => x.name === row.name);
-          const val = f ? fieldValue(f, trace) : { text: '', kind: 'none' as ValueKind };
-          const before = parent ? prevSnap?.stack.flatMap((x) => x.cells).concat(prevSnap.statics).find((c) => c.id === parent.id)?.fields?.find((x) => x.name === row.name) : undefined;
-          const changed = !!frame && !!f && !!before && fieldValue(before, trace).text !== val.text;
-          return { name: row.more ? `  ${row.name}` : `  .${row.name}`, value: val.text, kind: val.kind, param: row.param, recent: changed, flash: 0, rect, depth: 1, fold: null };
-        }
-        const cell = byName.get(row.name) ?? null;
-        const val = cell ? valueOf(cell, shown, trace, frame ? live : null) : { text: '', kind: 'none' as ValueKind };
-        if (frame && cell) anchors.set(cell.id, { y: rect.y + rect.h / 2, left: X, right: X + W });
-        return {
-          name: row.fold ? `${row.fold === 'open' ? '▾' : '▸'} ${row.name}` : row.name, value: val.text, kind: val.kind, param: row.param,
-          recent: !!frame && !!cell && recent === cell.id,
-          flash: frame && cell && flash && flash.cell === cell.id ? flash.a : 0,
-          rect, depth: 0, fold: row.fold ?? null,
-        };
-      });
+      const selected = selKey === `n:${node.id}` && ((s.selected as { copy?: number }).copy ?? 1) === h.copy;
+      const hovered = hovKey === `n:${node.id}` && ((s.hovered as { copy?: number }).copy ?? 1) === h.copy;
       g.save();
       if (fading?.host === h.key) g.globalAlpha = fading.alpha;
-      skin.frame(dc, panel, {
-        mode: frame ? 'live' : returned ? 'returned' : 'none',
-        stacked: Math.max(0, frames.length - 1),
-        rows,
-        head: { x: X, y: Y, w: W, h: INV_HEAD_PX * z },
-      });
+      this.drawMachine(skin, dc, s, h, fn, node.stale, node.place.pinned, frame, returned, stateOf(h), selected, hovered, now_, frames.length, anchors, live, scene.ports.get(h.key) ?? { in: [], out: [] });
       g.restore();
     }
 
@@ -1335,268 +1295,176 @@ export class GridView {
       const b = scene.belts.find((x) => x.key === sel.key);
       if (b) skin.beltHandle(dc, this.sp(beltHandle(b)));
     }
-    if (s.room) this.drawRoom(s, skin, now, dc);
   }
 
-  // ---------------- enter the machine ----------------
-
-  private roomAnim: { from: Rect; start: number; dir: 1 | -1 } | null = null;
-  private roomHits: { rect: Rect; back: Rect; stations: { y0: number; y1: number; line: number }[] } | null = null;
-
-  // Grow the room out of the machine (a screen rect), or shrink it back.
-  enterRoom(from: Rect, now: number): void {
-    this.roomAnim = { from, start: now, dir: 1 };
-  }
-  leaveRoom(to: Rect, now: number): void {
-    this.roomAnim = { from: to, start: now, dir: -1 };
-  }
-  // True once a leave animation has finished (the room can be dropped).
-  roomGone(now: number): boolean {
-    return !!this.roomAnim && this.roomAnim.dir < 0 && now - this.roomAnim.start > ROOM_MS;
-  }
-  machineRect(s: ViewState, fn: string): Rect {
-    const n = s.layout.nodes.get(`func:${fn}`) ?? [...s.layout.nodes.values()].find((x) => x.name === fn);
-    return n ? this.rectW(n.place.x, n.place.y, MW, MH) : { x: this.w / 2, y: this.h / 2, w: 1, h: 1 };
-  }
-
-  roomAt(x: number, y: number): { k: 'back' } | { k: 'station'; line: number } | { k: 'inside' } | { k: 'outside' } | null {
-    const h = this.roomHits;
-    if (!h) return null;
-    const inR = (r: Rect) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-    if (inR(h.back)) return { k: 'back' };
-    if (!inR(h.rect)) return { k: 'outside' };
-    for (const st of h.stations) if (y >= st.y0 && y < st.y1 && x > h.rect.x + h.rect.w * 0.3) return { k: 'station', line: st.line };
-    return { k: 'inside' };
-  }
-
-  private drawRoom(s: ViewState, skin: Skin, now: number, dc: Dc): void {
-    const room = roomOf(s);
-    const trace = s.trace;
-    if (!room || !trace || !trace.evs.length) return (this.roomHits = null), undefined;
-    const { fn, plan } = room;
+  // A machine is its inside: storage (variables) on the left, stations
+  // (statements) on the right, the memory its char *s point at along the
+  // bottom. The statement running now animates: what it reads flies in, it
+  // shows its values, what it changes flies out. Zoomed out, only the shell,
+  // its motor and the line it's on.
+  private drawMachine(
+    skin: Skin, dc: Dc, s: ViewState, h: Host, fn: FnInfo, stale: boolean, pinned: boolean,
+    frame: SnapFrame | null, returned: SnapFrame | null, state: RunState, selected: boolean, hovered: boolean,
+    bn: BeatNow | null, stacked: number, anchors: Map<number, Anchor>, live: Set<number>, ports: { in: number[]; out: number[] },
+  ): void {
     const g = this.g;
-    const a = this.roomAnim;
-    let k = 1;
-    if (a) {
-      const u = Math.max(0, Math.min(1, (now - a.start) / ROOM_MS));
-      k = 1 - Math.pow(1 - u, 3);
-      if (a.dir < 0) k = 1 - k;
-    }
-    const full: Rect = { x: 14, y: 10, w: this.w - 28, h: this.h - 90 };
-    const from = a?.from ?? full;
-    const R: Rect = { x: from.x + (full.x - from.x) * k, y: from.y + (full.y - from.y) * k, w: from.w + (full.w - from.w) * k, h: from.h + (full.h - from.h) * k };
-    // the factory stays, faintly, around the room
+    const z = dc.z;
+    const cs = this.cs;
+    const trace = s.trace;
+    const R = this.rectW(h.x, h.y, h.w, h.h);
+    const geo = fn.broken ? null : geomOf(fn);
+    const shown = frame ?? returned;
+    const name = `${fn.cname}(${fn.params.map((p) => p.name).join(', ')})${h.copy > 1 ? ` #${h.copy}` : ''}`;
     g.save();
-    g.globalAlpha = k;
-    g.fillStyle = skin.spotlight;
-    g.fillRect(0, 0, this.w, this.h);
-    g.fillStyle = skin.spotlight;
-    g.fillRect(0, 0, this.w, this.h);
-    g.restore();
-    const sc = roomScene(trace, fn, plan, s.pos);
-    const headH = 40;
-    const title = `inside ${fn.cname}${sc.beat === null ? ' · not called yet' : sc.idle ? (sc.live ? ' · waiting on a call' : ' · waiting for the next call') : ''}`;
-    // the floor
-    g.save();
-    g.beginPath();
-    g.rect(R.x, R.y, R.w, R.h);
-    g.clip();
     g.fillStyle = skin.casing;
+    g.globalAlpha *= 0.85;
     g.fillRect(R.x, R.y, R.w, R.h);
-    skin.background(dc, this.cam.x, this.cam.y);
     g.restore();
-    const hdc: Dc = { ...dc, z: 1.5, cs: CELL_PX * 1.5 };
-    skin.wall(hdc, R, { name: title, fns: 0, live: sc.live && !sc.idle, pinned: false, selected: false, hovered: false, head: { x: R.x, y: R.y, w: R.w, h: headH } });
-    const back: Rect = { x: R.x + R.w - 190, y: R.y + 6, w: 176, h: headH - 12 };
-    skin.plate(hdc, back.x + back.w / 2, back.y + back.h / 2, '← factory  (Esc)', 'void');
-    this.roomHits = { rect: R, back, stations: [] };
-    if (k < 0.97) return;
+    const headH = (geo?.head ?? 0.8) * cs;
+    const note = state === 'running' ? 'running' : state === 'waiting' ? 'waiting on a call' : state === 'error' ? 'crashed here' : frame ? '' : returned ? 'done' : '';
+    skin.wall(dc, R, { name, fns: 0, note, live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });
+    const m = geo?.motor ?? { x: 0.3, y: 0.9, w: MW, h: MH };
+    let waitingOn: string | null = null;
+    if (state === 'waiting' && frame && trace) {
+      const st = frameAt(trace, s.pos).snap.stack;
+      waitingOn = st[st.findIndex((f) => f.id === frame.id) + 1]?.fn ?? null;
+    }
+    skin.node(dc, this.rectW(h.x + m.x, h.y + m.y, MW, MH), {
+      name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn, state, waitingOn, frames: stacked, stale, pinned: false,
+      isStatic: fn.isStatic, params: fn.params.length, selected: false, hovered: false,
+      editing: h.copy === 1 && s.editorFn === h.fn, hasFrame: false, copy: h.copy,
+      inPorts: ports.in.map((y) => this.sy(y)), outPorts: [],
+    });
+    for (const y of ports.out) skin.door(dc, [R.x + R.w, this.sy(y)], true, state === 'running');
+    if (!geo || !trace) return;
+    const plan = planOf(fn);
+    const evI = Number.isInteger(s.pos) ? s.pos - 1 : Math.floor(s.pos);
+    const act = bn && frame && bn.beat.frame === frame.id ? bn : null;
+    const ist = shown ? interiorAt(trace, plan, shown.id, act ? (act.beat.kind === 'switch' && act.landed >= 1 ? act.beat.to + 1 : act.beat.from) : evI) : null;
+    const liveMode: InteriorInfo['mode'] = frame ? 'live' : returned ? 'returned' : 'none';
 
-    // ---- geometry: storage on the left, stations on the right, room for flights between ----
-    const slots = slotsOf(fn);
-    const b = sc.beat;
-    const before = b ? trace.snaps[b.before] : sc.snap;
-    const after = b ? trace.snaps[Math.min(b.after, trace.snaps.length - 1)] : sc.snap;
-    const fBefore = b ? before.stack.find((f) => f.id === b.frame) ?? null : null;
-    const fAfter = b ? after.stack.find((f) => f.id === b.frame) ?? fBefore : null;
-    const vals0 = slots.map((sl) => slotValue(sl, fn.name, fBefore, before, trace));
-    const vals1 = slots.map((sl) => slotValue(sl, fn.name, fAfter, after, trace));
-    const memN = slots.filter((_, i) => vals1[i].bytes || vals0[i].bytes).length;
-    const MEM_H = 66; // one strip on the memory floor, at zoom 1
-    const rowsH0 = INV_HEAD_PX + slots.length * SLOT_PX + 12;
-    const availH = R.h - headH - 30;
-    const z = Math.max(0.7, Math.min(1.8, availH / (Math.max(rowsH0, plan.h * 1.1) + memN * (MEM_H + 8) + 20), (R.w - 50) / (250 + 90 + plan.w * 1.1)));
-    const zI = z * 1.1;
-    const rdc: Dc = { ...dc, z, cs: CELL_PX * z };
-    const idc: Dc = { ...dc, z: zI, cs: CELL_PX * zI };
-    const top = R.y + headH + 14;
-    const SX = R.x + 22;
-    const SW = 250 * z;
-    const TX = SX + SW + 90 * z;
-    const content = sc.idle ? 0.8 : 1;
+    // ---- zoomed out: its name and the line it's on, readable ----
+    if (cs < 20) {
+      const big: Dc = { ...dc, z: 1, cs: CELL_PX };
+      const cx = R.x + R.w / 2;
+      skin.plate(big, cx, R.y + R.h * 0.42, fn.cname, state === 'running' ? 'arg' : 'void');
+      const cur = frame && ist?.current != null ? plan.stations[ist.current].text : null;
+      if (cur && R.h > 40) skin.plate(big, cx, R.y + R.h * 0.42 + 24, clipCode(cur, 30), state === 'running' ? 'ptr' : 'void');
+      return;
+    }
 
-    // which writes have landed, per chip (staggered)
-    const writes = sc.writes.slice(0, 10);
+    // ---- storage ----
+    const snapNow = frameAt(trace, s.pos).snap;
+    const before = act ? trace.snaps[act.beat.before] : snapNow;
+    const after = act ? trace.snaps[Math.min(act.beat.after, trace.snaps.length - 1)] : snapNow;
+    const fB = act ? before.stack.find((f) => f.id === act.beat.frame) ?? shown : shown;
+    const fA = act ? after.stack.find((f) => f.id === act.beat.frame) ?? fB : shown;
+    const writes = act && act.phase === 'write' ? writesOf(act.beat, fn, trace).slice(0, 10) : [];
     const chipU = (n: number, f: number) => Math.max(0, Math.min(1, (f - 0.1 * n) / 0.7));
     const arrived = new Set<string>();
-    writes.forEach((w, n) => chipU(n, sc.landed) >= 1 && arrived.add(w.key));
-    if (sc.landed >= 1) for (const w of writes) arrived.add(w.key);
-
-    // ---- storage: variables on the left, the memory they point at along the floor ----
-    g.save();
-    g.globalAlpha *= content;
-    const anchors = new Map<string, Pt>();
-    const cells = new Map<string, Rect>(); // a slot's strip
-    const rows: RowInfo[] = [];
-    const stripsToDraw: { r: Rect; key: string; name: string; bytes: number[]; marks: { label: string; index: number }[] }[] = [];
-    let y = top + INV_HEAD_PX * z;
-    const memTop = R.y + R.h - 16 - memN * (MEM_H + 8) * z;
-    let my = memTop;
-    slots.forEach((sl, i) => {
-      const v = arrived.has(sl.key) ? vals1[i] : vals0[i];
-      const rect: Rect = { x: SX, y, w: SW, h: SLOT_PX * z };
-      const hit = writes.some((w) => w.key === sl.key) && arrived.has(sl.key);
-      rows.push({
-        name: sl.kind === 'field' ? `  .${sl.name}` : sl.kind === 'more' ? `  ${sl.name}` : sl.kind === 'static' ? `${sl.name} (static)` : sl.name,
-        value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit && !sc.idle ? Math.max(0, 1 - sc.landed * 0.6) : 0, rect, depth: sl.depth, fold: null,
-      });
-      anchors.set(sl.key, [SX + SW, y + rect.h / 2]);
-      y += rect.h;
-      const bytes = v.bytes ?? vals1[i].bytes;
-      if (bytes) {
-        const r: Rect = { x: SX, y: my, w: R.x + R.w - 22 - SX, h: MEM_H * z };
-        const path = sl.kind === 'field' ? `${sl.key.slice(2).split('.')[0]}->${sl.name}` : sl.name;
-        stripsToDraw.push({ r, key: sl.key, name: path, bytes, marks: v.marks });
-        cells.set(sl.key, r);
-        my += (MEM_H + 8) * z;
+    writes.forEach((w, n) => chipU(n, act!.landed) >= 1 && arrived.add(w.key));
+    const slots = slotsOf(fn);
+    const X = this.sx(h.x + geo.store.x);
+    const Y = this.sy(h.y + geo.store.y);
+    const W = geo.store.w * cs;
+    const slotAt = new Map<string, Pt>();
+    const valueAt = (key: string) => {
+      const sl = slots.find((x) => x.key === key)!;
+      const late = arrived.has(key);
+      return slotValue(sl, fn.name, late ? fA : fB, late ? after : before, trace, frame ? live : null);
+    };
+    const rows: RowInfo[] = slots.map((sl, i) => {
+      const v = valueAt(sl.key);
+      const rect: Rect = { x: X, y: Y + (INV_HEAD_PX + i * SLOT_PX) * z, w: W, h: SLOT_PX * z };
+      slotAt.set(sl.key, [X + W, rect.y + rect.h / 2]);
+      const anchor = { y: rect.y + rect.h / 2, left: X, right: X + W };
+      if (frame && sl.kind === 'cell') {
+        const c = frame.cells.find((x) => x.name === sl.name);
+        if (c) anchors.set(c.id, anchor);
       }
+      if (sl.kind === 'static' && h.copy === 1) {
+        const id = staticCellId(trace, fn.name, sl.name);
+        if (id !== null) anchors.set(id, anchor);
+      }
+      const hit = arrived.has(sl.key) && writes.some((w) => w.key === sl.key);
+      return {
+        name: sl.kind === 'field' ? `  .${sl.name}` : sl.kind === 'more' ? `  ${sl.name}` : sl.kind === 'static' ? `${sl.name} (static)` : sl.fold ? `${sl.fold === 'open' ? '▾' : '▸'} ${sl.name}` : sl.name,
+        value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
+        rect, depth: sl.depth, fold: sl.fold ?? null,
+      };
     });
-    const panel: Rect = { x: SX, y: top, w: SW, h: y - top + 6 * z };
-    skin.frame(rdc, panel, { mode: sc.live ? 'live' : sc.beat ? 'returned' : 'none', stacked: 0, rows, head: { x: SX, y: top, w: SW, h: INV_HEAD_PX * z } });
-    for (const st of stripsToDraw) {
-      const wrote = writes.filter((w) => w.key === st.key && w.index !== undefined && arrived.has(st.key));
-      // the pointer's row points down at its memory
-      const from = anchors.get(st.key);
-      if (from) {
+    skin.frame(dc, { x: X, y: Y, w: W, h: (INV_HEAD_PX + slots.length * SLOT_PX + 8) * z }, { mode: liveMode, stacked: Math.max(0, stacked - 1), rows, head: { x: X, y: Y, w: W, h: INV_HEAD_PX * z } });
+
+    // ---- memory floor ----
+    const mem = new Map<string, { r: Rect; len: number }>();
+    geo.memory.keys.forEach((key, k) => {
+      const r = this.rectW(h.x + geo.memory.x, h.y + geo.memory.y + k * (geo.memH + geo.memGap), geo.memory.w, geo.memH);
+      const sl = slots.find((x) => x.key === key)!;
+      const v = valueAt(key);
+      const bytes = v.bytes ?? [];
+      mem.set(key, { r, len: bytes.length });
+      const wrote = writes.filter((w) => w.key === key && w.index !== undefined && arrived.has(key));
+      const label = sl.kind === 'field' ? `${key.slice(2).split('.')[0]}->${sl.name}` : sl.name;
+      if (!v.bytes) {
+        // nothing to show yet (NULL, not set, or not in memory the trace saw)
         g.save();
-        g.strokeStyle = skin.casing === '#000' ? '#555' : 'rgba(128,128,128,0.6)';
-        g.setLineDash([3, 3]);
-        g.lineWidth = 1;
-        g.beginPath();
-        g.moveTo(from[0] - 6, from[1]);
-        g.lineTo(from[0] + 10 * z, from[1]);
-        g.lineTo(from[0] + 10 * z, st.r.y);
-        g.stroke();
+        g.globalAlpha *= 0.6;
+        skin.plate(dc, r.x + Math.min(r.w / 2, 120 * z), r.y + r.h / 2, `${label} → ${v.text || '?'}`, 'void');
         g.restore();
+        return;
       }
-      skin.strip(rdc, st.r, {
-        label: `${st.name} → memory (${st.bytes.length} bytes shown)`, bound: true, bytes: st.bytes, length: st.bytes.length, pointer: null,
-        markers: [...st.marks.map((m) => ({ label: m.label, index: m.index, sampledIndex: m.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
+      skin.strip(dc, r, {
+        label: `${label} → memory`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
+        markers: [...v.marks.map((mk) => ({ label: mk.label, index: mk.index, sampledIndex: mk.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
         selected: false, hovered: false,
       });
-    }
-    g.restore();
+    });
 
     // ---- stations ----
-    const frameId = b?.frame ?? null;
-    const state: InteriorState | null = frameId !== null ? interiorAt(trace, plan, frameId, sc.interiorAt) : null;
-    const active = b?.station ?? null;
-    const override = b && active !== null && b.kind === 'switch' && !sc.idle
-      ? { station: active, text: `${sc.compute} → ${sc.landed >= 1 || sc.phase === 'write' ? String(b.result ?? '?') : '…'}`, result: sc.phase === 'write' ? b.result ?? null : null }
-      : null;
-    const info = interiorInfo(plan, state, {
-      x: TX, y: top, z: zI, title: 'stations', mode: sc.live ? 'live' : sc.beat ? 'returned' : 'none',
-      readout: (sw, snapIdx) => (frameId === null ? '' : readoutOf(sw, trace, snapIdx === null ? after : trace.snaps[snapIdx], frameId, fn.name)),
-      override,
-      hot: b && active !== null && b.kind !== 'switch' && !sc.idle && sc.phase !== 'read' && sc.compute ? { station: active, text: sc.compute } : null,
+    const zI = z * geo.stations.zoom;
+    const SX = this.sx(h.x + geo.stations.x);
+    const SY = this.sy(h.y + geo.stations.y);
+    const compute = act ? computeText(act.beat, fn, trace) : '';
+    const info = interiorInfo(plan, ist, {
+      x: SX, y: SY, z: zI, title: 'stations', mode: liveMode,
+      readout: (sw, si) => (shown ? readoutOf(sw, trace, si === null ? snapNow : trace.snaps[si], shown.id, fn.name) : ''),
+      override: act && act.beat.kind === 'switch' ? { station: act.beat.station, text: `${compute} → ${act.landed >= 1 ? String(act.beat.result ?? '?') : '…'}`, result: act.landed >= 1 ? act.beat.result ?? null : null } : null,
+      hot: act && act.beat.kind !== 'switch' && act.phase !== 'read' && compute ? { station: act.beat.station, text: compute } : null,
     });
-    g.save();
-    g.globalAlpha *= content;
-    skin.interior(idc, { x: TX, y: top, w: plan.w * zI, h: plan.h * zI }, info);
-    g.restore();
-    const stopOf = (k2: number): Pt => [TX + stopX(plan.stations[k2].depth) * zI, top + rowMid(plan.stations[k2].row) * zI];
-    this.roomHits.stations = plan.stations.filter((st) => st.kind !== 'else').map((st) => ({ y0: top + (HEAD + st.row * ROW) * zI, y1: top + (HEAD + (st.row + (st.kind === 'if' || st.kind === 'loop' ? 2 : 1)) * ROW) * zI, line: st.line }));
+    skin.interior({ ...dc, z: zI, cs: CELL_PX * zI }, { x: SX, y: SY, w: plan.w * zI, h: plan.h * zI }, info);
 
-    // ---- doors ----
-    const entry: Pt = [SX + SW + 45 * z, R.y + headH];
-    const exit: Pt = [TX + stopX(0) * zI, R.y + R.h];
-    skin.door(dc, entry, false, b?.kind === 'entry' && !sc.idle);
-    skin.door(dc, exit, false, b?.kind === 'exit' && !sc.idle);
-    if (b?.kind === 'entry' || (b && sc.idle === false)) {
-      const caller = trace.evs[b.kind === 'entry' ? b.from : b.from]?.k === 'call' ? (trace.evs[b.from] as { caller: string | null }).caller : null;
-      if (b.kind === 'entry') skin.plate(rdc, entry[0], entry[1] + 16 * z, `from ${caller ?? 'the process'}`, 'void');
-    }
-
-    // ---- flights ----
-    if (!b || sc.idle) return;
+    // ---- in flight: reads to the station, writes back to storage ----
+    if (!act) return;
+    const stn = plan.stations[act.beat.station];
+    const at: Pt = [SX + stopX(stn.depth) * zI, SY + rowMid(stn.row) * zI];
     const curve = (p: Pt, q: Pt): [Pt, Pt, Pt, Pt] => {
       const dx = (q[0] - p[0]) * 0.45;
       return [p, [p[0] + dx, p[1]], [q[0] - dx, q[1]], q];
     };
-    const at = active !== null ? stopOf(active) : exit;
-    const cellAt = (key: string, index: number | undefined): Pt => {
-      const r = cells.get(key);
-      if (r && index !== undefined) {
-        const shown = Math.min(24, stripsToDraw.find((x) => x.key === key)!.bytes.length);
+    if (act.phase === 'read') {
+      readsOf(act.beat, fn, trace).slice(0, 8).forEach((r, n) => {
+        const u = chipU(n, act.p / READ_END);
+        if (u <= 0 || u >= 1) return;
+        const [x, y] = bez(curve(slotAt.get(r.key) ?? [X + W, Y], at), u);
+        skin.pulse(dc, x, y);
+        skin.plate(dc, x, y - 12 * z, r.text, 'arg');
+      });
+    }
+    writes.forEach((w, n) => {
+      const u = chipU(n, act.landed);
+      if (u <= 0 || u >= 1) return;
+      let to = slotAt.get(w.key) ?? [X + W, Y];
+      const mm = mem.get(w.key);
+      if (mm && w.index !== undefined && mm.len) {
+        const shownN = Math.min(24, mm.len);
         const pad = Math.max(4, 7 * z);
-        const tw = r.w - pad * 2;
-        const th = Math.max(11, r.h * 0.27);
-        return [r.x + pad + (Math.min(index, shown - 1) + 0.5) * (tw / shown), r.y + r.h * 0.31 + th / 2];
+        const tw = mm.r.w - pad * 2;
+        to = [mm.r.x + pad + (Math.min(w.index, shownN - 1) + 0.5) * (tw / shownN), mm.r.y + mm.r.h * 0.31 + Math.max(11, mm.r.h * 0.27) / 2];
       }
-      return anchors.get(key) ?? [SX + SW, top];
-    };
-    const B = b.bounds;
-    const ev = trace.evs[b.from];
-    // reads: slot → station
-    if (b.kind !== 'entry' && (sc.phase === 'read' || (b.kind === 'exit' && sc.p < 0.6))) {
-      const f = b.kind === 'exit' ? sc.p / 0.6 : sc.p / B.read;
-      sc.reads.slice(0, 8).forEach((r, n) => {
-        const u = chipU(n, f);
-        if (u <= 0 || u >= 1) return;
-        const [x, yy] = bez(curve(anchors.get(r.key) ?? [SX + SW, top], at), u);
-        skin.pulse(rdc, x, yy);
-        skin.plate(rdc, x, yy - 12 * z, r.text, 'arg');
-      });
-    }
-    // calls: out through the callee's door, back in with the result
-    if (b.calls.length && active !== null) {
-      const c = b.calls.find((x) => x.call <= Math.floor(s.pos) && (x.ret === null || x.ret >= Math.floor(s.pos))) ?? b.calls[0];
-      const door: Pt = [R.x + R.w, at[1]];
-      skin.door(dc, door, true, sc.phase === 'out' || sc.phase === 'wait' || sc.phase === 'in');
-      skin.plate(dc, door[0] - 60, door[1] - 18, c.fn, 'void');
-      const call = trace.evs[c.call];
-      const args = call.k === 'call' ? `${c.fn}(${call.args.map((x) => argLabel(x.val, x.text, trace, trace.snaps[c.call + 1])).join(', ')})` : c.fn;
-      if (sc.phase === 'out') {
-        const u = Math.max(0, Math.min(1, (sc.p - B.compute) / Math.max(0.01, B.out - B.compute)));
-        const [x, yy] = bez(curve(at, door), u);
-        skin.plate(rdc, x, yy - 12 * z, clip(args, 40), 'arg');
-      } else if (sc.phase === 'wait') {
-        skin.plate(rdc, door[0] - 90 * z, door[1] + 16 * z, `waiting on ${c.fn}…`, 'void');
-        skin.pulse(rdc, door[0], door[1]);
-      } else if (sc.phase === 'in' && c.ret !== null) {
-        const r = trace.evs[c.ret];
-        const u = Math.max(0, Math.min(1, (sc.p - B.out) / Math.max(0.01, B.in - B.out)));
-        const [x, yy] = bez(curve(door, at), u);
-        skin.plate(rdc, x, yy - 12 * z, r.k === 'ret' ? (r.val.k === 'void' ? 'void' : retLabel(r.val, trace)) : '', 'ret');
-      }
-    }
-    // writes: station (or the entry door) → slot
-    if (sc.phase === 'write' || b.kind === 'entry') {
-      const origin: Pt = b.kind === 'entry' ? entry : at;
-      writes.forEach((w, n) => {
-        const u = chipU(n, sc.landed);
-        if (u <= 0 || u >= 1) return;
-        const [x, yy] = bez(curve(origin, cellAt(w.key, w.index)), u);
-        skin.pulse(rdc, x, yy);
-        skin.plate(rdc, x, yy - 12 * z, w.text, 'ret');
-      });
-    }
-    // exit: the result leaves through the door under the stations
-    if (b.kind === 'exit' && sc.p >= 0.6 && ev?.k === 'ret') {
-      const u = (sc.p - 0.6) / 0.4;
-      const [x, yy] = bez(curve(at, exit), Math.min(1, u));
-      skin.plate(rdc, x, yy - 12 * z, ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
-    }
+      const [x, y] = bez(curve(at, to), u);
+      skin.pulse(dc, x, y);
+      skin.plate(dc, x, y - 12 * z, w.text, 'ret');
+    });
   }
 
   private wireCurve(a: Anchor, b: Anchor): [Pt, Pt, Pt, Pt] {

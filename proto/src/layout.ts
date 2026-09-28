@@ -8,11 +8,8 @@
 import type { FnInfo, Model } from './parse';
 import type { Blueprint, Sprite } from './blueprint';
 
-export const MW = 4; // node footprint, cells
-export const MH = 3;
-export const SLOT_PX = 20;
-export const INV_HEAD_PX = 20;
-export const CELL_PX = 40;
+export { CELL_PX, folded, type FrameRow, frameRows, INV_HEAD_PX, MAX_FIELDS, MH, MW, SLOT_PX } from './machine';
+import { folded, machineSize, MH } from './machine';
 export const MOD_W = 6; // collapsed module block width, cells
 export const MOD_DOORS = 6; // doors listed on a collapsed block before "+n more"
 const COL_GAP = 5; // cells between module columns, room for belts
@@ -48,47 +45,12 @@ export interface Rect {
   h: number;
 }
 
-// Struct variables unfold into their fields under their own row. Folded
-// ones ("fnKey.var") show just the one row. Open by default: seeing the
-// struct is the point.
-export const MAX_FIELDS = 6;
-export const folded = new Set<string>();
-
-export interface FrameRow {
-  name: string; // variable, or field under `parent`
-  param: boolean;
-  depth: 0 | 1;
-  parent?: string;
-  fold?: 'open' | 'closed'; // a struct row that can fold
-  more?: number; // a "+n more" row
-}
-
-export function frameRows(fn: FnInfo | null): FrameRow[] {
-  if (!fn) return [];
-  const rows: FrameRow[] = [];
-  const add = (v: FnInfo['params'][number], param: boolean) => {
-    const fs = v.fields ?? [];
-    const open = fs.length > 0 && !folded.has(`${fn.name}.${v.name}`);
-    rows.push({ name: v.name, param, depth: 0, ...(fs.length ? { fold: open ? 'open' : 'closed' } : {}) });
-    if (!open) return;
-    for (const f of fs.slice(0, MAX_FIELDS)) rows.push({ name: f.name, param, depth: 1, parent: v.name });
-    if (fs.length > MAX_FIELDS) rows.push({ name: `+${fs.length - MAX_FIELDS} more`, param, depth: 1, parent: v.name, more: fs.length - MAX_FIELDS });
-  };
-  for (const v of fn.params) add(v, true);
-  for (const v of fn.locals) add(v, false);
-  return rows;
-}
-
-export function invCells(fn: FnInfo | null): number {
-  const slots = frameRows(fn).length;
-  if (!slots) return 0;
-  return Math.ceil((INV_HEAD_PX + slots * SLOT_PX + 12) / CELL_PX);
-}
-
 // Rectangle a node reserves on the grid, including ports, statics and inventory.
 export function footprint(n: NodeState): Rect {
-  const st = n.fn?.statics.length ? 2 : 0;
-  return { x: n.place.x - 1, y: n.place.y - st, w: MW + 2, h: MH + st + invCells(n.fn) };
+  // a machine holds everything inside it (storage, stations, memory); one
+  // cell each side for its ports
+  const m = machineSize(n.fn);
+  return { x: n.place.x - 1, y: n.place.y, w: m.w + 2, h: m.h };
 }
 
 const overlap = (a: Rect, b: Rect, pad = 1) =>
@@ -493,6 +455,12 @@ export class Layout {
 
     const cols: FnInfo[][] = [];
     for (const f of fns) (cols[depth.get(f.name)!] ??= []).push(f);
+    // columns as wide as their widest machine, 3 cells apart for belts
+    const colX: number[] = [];
+    for (let d = 0, x = 0; d < cols.length; d++) {
+      colX[d] = x;
+      x += Math.max(0, ...(cols[d] ?? []).map((f) => machineSize(f).w)) + 3;
+    }
     const rowOf = new Map<string, number>();
     cols.forEach((col, d) => {
       if (d > 0) {
@@ -506,9 +474,8 @@ export class Layout {
       let y = 0;
       col.forEach((f, i) => {
         rowOf.set(f.name, i);
-        y += f.statics.length ? 2 : 0;
-        this.nodes.set(f.id, { id: f.id, name: f.name, file: f.file, place: { x: d * 7, y, pinned: false }, stale: f.broken, fn: f });
-        y += MH + invCells(f) + 2;
+        this.nodes.set(f.id, { id: f.id, name: f.name, file: f.file, place: { x: colX[d], y, pinned: false }, stale: f.broken, fn: f });
+        y += machineSize(f).h + 2;
       });
     });
     void model;
@@ -521,7 +488,7 @@ export class Layout {
     const bottom = this.bottom(model.project ? fn.file : null);
     const left = model.project ? Math.min(...this.nodesOf(fn.file).map((n) => n.place.x), Infinity) : 0;
     const base = caller ? this.nodes.get(caller.id)!.place : { x: isFinite(left) ? left : this.modules.get(fn.file)?.x ?? 0, y: bottom + 2 };
-    const n: NodeState = { id: fn.id, name: fn.name, file: fn.file, place: { x: base.x + (caller ? 7 : 0), y: base.y, pinned: false }, stale: fn.broken, fn };
+    const n: NodeState = { id: fn.id, name: fn.name, file: fn.file, place: { x: base.x + (caller ? machineSize(this.nodes.get(caller.id)!.fn).w + 3 : 0), y: base.y, pinned: false }, stale: fn.broken, fn };
     for (let dy = 0; dy < 200; dy++) {
       for (const sign of [1, -1]) {
         n.place.y = base.y + dy * sign;
@@ -600,8 +567,8 @@ export class Layout {
     for (const n of [...this.nodes.values()].reverse()) {
       if (this.hidden(n)) continue;
       const { x, y } = n.place;
-      const h = MH + (invCells(n.fn) ? (INV_HEAD_PX + frameRows(n.fn).length * SLOT_PX + 10) / CELL_PX : 0);
-      if (wx >= x && wx < x + MW && wy >= y && wy < y + h) return n;
+      const m = machineSize(n.fn);
+      if (wx >= x && wx < x + m.w && wy >= y && wy < y + m.h) return n;
     }
     return null;
   }

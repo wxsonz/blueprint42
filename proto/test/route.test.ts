@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { run } from '../src/interp';
-import { Layout, MW } from '../src/layout';
+import { Layout } from '../src/layout';
 import { buildScene, crossings } from '../src/route';
 import type { Pt } from '../src/skins/types';
 import { model, setupParser } from './helpers';
@@ -45,7 +45,7 @@ describe('routing', () => {
     for (const b of scene.belts) {
       const from = scene.hosts.get(b.fromHost);
       const to = scene.hosts.get(b.toHost)!;
-      if (from) expect(b.pts[0][0]).toBe(from.x + MW);
+      if (from) expect(b.pts[0][0]).toBe(from.x + from.w);
       expect(b.pts[b.pts.length - 1][0]).toBe(to.x);
     }
   });

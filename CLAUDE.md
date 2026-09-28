@@ -33,8 +33,8 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 
 `proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
 sprites and bindings), M4 (invariants and truth checks), M5 (projects:
-folders, modules, Makefile builds, confirmed saves), M5.5 (enter a
-machine: its statements animated with real reads and writes) and
+folders, modules, Makefile builds, confirmed saves), M5.5 (machines are
+their insides: statements animated in place with real reads and writes) and
 M6 (live edits and cursor from any editor; `proto/nvim/` is the Neovim
 plugin: `:FtbConnect [port]`, `:FtbOpen`). No linter yet.
 
@@ -81,12 +81,13 @@ modules (one per `.c`, collapsed blocks or walls) and packs them;
 `server/project.mjs` is the file server (`/api/fs/*`); the trace server
 builds projects with their Makefile. Events carry a `file`.
 
-Enter the machine (M5.5): double-click a machine and it becomes a room
-where each statement run is animated (reads fly in, the expression shows
-its values, writes fly out, bytes land on a memory floor). `src/interior.ts`
-builds the stations and switch results; `src/room.ts` groups the trace into
-beats, paces them (everything outside is skipped) and computes reads and
-writes; `render.ts` `drawRoom` draws it with existing skin hooks.
+Machines are their insides (M5.5): every machine shows its storage,
+stations (one per statement) and memory floor, and the running statement
+animates in place (reads fly in, values fill the expression, writes fly
+out). `src/machine.ts` is machine geometry and storage slots;
+`src/beats.ts` groups the trace into statement beats and paces them;
+`src/interior.ts` builds stations and switch results; `render.ts`
+`drawMachine` draws it with existing skin hooks.
 
 Live edits (M6): `server/live.mjs` (`/api/live/push`, `/api/live/stream`,
 newline-separated JSON) relays editors' unsaved text and cursor to pages

@@ -2,7 +2,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
-import { folded, frameRows, invCells } from '../src/layout';
+import { folded, frameRows } from '../src/layout';
+import { machineSize } from '../src/machine';
 import { parse } from '../src/parse';
 import { returnCard } from '../src/render';
 import { sample, setupParser } from './helpers';
@@ -20,10 +21,10 @@ describe('struct fields', () => {
     const at = rows.findIndex((r) => r.name === 'buf');
     expect(rows[at].fold).toBe('open');
     expect(rows.slice(at + 1, at + 5).map((r) => [r.name, r.depth])).toEqual([['data', 1], ['len', 1], ['cap', 1], ['pos', 1]]);
-    const open = invCells(fill);
+    const open = machineSize(fill).h;
     folded.add('gnl_fill_line.buf');
     expect(frameRows(fill).length).toBe(rows.length - 4);
-    expect(invCells(fill)).toBeLessThanOrEqual(open);
+    expect(machineSize(fill).h).toBeLessThanOrEqual(open); // the machine shrinks with its storage
     folded.clear();
     // plain ints and char * stay single rows; a pointer to a pointer is not unfolded
     expect(m.byName.get('get_next_line')!.params.find((p) => p.name === 'fd')!.fields).toBeUndefined();

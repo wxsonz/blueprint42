@@ -12,7 +12,7 @@ why), then this file (current state and the next job).
   purpose (see `DECISIONS.md` and SPEC §4).
 - **Next job:** none planned; see SPEC "Later / parking lot" and ask the
   author.
-- **Checks:** 77 tests pass (`test/room.test.ts` covers the room on the real GNL; `test/live.test.ts` the live routes) (`npm test`), including automated M2, M3, M4
+- **Checks:** 77 tests pass (`test/beats.test.ts` covers beats and machine geometry on the real GNL; `test/live.test.ts` the live routes) (`npm test`), including automated M2, M3, M4
   and M5.5 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
   `test/interior.test.ts` (stations, gdb and interpreter switch results,
   room-making, blueprint round-trip), and M5 tests:
@@ -144,37 +144,40 @@ Known gaps:
 - Pinned modules can still overlap if the author drags them together
   (refused while dragging, but a module can grow into another when opened).
 
-## M5.5: enter the machine
+## M5.5: machines are their insides
 
-Double-click a machine (or right-click → Enter) and it grows into a room;
-Esc leaves. See SPEC for what the room shows.
-- `src/room.ts` is the engine, with no drawing:
-  - `roomTimeline` groups the trace into **beats**: entry, one per statement
-    run (gdb: a step on a new station plus the writes the next stop
-    reports; interpreter: consecutive events on a station), and exit.
-    Callee events are "waiting".
-  - It paces each event: `dur` and a progress range `p0`/`p1` inside its
-    beat. Events outside the room get `SKIP`.
-  - `readsOf` / `writesOf` / `computeText` / `slotValue` give what flies.
-    Writes diff the snapshot at the stop against the next stop's (under
-    gdb a stop's changes span several events, so `after` is the snapshot
-    after the next step). Byte writes use `SnapCell.bytes`: `gdb.ts` now
-    keeps each heap block's first 48 bytes.
-- `src/interior.ts` (from M5.5's first version) still builds the stations
-  (`planOf`), including each statement's reads (`i++` and `&x` stay as
-  written) and calls, and infers switch results (`interiorAt`).
-- `render.ts` `GridView.drawRoom` draws it in screen space with existing
-  skin hooks (`wall`, `frame`, `strip`, `interior`, `door`, `plate`,
-  `pulse`); `durationAt` and `roomOf` feed playback.
-- `main.ts`:
-  - `S.room`; `enterRoom` / `leaveRoom`;
-  - the playback loop now spends a frame's time across many short events;
-  - ←/→ step beats (`nextBeat` / `prevBeat`);
-  - the playbar describes the beat;
-  - pan, zoom and the follow camera pause while inside.
-- Value formatting moved to `src/values.ts` (shared by panels and room).
-- The in-place interior and its layout growth are gone; an `opened` key in
-  an older blueprint is accepted and ignored.
+Every machine on the grid shows its storage, stations and memory, and the
+running statement animates in place (see SPEC).
+- `src/machine.ts`: a machine's geometry in cells, from the code alone
+  (`geomOf`, `machineSize`), its storage slots (`slotsOf`, from
+  `frameRows`, which moved here with `folded`), and `callPortY` (the row a
+  call leaves from). `layout.ts` uses `machineSize` for footprints and
+  column widths. `route.ts` sizes hosts by it and puts out-ports at call
+  statements and in-ports at the entry door.
+- `src/beats.ts`: `timelineOf(trace, model)` groups every frame's events
+  into statement beats:
+  - under gdb, a step on a new station plus what the next stop reports;
+  - under the interpreter, consecutive events on a station.
+  Calls and returns stay belt events, except that a return carries the
+  write of a statement whose changes happened inside the call (`lastRet`).
+  `beatLen` sets Fast/Focus pacing. `readsOf`, `writesOf`, `computeText`
+  and `slotValue` give what flies. Writes diff the snapshot at the stop
+  against the next stop's; byte writes use `SnapCell.bytes` (heap blocks'
+  first 48 bytes, from `gdb.ts`).
+- `src/interior.ts` builds the stations (`planOf`: reads, calls, `keep`
+  leaves such as `i++`) and infers switch results (`interiorAt`).
+- `render.ts`:
+  - `GridView.drawMachine` draws a machine with the existing skin hooks:
+    wall, node (the motor), frame (storage), interior (stations), strip
+    (memory), plate/pulse (values in flight), door (ports). Below 20 px a
+    cell it draws only the name and current line.
+  - `durationAt(trace, model, i)` feeds playback; `stationAt` and `foldAt`
+    hit-test inside machines; `activeHostRect` frames the running
+    statement for the follow camera; `home()` is the starting view (main,
+    readable).
+- `main.ts`: the playback loop spends a frame's time across many events;
+  ←/→ step beats; the playbar describes the statement.
+- Statics are storage rows now (no chests above machines).
 
 ## M6: live edits from any editor
 

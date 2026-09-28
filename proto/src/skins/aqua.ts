@@ -337,7 +337,7 @@ export const aqua: Skin = {
     g.font = UI(px(dc, 10, 6));
     g.fillStyle = '#7a7a7a';
     g.textAlign = 'right';
-    g.fillText(`${w.fns} fn${w.fns === 1 ? '' : 's'}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
+    g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
     if (w.selected || w.hovered) focusRing(g, r, rad, w.selected);
   },
 

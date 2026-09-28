@@ -137,6 +137,7 @@ export interface ModuleInfo {
 export interface WallInfo {
   name: string;
   fns: number;
+  note?: string; // replaces the function count (a machine's wall: its state)
   live: boolean; // a frame is running inside
   pinned: boolean;
   selected: boolean;

@@ -206,48 +206,49 @@ a libft sub-make and two same-named `static` helpers traces with each
 helper told apart. 50 generated files open collapsed, with no overlapping
 modules and one trunk per pair of files that call each other.
 
-### M5.5 — Enter the machine
+### M5.5 — Machines are their insides
 - The canvas pane is called **Blueprint**.
-- **Double-click a machine to enter it** (author, 2026-09-28; this replaces
-  the first "expand in place" design). The machine grows into a room that
-  fills the Blueprint pane, with the factory faint around it. Esc or
-  "← factory" leaves at the same moment.
-- The room:
-  - **storage** on the left: params, locals, struct fields (including the
-    struct a pointer reaches) and statics;
-  - **stations** on the right, one per statement in code order: `if`/`else`
-    switches fork the track, loops run back with a count, `return` is an
-    exit;
-  - a **memory floor** along the bottom: the bytes each `char *` points at,
-    with its struct's index fields (`pos`, `len`, `cap`) as markers.
-- **Each statement is a beat:**
+- **Every machine on the grid is its inside, always** (author, 2026-09-28;
+  replaces "expand in place" and "enter the machine"). There is no
+  separate viewer. Each machine holds:
+  - its motor (the skin's machine sprite, with its state);
+  - **storage**: params, locals, struct fields (including the struct a
+    pointer reaches) and statics;
+  - **stations**, one per statement in code order: `if`/`else` switches
+    fork the track, loops run back with a count, `return` is an exit;
+  - a **memory floor**: the bytes each `char *` points at, with its
+    struct's index fields (`pos`, `len`, `cap`) as markers.
+- **Belts join statements.** A call leaves the caller's right side at the
+  row of the statement that makes it and enters the callee's entry door.
+  Its return comes back the same way.
+- **Every statement run is a beat** in the machine that runs it:
   1. the values it reads fly from storage to its station;
   2. the station shows the expression with those values (`buf->pos = 6`,
-     `6 == 8`);
-  3. a call goes out through the callee's door and its result comes back;
-  4. what actually changed flies back to storage. A byte lands on its cell
-     on the memory floor.
-- Switches flip and light the way taken. Arguments arrive through the entry
-  door, and the result leaves through the exit door.
-- **Pacing:** inside, each beat takes about 1–2.5 s at 1×. Everything else
-  in the program is skipped. ←/→ step one statement.
+     `6 == 8 → false`);
+  3. what actually changed flies back, and a byte lands on its cell.
+  When a statement calls, its changes land as the call's result comes
+  back.
+- **Pace:** Fast (≈0.35 s a statement) or Focus (≈1.1 s, calls and returns
+  staged). ←/→ step one statement, Shift+←/→ one call. The camera follows
+  the running statement.
+- **Detail by zoom:** close up, everything moves; zoomed out, each machine
+  shows its name and the line it's on.
 - **Truth:**
   - Reads are the names a statement uses, valued from the snapshot at its
     stop.
-  - Writes are the differences between that snapshot and the next stop.
+  - Writes are the differences at the next stop.
   - Switch results come from the interpreter's `eval` events or, under
     gdb, from the next line the frame ran.
-  - Never evaluate anything in gdb.
+  - Nothing is evaluated.
 
-✅ Accept: on gnl_v3, enter `gnl_consume` and press play.
-- Playback skips to its first call.
-- `buf` and `line_end` arrive through the entry door.
-- `6` flies from `line_end` to `.pos`.
-- `.pos` and `.len` fly into the switch, which reads `6 == 8 → false` and
-  lights the false way.
-- In the call that empties the buffer, `'\0'` lands on `data[0]` through
-  `data[7]` while the loop counts ×8.
-- Esc returns to the factory.
+✅ Accept: on gnl_v3, play. Watching `gnl_consume`:
+- `6` flies from `line_end` into `buf->pos = line_end`, and `.pos`
+  becomes 6;
+- the switch reads `6 == 8 → false`;
+- in the call that empties the buffer, `'\0'` lands on `data[0]` through
+  `data[7]` while the loop counts ×8;
+- the belt from `get_next_line` leaves at its `gnl_consume(buf, line_end)`
+  statement.
 
 ### M6 — Neovim bridge (the end state)
 - An nvim plugin syncs buffers and cursor over msgpack-RPC or a websocket to

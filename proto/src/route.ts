@@ -5,7 +5,8 @@
 // function's first live frame is hosted by a spawned copy (copy 2, 3, …),
 // placed in reserved slots next to the home, so recursion reads as a chain of
 // factories rather than one machine talking to itself.
-import { MH, MW, footprint, invCells, type Layout, type NodeState } from './layout';
+import { MH, MW, footprint, type Layout, type NodeState } from './layout';
+import { callPortY, geomOf, machineSize } from './machine';
 //
 // Modules (M5): a collapsed module is one host (key "mod:<file>"). Calls
 // from outside land on it; all calls between the same two hosts share one
@@ -144,9 +145,10 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
       moduleOf.set(n.name, moduleKey(n.file));
       continue;
     }
-    hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, w: MW, h: MH, inv: invCells(n.fn) });
+    const size = machineSize(n.fn);
+    hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, w: size.w, h: size.h, inv: 0 });
     const f = footprint(n);
-    obstacles.push({ x: f.x + 1, y: f.y, w: MW, h: f.h });
+    obstacles.push({ x: f.x + 1, y: f.y, w: f.w - 2, h: f.h });
   }
   for (const m of layout.modules.values()) {
     const r = layout.moduleRect(m.file);
@@ -170,15 +172,14 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     const want = Math.min(MAX_COPIES, Math.max(selfRec ? 2 : 0, maxFrames(trace, f.name)));
     copies.set(f.name, Math.max(1, want));
     let prev = { x: home.place.x, y: home.place.y };
-    const inv = invCells(f);
-    const h = MH + inv;
+    const { w, h } = machineSize(f);
     for (let c = 2; c <= want; c++) {
-      const cands: [number, number][] = [[prev.x + 6, prev.y], [prev.x, prev.y + h + 1], [prev.x + 6, prev.y + h + 1]];
-      for (let d = 2; d < 30; d++) cands.push([prev.x, prev.y + d * (h + 1)], [prev.x + 6, prev.y + d * (h + 1)]);
-      const spot = cands.find(([x, y]) => !obstacles.some((o) => overlaps({ x, y, w: MW, h }, o, 0.9))) ?? cands[0];
+      const cands: [number, number][] = [[prev.x + w + 3, prev.y], [prev.x, prev.y + h + 1], [prev.x + w + 3, prev.y + h + 1]];
+      for (let d = 2; d < 30; d++) cands.push([prev.x, prev.y + d * (h + 1)], [prev.x + w + 3, prev.y + d * (h + 1)]);
+      const spot = cands.find(([x, y]) => !obstacles.some((o) => overlaps({ x, y, w, h }, o, 0.9))) ?? cands[0];
       prev = { x: spot[0], y: spot[1] };
-      hosts.set(hostKey(f.name, c), { key: hostKey(f.name, c), fn: f.name, copy: c, x: prev.x, y: prev.y, w: MW, h: MH, inv });
-      obstacles.push({ x: prev.x, y: prev.y, w: MW, h });
+      hosts.set(hostKey(f.name, c), { key: hostKey(f.name, c), fn: f.name, copy: c, x: prev.x, y: prev.y, w, h, inv: 0 });
+      obstacles.push({ x: prev.x, y: prev.y, w, h });
     }
   }
 
@@ -238,16 +239,35 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     ins.get(e.B.key)!.push(e);
   }
   const portY = (top: number, i: number, k: number, h = MH) => top + 0.95 + ((h - 1.55) * (i + 0.5)) / k;
+  const fnOf = (h: Host) => (h.module ? null : model.byName.get(h.fn) ?? null);
   for (const [k, list] of outs) {
     const top = k === '' ? pp!.y : hosts.get(k)!.y;
     list.sort((a, b) => a.B.y - b.B.y || a.B.x - b.B.x);
     list.forEach((e, i) => (e.sy = portY(top, i, list.length, k === '' ? MH : hosts.get(k)!.h)));
+    // a machine's calls leave at the row of the statement that makes them
+    const f = k ? fnOf(hosts.get(k)!) : null;
+    if (f) {
+      const used: number[] = [];
+      for (const e of list) {
+        const y = e.lines.length ? callPortY(f, e.lines[0]) : null;
+        if (y === null) continue;
+        let sy = top + y;
+        while (used.some((u) => Math.abs(u - sy) < 0.3)) sy += 0.35;
+        used.push(sy);
+        e.sy = sy;
+      }
+    }
     if (k) scene.ports.set(k, { in: [], out: list.map((e) => e.sy) });
   }
   for (const [k, list] of ins) {
     const h = hosts.get(k)!;
     list.sort((a, b) => (a.A?.y ?? pp!.y) - (b.A?.y ?? pp!.y) || (a.A?.x ?? -1e9) - (b.A?.x ?? -1e9));
-    list.forEach((e, i) => (e.ty = portY(h.y, i, list.length, h.h)));
+    const f = fnOf(h);
+    // into a machine: its entry door, beside its motor
+    if (f) {
+      const g = geomOf(f);
+      list.forEach((e, i) => (e.ty = h.y + g.motor.y + 0.5 + ((g.motor.h - 1) * (i + 0.5)) / list.length));
+    } else list.forEach((e, i) => (e.ty = portY(h.y, i, list.length, h.h)));
     const p = scene.ports.get(k) ?? { in: [], out: [] };
     p.in = list.map((e) => e.ty);
     scene.ports.set(k, p);
