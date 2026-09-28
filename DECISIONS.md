@@ -983,3 +983,12 @@ questions. Newest last.
   editor and flat panels stay clean.
 - **Decision (author: the play light is backwards):** It shows the
   state, not the icon: red while paused, green while playing.
+- **Decision (author: the PS1 duel doesn't match, the grille is noisy):**
+  - The duel, the return card and the inspector get the windows' look:
+    a dark title with the logo's four colours underneath.
+  - The dark palette's pastels are replaced with colours that read on
+    grey: calls in `#0063b3`, returns and values in `#00864a`, pointers
+    in `#b0307a`.
+  - The playbar is plain dithered plastic, and the vent grille is a
+    slim, softer 8 px strip along its bottom edge, like the vent on the
+    console's side.
