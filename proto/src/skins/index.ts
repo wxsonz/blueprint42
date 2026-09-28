@@ -11,12 +11,12 @@ import { xp } from './xp';
 import { seven } from './seven';
 import { metro, metroLight } from './metro';
 import { bigsur, bigsurDark, leopard, platinum, system7, tahoe, tahoeDark, yosemite } from './macos';
-import { gamecube, gba, n64, nswitch, nswitchDark, ps1, ps2, ps3, ps4, ps5, snes, wii, wiiDark } from './consoles';
+import { gamecube, nswitch, nswitchDark, ps1, ps2, ps3, ps4, ps5, wii, wiiDark } from './consoles';
 import type { Skin } from './types';
 
 // A skin with a variantOf is the other mode (light/dark) of that skin: the
 // picker lists only bases, and the ☀/☾ button flips between the two.
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave, ps1, ps2, ps3, ps4, ps5, wii, wiiDark, gamecube, n64, nswitch, nswitchDark, snes, gba];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave, ps1, ps2, ps3, ps4, ps5, wii, wiiDark, gamecube, nswitch, nswitchDark];
 
 // How the picker groups the base skins. A skin missing here still shows,
 // under "Other".
@@ -25,7 +25,7 @@ export const SKIN_GROUPS: { name: string; blurb: string; ids: string[] }[] = [
   { name: 'Windows', blurb: '3.1 to 8', ids: ['classic', 'xp', 'seven', 'metro'] },
   { name: 'Mac', blurb: 'System 7 to Tahoe', ids: ['system7', 'platinum', 'aqua', 'leopard', 'yosemite', 'bigsur', 'tahoe'] },
   { name: 'PlayStation', blurb: 'PS1 to PS5', ids: ['ps1', 'ps2', 'ps3', 'ps4', 'ps5'] },
-  { name: 'Nintendo', blurb: 'Game Boy to Switch', ids: ['gameboy', 'gba', 'snes', 'n64', 'gamecube', 'wii', 'switch'] },
+  { name: 'Nintendo', blurb: 'Game Boy to Switch', ids: ['gameboy', 'gamecube', 'wii', 'switch'] },
   { name: 'Just for fun', blurb: 'players, drawings, machines, neon', ids: ['amp', 'blueprint', 'factory', 'synthwave'] },
 ];
 
@@ -44,11 +44,8 @@ export const SKIN_FONTS: Record<string, string[]> = {
   wii: ['700 12px "M PLUS 1p"', '12px "JetBrains Mono"'],
   'wii-dark': ['700 12px "M PLUS 1p"', '12px "JetBrains Mono"'],
   gamecube: ['600 12px Jost', '12px "JetBrains Mono"'],
-  n64: ['700 12px "Chakra Petch"', '12px "Share Tech Mono"'],
   switch: ['700 12px Nunito', '12px "JetBrains Mono"'],
   'switch-dark': ['700 12px Nunito', '12px "JetBrains Mono"'],
-  snes: ['700 12px "Pixelify Sans"', '12px "Share Tech Mono"'],
-  gba: ['700 12px "Pixelify Sans"', '12px "Share Tech Mono"'],
   amp: ['16px VT323', '8px Silkscreen'],
   classic: ['11px Cousine'],
   aqua: [],

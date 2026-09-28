@@ -919,3 +919,6 @@ questions. Newest last.
   was 28%), and the chrome text carries a soft dark shadow, as the XMB's
   does. Audited all ten reworked console skins: duel titles are at least
   6.6:1, and no text has an x-height below 5 px.
+- **Decision (author and friends: drop SNES, N64 and GBA):** Removed. They
+  had no system UI to reference, and hardware colours alone read as a
+  recolour. The Chakra Petch font went with the N64.

@@ -1,5 +1,4 @@
-// Console skins: PlayStation 1–5, Wii, GameCube, Nintendo 64, Switch, SNES
-// and Game Boy Advance. Each is a theme for the kit (`makeSkin`): a
+// Console skins: PlayStation 1–5, Wii, GameCube and Switch. Each is a theme for the kit (`makeSkin`): a
 // wallpaper drawn once per size, window chrome in the console's own style,
 // and a palette. Geometry is the engine's; only the look changes.
 import { backdrop, makeSkin, plainCard, softShadow, type Palette, type Theme } from './kit';
@@ -11,16 +10,11 @@ const RUBIK = F('Rubik, "Open Sans", sans-serif');
 const EXO = F('"Exo 2", "Open Sans", sans-serif');
 const NUNITO = F('Nunito, "Open Sans", sans-serif');
 const JOST = F('Jost, "Open Sans", sans-serif');
-const CHAKRA = F('"Chakra Petch", "Open Sans", sans-serif');
-const PIXEL = F('"Pixelify Sans", "Open Sans", sans-serif');
 const RODIN = F('"M PLUS 1p", "Open Sans", sans-serif'); // the Wii's FOT-Rodin
 const SST = F('"Source Sans 3", "Open Sans", sans-serif'); // PlayStation's SST
 const RODIN_R = F('"M PLUS Rounded 1c", "Open Sans", sans-serif'); // the PS3's SCE Rodin
 const MONO = (family: string) => (px: number, w = 400) => `${w >= 600 ? 700 : 400} ${px}px ${family}, "DejaVu Sans Mono", monospace`;
 
-const nameHash = (s: string) => hash(s.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 9973);
-// the machine's name, without "(args) - Running"
-const bare = (title: string) => title.replace(/[( ].*$/, '');
 
 function text(dc: Dc, r: Rect, s: string, font: (px: number, w?: number) => string, px: number, color: string, opts: { w?: number; align?: CanvasTextAlign; x?: number; right?: number; halo?: string } = {}): void {
   const g = dc.g;
@@ -754,75 +748,6 @@ export const gamecubeTheme: Theme = {
   },
 };
 
-const N64 = ['#e3232b', '#1fa84a', '#f2b600', '#1c5fc7'];
-const n64P: Palette = {
-  bg: '#141418', card: '#e6e6ea', panel: '#d7d7dc', line: '#8d8d95',
-  fg: '#1b1b20', dim: '#55555e', faint: '#8c8c94', accent: '#1c5fc7', ptr: '#d0212a', ret: '#16883c', wait: '#c98f00', err: '#d0212a',
-  param: '#1c5fc7', cell: '#cfdcf5', track: '#ffffff',
-};
-export const n64Theme: Theme = {
-  id: 'n64', name: 'Nintendo 64', blurb: 'charcoal plastic, the four logo colours, chunky 3D',
-  p: n64P, ui: CHAKRA, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,0,0.6)',
-  pulseColor: 'rgba(242,182,0,0.9)',
-  card: cardOf(3, '#f2b600'),
-  background(dc) {
-    backdrop(dc, 'n64', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#1d1d23');
-      sky.addColorStop(1, '#0b0b0e');
-      g.fillStyle = sky;
-      g.fillRect(0, 0, W, H);
-      // the four colours as a band across the bottom-left, like the box art
-      const w = Math.max(W, H) * 0.07;
-      for (let k = 0; k < 4; k++) {
-        g.fillStyle = N64[k];
-        g.globalAlpha = 0.16;
-        g.beginPath();
-        const x = -H * 0.2 + k * w;
-        g.moveTo(x, H);
-        g.lineTo(x + w, H);
-        g.lineTo(x + w + H * 0.6, H * 0.4);
-        g.lineTo(x + H * 0.6, H * 0.4);
-        g.closePath();
-        g.fill();
-      }
-      g.globalAlpha = 1;
-      g.strokeStyle = 'rgba(255,255,255,0.035)';
-      g.lineWidth = 1;
-      for (let x = 0; x < W; x += 32) (g.beginPath(), g.moveTo(x, 0), g.lineTo(x, H), g.stroke());
-      for (let y = 0; y < H; y += 32) (g.beginPath(), g.moveTo(0, y), g.lineTo(W, y), g.stroke());
-    });
-  },
-  window: {
-    border: 4, corner: 4, titleH: 24, face: '#e6e6ea', workspace: 'rgba(255,255,255,0.04)',
-    frame(dc, r, active, face) {
-      plastic(dc, r, Math.max(1, 4 * dc.z), active ? '#6a6a72' : '#4a4a52', '#9a9aa2', '#232328');
-      client(dc, r, Math.max(2, 4 * dc.z), 24 * dc.z, face, 0, '#2a2a30');
-    },
-    titleBar(dc, r, title, active) {
-      const g = dc.g;
-      const bar = { x: r.x + 4 * dc.z, y: r.y + 4 * dc.z, w: r.w - 8 * dc.z, h: r.h - 6 * dc.z };
-      g.fillStyle = active ? N64[Math.floor(nameHash(bare(title)) * 4)] : '#5a5a62';
-      g.fillRect(bar.x, bar.y, bar.w, bar.h);
-      g.fillStyle = 'rgba(255,255,255,0.25)';
-      g.fillRect(bar.x, bar.y, bar.w, Math.max(1, 1.5 * dc.z));
-      text(dc, bar, title, CHAKRA, 12.5, '#ffffff', { w: 700, x: bar.x + 7 * dc.z, halo: 'rgba(0,0,0,0.35)' });
-    },
-    progress(dc, r, fill, anim) {
-      const g = dc.g;
-      g.fillStyle = '#2a2a30';
-      g.fillRect(r.x, r.y, r.w, r.h);
-      const n = Math.max(4, Math.floor(r.w / Math.max(4, 8 * dc.z)));
-      const on = anim ? Math.floor(dc.time * 8) % (n + 1) : Math.round(n * fill);
-      const w = r.w / n;
-      for (let k = 0; k < on; k++) {
-        g.fillStyle = N64[k % 4];
-        g.fillRect(r.x + k * w + 1, r.y + 1, w - 2, r.h - 2);
-      }
-    },
-  },
-};
-
 // The Switch HOME Menu: Basic White (#ebebeb) or Basic Black (#2d2d2d),
 // plain square-ish tiles, and the selection: an outline 5px thick, 5px out
 // from the tile, pulsing between hsl(200 100% 50%) and hsl(200 100% 80%)
@@ -891,139 +816,6 @@ function switchOf(dark: boolean): Theme {
 }
 export const switchTheme = switchOf(false);
 
-const SFC = { a: '#d8302f', b: '#f2b90d', x: '#2a5fc4', y: '#2c9a45' };
-const snesP: Palette = {
-  bg: '#cfcdd6', card: '#f4f3f7', panel: '#e9e7ef', line: '#9d99ad',
-  fg: '#262233', dim: '#5b566b', faint: '#918ca3', accent: '#5b4c96', ptr: '#c22a2a', ret: '#23843b', wait: '#b88a00', err: '#c22a2a',
-  param: '#4a3d8a', cell: '#dcd6f0', track: '#ffffff',
-};
-export const snesTheme: Theme = {
-  id: 'snes', name: 'SNES', blurb: 'grey plastic ridges, purple bars, the four Super Famicom colours',
-  p: snesP, ui: PIXEL, mono: MONO('"Share Tech Mono"'), radius: 6, spotlight: 'rgba(60,54,80,0.45)',
-  pulseColor: 'rgba(91,76,150,0.9)',
-  card: cardOf(6, '#5b4c96'),
-  background(dc) {
-    backdrop(dc, 'snes', (g, W, H) => {
-      const body = g.createLinearGradient(0, 0, 0, H);
-      body.addColorStop(0, '#d9d7e0');
-      body.addColorStop(1, '#bdbac6');
-      g.fillStyle = body;
-      g.fillRect(0, 0, W, H);
-      // the ridges on the console's top
-      for (let y = 18; y < H * 0.2; y += 9) {
-        g.fillStyle = 'rgba(0,0,0,0.07)';
-        g.fillRect(0, y, W, 2);
-        g.fillStyle = 'rgba(255,255,255,0.35)';
-        g.fillRect(0, y + 2, W, 1);
-      }
-      g.fillStyle = 'rgba(91,76,150,0.12)';
-      g.fillRect(0, H * 0.86, W, H * 0.14);
-    });
-  },
-  window: {
-    border: 4, corner: 8, titleH: 24, face: '#f4f3f7', workspace: 'rgba(255,255,255,0.25)',
-    frame(dc, r, active, face) {
-      plastic(dc, r, Math.max(2, 8 * dc.z), active ? '#c2bfcc' : '#b1aebc', '#eceaf2', '#7d798d');
-      client(dc, r, Math.max(2, 4 * dc.z), 24 * dc.z, face, Math.max(1, 3 * dc.z), '#9d99ad');
-    },
-    titleBar(dc, r, title, active, buttons) {
-      const g = dc.g;
-      const bar = { x: r.x + 4 * dc.z, y: r.y + 4 * dc.z, w: r.w - 8 * dc.z, h: r.h - 6 * dc.z };
-      rrect(g, bar.x, bar.y, bar.w, bar.h, Math.max(1, 4 * dc.z));
-      g.fillStyle = active ? '#4b3f72' : '#8c86a3';
-      g.fill();
-      let right = bar.x + bar.w - 7 * dc.z;
-      if (buttons && r.w > 150 * dc.z) {
-        const d = Math.max(2, 3.6 * dc.z);
-        for (const c of [SFC.a, SFC.b, SFC.x, SFC.y]) {
-          g.fillStyle = active ? c : '#b8b3cc';
-          g.beginPath();
-          g.arc(right - d, bar.y + bar.h / 2, d, 0, Math.PI * 2);
-          g.fill();
-          right -= d * 2.8;
-        }
-      }
-      text(dc, bar, title, PIXEL, 12.5, active ? '#f3f0ff' : '#e9e6f3', { w: 700, x: bar.x + 7 * dc.z, right });
-    },
-    progress(dc, r, fill, anim) {
-      bar(dc, r, fill, anim, '#dcd6f0', '#5b4c96', false);
-    },
-  },
-};
-
-const gbaP: Palette = {
-  bg: '#2a1f60', card: '#ffffff', panel: '#f3f3ec', line: '#b5b3c4',
-  fg: '#23213a', dim: '#5d5a78', faint: '#96939f', accent: '#4a5fd8', ptr: '#d0457e', ret: '#23965a', wait: '#c08a00', err: '#d33a3a',
-  param: '#3f52c4', cell: '#dde2fb', track: '#ffffff',
-};
-export const gbaTheme: Theme = {
-  id: 'gba', name: 'Game Boy Advance', blurb: 'indigo plastic, a bright screen in a dark bezel',
-  p: gbaP, ui: PIXEL, mono: MONO('"Share Tech Mono"'), radius: 4, spotlight: 'rgba(10,4,34,0.55)',
-  pulseColor: 'rgba(74,95,216,0.9)',
-  card: cardOf(4, '#4a5fd8'),
-  background(dc) {
-    backdrop(dc, 'gba', (g, W, H) => {
-      const body = g.createLinearGradient(0, 0, W, H);
-      body.addColorStop(0, '#4a3a9c');
-      body.addColorStop(1, '#221855');
-      g.fillStyle = body;
-      g.fillRect(0, 0, W, H);
-      // a translucent sheen across the plastic
-      const sheen = g.createLinearGradient(0, 0, W, H * 0.6);
-      sheen.addColorStop(0.2, 'rgba(255,255,255,0)');
-      sheen.addColorStop(0.35, 'rgba(255,255,255,0.07)');
-      sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
-      g.fillStyle = sheen;
-      g.fillRect(0, 0, W, H);
-      // the speaker grille, bottom right
-      g.fillStyle = 'rgba(0,0,0,0.22)';
-      for (let k = 0; k < 6; k++) for (let j = 0; j < 6 - k; j++) {
-        g.beginPath();
-        g.arc(W - 40 - j * 14 - k * 7, H - 40 - k * 12, 3, 0, Math.PI * 2);
-        g.fill();
-      }
-    });
-  },
-  window: {
-    border: 6, corner: 12, titleH: 24, face: '#f7f7f0', workspace: 'rgba(255,255,255,0.05)',
-    frame(dc, r, active, face) {
-      const g = dc.g;
-      const rad = Math.max(3, 12 * dc.z);
-      rrect(g, r.x, r.y, r.w, r.h, rad);
-      const body = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-      body.addColorStop(0, active ? '#6a58c8' : '#54479a');
-      body.addColorStop(1, active ? '#3f3190' : '#342a74');
-      g.fillStyle = body;
-      g.fill();
-      g.strokeStyle = active ? '#b9aeff' : 'rgba(185,174,255,0.3)';
-      g.lineWidth = Math.max(1, 1.2 * dc.z);
-      g.stroke();
-      // the screen's dark bezel, then the bright screen
-      const b = Math.max(2, 6 * dc.z);
-      const th = 24 * dc.z;
-      rrect(g, r.x + b, r.y + th, r.w - 2 * b, Math.max(0, r.h - th - b), Math.max(2, 5 * dc.z));
-      g.fillStyle = '#1e1c26';
-      g.fill();
-      const k = Math.max(1.5, 3 * dc.z);
-      rrect(g, r.x + b + k, r.y + th + k, r.w - 2 * b - 2 * k, Math.max(0, r.h - th - b - 2 * k), Math.max(1, 3 * dc.z));
-      g.fillStyle = face;
-      g.fill();
-    },
-    titleBar(dc, r, title, active) {
-      const g = dc.g;
-      // the power light
-      g.fillStyle = active ? '#58e070' : '#3a3560';
-      g.beginPath();
-      g.arc(r.x + 12 * dc.z, r.y + r.h / 2, Math.max(1.5, 2.8 * dc.z), 0, Math.PI * 2);
-      g.fill();
-      text(dc, r, title, PIXEL, 12.5, active ? '#f3f0ff' : '#bdb5ee', { w: 700, x: r.x + 22 * dc.z });
-    },
-    progress(dc, r, fill, anim) {
-      bar(dc, r, fill, anim, '#dde2fb', '#4a5fd8', false);
-    },
-  },
-};
-
 export const ps1 = { ...makeSkin(ps1Theme), mode: 'dark' as const };
 export const ps2 = makeSkin(ps2Theme);
 export const ps3 = makeSkin(ps3Theme);
@@ -1032,8 +824,5 @@ export const ps5 = makeSkin(ps5Theme);
 export const wii = { ...makeSkin(wiiTheme), mode: 'light' as const };
 export const wiiDark = { ...makeSkin(wiiOf(true)), variantOf: 'wii', mode: 'dark' as const };
 export const gamecube = makeSkin(gamecubeTheme);
-export const n64 = makeSkin(n64Theme);
 export const nswitch = { ...makeSkin(switchTheme), mode: 'light' as const };
 export const nswitchDark = { ...makeSkin(switchOf(true)), variantOf: 'switch', mode: 'dark' as const };
-export const snes = makeSkin(snesTheme);
-export const gba = makeSkin(gbaTheme);

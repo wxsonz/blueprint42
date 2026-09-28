@@ -62,11 +62,11 @@ and after each one) → `render.ts` (engine: camera, routing, hit-testing;
 fractional playback position; all drawing is delegated to the active skin) →
 `main.ts` (state, playback loop, mouse and keys, DOM panels).
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
-editor via CSS variables on `html[data-skin]`. Twenty-nine skins: amp, classic,
+editor via CSS variables on `html[data-skin]`. Twenty-six skins: amp, classic,
 aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in
 `skins/macos.ts` (system7, platinum, leopard, yosemite, bigsur, tahoe), barebone (the
 fastest to paint), blueprint, factory, gameboy, synthwave, and the consoles in
-`skins/consoles.ts` (ps1–ps5, wii, gamecube, n64, switch, snes, gba; their CSS was
+`skins/consoles.ts` (ps1–ps5, wii, gamecube, switch; their CSS was
 generated from short specs, edit it by hand now). Skins with both
 modes (metro, bigsur, tahoe, minimal, barebone, wii, switch) have a second skin with
 `variantOf`/`mode`; the picker lists base skins with a canvas-drawn preview
