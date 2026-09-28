@@ -842,7 +842,7 @@ let ps3Spark: HTMLCanvasElement | null = null;
 let ps3Rib: HTMLCanvasElement | null = null;
 let ps3RibKey = '';
 let ps3RibT = 0;
-function ps3Xmb(dc: Dc): void {
+function ps3Xmb(dc: Dc, tint: Rgb): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 30 : dc.time;
   const W = dc.vw;
@@ -881,9 +881,11 @@ function ps3Xmb(dc: Dc): void {
     }
     const X = (x: number) => x;
     const shade = rg.createLinearGradient(0, 0, rw, 0);
-    shade.addColorStop(0, 'rgba(190,220,255,0.6)');
-    shade.addColorStop(0.45, 'rgba(205,230,255,1)');
-    shade.addColorStop(1, 'rgba(195,235,255,0.85)');
+    // the ribbon's light is the theme colour, nearly white
+    const lite = toward(tint, 255, 0.78).map(Math.round).join(',');
+    shade.addColorStop(0, `rgba(${lite},0.6)`);
+    shade.addColorStop(0.45, `rgba(${lite},1)`);
+    shade.addColorStop(1, `rgba(${lite},0.85)`);
     rg.fillStyle = shade;
     rg.strokeStyle = shade;
     // a soft glow along the middle, then the sheets, blurred, then the lines
@@ -920,8 +922,8 @@ function ps3Xmb(dc: Dc): void {
     const sg = ps3Spark.getContext('2d')!;
     const r = sg.createRadialGradient(16, 16, 0, 16, 16, 16);
     r.addColorStop(0, 'rgba(255,255,255,1)');
-    r.addColorStop(0.25, 'rgba(235,245,255,0.8)');
-    r.addColorStop(1, 'rgba(210,235,255,0)');
+    r.addColorStop(0.25, 'rgba(255,255,255,0.8)');
+    r.addColorStop(1, 'rgba(255,255,255,0)');
     sg.fillStyle = r;
     sg.fillRect(0, 0, 32, 32);
   }
@@ -1219,7 +1221,7 @@ export const ps3Theme: Theme = {
       ps3Sky(g, dc.vw, dc.vh, sky);
       g.restore();
     } else backdrop(dc, `ps3-${sky.mid.join(',')}`, (g, W, H) => ps3Sky(g, W, H, sky));
-    ps3Xmb(dc);
+    ps3Xmb(dc, sky.mid);
   },
   window: {
     border: 0, corner: 3, titleH: 28, face: 'rgba(0,0,0,0.12)', workspace: 'rgba(0,0,0,0.05)',

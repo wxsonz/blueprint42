@@ -1209,3 +1209,6 @@ questions. Newest last.
   pooling at the bottom. It replaces the pale jelly bead there.
 - The PS3's colours include black (#1c1c20: charcoal at the top to black),
   listed after the XMB blue.
+- The wave's light was a fixed pale blue; it is now the theme colour mixed
+  78% toward white (following a fade as it happens), and the sparkles are
+  plain white.
