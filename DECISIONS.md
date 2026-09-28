@@ -856,3 +856,14 @@ questions. Newest last.
   thin bright one. They're softer (12 px blur, baked) and fainter (0.14)
   so the wide bands don't wash out the glass. The CSS glass (`--aero`)
   has matching wide bands.
+- **Decision (author: Tab indents the front of the line, not at the
+  cursor; show tabs and trailing spaces):**
+  - Tab is CodeMirror's `insertTab`: a tab where the cursor is, or an
+    indent when there's a selection. Shift+Tab is `indentLess`.
+  - Both step aside in vim's normal and visual modes, where Tab isn't an
+    edit.
+  - Whitespace shows like vim's `listchars`: every tab as a faint `──›`,
+    trailing spaces as dots on a soft red wash (norminette rejects
+    them). Spaces inside a line stay unmarked.
+  - The colours come from `--ed-ws` and `--bad`, so each skin can tune
+    them.

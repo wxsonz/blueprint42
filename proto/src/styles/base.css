@@ -153,6 +153,13 @@ kbd {
   overflow: hidden;
 }
 #editor .cm-editor { height: 100%; }
+/* whitespace, like vim's listchars: a faint arrow line for each tab, dots
+   on a soft red wash for trailing spaces; spaces inside a line stay quiet */
+#editor .cm-highlightTab { background: linear-gradient(var(--ed-ws, color-mix(in srgb, var(--ed-fg) 22%, transparent)), var(--ed-ws, color-mix(in srgb, var(--ed-fg) 22%, transparent))) 2px 55% / calc(100% - 7px) 1px no-repeat; position: relative; }
+#editor .cm-highlightTab::after { content: '›'; position: absolute; right: 1px; top: 50%; transform: translateY(-54%); line-height: 1; color: var(--ed-ws, color-mix(in srgb, var(--ed-fg) 30%, transparent)); pointer-events: none; }
+#editor .cm-highlightSpace { background: none; }
+#editor .cm-trailingSpace { background-color: color-mix(in srgb, var(--bad, #d33) 22%, transparent); border-radius: 2px; }
+#editor .cm-trailingSpace .cm-highlightSpace { background: radial-gradient(circle, color-mix(in srgb, var(--bad, #d33) 75%, transparent) 1px, transparent 1.5px) center / 100% 100% no-repeat; }
 #editor .cm-editor.cm-focused { outline: none; }
 #grid { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 

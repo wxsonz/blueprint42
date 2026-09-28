@@ -1,7 +1,7 @@
 import { Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
-import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, highlightTrailingWhitespace, highlightWhitespace, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
 import { HighlightStyle, bracketMatching, indentUnit, syntaxHighlighting } from '@codemirror/language';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentLess, insertTab } from '@codemirror/commands';
 import { cpp } from '@codemirror/lang-cpp';
 import { tags as t } from '@lezer/highlight';
 import { vim, getCM } from '@replit/codemirror-vim';
@@ -85,7 +85,12 @@ export function createState(doc: string, hooks: EditorHooks, useVim: boolean, ex
         syntaxHighlighting(highlight),
         theme,
         execField,
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        // Tab types a tab where the cursor is (indents only a selection);
+        // Shift+Tab takes one indent off the line
+        keymap.of([...defaultKeymap, ...historyKeymap, { key: 'Tab', run: typing(insertTab), shift: typing(indentLess) }]),
+        // show tabs and trailing whitespace, like vim's listchars
+        highlightWhitespace(),
+        highlightTrailingWhitespace(),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) hooks.onChange(u.state.doc.toString());
           if (u.selectionSet || u.docChanged) {
@@ -97,6 +102,16 @@ export function createState(doc: string, hooks: EditorHooks, useVim: boolean, ex
         ...extra,
       ],
   });
+}
+
+// A command for typing: in vim's normal or visual mode it steps aside (Tab
+// isn't a vim edit there), in insert mode or without vim it runs.
+function typing(cmd: (v: EditorView) => boolean) {
+  return (v: EditorView) => {
+    const vimState = (getCM(v) as { state?: { vim?: { insertMode?: boolean } } } | null)?.state?.vim;
+    if (vimState && !vimState.insertMode) return false;
+    return cmd(v);
+  };
 }
 
 export function createEditor(parent: HTMLElement, doc: string, hooks: EditorHooks, useVim: boolean, extra: Extension[] = []): EditorView {
