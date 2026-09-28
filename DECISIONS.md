@@ -1308,3 +1308,10 @@ questions. Newest last.
   sky's gradient is worked out per quad), with the ridge between two
   visible faces as the bright line. No offscreen canvas, blur or soft-light
   blend any more: ~0.7 ms a frame headless against ~2.7 for the ribbons.
+- The prism, corrected from the author's closer look: its head and tail are
+  flared (bigger than the body) but faded out, so they never show; of its
+  faces one is the sky's top colour, one the sky's middle (all but melting
+  in near the middle), the third not drawn; one edge is a thick line of the
+  top colour. Each face is now a flat shape per visible stretch with one
+  fade gradient along the chord, which ends the banding of per-quad shading
+  and makes it far less readable. ~0.2 ms a frame headless.

@@ -1385,32 +1385,14 @@ const ps4P: Palette = {
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
 // The background, after the PS4's welcome screen: one long twisted
-// triangular prism at a time, thin at its head and tail and thick in the
-// body, following a slow arc across the view. Seen from the side its faces
-// read as crescents: the ones turned to the viewer are drawn, each a flat
-// shade of the sky just behind it (lighter or darker by how it faces the
-// light), and the ridge between two visible faces is the bright line. It
-// sweeps across in about 12 s, entering and leaving by the edges, spinning
-// as it goes, fading in and out. The sky colour is worked out per quad, so
-// the shape is drawn opaque straight onto the page: no offscreen canvas, no
-// blur, no blending. Stateless in time.
-const PS4_SKY: [number, number, number, number][] = [
-  [0, 10, 95, 174], [0.35, 7, 70, 196], [0.55, 5, 56, 188], [0.82, 3, 26, 120], [1, 1, 10, 46],
-];
-function ps4SkyAt(x: number, y: number, W: number, H: number): [number, number, number] {
-  const gx = W * 0.12;
-  const u = Math.max(0, Math.min(1, (x * gx + y * H) / (gx * gx + H * H)));
-  let k = 1;
-  while (k < PS4_SKY.length - 1 && PS4_SKY[k][0] < u) k++;
-  const [u0, ...c0] = PS4_SKY[k - 1];
-  const [u1, ...c1] = PS4_SKY[k];
-  const f = (u - u0) / (u1 - u0 || 1);
-  const c = c0.map((v, i) => v + (c1[i] - v) * f);
-  // the soft glow in the middle
-  const R = Math.max(W, H) * 0.5;
-  const a = 0.28 * Math.max(0, 1 - Math.hypot(x - W * 0.5, y - H * 0.4) / R);
-  return [c[0] * (1 - a) + 20 * a, c[1] * (1 - a) + 80 * a, c[2] * (1 - a) + 235 * a];
-}
+// triangular prism at a time, following a slow arc across the view, flared
+// at its head and tail but faded to nothing there, so only its pinched body
+// shows. Of its three faces one is the sky's top colour, one the sky's
+// middle (so near the middle it all but melts in) and the third isn't drawn;
+// one edge carries a thick line of the top colour. Each face is one flat
+// shape per stretch where it faces the viewer, faded toward the ends by one
+// gradient along the chord: no banding, and cheap. It sweeps across in about
+// 12 s, spinning as it goes, fading in and out. Stateless in time.
 function ps4Prism(dc: Dc): void {
   const g = dc.g;
   const W = dc.vw;
@@ -1429,75 +1411,83 @@ function ps4Prism(dc: Dc): void {
   const ox = W / 2 + Math.cos(phi) * D;
   const oy = H / 2 + Math.sin(phi) * D;
   const way = hh(4) < 0.5 ? -1 : 1;
-  const span = 1.1 + 0.4 * hh(5);
+  const span = 1.2 + 0.4 * hh(5);
   const mid = phi + Math.PI + way * (-0.8 + 1.6 * p);
-  const rmax = H * (0.1 + 0.05 * hh(6));
-  const spin = t * 0.5 * (hh(7) < 0.5 ? -1 : 1);
-  const twist = (1.2 + 1.2 * hh(8)) * Math.PI;
-  const N = 96;
-  const L = [-0.35, -0.6, 0.72];
-  // the three edges of the prism along its length, in screen x, y and depth
+  // flared at head and tail, pinched in the body (the ends fade out anyway)
+  const rmin = H * (0.035 + 0.02 * hh(6));
+  const rmax = H * (0.16 + 0.06 * hh(9));
+  const spin = t * 0.45 * (hh(7) < 0.5 ? -1 : 1);
+  const twist = (1.0 + 1.0 * hh(8)) * Math.PI;
+  const N = 72;
   const ring: { x: number; y: number }[][] = [];
   const ang: number[] = [];
   for (let i = 0; i <= N; i++) {
     const s = i / N;
     const th = mid - span / 2 + span * s;
     const cx = ox + Math.cos(th) * R, cy = oy + Math.sin(th) * R;
-    const nx = -Math.cos(th), ny = -Math.sin(th); // toward the circle's centre
-    const r = rmax * Math.sin(Math.PI * s) ** 0.85;
+    const nx = -Math.cos(th), ny = -Math.sin(th);
+    const r = rmin + (rmax - rmin) * Math.abs(Math.cos(Math.PI * s)) ** 1.6;
     const tw = spin + twist * s;
     ang.push(tw);
     const tri: { x: number; y: number }[] = [];
     for (let k = 0; k < 3; k++) {
       const a = tw + (k * 2 * Math.PI) / 3;
-      // across (in the screen plane) and out (toward the viewer): only the
-      // across part shows; the out part decides which faces we see
       tri.push({ x: cx + nx * r * Math.cos(a), y: cy + ny * r * Math.cos(a) });
     }
     ring.push(tri);
   }
-  g.save();
-  g.lineWidth = 1;
-  g.lineJoin = 'round';
-  const ridges: [number, number, number][] = [];
-  for (let i = 0; i < N; i++) {
-    const s = (i + 0.5) / N;
-    const th = mid - span / 2 + span * s;
-    const nx = -Math.cos(th), ny = -Math.sin(th);
-    const tw = (ang[i] + ang[i + 1]) / 2;
-    const vis: boolean[] = [];
-    for (let k = 0; k < 3; k++) {
-      // a face's outward normal lies midway between its two edges
-      const a = tw + ((k + 0.5) * 2 * Math.PI) / 3;
-      const out = Math.sin(a); // toward the viewer
-      vis.push(out > 0);
-      if (out <= 0) continue;
-      const nrm = [nx * Math.cos(a), ny * Math.cos(a), out];
-      const b = nrm[0] * L[0] + nrm[1] * L[1] + nrm[2] * L[2];
-      const q = [ring[i][k], ring[i + 1][k], ring[i + 1][(k + 1) % 3], ring[i][(k + 1) % 3]];
-      const sky = ps4SkyAt((q[0].x + q[2].x) / 2, (q[0].y + q[2].y) / 2, W, H);
-      const f = Math.max(-1, Math.min(1, (b - 0.35) * 1.6)) * fade;
-      const col = f >= 0 ? sky.map((v) => v + (255 - v) * 0.18 * f) : sky.map((v) => v * (1 + 0.38 * f));
-      g.fillStyle = g.strokeStyle = `rgb(${col.map(Math.round).join(',')})`;
-      g.beginPath();
-      g.moveTo(q[0].x, q[0].y);
-      for (let j = 1; j < 4; j++) g.lineTo(q[j].x, q[j].y);
-      g.closePath();
-      g.fill();
-      g.stroke();
+  // the colours: the top of the sky and its middle, faded to nothing toward
+  // the head and tail along the shape's chord
+  const th0 = mid - span / 2, th1 = mid + span / 2;
+  const x0 = ox + Math.cos(th0) * R, y0 = oy + Math.sin(th0) * R;
+  const x1 = ox + Math.cos(th1) * R, y1 = oy + Math.sin(th1) * R;
+  const along = (rgb: string, a: number) => {
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, `rgba(${rgb},0)`);
+    gr.addColorStop(0.3, `rgba(${rgb},${a * fade})`);
+    gr.addColorStop(0.7, `rgba(${rgb},${a * fade})`);
+    gr.addColorStop(1, `rgba(${rgb},0)`);
+    return gr;
+  };
+  const TOP = '10,95,174';
+  const MID = '6,62,192';
+  // a face's visible stretches: where its outward normal turns to the viewer
+  const faceRuns = (k: number) => {
+    const runs: [number, number][] = [];
+    let start = -1;
+    for (let i = 0; i < N; i++) {
+      const a = (ang[i] + ang[i + 1]) / 2 + ((k + 0.5) * 2 * Math.PI) / 3;
+      const vis = Math.sin(a) > 0;
+      if (vis && start < 0) start = i;
+      if (!vis && start >= 0) runs.push([start, i]), (start = -1);
     }
-    // the ridge between two visible faces: the bright line
-    for (let k = 0; k < 3; k++) if (vis[k] && vis[(k + 2) % 3]) ridges.push([i, k, Math.sin(Math.PI * s)]);
-  }
-  g.lineCap = 'round';
-  g.lineWidth = Math.max(1, H / 700);
-  for (const [i, k, w] of ridges) {
-    g.strokeStyle = `rgba(255,255,255,${0.4 * fade * w})`;
+    if (start >= 0) runs.push([start, N]);
+    return runs;
+  };
+  g.save();
+  // face 0 the sky's top colour, face 1 its middle; face 2 isn't drawn
+  for (const [k, rgb, a] of [[1, MID, 0.8], [0, TOP, 0.75]] as const) {
+    g.fillStyle = along(rgb, a);
     g.beginPath();
-    g.moveTo(ring[i][k].x, ring[i][k].y);
-    g.lineTo(ring[i + 1][k].x, ring[i + 1][k].y);
-    g.stroke();
+    for (const [i0, i1] of faceRuns(k)) {
+      g.moveTo(ring[i0][k].x, ring[i0][k].y);
+      for (let i = i0 + 1; i <= i1; i++) g.lineTo(ring[i][k].x, ring[i][k].y);
+      for (let i = i1; i >= i0; i--) g.lineTo(ring[i][(k + 1) % 3].x, ring[i][(k + 1) % 3].y);
+      g.closePath();
+    }
+    g.fill();
   }
+  // one edge carries a thick line of the top colour, where it shows
+  g.strokeStyle = along(TOP, 0.9);
+  g.lineWidth = Math.max(2, H / 260);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.beginPath();
+  for (const [i0, i1] of faceRuns(0)) {
+    g.moveTo(ring[i0][0].x, ring[i0][0].y);
+    for (let i = i0 + 1; i <= i1; i++) g.lineTo(ring[i][0].x, ring[i][0].y);
+  }
+  g.stroke();
   g.restore();
 }
 // A belt as the PS4's progress bar: a flat track; live, a white fill runs
