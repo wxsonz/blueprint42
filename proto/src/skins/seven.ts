@@ -51,20 +51,22 @@ function aeroBake(active: boolean) {
       // the streaks run from top-left down to bottom-right (about 0.55
       // across per 1 down), soft-edged: blurred here, once, not per frame
       g.save();
-      g.filter = `blur(${Math.round(7 * (g.getTransform().a || 1))}px)`;
-      g.fillStyle = active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.15)';
+      g.filter = `blur(${Math.round(12 * (g.getTransform().a || 1))}px)`;
       const lean = H * 0.55;
-      g.beginPath();
-      for (let x = -lean - 40, k = 0; x < W + 40; k++) {
-        const w = 14 + 46 * hash(k * 7 + 1);
+      // wide bands (60–180px), now and then a thin bright one beside them
+      for (let x = -lean - 120, k = 0; x < W + 120; k++) {
+        const thin = hash(k * 31 + 9) < 0.3;
+        const w = thin ? 10 + 14 * hash(k * 7 + 1) : 60 + 120 * hash(k * 7 + 1);
+        g.fillStyle = `rgba(255,255,255,${(thin ? 0.2 : 0.14) * (active ? 1 : 0.7)})`;
+        g.beginPath();
         g.moveTo(x, 0);
         g.lineTo(x + w, 0);
         g.lineTo(x + w + lean, H);
         g.lineTo(x + lean, H);
         g.closePath();
-        x += w + 36 + 150 * hash(k * 13 + 5);
+        g.fill();
+        x += w + (thin ? 18 + 30 * hash(k * 5 + 3) : 60 + 160 * hash(k * 13 + 5));
       }
-      g.fill();
       g.restore();
     },
   };

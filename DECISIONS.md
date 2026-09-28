@@ -851,3 +851,8 @@ questions. Newest last.
   - The caption glow is a pre-blurred white pill stretched behind the
     title, as Aero's is, instead of a hard white text outline. It's one
     image draw.
+- **Decision (author: the Aero reflections should be much wider):** The
+  baked bands are 60–180 px wide, 60–220 px apart, with an occasional
+  thin bright one. They're softer (12 px blur, baked) and fainter (0.14)
+  so the wide bands don't wash out the glass. The CSS glass (`--aero`)
+  has matching wide bands.
