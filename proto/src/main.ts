@@ -3,11 +3,11 @@ import { Vim } from '@replit/codemirror-vim';
 import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Payload, type Trace } from './interp';
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { doorsOf, folded, footprint, Layout } from './layout';
+import { doorsOf, folded, footprint, innerCells, Layout, opened } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, stationAt, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -158,7 +158,11 @@ function analyze(src: string, fresh: boolean): void {
   const model = S.project ? projectModel(S.project) : parse(src);
   modelRevision++;
   if (fresh) layout.reset();
+  // an open machine whose code changed size: make room again
+  const innerSig = (m: Model | null) => [...opened].map((k) => `${k}:${JSON.stringify(innerCells(m?.byName.get(k) ?? null))}`).join('|');
+  const before = innerSig(S.model);
   const renamed = layout.sync(model);
+  if (opened.size && innerSig(model) !== before) layout.reflow(model);
   if (renamed.size) {
     for (const sprite of S.sprites) if (sprite.binding?.scope === 'fn' && sprite.binding.fn) {
       const next = renamed.get(`func:${sprite.binding.fn}`);
@@ -1153,6 +1157,18 @@ function toggleFold(t: { fn: string; name: string }): void {
   saveSoon();
 }
 
+// M5.5: open a machine to see its insides (or close it); neighbours make room.
+function toggleInside(id: string): void {
+  const n = layout.nodes.get(id);
+  if (!n?.fn || !S.model) return;
+  if (opened.has(n.name)) opened.delete(n.name);
+  else opened.add(n.name);
+  layout.reflow(S.model);
+  saveSoon();
+  const f = footprint(n);
+  if (opened.has(n.name)) view.ensureVisible(f.x, f.y, Math.min(f.w, view.w / view.cs - 3), Math.min(f.h, view.h / view.cs - 3));
+}
+
 function setAllModules(collapsed: boolean): void {
   if (!S.model) return;
   for (const f of layout.modules.keys()) layout.setCollapsed(f, collapsed, S.model);
@@ -1331,6 +1347,13 @@ function bindMouse(): void {
     if (!hit) return view.fit(S);
     if (hit.k === 'belt' && layout.waypoints.has(hit.key)) return resetRoute(hit.key);
     if (hit.k === 'module') return toggleModule(hit.file);
+    if (hit.k === 'node' && (hit.copy ?? 1) === 1) {
+      // a statement inside an open machine: jump to it; the machine itself: open or close it
+      const at = stationAt(S, wx, wy);
+      const fn = at ? S.model?.byName.get(at.fn) : undefined;
+      if (at && fn) return openAt(fn.file, at.line, 0);
+      toggleInside(hit.id);
+    }
     gotoCode(hit);
   });
 
@@ -1356,6 +1379,8 @@ function bindMouse(): void {
     const items: [string, () => void][] = [];
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
+      const nm = layout.nodes.get(hit.id)?.name;
+      if (nm && (hit.copy ?? 1) === 1) items.push([opened.has(nm) ? 'Close (hide inside)' : 'Open (see inside)', () => toggleInside(hit.id)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
     } else if (hit?.k === 'sprite') {
       items.push(['Bind…', () => { S.selected = hit; lastInspectorKey = ''; renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
@@ -1522,7 +1547,7 @@ function openHelp(): void {
         <div><h4>Canvas</h4>
           ${K(['Middle-drag'], 'pan')}${K(['Drag empty space'], 'pan')}${K(['Wheel'], 'zoom at the pointer')}
           ${K(['Click'], 'select a function or call')}${K(['Drag function'], 'move it (it stays put)')}${K(['Drag call'], 're-route it')}
-          ${K(['Double-click'], 'jump to code · reset route · fit')}${K(['Right-click'], 'more')}
+          ${K(['Double-click'], 'open a machine (see inside) · jump to code · reset route · fit')}${K(['Double-click statement'], 'jump to that line')}${K(['Right-click'], 'more')}
         </div>
         <div><h4>Playback (canvas focused)</h4>
           ${K(['Space'], 'play / pause')}${K(['←', '→'], 'step')}${K(['Shift', '←/→'], 'previous / next call')}
@@ -1878,7 +1903,7 @@ function renderInspector(): void {
       ${row('called by', esc(callers.join(', ') || (node.name === 'main' ? 'process' : '—')))}
       ${f?.externals.length ? row('external', esc(f.externals.join(', '))) : ''}
       ${suggestionButtons([...f?.params ?? [], ...f?.locals ?? []], f?.name ?? '')}
-      <div class="foot"><span>double-click → code</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
+      <div class="foot"><span>double-click → ${opened.has(node.name) ? 'close' : 'see inside'}</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
     bindSuggestionButtons();
   } else if (e.k === 'static') {
     const id = S.trace ? [...S.trace.cells].find(([, c]) => c.frame === -1 && c.owner === e.fn && c.name === e.name)?.[0] : undefined;

@@ -4,16 +4,18 @@ For the next agent picking this up. Read in this order: `CLAUDE.md` (rules),
 `SPEC.md` (principles and milestones), `DECISIONS.md` (every deviation and
 why), then this file (current state and the next job).
 
-## Where things stand (2026-09-27)
+## Where things stand (2026-09-28)
 
-- `cleanup-and-trace` was merged into `main`. M5 is on branch
-  `m5-open-project`. Nothing is pushed (there is no remote).
-- **Done:** M0, M1, M3, M2, M4 and M5. M3 was built before M2 on purpose
-  (see `DECISIONS.md` and SPEC §4).
-- **Next job: M5.5** (inside a machine, see below), then M6 (nvim bridge).
-- **Checks:** 63 tests pass (`npm test`), including automated M2, M3 and
-  M4 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
-  and M5 tests: `test/project.test.ts` (linking, modules, file server)
+- `main` has everything through M5 (fast-forwarded from `m5-open-project`).
+  M5.5 is on branch `m5.5-inside`. Nothing is pushed (there is no remote).
+- **Done:** M0, M1, M3, M2, M4, M5 and M5.5. M3 was built before M2 on
+  purpose (see `DECISIONS.md` and SPEC §4).
+- **Next job: M6** (nvim bridge).
+- **Checks:** 69 tests pass (`npm test`), including automated M2, M3, M4
+  and M5.5 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
+  `test/interior.test.ts` (stations, gdb and interpreter switch results,
+  room-making, blueprint round-trip), and M5 tests:
+  `test/project.test.ts` (linking, modules, file server)
   and `test/project-trace.test.ts` (gnl as a project, Makefile + libft,
   library + driver, compile errors by file).
   `npm run check` is clean. The drop, bind, re-run, export and remove
@@ -141,36 +143,28 @@ Known gaps:
 - Pinned modules can still overlap if the author drags them together
   (refused while dragging, but a module can grow into another when opened).
 
-## Next milestone: M5.5, inside a machine (SPEC §4)
+## M5.5: inside a machine
 
-The author's design is in SPEC. What's done since M5, all on
-`m5-open-project`:
-- real data on belts (strings as text, structs as crates);
-- struct fields in frames;
-- Fast/Focus playback: one pass, reading pauses, and a return card showing
-  in/out and pointer changes.
-
-Implementation sketch:
-- `parse.ts`: build a per-function statement tree from `fn.node`
-  (`if`/`else`, `while`/`for`/`do`, `return`, expression statements, with
-  lines). `interp.ts` already walks the same node types.
-- `layout.ts`: an "opened machine" set like `folded`. `invCells` and
-  `footprint` grow for an open machine, and `reflow()` (already used by
-  struct folds) makes room.
-- Skins: new hooks `station`, `switch` and `loop`, in all four skins.
-- `render.ts`:
-  - draw the interior under the node;
-  - place the token from the current event's line (`frameAt` → `ev.line`,
-    `ev.file`);
-  - get switch results from `eval` events (interpreter), or from the next
-    step's line (gdb);
-  - get operand values from `SnapCell` / `SnapField` (`fieldValue`,
-    `valueOf`).
-- `main.ts`: double-click currently jumps to code. Make it open/close the
-  machine as well (or move that to a right-click item). Persist the state in
-  blueprint v1/v2 next to `folded`.
-- Rename "Factory" → "Blueprint" in `index.html`, the help text and the
-  docs.
+Double-click a machine (or right-click → Open) and its body opens under the
+frame panel as a small railway; double-click a statement to jump to it.
+- `src/interior.ts` builds the stations from `fn.node` (`planOf`, cached per
+  `FnInfo`), their geometry in px at zoom 1 (`stopX`, `rowMid`, tracks with
+  a kind and an owner switch), and reads the trace (`interiorAt`): the
+  running station, stations reached, each switch's latest result and a
+  loop's count for its current or last run.
+- Switch results: the interpreter's `eval` events; under gdb, the next line
+  the same frame ran (inside the body → true). A switch whose body starts on
+  its own line can't be told apart and shows nothing (`inferable`).
+- `render.ts` `readoutOf` puts the values the condition read into its text
+  (names and one-level members only, from the snapshot at that moment);
+  `interiorInfo` turns it all into screen geometry; `stationAt` hit-tests.
+- `layout.ts`: `opened` (a Set like `folded`), `innerCells`, `innerTop`;
+  `footprint` and `at` include the interior, and `layered` widens a column
+  for an open machine. Saved in the blueprint as `opened`.
+- Skins: one hook, `interior()`, drawn by the shared `drawInterior` in
+  `skins/sprites.ts` with each skin's palette.
+- The interior shows the newest live frame of the function (recursion: the
+  deepest), else its last finished run, dimmed.
 
 ## Next milestone: M6 (SPEC §4)
 

@@ -2,7 +2,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, brackets, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const ACCENT = '#8ab4ff';
 const PTR = '#ff8a7a';
@@ -44,6 +44,7 @@ export const minimal: Skin = {
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
+  interior(dc, r, i) { drawInterior(dc, r, i, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;

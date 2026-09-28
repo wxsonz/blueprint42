@@ -1,10 +1,11 @@
 // Grid engine: camera, hosts, hit-testing and playback timing. Routing lives
 // in route.ts; every pixel is delegated to the active skin (skins/*.ts).
-import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
+import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, innerCells, innerTop, type Layout } from './layout';
+import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import type { Model } from './parse';
 import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, hostKey, isModuleKey, procPlace, type Belt, type Scene } from './route';
-import type { CrateInfo, Dc, Pt, Rect, RowInfo, RunState, Skin, StripInfo, ValueKind } from './skins/types';
+import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo, StripInfo, ValueKind } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
 
@@ -553,6 +554,89 @@ function fieldValue(f: SnapField, trace: Trace | null): { text: string; kind: Va
   return { text: fmtVal(f.val, f.type), kind: 'int' };
 }
 
+// ---------------- M5.5: inside a machine ----------------
+
+// A switch's condition with the values it read: `buf->pos == buf->len` → `6 == 8`.
+// Only names and one-level members are replaced; everything else stays as written.
+export function readoutOf(sw: Station, trace: Trace, snap: Snap | null, frameId: number, fn: string): string {
+  const raw = sw.cond ?? '';
+  const f = snap?.stack.find((x) => x.id === frameId) ?? null;
+  const cellOf = (name: string): SnapCell | null => {
+    const c = f?.cells.find((x) => x.name === name);
+    if (c) return c;
+    const id = staticCellId(trace, fn, name);
+    return id !== null ? snap?.statics.find((x) => x.id === id) ?? null : null;
+  };
+  let out = raw;
+  for (const leaf of [...(sw.leaves ?? [])].sort((a, b) => b.from - a.from)) {
+    const c = cellOf(leaf.path[0]);
+    let text: string | null = null;
+    if (c && leaf.path.length === 1) text = valueOf(c, f, trace, null).text;
+    else if (c && leaf.path.length === 2) {
+      const fld = c.fields?.find((x) => x.name === leaf.path[1]);
+      if (fld) text = fieldValue(fld, trace).text;
+    }
+    if (text !== null) out = out.slice(0, leaf.from) + text + out.slice(leaf.to);
+  }
+  return out === raw ? '' : out.replace(/\s+/g, ' ').trim();
+}
+
+function interiorInfo(
+  plan: Plan, state: InteriorState | null,
+  o: { x: number; y: number; z: number; title: string; mode: InteriorInfo['mode']; readout: (sw: Station, snap: number | null) => string },
+): InteriorInfo {
+  const P = (px: number, py: number): Pt => [o.x + px * o.z, o.y + py * o.z];
+  const live = o.mode === 'live';
+  const stations: StationInfo[] = plan.stations.map((st, i) => {
+    let readout: StationInfo['readout'] = null;
+    if ((st.kind === 'if' || st.kind === 'loop') && state) {
+      const dec = state.decided.get(i);
+      if (state.pending === i && live) {
+        const v = o.readout(st, null);
+        readout = { text: `${v ? `${v} ` : ''}→ …`, result: null };
+      } else if (dec) {
+        const v = o.readout(st, dec.d.snap);
+        readout = { text: `${v ? `${v} ` : ''}→ ${dec.d.result}`, result: dec.d.result };
+      }
+    }
+    const [x, y] = P(stopX(st.depth), rowMid(st.row));
+    return {
+      kind: st.kind, text: st.text, x, y, textX: o.x + textX(st.depth) * o.z, readout,
+      count: st.kind === 'loop' && state ? state.decided.get(i)?.count ?? null : null,
+      state: !state ? 'idle' : state.current === i && live ? 'current' : state.visited.has(i) ? 'visited' : 'idle',
+    };
+  });
+  const tracks = plan.tracks.map((t) => {
+    const dec = state?.decided.get(t.owner);
+    const lit = !state ? false
+      : t.kind === 'line' ? state.visited.has(t.owner)
+      : t.kind === 'then' ? dec?.d.result === true
+      : t.kind === 'back' ? (dec?.count ?? 0) > 0 || (plan.stations[t.owner].loop === 'do' && dec?.d.result === true)
+      : dec?.d.result === false;
+    return { pts: t.pts.map(([px, py]) => P(px, py)), lit, back: t.kind === 'back' };
+  });
+  const cur = state?.current ?? null;
+  const token = live && cur !== null ? P(stopX(plan.stations[cur].depth), rowMid(plan.stations[cur].row)) : null;
+  return { title: o.title, mode: o.mode, stations, tracks, token, row: ROW * o.z, head: { x: o.x, y: o.y, w: plan.w * o.z, h: HEAD * o.z } };
+}
+
+// The statement a click inside an opened machine lands on: its function and line.
+export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number } | null {
+  for (const n of s.layout.visible()) {
+    const fn = n.fn;
+    if (!fn || !innerCells(fn)) continue;
+    const plan = planOf(fn);
+    const lx = (wx - n.place.x) * CELL_PX;
+    const ly = (wy - n.place.y - innerTop(fn)) * CELL_PX;
+    if (lx < 0 || lx > plan.w || ly < HEAD || ly > plan.h) continue;
+    const row = Math.floor((ly - HEAD) / ROW);
+    let hit: Station | null = null;
+    for (const st of plan.stations) if (st.row <= row && st.kind !== 'else') hit = st;
+    return hit ? { fn: fn.name, line: hit.line } : null;
+  }
+  return null;
+}
+
 // The struct row a click lands on (to fold or unfold it), in world units.
 export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name: string } | null {
   const scene = sceneAt(s);
@@ -1094,6 +1178,23 @@ export class GridView {
         head: { x: X, y: Y, w: W, h: INV_HEAD_PX * z },
       });
       g.restore();
+    }
+
+    // ---- M5.5: opened machines show their insides under the frame panel ----
+    for (const n of s.layout.visible()) {
+      const fn = n.fn;
+      if (!fn || !innerCells(fn)) continue;
+      const plan = planOf(fn);
+      const X = this.sx(n.place.x);
+      const Y = this.sy(n.place.y + innerTop(fn));
+      const own = st.filter((f) => f.fn === fn.name).at(-1) ?? null;
+      const returned = !own && trace && fr ? lastReturned(trace, fn.name, fr.si) : null;
+      const shown = own ?? returned;
+      const state = trace && fr && shown ? interiorAt(trace, plan, shown.id, fr.si - 1) : null;
+      skin.interior(dc, { x: X, y: Y, w: plan.w * z, h: plan.h * z }, interiorInfo(plan, state, {
+        x: X, y: Y, z, title: `inside ${fn.cname}${own ? '' : returned ? ' · last run' : ''}`, mode: own ? 'live' : returned ? 'returned' : 'none',
+        readout: (sw, snapIdx) => readoutOf(sw, trace!, snapIdx === null ? snap : trace!.snaps[snapIdx], shown!.id, fn.name),
+      }));
     }
 
     // ---- authored data sprites; all displayed values come from the selected snapshot ----

@@ -32,6 +32,7 @@ export interface Blueprint {
   waypoints: Record<string, { x: number; y: number }>;
   sprites: Sprite[];
   folded?: string[]; // struct rows the author folded ("fnKey.var")
+  opened?: string[]; // machines opened to show their insides (M5.5, by function key)
 }
 
 const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);
@@ -78,6 +79,11 @@ export function parseBlueprint(input: unknown): Blueprint {
     if (!Array.isArray(data.folded) || data.folded.length > 2000 || !data.folded.every((k) => typeof k === 'string' && k.length <= 400)) throw new Error('Invalid folded rows');
     folded = [...new Set(data.folded as string[])];
   }
+  let opened: string[] | undefined;
+  if (data.opened !== undefined) {
+    if (!Array.isArray(data.opened) || data.opened.length > 2000 || !data.opened.every((k) => typeof k === 'string' && k.length <= 400)) throw new Error('Invalid opened machines');
+    opened = [...new Set(data.opened as string[])];
+  }
   const ids = new Set<string>();
   const sprites: Sprite[] = data.sprites.map((raw: unknown) => {
     if (!rec(raw) || typeof raw.id !== 'string' || !raw.id || raw.id.length > 100 || ids.has(raw.id) || !kinds.has(raw.kind as SpriteKind) || !finite(raw.x) || !finite(raw.y))
@@ -115,7 +121,7 @@ export function parseBlueprint(input: unknown): Blueprint {
     }
     return sprite;
   });
-  const fold = folded?.length ? { folded } : {};
+  const fold = { ...(folded?.length ? { folded } : {}), ...(opened?.length ? { opened } : {}) };
   return data.version === 2 ? { version: 2, nodes, ...(modules ? { modules } : {}), waypoints, sprites, ...fold } : { version: 1, nodes, waypoints, sprites, ...fold };
 }
 

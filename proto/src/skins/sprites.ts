@@ -1,5 +1,5 @@
 import type { SpriteKind } from '../blueprint';
-import type { CrateInfo, Dc, Rect, SpriteInfo, StripInfo } from './types';
+import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, SpriteInfo, StripInfo } from './types';
 import { fitText, rrect } from './util';
 
 export interface SpritePalette {
@@ -207,6 +207,138 @@ export function drawCrate(dc: Dc, x: number, y: number, c: CrateInfo, p: SpriteP
     g.textAlign = 'left';
     g.fillStyle = p.muted;
     caption(g, `+${c.more} more`, r.x + pad, r.y + 1 + lh * (rows.length + 1.5), r.w - pad * 2, p, fs);
+  }
+  g.restore();
+}
+
+// M5.5: inside a machine. Tracks first, then stops, code and readouts, then
+// the token on the running line. Text is cut, never shrunk.
+export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette): void {
+  const g = dc.g;
+  const z = dc.z;
+  const fs = Math.max(7, 11 * z);
+  const right = r.x + r.w - Math.max(3, 6 * z);
+  const cut = (s: string, max: number) => {
+    if (max <= 0) return '';
+    if (g.measureText(s).width <= max) return s;
+    let t = s;
+    while (t.length > 1 && g.measureText(t + '…').width > max) t = t.slice(0, -1);
+    return t + '…';
+  };
+  g.save();
+  box(g, r, p.radius * z, p.body, p.edge);
+  g.save();
+  rrect(g, i.head.x + 1, i.head.y + 1, i.head.w - 2, i.head.h - 1, [p.radius * z, p.radius * z, 0, 0]);
+  g.fillStyle = i.mode === 'live' ? p.accent : p.muted;
+  g.globalAlpha *= 0.2;
+  g.fill();
+  g.restore();
+  g.font = p.font(fs);
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  g.fillStyle = i.mode === 'none' ? p.muted : p.text;
+  g.fillText(cut(i.title, i.head.w - 12 * z), i.head.x + 6 * z, i.head.y + i.head.h / 2);
+  if (i.mode !== 'live') g.globalAlpha *= 0.75;
+
+  // tracks: the way taken is lit
+  const line = (pts: Pt[]) => {
+    g.beginPath();
+    pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.stroke();
+  };
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  for (const lit of [false, true]) {
+    for (const t of i.tracks) {
+      if (t.lit !== lit) continue;
+      g.strokeStyle = lit ? p.accent : p.muted;
+      g.globalAlpha = (i.mode !== 'live' ? 0.75 : 1) * (lit ? 1 : 0.4);
+      g.lineWidth = Math.max(1, (lit ? 2.4 : 1.6) * z);
+      g.setLineDash(t.back && !lit ? [3 * z, 3 * z] : []);
+      line(t.pts);
+      if (t.back && t.pts.length > 1) {
+        // arrowhead where the loop comes back in
+        const [x1, y1] = t.pts[t.pts.length - 1];
+        const [x0, y0] = t.pts[t.pts.length - 2];
+        const a = Math.atan2(y1 - y0, x1 - x0);
+        const s = 4 * z;
+        g.setLineDash([]);
+        g.beginPath();
+        g.moveTo(x1, y1);
+        g.lineTo(x1 - s * Math.cos(a - 0.5), y1 - s * Math.sin(a - 0.5));
+        g.lineTo(x1 - s * Math.cos(a + 0.5), y1 - s * Math.sin(a + 0.5));
+        g.closePath();
+        g.fillStyle = g.strokeStyle;
+        g.fill();
+      }
+    }
+  }
+  g.setLineDash([]);
+  g.globalAlpha = i.mode !== 'live' ? 0.75 : 1;
+
+  // stops, code, readouts
+  const u = Math.max(2, 3.2 * z);
+  for (const s of i.stations) {
+    const on = s.state !== 'idle';
+    const cur = s.state === 'current';
+    const fill = cur ? p.accent : on ? p.text : p.body;
+    g.fillStyle = fill;
+    g.strokeStyle = cur ? p.accent : on ? p.text : p.muted;
+    g.lineWidth = Math.max(1, 1.2 * z);
+    g.beginPath();
+    if (s.kind === 'if' || s.kind === 'loop') {
+      // a switch: a diamond
+      g.moveTo(s.x, s.y - u * 1.35); g.lineTo(s.x + u * 1.35, s.y); g.lineTo(s.x, s.y + u * 1.35); g.lineTo(s.x - u * 1.35, s.y); g.closePath();
+    } else if (s.kind === 'ret' || s.kind === 'end') {
+      g.rect(s.x - u, s.y - u, u * 2, u * 2);
+    } else if (s.kind === 'else') {
+      g.rect(s.x - u * 0.7, s.y - u * 0.7, u * 1.4, u * 1.4);
+    } else g.arc(s.x, s.y, u * 0.85, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    if (s.kind === 'ret') {
+      g.strokeStyle = p.marker;
+      g.stroke();
+    }
+    g.font = p.font(fs);
+    g.fillStyle = cur ? p.text : on ? p.text : p.muted;
+    g.globalAlpha = (i.mode !== 'live' ? 0.75 : 1) * (on ? 1 : 0.7);
+    const badge = s.count !== null ? `×${s.count}` : '';
+    const bw = badge ? g.measureText(badge).width + 6 * z : 0;
+    g.fillText(cut(s.text, right - s.textX - bw), s.textX, s.y);
+    if (badge) {
+      g.textAlign = 'right';
+      g.fillStyle = s.count ? p.accent : p.muted;
+      g.fillText(badge, right, s.y);
+      g.textAlign = 'left';
+    }
+    if (s.readout) {
+      const ry = s.y + i.row;
+      const res = s.readout.result;
+      g.font = p.font(fs * 0.95);
+      g.fillStyle = res === null ? p.muted : res ? p.accent : p.marker;
+      g.fillText(cut(s.readout.text, right - s.textX - 4 * z), s.textX + 4 * z, ry);
+    }
+    g.globalAlpha = i.mode !== 'live' ? 0.75 : 1;
+  }
+
+  // the token: where the frame is now
+  if (i.token) {
+    const [x, y] = i.token;
+    const pulse = 0.5 + 0.5 * Math.sin(dc.time * 6);
+    g.globalAlpha = 1;
+    g.fillStyle = p.accent;
+    g.globalAlpha = 0.25 + 0.2 * pulse;
+    g.beginPath();
+    g.arc(x, y, u * (2.4 + pulse * 0.8), 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = 1;
+    g.beginPath();
+    g.arc(x, y, u * 1.2, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = p.edge;
+    g.lineWidth = Math.max(1, z);
+    g.stroke();
   }
   g.restore();
 }

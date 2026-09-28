@@ -146,7 +146,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     }
     hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, w: MW, h: MH, inv: invCells(n.fn) });
     const f = footprint(n);
-    obstacles.push({ x: f.x + 1, y: f.y, w: MW, h: f.h });
+    obstacles.push({ x: f.x + 1, y: f.y, w: f.w - 2, h: f.h });
   }
   for (const m of layout.modules.values()) {
     const r = layout.moduleRect(m.file);

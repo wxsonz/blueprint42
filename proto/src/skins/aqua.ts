@@ -5,7 +5,7 @@
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, fitText, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, bold = false) => `${bold ? '700 ' : ''}${px}px "Lucida Grande", "DejaVu Sans", "Helvetica Neue", sans-serif`;
 const MONO = (px: number) => `${px}px Monaco, "DejaVu Sans Mono", Menlo, monospace`;
@@ -192,6 +192,7 @@ export const aqua: Skin = {
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
+  interior(dc, r, i) { drawInterior(dc, r, i, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;

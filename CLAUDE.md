@@ -6,8 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read `SPEC.md` first. Principles in §1 override convenience.
 
-- Current target: **M5.5** (inside a machine; also rename the "Factory"
-  pane to "Blueprint"), then M6 (nvim bridge). M0–M5 are implemented in
+- Current target: **M6** (nvim bridge). M0–M5.5 are implemented in
   `proto/`; M3 came before M2 by the author's decision in `DECISIONS.md`.
 - Record every deviation from the recommended stack, and every answer to an
   open question from SPEC §6, in `DECISIONS.md` (date, decision, why).
@@ -33,8 +32,9 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 ## Current state
 
 `proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
-sprites and bindings), M4 (invariants and truth checks) and M5 (projects:
-folders, modules, Makefile builds, confirmed saves). No linter yet.
+sprites and bindings), M4 (invariants and truth checks), M5 (projects:
+folders, modules, Makefile builds, confirmed saves) and M5.5 (open a
+machine to see its statements as stations, with live switch results). No linter yet.
 
 ```sh
 cd proto
@@ -78,6 +78,11 @@ modules (one per `.c`, collapsed blocks or walls) and packs them;
 `route.ts` makes a collapsed module one host (`mod:<file>`) with trunks;
 `server/project.mjs` is the file server (`/api/fs/*`); the trace server
 builds projects with their Makefile. Events carry a `file`.
+
+Inside a machine (M5.5): `src/interior.ts` turns a function body into
+stations and tracks and reads switch results from the trace (interpreter
+`eval` events, or under gdb the next line the frame ran). `layout.ts`
+`opened` makes room for an open machine; skins draw it via `interior()`.
 
 In dev builds `window.__ftb` exposes `{ S, view, layout, editor,
 computeBelts, openFolder, switchFile, … }` for headless checks.

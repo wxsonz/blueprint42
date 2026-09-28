@@ -144,6 +144,29 @@ export interface WallInfo {
   head: Rect;
 }
 
+// M5.5: a machine's insides, one station per statement. Geometry is the
+// engine's; screen px.
+export interface StationInfo {
+  kind: 'do' | 'if' | 'else' | 'loop' | 'ret' | 'jump' | 'end';
+  text: string;
+  x: number; // centre of its stop on the track
+  y: number;
+  textX: number;
+  readout: { text: string; result: boolean | null } | null; // a switch: its operands and result, on the row below
+  count: number | null; // a loop: times round
+  state: 'idle' | 'visited' | 'current';
+}
+
+export interface InteriorInfo {
+  title: string;
+  mode: 'live' | 'returned' | 'none';
+  stations: StationInfo[];
+  tracks: { pts: Pt[]; lit: boolean; back: boolean }[];
+  token: Pt | null; // where the running line is
+  row: number; // row height, px
+  head: Rect;
+}
+
 export interface Skin {
   id: string;
   name: string;
@@ -170,4 +193,5 @@ export interface Skin {
   wall(dc: Dc, r: Rect, w: WallInfo): void; // drawn under belts and machines
   door(dc: Dc, p: Pt, vertical: boolean, live: boolean): void; // where a belt passes through a wall
   attention(dc: Dc, r: Rect, a: number): void; // focus mode: "look here", a = 0..1 strength
+  interior(dc: Dc, r: Rect, i: InteriorInfo): void; // an opened machine's stations (M5.5)
 }

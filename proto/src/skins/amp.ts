@@ -5,7 +5,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { arrowHead, baseName, beltMid, brackets, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
-import { drawCrate, drawSprite, drawStrip, type SpritePalette } from './sprites';
+import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const LCD = '#00e000';
 const LCD_DIM = '#1f6a1f';
@@ -122,6 +122,7 @@ export const amp: Skin = {
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
+  interior(dc, r, i) { drawInterior(dc, r, i, spritePalette); },
 
   background(dc, camX, camY) {
     const g = dc.g;
