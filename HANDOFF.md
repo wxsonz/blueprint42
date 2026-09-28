@@ -179,6 +179,18 @@ running statement animates in place (see SPEC).
   ←/→ step beats; the playbar describes the statement.
 - Statics are storage rows now (no chests above machines).
 
+## Layout tools and themes
+
+- `Layout.tidy` (the Tidy button), `Layout.overlaps` / `Layout.settle`
+  (run after any saved layout loads), and `shut` (machine.ts: closed
+  machines, saved in the blueprint as `shut`). The pane head has Insides /
+  Closed and Tidy.
+- Eight skins. `skins/kit.ts` `makeSkin(theme)` implements every hook for
+  the spec-driven ones (`blueprint`, `factory`, `gameboy`, `synthwave`);
+  a new theme is a `Theme` (palette, fonts, `card`, `background`,
+  optional `belt` / `nodeDecor` / `wallDecor`) plus a CSS file of
+  variables (copy `styles/minimal.css`'s variable list).
+
 ## M6: live edits from any editor
 
 The page doesn't care where an edit comes from (author's call). Any editor

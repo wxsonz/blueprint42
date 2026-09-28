@@ -62,7 +62,9 @@ and after each one) → `render.ts` (engine: camera, routing, hit-testing;
 fractional playback position; all drawing is delegated to the active skin) →
 `main.ts` (state, playback loop, mouse and keys, DOM panels).
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
-editor via CSS variables on `html[data-skin]`. `editor.ts` is CodeMirror
+editor via CSS variables on `html[data-skin]`. Eight skins: amp, classic,
+aqua, minimal (hand-written), and blueprint, factory, gameboy, synthwave
+(specs for `skins/kit.ts` `makeSkin`, the quickest way to add a theme). `editor.ts` is CodeMirror
 with vim in a toggleable compartment.
 
 Two engines produce the same `Trace` (events + a snapshot before and after

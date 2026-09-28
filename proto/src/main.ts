@@ -26,6 +26,10 @@ import './styles/amp.css';
 import './styles/classic.css';
 import './styles/aqua.css';
 import './styles/minimal.css';
+import './styles/blueprint.css';
+import './styles/factory.css';
+import './styles/gameboy.css';
+import './styles/synthwave.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -1680,11 +1684,10 @@ async function applySkin(skin: Skin): Promise<void> {
 }
 
 function renderSkinPicker(): void {
-  const box = $('skins');
-  box.innerHTML = SKINS.map((s) => `<button data-id="${s.id}" aria-pressed="${s === S.skin}" title="${esc(s.blurb)}">${esc(s.name)}</button>`).join('');
-  box.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
-    b.addEventListener('click', () => void applySkin(SKINS.find((s) => s.id === b.dataset.id)!)),
-  );
+  const box = $<HTMLSelectElement>('skins');
+  box.innerHTML = SKINS.map((s) => `<option value="${s.id}"${s === S.skin ? ' selected' : ''} title="${esc(s.blurb)}">${esc(s.name)}</option>`).join('');
+  box.title = S.skin.blurb;
+  box.onchange = () => void applySkin(SKINS.find((s) => s.id === box.value)!);
 }
 
 // ---------------- vim toggle ----------------

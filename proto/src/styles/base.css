@@ -430,3 +430,10 @@ kbd {
 #stage-card td.same { color: var(--panel-dim); }
 #stage-card tr.sep td { padding: 0; border-top: var(--rule, 1px solid rgba(128,128,128,0.3)); height: 6px; }
 #stage-card tr.ret td.o { color: var(--ok, var(--accent)); font-weight: 700; }
+
+/* the skin picker */
+.skin-pick {
+  font: inherit; color: var(--btn-fg); background: var(--btn-bg); border: var(--btn-border); border-radius: var(--btn-radius, 4px);
+  padding: 3px 8px; cursor: pointer;
+}
+.skin-pick option { color: #111; background: #fff; }
