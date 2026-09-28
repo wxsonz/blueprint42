@@ -620,4 +620,14 @@ questions. Newest last.
   heavy black edge around each view, so the busy scene behind doesn't
   blend into it. The frame is drawn under the live view (some skins paint
   it solid).
+- **Decision (author: the live views "lack attention"):** The duel shows
+  what's happening as code, not as more scene. For a call: the caller's
+  line with the call marked, and the callee's signature with the values
+  that arrived. For a return: the return statement with its typed value,
+  and the caller's line with the call replaced by that value. For a
+  write: the writing statement, and the owner's variable going from old
+  to new. A big verb (CALLS / RETURNS / WRITES INTO) sits in the middle,
+  with the payload chip crossing. It's a DOM overlay on a black backing
+  that stays up ≥1.5 s, and it's cheaper than the two live views it
+  replaced.
 

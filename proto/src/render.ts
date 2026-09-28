@@ -94,7 +94,7 @@ const sceneCache = new WeakMap<Ev, Scene3>();
 const cardLines = new WeakMap<Ev, number>(); // filled by prepareStage()
 const clampS = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 interface DuelEnd { at: Pt; rect: Rect | null; name: string }
-interface Duel { key: string; kind: 'call' | 'ret' | 'write'; left: DuelEnd & { verb: string }; right: DuelEnd & { verb: string }; p: number; label: string }
+export interface Duel { key: string; kind: 'call' | 'ret' | 'write'; i: number; beatFrom?: number; left: DuelEnd & { verb: string }; right: DuelEnd & { verb: string }; p: number; label: string }
 const clipCode = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
 function sceneOf(e: Ev): Scene3 {
   let hit = sceneCache.get(e);
@@ -716,17 +716,8 @@ export class GridView {
   private target = { x: -2, y: -3, zoom: 1 };
   private last = performance.now();
 
-  constructor(private canvas: HTMLCanvasElement, private lens = false) {
+  constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
-  }
-
-  // An off-screen view (a lens) has no layout box: its size is set here.
-  setSize(w: number, h: number, dpr: number): void {
-    this.w = w;
-    this.h = h;
-    this.dpr = dpr;
-    if (this.canvas.width !== Math.round(w * dpr)) this.canvas.width = Math.round(w * dpr);
-    if (this.canvas.height !== Math.round(h * dpr)) this.canvas.height = Math.round(h * dpr);
   }
 
   get cs(): number {
@@ -1354,7 +1345,8 @@ export class GridView {
 
     // ---- the duel: a transfer whose sender or receiver is off screen pops up
     // side by side, sender on the left, receiver on the right ----
-    if (!this.lens && trace && fr) {
+    this.duel = null;
+    if (trace && fr) {
       const off = (p: Pt) => { const [x, y] = this.sp(p); return x < 0 || y < 0 || x > this.w || y > this.h; };
       let duel: Duel | null = null;
       const hostRectW = (k: string): Rect | null => { const h = scene.hosts.get(k); return h ? { x: h.x, y: h.y, w: h.w, h: h.h } : null; };
@@ -1370,8 +1362,8 @@ export class GridView {
             ? ev.args.map((x) => `${x.name} = ${argLabel(x.val, x.text, trace, snapNow)}`).join(', ') || '()'
             : ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace);
           duel = ev.k === 'call'
-            ? { key: `c${fr.i}`, kind: 'call', left: { ...caller, verb: 'calls' }, right: { ...callee, verb: 'called' }, p: ph?.travel ?? 0, label }
-            : { key: `r${fr.i}`, kind: 'ret', left: { ...callee, verb: 'returns' }, right: { ...caller, verb: 'gets it back' }, p: ph?.travel ?? 0, label };
+            ? { key: `c${fr.i}`, kind: 'call', i: fr.i, left: { ...caller, verb: 'calls' }, right: { ...callee, verb: 'called' }, p: ph?.travel ?? 0, label }
+            : { key: `r${fr.i}`, kind: 'ret', i: fr.i, left: { ...callee, verb: 'returns' }, right: { ...caller, verb: 'gets it back' }, p: ph?.travel ?? 0, label };
         }
       }
       // a statement writing into memory another machine owns
@@ -1397,109 +1389,19 @@ export class GridView {
           const g2 = geomOf(wfn);
           const from: Pt = shut.has(wfn.name) ? [wh.x + wh.w / 2, wh.y + wh.h / 2] : [wh.x + g2.stations.x + 4, wh.y + g2.stations.y + (rowMid(plan.stations[b.station].row) * g2.stations.zoom) / CELL_PX];
           duel = {
-            key: `w${b.from}|${i}`, kind: 'write', p: now_.landed, label: `${info.name} = ${fmtVal(e.val)}`,
+            key: `w${b.from}|${i}`, kind: 'write', i, beatFrom: b.from, p: now_.landed, label: `${info.name} = ${fmtVal(e.val)}`,
             left: { at: from, rect: { x: wh.x, y: wh.y, w: wh.w, h: wh.h }, name: wfn.cname, verb: 'writes' },
             right: { at, rect: { x: h.x, y: h.y, w: h.w, h: h.h }, name: fn.cname, verb: `${info.name} changes` },
           };
         }
       }
-      if (duel && (off(duel.left.at) || off(duel.right.at))) this.drawDuel(s, skin, now, dc, duel);
-      else this.duelKey = '';
+      // the page shows it (main.ts renderDuel): clear cards, not more scene
+      this.duel = duel && (off(duel.left.at) || off(duel.right.at)) ? duel : null;
     }
   }
 
-  private lensViews: GridView[] = [];
-  private lensKey = '';
-  private lensAt = 0;
-  private duelKey = '';
-  private duelAt = 0;
-
-  // The duel overlay: two live views side by side. Each slides in from where
-  // its machine really is, its camera starting on the whole machine and
-  // gliding to the spot; the payload crosses from left to right.
-  private drawDuel(s: ViewState, skin: Skin, now: number, dc: Dc, d: Duel): void {
-    const g = this.g;
-    const fresh = d.key !== this.duelKey;
-    if (fresh) (this.duelKey = d.key), (this.duelAt = now);
-    const k = Math.min(1, (now - this.duelAt) / 320);
-    const ease = 1 - Math.pow(1 - k, 3);
-    const W = Math.min(340, this.w * 0.34);
-    const H = W * 0.62;
-    const head = 24;
-    const gap = Math.max(70, this.w * 0.08);
-    const total = W * 2 + gap;
-    const x0 = (this.w - total) / 2;
-    const y0 = this.h - H - head - 104;
-    const slots = [{ x: x0, y: y0 }, { x: x0 + W + gap, y: y0 }];
-    // a black backing around both views and the gap between them: the scene
-    // behind is busy, the viewer shouldn't blend into it
-    g.save();
-    g.globalAlpha = 0.88 * ease;
-    g.fillStyle = '#000000';
-    g.fillRect(x0 - 10, y0 - 10, total + 20, H + head + 20);
-    g.restore();
-    [d.left, d.right].forEach((end, n) => {
-      let v = this.lensViews[n];
-      if (!v) this.lensViews[n] = v = new GridView(document.createElement('canvas'), true);
-      v.setSize(W, H, this.dpr);
-      const zoom = 0.75;
-      const tx = end.at[0] - W / (2 * CELL_PX * zoom);
-      const ty = end.at[1] - H / (2 * CELL_PX * zoom);
-      if (fresh) {
-        // start framing the whole machine, then glide in to the spot
-        const r = end.rect ?? { x: end.at[0] - 4, y: end.at[1] - 3, w: 8, h: 6 };
-        const z0 = Math.max(0.2, Math.min(0.75, W / ((r.w + 2) * CELL_PX), H / ((r.h + 2) * CELL_PX)));
-        v.cam.zoom = z0;
-        v.cam.x = r.x + r.w / 2 - W / (2 * CELL_PX * z0);
-        v.cam.y = r.y + r.h / 2 - H / (2 * CELL_PX * z0);
-      }
-      v.target.zoom = zoom;
-      v.target.x = tx;
-      v.target.y = ty;
-      const moving = !v.settled();
-      const key = `${d.key}|${skin.id}`;
-      if (moving || key !== v.lensKey || now - v.lensAt > 66) {
-        v.draw(s, skin, now);
-        v.lensKey = key;
-        v.lensAt = now;
-      }
-      // slide in from the machine's real direction
-      const real = end.rect ? this.sp([end.rect.x + end.rect.w / 2, end.rect.y + end.rect.h / 2]) : this.sp(end.at);
-      const cx = slots[n].x + W / 2, cy = slots[n].y + (H + head) / 2;
-      let dx = real[0] - cx, dy = real[1] - cy;
-      const len = Math.hypot(dx, dy) || 1;
-      const reach = Math.min(len, Math.max(this.w, this.h) * 0.6);
-      dx = (dx / len) * reach;
-      dy = (dy / len) * reach;
-      const x = slots[n].x + dx * (1 - ease), y = slots[n].y + dy * (1 - ease);
-      g.save();
-      g.globalAlpha = 0.25 + 0.75 * ease;
-      g.fillStyle = skin.casing;
-      g.fillRect(x, y, W, H + head);
-      // the frame first (some skins paint it solid), the live view on top
-      skin.wall(dc, { x, y, w: W, h: H + head }, { name: `${end.name} · ${end.verb}`, fns: 0, note: '', kind: 'machine', live: true, pinned: false, selected: false, hovered: false, head: { x, y, w: W, h: head } });
-      g.drawImage(v.canvas, x, y + head, W, H);
-      g.strokeStyle = '#000000';
-      g.lineWidth = 3;
-      g.strokeRect(x - 1.5, y - 1.5, W + 3, H + head + 3);
-      g.restore();
-    });
-    if (ease < 1) return;
-    // the payload crosses the gap, left to right
-    const ax = slots[0].x + W, bx = slots[1].x;
-    const y = y0 + head + H / 2;
-    const u = Math.max(0, Math.min(1, d.p));
-    const zdc: Dc = { ...dc, z: 1, cs: CELL_PX };
-    g.save();
-    g.strokeStyle = skin.casing === '#000' ? '#888' : 'rgba(128,128,128,0.8)';
-    g.setLineDash([4, 4]);
-    g.lineWidth = 2;
-    g.beginPath(); g.moveTo(ax + 6, y); g.lineTo(bx - 6, y); g.stroke();
-    g.setLineDash([]);
-    g.restore();
-    skin.pulse(zdc, ax + (bx - ax) * u, y);
-    skin.plate(zdc, ax + (bx - ax) * u, y - 22, clipCode(d.label, 44), d.kind === 'ret' ? 'ret' : d.kind === 'write' ? 'ptr' : 'arg');
-  }
+  // A transfer whose sender or receiver is off screen, for the page to show.
+  duel: Duel | null = null;
 
   // A machine is its inside: storage (variables) on the left, stations
   // (statements) on the right, the memory its char *s point at along the

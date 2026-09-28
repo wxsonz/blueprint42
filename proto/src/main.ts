@@ -2403,6 +2403,138 @@ function renderFeed(): void {
   el.innerHTML = rows.map((r, n) => `<div class="kf ${r.kind}" data-i="${r.i}" style="opacity:${fade[n]}" title="jump here">${feedIcon(r.from)}<span class="act">${FEED_ACT[r.kind]}</span>${feedIcon(r.to)}<span class="data">${r.data}</span></div>`).join('');
 }
 
+// ---------------- the duel: a transfer between far-apart machines ----------------
+// The renderer decides when (a sender or receiver off screen, view.duel);
+// here it's spelled out: the caller's line with the call marked and the
+// callee's signature with the values that arrived; or the return statement
+// and the caller's line with the call replaced by what came back; or a
+// write landing in memory another function owns. It stays up long enough
+// to read, even in Fast mode.
+const C_KW = new Set(['if', 'else', 'while', 'for', 'do', 'return', 'break', 'continue', 'static', 'const', 'struct', 'typedef', 'sizeof', 'unsigned', 'signed', 'goto', 'switch', 'case', 'default', 'enum', 'union', 'extern', 'volatile']);
+const C_TY = /^(int|char|void|long|short|float|double|size_t|ssize_t|bool|t_\w+|s_\w+|u?int\d+_t)$/;
+function hlC(code: string): string {
+  return code.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*.*?\*\/|\/\/.*$|\b\d[\w.]*\b|\b[A-Za-z_]\w*\b|[^A-Za-z_0-9"'\/]+|\/)/g, (t, _m, off: number, all: string) => {
+    const e = esc(t);
+    if (t[0] === '"' || t[0] === "'") return `<span class="syn-str">${e}</span>`;
+    if (t.startsWith('/*') || t.startsWith('//')) return `<span class="syn-com">${e}</span>`;
+    if (/^\d/.test(t)) return `<span class="syn-num">${e}</span>`;
+    if (/^[A-Za-z_]/.test(t)) {
+      if (C_KW.has(t)) return `<span class="syn-kw">${e}</span>`;
+      if (C_TY.test(t)) return `<span class="syn-ty">${e}</span>`;
+      if (/^[A-Z][A-Z0-9_]+$/.test(t)) return `<span class="syn-mac">${e}</span>`;
+      if (all.slice(off + t.length).trimStart().startsWith('(')) return `<span class="syn-fn">${e}</span>`;
+    }
+    return e;
+  });
+}
+
+// A source line as the editor has it (project file, or the sample buffer).
+function srcLine(file: string | undefined, line: number): string {
+  const text = S.project && file ? S.project.files.get(file)?.text : editor.state.doc.toString();
+  return (text?.split('\n')[line] ?? '').trim();
+}
+
+// Where a frame was when event `i` happened: its latest line before i
+// (not the closing brace gdb stops on just before a return).
+function frameLine(t: Trace, frame: number, i: number, skipLine = -1): { line: number; file?: string } | null {
+  for (let j = i - 1; j >= 0; j--) {
+    const e = t.evs[j];
+    if (e.frame === frame && e.k !== 'call' && e.k !== 'ret' && e.line !== skipLine) return { line: e.line, file: e.file };
+  }
+  return null;
+}
+
+// `callee(…)` inside a line: where it starts and ends (matching the parenthesis).
+function callSpan(code: string, callee: string): [number, number] | null {
+  const m = new RegExp(`\\b${callee}\\s*\\(`).exec(code);
+  if (!m) return null;
+  let depth = 0;
+  for (let k = m.index + m[0].length - 1; k < code.length; k++) {
+    if (code[k] === '(') depth++;
+    else if (code[k] === ')' && --depth === 0) return [m.index, k + 1];
+  }
+  return null;
+}
+
+const DUEL_ICON = {
+  call: '<svg viewBox="0 0 26 18"><path d="M1 9h21M15 3l7 6-7 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ret: '<svg viewBox="0 0 26 18"><path d="M3 2v7h19M17 3l6 6-6 6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  write: '<svg viewBox="0 0 26 18"><path d="M3 15l1.5-4.5L16 1.5l3.5 3.5L8 14zM3 15l4.5-1.5M20 16h5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg>',
+};
+
+let duelShown: { key: string; since: number } | null = null;
+function renderDuel(now: number): void {
+  const el = $('duel');
+  const d = view.duel;
+  const t = S.trace;
+  if (!d || !t) {
+    // keep the last one up long enough to read, then let it go
+    if (duelShown && now - duelShown.since > 1500) {
+      el.classList.add('out');
+      if (now - duelShown.since > 1800) (el.hidden = true), (duelShown = null);
+    }
+    return;
+  }
+  const chip = el.querySelector<HTMLElement>('.chip');
+  if (duelShown?.key === d.key && chip) {
+    chip.style.left = `${Math.max(4, Math.min(96, d.p * 100))}%`;
+    return;
+  }
+  duelShown = { key: d.key, since: now };
+  const name = (fn: string | null | undefined) => (!fn ? 'process' : S.model?.byName.get(fn)?.cname ?? fn);
+  const head = (fn: string, at: { line: number } | null) => `<div class="d-head">${feedIcon(fn).replace('<span class="fn">', '').replace(/<\/span>$/, '')}${at ? `<span class="d-at">line ${at.line + 1}</span>` : ''}</div>`;
+  const e = t.evs[d.i];
+  let left = '', right = '', verb = '', what = '';
+  if (e.k === 'call') {
+    const callerFrame = t.snaps[d.i].stack.at(-1);
+    const at = t.engine === 'interp' ? { line: e.line, file: e.file } : callerFrame ? frameLine(t, callerFrame.id, d.i) : null;
+    const code = at ? srcLine(at.file, at.line) : '';
+    const fn = S.model?.byName.get(e.fn);
+    const span = fn ? callSpan(code, fn.cname) : null;
+    const body = span ? `${hlC(code.slice(0, span[0]))}<mark>${hlC(code.slice(span[0], span[1]))}</mark>${hlC(code.slice(span[1]))}` : hlC(code || `${e.fn}(…)`);
+    left = `<div class="d-card send">${head(name(e.caller), at)}<pre class="d-code">${body}</pre></div>`;
+    const snap = t.snaps[d.i + 1];
+    const params = (fn?.params ?? []).map((p, k) => {
+      const a = e.args[k];
+      const v = a ? (a.data ? payloadText(a.data) : argLabel(a.val, a.text, t, snap)) : '?';
+      return `  ${hlC(`${p.type} ${p.name}`)} = <span class="val">${esc(v)}</span>`;
+    });
+    const sig = fn ? `${hlC(`${fn.isStatic ? 'static ' : ''}${fn.ret}`)}\n${hlC(fn.cname)}(${params.length ? `\n${params.join(',\n')}\n` : ''})` : esc(e.fn);
+    right = `<div class="d-card recv">${head(name(e.fn), fn ? { line: fn.nameLine } : null)}<pre class="d-code">${sig}</pre></div>`;
+    verb = `calls ${DUEL_ICON.call}`;
+    what = e.args.map((a) => `${a.name} = ${a.data ? payloadText(a.data) : argLabel(a.val, a.text, t, snap)}`).join(', ') || 'no arguments';
+  } else if (e.k === 'ret') {
+    const fn = S.model?.byName.get(e.fn);
+    const value = e.data ? payloadText(e.data) : e.val.k === 'void' ? 'void' : retLabel(e.val, t);
+    const at = frameLine(t, e.frame!, d.i, fn?.endLine ?? -1);
+    const code = at ? srcLine(at.file, at.line) : '}';
+    left = `<div class="d-card send">${head(name(e.fn), at)}<pre class="d-code">${hlC(code)}\n<span class="syn-com">// </span>${hlC(fn?.ret ?? '')} <span class="val">${esc(value)}</span></pre></div>`;
+    const st = t.snaps[d.i].stack;
+    const k = st.findIndex((f) => f.id === e.frame);
+    const caller = k > 0 ? st[k - 1] : null;
+    const cat = caller ? frameLine(t, caller.id, d.i) : null;
+    const ccode = cat ? srcLine(cat.file, cat.line) : '';
+    const span = fn ? callSpan(ccode, fn.cname) : null;
+    const got = span ? `<span class="faint">${hlC(ccode)}</span>\n${hlC(ccode.slice(0, span[0]))}<span class="val">${esc(value)}</span>${hlC(ccode.slice(span[1]))}` : hlC(ccode || 'main');
+    right = `<div class="d-card recv">${head(name(e.caller), cat)}<pre class="d-code">${got}</pre></div>`;
+    verb = `returns ${DUEL_ICON.ret}`;
+    what = value;
+  } else if (e.k === 'write') {
+    const info = t.cells.get(e.cell);
+    const at = d.beatFrom !== undefined ? { line: t.evs[d.beatFrom].line, file: t.evs[d.beatFrom].file } : null;
+    const writer = t.snaps[d.i].stack.find((f) => f.id === e.frame)?.fn;
+    left = `<div class="d-card send">${head(name(writer), at)}<pre class="d-code">${hlC(at ? srcLine(at.file, at.line) : '')}</pre></div>`;
+    const oldCell = [...t.snaps[d.i].statics, ...t.snaps[d.i].stack.flatMap((f) => f.cells)].find((c) => c.id === e.cell);
+    const owner = info?.frame === -1 ? info.owner : t.snaps[d.i + 1]?.stack.find((f) => f.id === info?.frame)?.fn;
+    right = `<div class="d-card recv">${head(name(owner), null)}<pre class="d-code">${hlC(`${oldCell?.type ?? ''} ${info?.name ?? '?'}`)}${info?.frame === -1 ? ' <span class="syn-com">// static</span>' : ''}\n  <span class="old">${esc(oldCell ? fmtVal(oldCell.val) : '?')}</span>\n→ <span class="val">${esc(fmtVal(e.val))}</span></pre></div>`;
+    verb = `writes into ${DUEL_ICON.write}`;
+    what = `${info?.name ?? ''} = ${fmtVal(e.val)}`;
+  } else return;
+  el.className = d.kind;
+  el.innerHTML = `${left}<div class="d-mid"><div class="d-verb">${verb}</div><div class="d-track"><span class="chip" style="left:${Math.max(4, d.p * 100)}%">${esc(clipFeed(what, 36))}</span></div>${what.length > 36 ? `<div class="d-what" title="${esc(what)}">${esc(what)}</div>` : ''}</div>${right}`;
+  el.hidden = false;
+}
+
 // ---------------- focus mode: a return's card ----------------
 // Over the veiled grid, before the result travels back: what the function
 // was called with and what it hands back — its return value, and whatever it
@@ -2569,6 +2701,7 @@ function frame(now: number): void {
   renderStageCard();
   renderPlaybar();
   renderFeed();
+  renderDuel(now);
   renderInspector();
   renderLiveStatus();
   requestAnimationFrame(frame);

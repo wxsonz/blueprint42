@@ -455,3 +455,32 @@ kbd {
 #feed .kf .data b { color: var(--panel-fg); font-weight: 600; }
 #feed .kf .data i { font-style: normal; opacity: 0.75; }
 @keyframes kf-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; } }
+
+/* ---------- the duel: who sends what to whom, spelled out ---------- */
+#duel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px;
+  width: min(94%, 980px); padding: 12px; background: rgba(0, 0, 0, 0.86); border-radius: 10px; box-shadow: 0 0 0 2px #000, 0 12px 40px rgba(0, 0, 0, 0.55); pointer-events: none; transition: opacity 0.25s; }
+#duel.out { opacity: 0; }
+#duel .d-card { background: var(--ed-bg); color: var(--ed-fg); border-radius: 6px; box-shadow: 0 0 0 2px #000; overflow: hidden; min-width: 0; }
+#duel .d-card.send { animation: duel-l 0.28s ease-out; }
+#duel .d-card.recv { animation: duel-r 0.28s ease-out; }
+#duel .d-head { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: var(--panel-bg); color: var(--panel-fg); font: 700 12.5px var(--font-ui, sans-serif); }
+#duel .d-head .ico { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: #fff; font: 700 9.5px var(--font-mono, monospace); }
+#duel .d-head .d-at { margin-left: auto; font: 11px var(--font-mono, monospace); color: var(--panel-dim); font-weight: 400; }
+#duel .d-code { margin: 0; padding: 8px 10px; font: 13px/1.45 var(--ed-font, var(--font-mono, monospace)); white-space: pre-wrap; word-break: break-word; }
+#duel .d-code .faint { opacity: 0.45; text-decoration: line-through; }
+#duel .d-code mark { background: var(--ed-exec, rgba(255, 220, 80, 0.3)); color: inherit; border-radius: 3px; box-shadow: 0 0 0 2px var(--ed-exec-bar, #e0b000); padding: 0 1px; }
+#duel .d-code .val { color: var(--lcd-ret, #6ee7a0); font-weight: 700; }
+#duel .d-code .old { color: var(--panel-dim); text-decoration: line-through; }
+#duel .d-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 150px; max-width: 260px; }
+#duel .d-verb { font: 800 13px var(--font-ui, sans-serif); letter-spacing: 0.14em; color: #fff; display: flex; align-items: center; gap: 6px; }
+#duel .d-verb svg { width: 26px; height: 18px; }
+#duel.call .d-verb { color: var(--tl-call, #4a90e2); }
+#duel.ret .d-verb { color: var(--tl-ret, #3fb950); }
+#duel.write .d-verb { color: var(--tl-ptr, #e0a040); }
+#duel .d-track { position: relative; width: 100%; height: 26px; border-top: 2px dashed rgba(255, 255, 255, 0.35); margin-top: 12px; }
+#duel .chip { position: absolute; top: -13px; transform: translateX(-50%); white-space: nowrap; max-width: 250px; overflow: hidden; text-overflow: ellipsis; font: 700 11.5px var(--font-mono, monospace);
+  background: #fff; color: #000; padding: 3px 8px; border-radius: 12px; box-shadow: 0 0 0 2px #000; }
+#duel .d-what { font: 11.5px var(--font-mono, monospace); color: rgba(255, 255, 255, 0.85); text-align: center; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.syn-kw { color: var(--syn-kw); } .syn-ty { color: var(--syn-type); } .syn-fn { color: var(--syn-fn); } .syn-num { color: var(--syn-num); } .syn-str { color: var(--syn-str); } .syn-mac { color: var(--syn-macro); } .syn-com { color: var(--syn-com); }
+@keyframes duel-l { from { transform: translateX(-60px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes duel-r { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
