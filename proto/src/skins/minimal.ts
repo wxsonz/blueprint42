@@ -182,8 +182,10 @@ export const minimal: Skin = {
     const o = 5 + 12 * (1 - a);
     g.save();
     g.globalAlpha = Math.min(1, a * 1.2);
-    g.shadowColor = 'rgba(138,180,255,0.7)';
-    g.shadowBlur = 14 * dc.z;
+    // a wide faint halo, then the corners (a blur here is too costly to paint)
+    g.strokeStyle = 'rgba(138,180,255,0.25)';
+    g.lineWidth = Math.max(6, 9 * dc.z);
+    brackets(g, r, o, Math.max(8, 14 * dc.z));
     g.strokeStyle = ACCENT;
     g.lineWidth = Math.max(1.5, 2 * dc.z);
     brackets(g, r, o, Math.max(8, 14 * dc.z));

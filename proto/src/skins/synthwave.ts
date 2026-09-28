@@ -7,6 +7,40 @@ const PINK = '#ff3cac';
 const CYAN = '#2de2e6';
 const GOLD = '#f9c80e';
 
+const skies = new Map<string, HTMLCanvasElement>(); // by size: the main view and its lenses
+
+function paintSky(W: number, H: number, hz: number, dpr: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * dpr);
+  c.height = Math.round(H * dpr);
+  const g = c.getContext('2d')!;
+  g.scale(dpr, dpr);
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0b0217');
+  grad.addColorStop(0.45, '#231046');
+  grad.addColorStop(0.62, '#3a0f4f');
+  grad.addColorStop(1, '#12051f');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  // the sun: a striped gradient disc sitting on the horizon
+  const R = Math.min(W, H) * 0.2;
+  const cx = W * 0.5, cy = hz - R * 0.35;
+  g.save();
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
+  const sun = g.createLinearGradient(0, cy - R, 0, cy + R);
+  sun.addColorStop(0, '#ffe36e');
+  sun.addColorStop(0.5, '#ff7a5c');
+  sun.addColorStop(1, '#ff2e9a');
+  g.fillStyle = sun;
+  g.globalAlpha = 0.5;
+  g.fillRect(cx - R, cy - R, R * 2, R * 2);
+  g.globalAlpha = 1;
+  g.fillStyle = '#231046';
+  for (let k = 0; k < 7; k++) g.fillRect(cx - R, cy + R * (0.1 + k * 0.14), R * 2, 2 + k * 1.3);
+  g.restore();
+  return c;
+}
+
 export const synthwaveTheme: Theme = {
   id: 'synthwave',
   name: 'Synthwave',
@@ -49,32 +83,18 @@ export const synthwaveTheme: Theme = {
   background(dc) {
     const g = dc.g;
     const W = dc.vw, H = dc.vh;
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#0b0217');
-    sky.addColorStop(0.45, '#231046');
-    sky.addColorStop(0.62, '#3a0f4f');
-    sky.addColorStop(1, '#12051f');
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, H);
     const hz = H * 0.58;
-    // the sun: a striped gradient disc sitting on the horizon
-    const R = Math.min(W, H) * 0.2;
-    const cx = W * 0.5, cy = hz - R * 0.35;
-    g.save();
-    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
-    const sun = g.createLinearGradient(0, cy - R, 0, cy + R);
-    sun.addColorStop(0, '#ffe36e');
-    sun.addColorStop(0.5, '#ff7a5c');
-    sun.addColorStop(1, '#ff2e9a');
-    g.fillStyle = sun;
-    g.globalAlpha = 0.5;
-    g.fillRect(cx - R, cy - R, R * 2, R * 2);
-    g.globalAlpha = 1;
-    g.fillStyle = '#231046';
-    for (let k = 0; k < 7; k++) {
-      const y = cy + R * (0.1 + k * 0.14);
-      g.fillRect(cx - R, y, R * 2, 2 + k * 1.3);
+    // the sky and the sun only change with the canvas size: paint them once
+    const dpr = g.getTransform().a || 1;
+    const key = `${Math.round(W)}x${Math.round(H)}@${dpr}`;
+    let sky = skies.get(key);
+    if (!sky) {
+      if (skies.size > 4) skies.clear();
+      skies.set(key, (sky = paintSky(W, H, hz, dpr)));
     }
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(sky, 0, 0);
     g.restore();
     // the floor: lines converging on the horizon, rows closer as they recede
     g.save();
@@ -82,9 +102,9 @@ export const synthwaveTheme: Theme = {
     g.strokeStyle = 'rgba(255,60,172,0.35)';
     g.lineWidth = 1;
     const vx = W / 2;
-    for (let k = -18; k <= 18; k++) {
-      g.beginPath(); g.moveTo(vx + k * 8, hz); g.lineTo(vx + k * W * 0.16, H); g.stroke();
-    }
+    g.beginPath();
+    for (let k = -18; k <= 18; k++) (g.moveTo(vx + k * 8, hz), g.lineTo(vx + k * W * 0.16, H));
+    g.stroke();
     const t = (dc.time * 0.25) % 1;
     for (let k = 0; k < 14; k++) {
       const f = (k + t) / 14;

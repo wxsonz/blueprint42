@@ -166,10 +166,12 @@ export function makeSkin(t: Theme): Skin {
     attention(dc, r, a) {
       const g = dc.g;
       g.save();
-      g.globalAlpha = Math.min(1, a * 1.2);
       g.strokeStyle = p.accent;
-      g.shadowColor = p.accent;
-      g.shadowBlur = 14 * dc.z;
+      // a wide faint halo, then the corners (a blur here is too costly to paint)
+      g.globalAlpha = Math.min(1, a * 1.2) * 0.25;
+      g.lineWidth = Math.max(6, 10 * dc.z);
+      brackets(g, r, 5 + 12 * (1 - a), Math.max(8, 14 * dc.z));
+      g.globalAlpha = Math.min(1, a * 1.2);
       g.lineWidth = Math.max(1.5, 2.5 * dc.z);
       brackets(g, r, 5 + 12 * (1 - a), Math.max(8, 14 * dc.z));
       g.restore();

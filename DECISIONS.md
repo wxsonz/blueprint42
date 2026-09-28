@@ -551,4 +551,11 @@ questions. Newest last.
   memory another machine owns (a static, a caller's local), up to two
   small live views of that far end appear in the pane's corner. Fast mode's
   camera still only pans.
+- **Decision (2026-09-28, the author found Focus dimming slow):** measured
+  with the paint forced to finish, a dimmed frame cost ~2× a plain one. The
+  attention marks' `shadowBlur` was most of that, then the veil and the
+  full insides of machines under it. Now attention marks use a wide faint
+  stroke instead of blur (every skin), machines outside the scene draw
+  compact while veiled, Synthwave's sky and sun are cached per size, and
+  lenses repaint at ~15 fps. Dimmed now ≈ 1–1.35× plain.
 

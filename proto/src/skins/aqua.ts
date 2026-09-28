@@ -347,13 +347,14 @@ export const aqua: Skin = {
     const o = 4 + 10 * (1 - a);
     g.save();
     g.globalAlpha = Math.min(1, a * 1.2);
-    g.shadowColor = 'rgba(56,117,215,0.9)';
-    g.shadowBlur = 24 * dc.z;
+    // a wide faint halo, then the ring (a blur here is too costly to paint)
     rrect(g, r.x - o, r.y - o, r.w + 2 * o, r.h + 2 * o, px(dc, 10, 4) + o);
+    g.strokeStyle = 'rgba(56,117,215,0.22)';
+    g.lineWidth = Math.max(8, 16 * dc.z);
+    g.stroke();
     g.strokeStyle = 'rgba(56,117,215,0.85)';
     g.lineWidth = Math.max(3, 5 * dc.z);
     g.stroke();
-    g.shadowBlur = 0;
     g.strokeStyle = '#ffffff';
     g.lineWidth = 1;
     g.stroke();

@@ -280,10 +280,12 @@ export const amp: Skin = {
   attention(dc, r, a) {
     const g = dc.g;
     g.save();
-    g.globalAlpha = Math.min(1, a * 1.2);
-    g.shadowColor = LCD;
-    g.shadowBlur = 20 * dc.z;
+    g.globalAlpha = Math.min(1, a * 1.2) * 0.25;
     g.strokeStyle = LCD;
+    // a wide faint halo, then the corners (a blur here is too costly to paint)
+    g.lineWidth = Math.max(7, 11 * dc.z);
+    brackets(g, r, 6 + 14 * (1 - a), Math.max(8, 16 * dc.z));
+    g.globalAlpha = Math.min(1, a * 1.2);
     g.lineWidth = Math.max(2, 3 * dc.z);
     brackets(g, r, 6 + 14 * (1 - a), Math.max(8, 16 * dc.z));
     g.globalAlpha = a * 0.35;

@@ -1136,6 +1136,9 @@ export class GridView {
     }
 
     const now_ = trace && fr ? beatNow(trace, s.model!, s.pos) : null;
+    // a Focus scene veils everything but its two ends: machines under the
+    // veil draw compact (their insides would barely show, and cost the most)
+    const scenePair = ev && staged(ev) && animPair ? new Set(animPair) : null;
     for (const h of hostsToDraw) {
       if (!this.onScreen(h.x, h.y, h.w, h.h)) continue;
       const node = s.layout.nodes.get(`func:${h.fn}`);
@@ -1148,7 +1151,7 @@ export class GridView {
       const hovered = hovKey === `n:${node.id}` && ((s.hovered as { copy?: number }).copy ?? 1) === h.copy;
       g.save();
       if (fading?.host === h.key) g.globalAlpha = fading.alpha;
-      this.drawMachine(skin, dc, s, h, fn, node.stale, node.place.pinned, frame, returned, stateOf(h), selected, hovered, now_, frames.length, anchors, live, scene.ports.get(h.key) ?? { in: [], out: [] });
+      this.drawMachine(skin, dc, s, h, fn, node.stale, node.place.pinned, frame, returned, stateOf(h), selected, hovered, now_, frames.length, anchors, live, scene.ports.get(h.key) ?? { in: [], out: [] }, !!scenePair && !scenePair.has(h.key));
       g.restore();
     }
 
@@ -1392,6 +1395,8 @@ export class GridView {
   }
 
   private lensViews: GridView[] = [];
+  private lensKey = '';
+  private lensAt = 0;
   // Small live views of far-away places, in the pane's bottom-right corner.
   private drawLenses(s: ViewState, skin: Skin, now: number, dc: Dc, far: { at: Pt; title: string }[]): void {
     const W = Math.min(320, this.w * 0.3);
@@ -1405,7 +1410,13 @@ export class GridView {
       v.cam.zoom = v.target.zoom = zoom;
       v.cam.x = v.target.x = f.at[0] - W / (2 * CELL_PX * zoom);
       v.cam.y = v.target.y = f.at[1] - H / (2 * CELL_PX * zoom);
-      v.draw(s, skin, now);
+      // a whole scene each: repaint ~15 times a second (or when it looks elsewhere)
+      const key = `${f.title}|${f.at[0].toFixed(1)},${f.at[1].toFixed(1)}|${skin.id}`;
+      if (key !== v.lensKey || now - v.lensAt > 66) {
+        v.draw(s, skin, now);
+        v.lensKey = key;
+        v.lensAt = now;
+      }
       const x = this.w - (W + 14) * (k + 1);
       const y = this.h - H - head - 96;
       const g = this.g;
@@ -1427,6 +1438,7 @@ export class GridView {
     skin: Skin, dc: Dc, s: ViewState, h: Host, fn: FnInfo, stale: boolean, pinned: boolean,
     frame: SnapFrame | null, returned: SnapFrame | null, state: RunState, selected: boolean, hovered: boolean,
     bn: BeatNow | null, stacked: number, anchors: Map<number, Anchor>, live: Set<number>, ports: { in: number[]; out: number[] },
+    compact = false,
   ): void {
     const g = this.g;
     const z = dc.z;
@@ -1480,8 +1492,8 @@ export class GridView {
       }
       return;
     }
-    // ---- zoomed out: its name and the line it's on, readable ----
-    if (cs < 20) {
+    // ---- zoomed out (or under a Focus veil): its name and the line it's on ----
+    if (cs < 20 || compact) {
       const cur = frame && ist?.current != null ? plan.stations[ist.current].text : null;
       if (closed) {
         // small already: the motor says its name; only the running line, if any
