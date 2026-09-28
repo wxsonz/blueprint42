@@ -192,7 +192,7 @@ export const sevenTheme: Theme = {
       const g = dc.g;
       const b = Math.max(2, 9 * dc.z);
       let right = r.x + r.w;
-      if (buttons && r.w > 120 * dc.z) {
+      if (buttons && r.w > 110 * dc.z) {
         // the caption buttons hang from the window's top edge: 20 tall,
         // 29 wide (46 for close), square on top and rounded underneath
         const bh = Math.max(8, 19 * dc.z);

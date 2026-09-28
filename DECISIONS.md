@@ -955,3 +955,22 @@ questions. Newest last.
     gloss split by a slim light bar, blue while working. The light bar
     runs under the top bar and under the active window's title strip.
   - **PS3** stays the XMB, which was already referenced.
+- **Decision (author, with screenshots: PS1 feedback):**
+  - **Flicker:** window buttons (△○✕□; Aero's and Metro's too) showed
+    only above a width of 150 world units, right at a machine window's
+    natural width, so rounding flipped them on and off. The threshold is
+    now 110.
+  - **Dither:** the PS1's 15-bit colour with a 4×4 ordered (Bayer)
+    dither. The BIOS tiles are quantised to 5 bits a channel with a real
+    Bayer dither once, when the backdrop is cached (`psDither`). A static
+    Bayer tile is blended (`overlay`, 0.16) over the whole screen, which
+    the GPU composites, with no per-frame filtering.
+  - **Progress:** an old PC case's front panel: a green power LED, an
+    amber disk LED that flickers while running, and a segmented load
+    meter (green, then amber, then red).
+  - **All grey, like the console:** the PAL BIOS's grey block background;
+    grey panes and bars; a light editor with syntax colours to match.
+  - **Buttons:** round and convex like the lid button; Play is green,
+    and red while playing (`button.playing`, set by main).
+  - **Logo and grille:** the logo carries the four PS1 colours, and the
+    console's vent grille is the playbar's texture.

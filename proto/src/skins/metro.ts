@@ -86,7 +86,7 @@ function metroOf(dark: boolean): Theme {
       g.fillStyle = active ? tileOf(name) : dark ? '#2b2b2b' : '#e1e1e1';
       g.fillRect(r.x, r.y, r.w, r.h);
       let right = r.x + r.w;
-      if (buttons && r.w > 140 * dc.z) {
+      if (buttons && r.w > 110 * dc.z) {
         const bw = r.h * 1.3;
         for (const k of ['close', 'max', 'min'] as const) {
           if (k === 'close' && active) (g.fillStyle = '#c7372f'), g.fillRect(right - bw, r.y, bw, r.h);

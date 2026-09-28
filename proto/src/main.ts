@@ -2322,6 +2322,7 @@ function renderPlaybar(): void {
       : S.gdb.status === 'running' ? 'running under gdb…' : 'no trace';
     $('pb-event').innerHTML = inRoom ? inRoom.html : ev ? describe(ev, t!) : t ? '<span class="no">ready — press play</span>' : '<span class="no">nothing to run</span>';
     $('play-icon').innerHTML = S.playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
+    $('play-icon').closest('button')?.classList.toggle('playing', S.playing);
     document.querySelectorAll<HTMLButtonElement>('.pb-buttons button').forEach((b) => (b.disabled = !t));
   }
   const diag = !t ? S.gdb.compile?.diagnostics.find((d) => d.severity === 'error') : undefined;
