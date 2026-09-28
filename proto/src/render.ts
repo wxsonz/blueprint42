@@ -1431,6 +1431,13 @@ export class GridView {
     const x0 = (this.w - total) / 2;
     const y0 = this.h - H - head - 104;
     const slots = [{ x: x0, y: y0 }, { x: x0 + W + gap, y: y0 }];
+    // a black backing around both views and the gap between them: the scene
+    // behind is busy, the viewer shouldn't blend into it
+    g.save();
+    g.globalAlpha = 0.88 * ease;
+    g.fillStyle = '#000000';
+    g.fillRect(x0 - 10, y0 - 10, total + 20, H + head + 20);
+    g.restore();
     [d.left, d.right].forEach((end, n) => {
       let v = this.lensViews[n];
       if (!v) this.lensViews[n] = v = new GridView(document.createElement('canvas'), true);
@@ -1469,8 +1476,12 @@ export class GridView {
       g.globalAlpha = 0.25 + 0.75 * ease;
       g.fillStyle = skin.casing;
       g.fillRect(x, y, W, H + head);
-      g.drawImage(v.canvas, x, y + head, W, H);
+      // the frame first (some skins paint it solid), the live view on top
       skin.wall(dc, { x, y, w: W, h: H + head }, { name: `${end.name} · ${end.verb}`, fns: 0, note: '', kind: 'machine', live: true, pinned: false, selected: false, hovered: false, head: { x, y, w: W, h: head } });
+      g.drawImage(v.canvas, x, y + head, W, H);
+      g.strokeStyle = '#000000';
+      g.lineWidth = 3;
+      g.strokeRect(x - 1.5, y - 1.5, W + 3, H + head + 3);
       g.restore();
     });
     if (ease < 1) return;

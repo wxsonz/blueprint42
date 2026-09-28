@@ -611,4 +611,13 @@ questions. Newest last.
   change colour instead of animating, system fonts. Measured at 2× with
   the paint forced to finish: 5 ms a frame (Minimal 6.4, Tahoe 11.7, Amp
   17.4).
+- **Decision (author):** Barebone is black and white: no borders or glow
+  anywhere (surfaces differ by a shade), and colour only where it means
+  something: the running machine and live belts (blue), pointers,
+  returned values, errors, and a value that just changed. Feed icons are
+  gray there; only the action keeps its colour.
+- **Decision (author):** The duel viewer sits on a black backing, with a
+  heavy black edge around each view, so the busy scene behind doesn't
+  blend into it. The frame is drawn under the live view (some skins paint
+  it solid).
 
