@@ -155,6 +155,7 @@ export interface StationInfo {
   readout: { text: string; result: boolean | null } | null; // a switch: its operands and result, on the row below
   count: number | null; // a loop: times round
   state: 'idle' | 'visited' | 'current';
+  hot?: boolean; // its text is the expression with the values it just read (inside a machine)
 }
 
 export interface InteriorInfo {

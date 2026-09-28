@@ -301,7 +301,7 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       g.stroke();
     }
     g.font = p.font(fs);
-    g.fillStyle = cur ? p.text : on ? p.text : p.muted;
+    g.fillStyle = s.hot ? p.accent : cur ? p.text : on ? p.text : p.muted;
     g.globalAlpha = (i.mode !== 'live' ? 0.75 : 1) * (on ? 1 : 0.7);
     const badge = s.count !== null ? `×${s.count}` : '';
     const bw = badge ? g.measureText(badge).width + 6 * z : 0;

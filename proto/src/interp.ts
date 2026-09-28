@@ -27,6 +27,7 @@ export interface SnapCell {
   val: V;
   str?: string; // a char *'s text, quoted: what it points at, not where
   fields?: SnapField[]; // a struct's members, or the members of the struct it points at
+  bytes?: number[]; // a heap block's first bytes (gdb engine, up to 48)
 }
 
 // What rides a belt with a call or a return, beyond the bare value: the text

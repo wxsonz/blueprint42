@@ -12,7 +12,7 @@ why), then this file (current state and the next job).
   purpose (see `DECISIONS.md` and SPEC §4).
 - **Next job:** none planned; see SPEC "Later / parking lot" and ask the
   author.
-- **Checks:** 72 tests pass (`test/live.test.ts` covers the live routes) (`npm test`), including automated M2, M3, M4
+- **Checks:** 77 tests pass (`test/room.test.ts` covers the room on the real GNL; `test/live.test.ts` the live routes) (`npm test`), including automated M2, M3, M4
   and M5.5 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
   `test/interior.test.ts` (stations, gdb and interpreter switch results,
   room-making, blueprint round-trip), and M5 tests:
@@ -144,28 +144,37 @@ Known gaps:
 - Pinned modules can still overlap if the author drags them together
   (refused while dragging, but a module can grow into another when opened).
 
-## M5.5: inside a machine
+## M5.5: enter the machine
 
-Double-click a machine (or right-click → Open) and its body opens under the
-frame panel as a small railway; double-click a statement to jump to it.
-- `src/interior.ts` builds the stations from `fn.node` (`planOf`, cached per
-  `FnInfo`), their geometry in px at zoom 1 (`stopX`, `rowMid`, tracks with
-  a kind and an owner switch), and reads the trace (`interiorAt`): the
-  running station, stations reached, each switch's latest result and a
-  loop's count for its current or last run.
-- Switch results: the interpreter's `eval` events; under gdb, the next line
-  the same frame ran (inside the body → true). A switch whose body starts on
-  its own line can't be told apart and shows nothing (`inferable`).
-- `render.ts` `readoutOf` puts the values the condition read into its text
-  (names and one-level members only, from the snapshot at that moment);
-  `interiorInfo` turns it all into screen geometry; `stationAt` hit-tests.
-- `layout.ts`: `opened` (a Set like `folded`), `innerCells`, `innerTop`;
-  `footprint` and `at` include the interior, and `layered` widens a column
-  for an open machine. Saved in the blueprint as `opened`.
-- Skins: one hook, `interior()`, drawn by the shared `drawInterior` in
-  `skins/sprites.ts` with each skin's palette.
-- The interior shows the newest live frame of the function (recursion: the
-  deepest), else its last finished run, dimmed.
+Double-click a machine (or right-click → Enter) and it grows into a room;
+Esc leaves. See SPEC for what the room shows.
+- `src/room.ts` is the engine, with no drawing:
+  - `roomTimeline` groups the trace into **beats**: entry, one per statement
+    run (gdb: a step on a new station plus the writes the next stop
+    reports; interpreter: consecutive events on a station), and exit.
+    Callee events are "waiting".
+  - It paces each event: `dur` and a progress range `p0`/`p1` inside its
+    beat. Events outside the room get `SKIP`.
+  - `readsOf` / `writesOf` / `computeText` / `slotValue` give what flies.
+    Writes diff the snapshot at the stop against the next stop's (under
+    gdb a stop's changes span several events, so `after` is the snapshot
+    after the next step). Byte writes use `SnapCell.bytes`: `gdb.ts` now
+    keeps each heap block's first 48 bytes.
+- `src/interior.ts` (from M5.5's first version) still builds the stations
+  (`planOf`), including each statement's reads (`i++` and `&x` stay as
+  written) and calls, and infers switch results (`interiorAt`).
+- `render.ts` `GridView.drawRoom` draws it in screen space with existing
+  skin hooks (`wall`, `frame`, `strip`, `interior`, `door`, `plate`,
+  `pulse`); `durationAt` and `roomOf` feed playback.
+- `main.ts`:
+  - `S.room`; `enterRoom` / `leaveRoom`;
+  - the playback loop now spends a frame's time across many short events;
+  - ←/→ step beats (`nextBeat` / `prevBeat`);
+  - the playbar describes the beat;
+  - pan, zoom and the follow camera pause while inside.
+- Value formatting moved to `src/values.ts` (shared by panels and room).
+- The in-place interior and its layout growth are gone; an `opened` key in
+  an older blueprint is accepted and ignored.
 
 ## M6: live edits from any editor
 

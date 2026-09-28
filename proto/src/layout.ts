@@ -5,7 +5,6 @@
 // drawn around its machines; a collapsed one is a single block. Node
 // positions are always world coordinates; moving a module moves its nodes,
 // and a collapsed module's nodes stay where they would be if it opened.
-import { interiorCells } from './interior';
 import type { FnInfo, Model } from './parse';
 import type { Blueprint, Sprite } from './blueprint';
 
@@ -80,17 +79,6 @@ export function frameRows(fn: FnInfo | null): FrameRow[] {
   return rows;
 }
 
-// M5.5: machines opened to show their insides (by function key). The
-// interior hangs under the frame panel and can be wider than the machine.
-export const opened = new Set<string>();
-
-export function innerCells(fn: FnInfo | null): { w: number; h: number } | null {
-  return fn && opened.has(fn.name) && !fn.broken ? interiorCells(fn) : null;
-}
-
-// Top of the interior, in cells below the node's place.
-export const innerTop = (fn: FnInfo | null) => MH + invCells(fn) + (invCells(fn) ? 0 : 0.25);
-
 export function invCells(fn: FnInfo | null): number {
   const slots = frameRows(fn).length;
   if (!slots) return 0;
@@ -100,8 +88,7 @@ export function invCells(fn: FnInfo | null): number {
 // Rectangle a node reserves on the grid, including ports, statics and inventory.
 export function footprint(n: NodeState): Rect {
   const st = n.fn?.statics.length ? 2 : 0;
-  const inner = innerCells(n.fn);
-  return { x: n.place.x - 1, y: n.place.y - st, w: Math.max(MW, inner?.w ?? 0) + 2, h: MH + st + invCells(n.fn) + (inner ? inner.h + 0.5 : 0) };
+  return { x: n.place.x - 1, y: n.place.y - st, w: MW + 2, h: MH + st + invCells(n.fn) };
 }
 
 const overlap = (a: Rect, b: Rect, pad = 1) =>
@@ -128,7 +115,6 @@ export class Layout {
   reset(): void {
     this.graph = '';
     folded.clear();
-    opened.clear();
     this.nodes.clear();
     this.modules.clear();
     this.waypoints.clear();
@@ -307,7 +293,7 @@ export class Layout {
       nodes[n.id] = { x: n.place.x - (m?.x ?? 0), y: n.place.y - (m?.y ?? 0), pinned: n.place.pinned };
     }
     const waypoints = Object.fromEntries([...this.waypoints].map(([k, p]) => [k, { x: p.x, y: p.y }]));
-    const fold = { ...(folded.size ? { folded: [...folded].sort() } : {}), ...(opened.size ? { opened: [...opened].sort() } : {}) };
+    const fold = folded.size ? { folded: [...folded].sort() } : {};
     if (!project) return { version: 1, nodes, waypoints, sprites, ...fold };
     const modules: NonNullable<Blueprint['modules']> = {};
     for (const m of this.modules.values()) {
@@ -320,8 +306,6 @@ export class Layout {
   applyBlueprint(bp: Blueprint, model: Model, full: boolean): void {
     folded.clear();
     for (const k of bp.folded ?? []) folded.add(k);
-    opened.clear();
-    for (const k of bp.opened ?? []) opened.add(k);
     for (const [file, b] of Object.entries(bp.modules ?? {})) {
       const m = this.modules.get(file);
       if (!m) continue;
@@ -509,12 +493,6 @@ export class Layout {
 
     const cols: FnInfo[][] = [];
     for (const f of fns) (cols[depth.get(f.name)!] ??= []).push(f);
-    // columns 7 cells apart, wider where an open machine needs the room
-    const colX: number[] = [];
-    for (let d = 0, x = 0; d < cols.length; d++) {
-      colX[d] = x;
-      x += Math.max(MW, ...(cols[d] ?? []).map((f) => innerCells(f)?.w ?? 0)) + 3;
-    }
     const rowOf = new Map<string, number>();
     cols.forEach((col, d) => {
       if (d > 0) {
@@ -529,9 +507,8 @@ export class Layout {
       col.forEach((f, i) => {
         rowOf.set(f.name, i);
         y += f.statics.length ? 2 : 0;
-        this.nodes.set(f.id, { id: f.id, name: f.name, file: f.file, place: { x: colX[d], y, pinned: false }, stale: f.broken, fn: f });
-        const inner = innerCells(f);
-        y += MH + invCells(f) + (inner ? inner.h + 0.5 : 0) + 2;
+        this.nodes.set(f.id, { id: f.id, name: f.name, file: f.file, place: { x: d * 7, y, pinned: false }, stale: f.broken, fn: f });
+        y += MH + invCells(f) + 2;
       });
     });
     void model;
@@ -625,9 +602,6 @@ export class Layout {
       const { x, y } = n.place;
       const h = MH + (invCells(n.fn) ? (INV_HEAD_PX + frameRows(n.fn).length * SLOT_PX + 10) / CELL_PX : 0);
       if (wx >= x && wx < x + MW && wy >= y && wy < y + h) return n;
-      const inner = innerCells(n.fn);
-      const top = y + innerTop(n.fn);
-      if (inner && wx >= x && wx < x + inner.w && wy >= top && wy < top + inner.h) return n;
     }
     return null;
   }

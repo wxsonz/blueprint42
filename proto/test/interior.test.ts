@@ -5,7 +5,7 @@ import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { parseBlueprint } from '../src/blueprint';
 import { interiorAt, planOf } from '../src/interior';
-import { footprint, Layout, opened } from '../src/layout';
+import { Layout } from '../src/layout';
 import { run } from '../src/interp';
 import { parse } from '../src/parse';
 import { readoutOf } from '../src/render';
@@ -89,28 +89,15 @@ describe('inside a machine (M5.5)', () => {
     expect(p.stations[st.current!].line).toBe(8);
   });
 
-  it('opens in place: neighbours make room, and the blueprint remembers it', () => {
-    const m = parse(sample('gnl').src);
+  it('still reads a blueprint from M5.5 that has opened machines (now ignored)', () => {
+    const bp = parseBlueprint({ version: 1, nodes: {}, waypoints: {}, sprites: [], opened: ['gnl_consume'] });
+    expect(bp.opened).toEqual(['gnl_consume']);
     const l = new Layout();
+    const m = parse(sample('gnl').src);
+    l.reset();
     l.sync(m);
-    opened.add('gnl_consume');
-    opened.add('get_next_line');
-    l.reflow(m);
-    const nodes = [...l.nodes.values()];
-    for (const a of nodes) for (const b of nodes) {
-      if (a === b) continue;
-      const [fa, fb] = [footprint(a), footprint(b)];
-      const hit = fa.x < fb.x + fb.w && fb.x < fa.x + fa.w && fa.y < fb.y + fb.h && fb.y < fa.y + fa.h;
-      expect(hit, `${a.name} overlaps ${b.name}`).toBe(false);
-    }
-    const bp = parseBlueprint(JSON.parse(JSON.stringify(l.toBlueprint([], false))));
-    expect(bp.opened).toEqual(['get_next_line', 'gnl_consume']);
-    const again = new Layout();
-    again.reset(); // what a fresh load does
-    again.sync(m);
-    expect(opened.size).toBe(0); // a fresh layout starts closed…
-    again.applyBlueprint(bp, m, false);
-    expect([...opened].sort()).toEqual(['get_next_line', 'gnl_consume']); // …and the blueprint opens them again
-    opened.clear();
+    const before = JSON.stringify([...l.nodes.values()].map((n) => n.place));
+    l.applyBlueprint(bp, m, false);
+    expect(JSON.stringify([...l.nodes.values()].map((n) => n.place))).toBe(before);
   });
 });

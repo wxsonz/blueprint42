@@ -206,28 +206,48 @@ a libft sub-make and two same-named `static` helpers traces with each
 helper told apart. 50 generated files open collapsed, with no overlapping
 modules and one trunk per pair of files that call each other.
 
-### M5.5 — Inside a machine
-- Rename the canvas pane from "Factory" to **Blueprint**.
-- Open a function **in place**: its machine expands on the grid into its
-  interior, and auto-placed neighbours move aside (like opening a module).
-  Double-click or right-click opens and closes it, and the state is saved
-  with the blueprint like struct folds.
-- **Every statement is a station**, in code order (1:1 with the editor):
-  - `if`/`else` is a switch that forks the track;
-  - `while`/`for`/`do` is a loop-back with an iteration count;
-  - `return` is an exit.
-- A token shows the running line. Each switch shows its operands' live
-  values and the result, e.g. `buf->pos == buf->len` → `6 == 8 → false`.
-- Engines:
-  - The interpreter already emits `eval` events (condition + result).
-  - Under gdb only line steps exist: infer the branch from the next line
-    executed, and read operand values from frame cells and struct fields.
-  - Never evaluate a condition in gdb: it may have side effects.
+### M5.5 — Enter the machine
+- The canvas pane is called **Blueprint**.
+- **Double-click a machine to enter it** (author, 2026-09-28; this replaces
+  the first "expand in place" design). The machine grows into a room that
+  fills the Blueprint pane, with the factory faint around it. Esc or
+  "← factory" leaves at the same moment.
+- The room:
+  - **storage** on the left: params, locals, struct fields (including the
+    struct a pointer reaches) and statics;
+  - **stations** on the right, one per statement in code order: `if`/`else`
+    switches fork the track, loops run back with a count, `return` is an
+    exit;
+  - a **memory floor** along the bottom: the bytes each `char *` points at,
+    with its struct's index fields (`pos`, `len`, `cap`) as markers.
+- **Each statement is a beat:**
+  1. the values it reads fly from storage to its station;
+  2. the station shows the expression with those values (`buf->pos = 6`,
+     `6 == 8`);
+  3. a call goes out through the callee's door and its result comes back;
+  4. what actually changed flies back to storage. A byte lands on its cell
+     on the memory floor.
+- Switches flip and light the way taken. Arguments arrive through the entry
+  door, and the result leaves through the exit door.
+- **Pacing:** inside, each beat takes about 1–2.5 s at 1×. Everything else
+  in the program is skipped. ←/→ step one statement.
+- **Truth:**
+  - Reads are the names a statement uses, valued from the snapshot at its
+    stop.
+  - Writes are the differences between that snapshot and the next stop.
+  - Switch results come from the interpreter's `eval` events or, under
+    gdb, from the next line the frame ran.
+  - Never evaluate anything in gdb.
 
-✅ Accept: on gnl_v3, open `gnl_consume`. During the run its
-`if (buf->pos == buf->len)` switch shows `6 == 8 → false` and routes the
-token down the false branch. The zeroing loop shows its count (8). The pane
-reads "Blueprint".
+✅ Accept: on gnl_v3, enter `gnl_consume` and press play.
+- Playback skips to its first call.
+- `buf` and `line_end` arrive through the entry door.
+- `6` flies from `line_end` to `.pos`.
+- `.pos` and `.len` fly into the switch, which reads `6 == 8 → false` and
+  lights the false way.
+- In the call that empties the buffer, `'\0'` lands on `data[0]` through
+  `data[7]` while the loop counts ×8.
+- Esc returns to the factory.
 
 ### M6 — Neovim bridge (the end state)
 - An nvim plugin syncs buffers and cursor over msgpack-RPC or a websocket to

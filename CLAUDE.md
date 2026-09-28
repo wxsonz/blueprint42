@@ -33,8 +33,8 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 
 `proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
 sprites and bindings), M4 (invariants and truth checks), M5 (projects:
-folders, modules, Makefile builds, confirmed saves), M5.5 (open a
-machine to see its statements as stations, with live switch results) and
+folders, modules, Makefile builds, confirmed saves), M5.5 (enter a
+machine: its statements animated with real reads and writes) and
 M6 (live edits and cursor from any editor; `proto/nvim/` is the Neovim
 plugin: `:FtbConnect [port]`, `:FtbOpen`). No linter yet.
 
@@ -81,10 +81,12 @@ modules (one per `.c`, collapsed blocks or walls) and packs them;
 `server/project.mjs` is the file server (`/api/fs/*`); the trace server
 builds projects with their Makefile. Events carry a `file`.
 
-Inside a machine (M5.5): `src/interior.ts` turns a function body into
-stations and tracks and reads switch results from the trace (interpreter
-`eval` events, or under gdb the next line the frame ran). `layout.ts`
-`opened` makes room for an open machine; skins draw it via `interior()`.
+Enter the machine (M5.5): double-click a machine and it becomes a room
+where each statement run is animated (reads fly in, the expression shows
+its values, writes fly out, bytes land on a memory floor). `src/interior.ts`
+builds the stations and switch results; `src/room.ts` groups the trace into
+beats, paces them (everything outside is skipped) and computes reads and
+writes; `render.ts` `drawRoom` draws it with existing skin hooks.
 
 Live edits (M6): `server/live.mjs` (`/api/live/push`, `/api/live/stream`,
 newline-separated JSON) relays editors' unsaved text and cursor to pages

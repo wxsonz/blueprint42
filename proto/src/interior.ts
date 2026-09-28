@@ -16,6 +16,7 @@ export interface Leaf {
   from: number; // offsets into `cond`
   to: number;
   path: [string] | [string, string]; // `x`, or `a->b` / `a.b`
+  keep?: boolean; // read, but shown as written (`i++`, `&x`): a value there would read wrong
 }
 
 export interface Station {
@@ -32,6 +33,9 @@ export interface Station {
   loop?: 'while' | 'for' | 'do';
   owner?: number; // an `else`: its `if`
   end: number; // index of the last station inside this one (itself if none)
+  src?: string; // a statement as written (reads index into it)
+  reads?: Leaf[]; // what a statement reads: the names it uses, not the plain target of `=`
+  calls?: string[]; // functions the statement (or a switch's condition) calls
 }
 
 // Geometry, local px at zoom 1.
@@ -69,7 +73,7 @@ const unparen = (n: Node): Node => (n.type === 'parenthesized_expression' && n.n
 
 // The parts of a condition that have a value in the frame: plain names and
 // one-level member access. A callee, a sizeof or a subscripted array stays as written.
-function leavesOf(cond: Node): Leaf[] {
+export function leavesOf(cond: Node): Leaf[] {
   const out: Leaf[] = [];
   const base = cond.startIndex;
   const walk = (n: Node) => {
@@ -85,6 +89,13 @@ function leavesOf(cond: Node): Leaf[] {
       out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [n.text] });
       return;
     }
+    if (n.type === 'update_expression' || (n.type === 'pointer_expression' && n.child(0)?.text === '&')) {
+      const inner: Leaf[] = [];
+      const arg = n.childForFieldName('argument') ?? n.namedChild(0);
+      if (arg) for (const l of leavesOf(arg)) inner.push({ ...l, from: l.from + arg.startIndex - base, to: l.to + arg.startIndex - base, keep: true });
+      out.push(...inner);
+      return;
+    }
     if (n.type === 'call_expression') {
       const args = n.childForFieldName('arguments');
       if (args) walk(args);
@@ -98,6 +109,45 @@ function leavesOf(cond: Node): Leaf[] {
     for (const c of n.namedChildren) if (c) walk(c);
   };
   walk(cond);
+  return out;
+}
+
+// Offsets of `leaves` (relative to `node`) made relative to `base`.
+const shift = (leaves: Leaf[], node: Node, base: number): Leaf[] => leaves.map((l) => ({ ...l, from: l.from + node.startIndex - base, to: l.to + node.startIndex - base }));
+
+// What a statement reads. The plain target of `=` (`x = …`, `a->b = …`) is
+// only written; an index or a pointer on the left is read to find the place.
+function readsOf(n: Node): Leaf[] {
+  const base = n.startIndex;
+  if (n.type === 'declaration') {
+    return n.namedChildren.flatMap((d) => {
+      const v = d?.type === 'init_declarator' ? d.childForFieldName('value') : null;
+      return v ? shift(leavesOf(v), v, base) : [];
+    });
+  }
+  const e = n.type === 'expression_statement' || n.type === 'return_statement' ? n.namedChild(0) : n;
+  if (!e) return [];
+  if (e.type === 'assignment_expression') {
+    const left = e.childForFieldName('left');
+    const right = e.childForFieldName('right');
+    const op = e.childForFieldName('operator')?.text ?? '=';
+    const out = right ? shift(leavesOf(right), right, base) : [];
+    if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left), left, base));
+    return out;
+  }
+  return shift(leavesOf(e), e, base);
+}
+
+function callsOf(n: Node): string[] {
+  const out: string[] = [];
+  const walk = (x: Node) => {
+    if (x.type === 'call_expression') {
+      const f = x.childForFieldName('function');
+      if (f?.type === 'identifier' && !out.includes(f.text)) out.push(f.text);
+    }
+    for (const c of x.namedChildren) if (c) walk(c);
+  };
+  walk(n);
   return out;
 }
 
@@ -131,11 +181,14 @@ export function planOf(fn: FnInfo): Plan {
     return push({
       kind, line, last: n.endPosition.row, text: clipText(text), depth, cond: c.text, leaves: leavesOf(c),
       body: body ? [body.startPosition.row, body.endPosition.row] : undefined,
-      inferable: !!body && b0 !== line, loop,
+      inferable: !!body && b0 !== line, loop, calls: callsOf(c),
     }, 2);
   };
   const stmt = (n: Node, depth: number) => {
-    const simple = (kind: StationKind) => push({ kind, line: n.startPosition.row, last: n.endPosition.row, text: clipText(one(n.text.split('\n')[0])), depth });
+    const simple = (kind: StationKind) => push({
+      kind, line: n.startPosition.row, last: n.endPosition.row, text: clipText(one(n.text.split('\n')[0])), depth,
+      src: n.text, reads: readsOf(n), calls: callsOf(n),
+    });
     switch (n.type) {
       case 'comment':
       case ';':

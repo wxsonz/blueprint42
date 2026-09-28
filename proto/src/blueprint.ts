@@ -32,7 +32,7 @@ export interface Blueprint {
   waypoints: Record<string, { x: number; y: number }>;
   sprites: Sprite[];
   folded?: string[]; // struct rows the author folded ("fnKey.var")
-  opened?: string[]; // machines opened to show their insides (M5.5, by function key)
+  opened?: string[]; // M5.5's in-place interiors: still accepted from older files, ignored
 }
 
 const kinds = new Set<SpriteKind>(['strip', 'marker', 'chest', 'drill', 'copy', 'stack', 'train']);

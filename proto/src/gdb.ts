@@ -205,7 +205,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   if (boundIds.size) currentBound = Object.create(null);
 
   // What the picture shows through a cell: a string, a struct's fields.
-  const extras = new Map<number, { str?: string; fields?: SnapField[] }>();
+  const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[] }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   const snapshot = (): Snap => ({
     stack: stack.map((f) => ({ id: f.id, fn: f.fn, cells: [...f.cells.values()].map(snapCell) })),
@@ -441,6 +441,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
       const c = heapCell.get(b.id);
       if (c === undefined) continue;
       const nv: V = { k: 'raw', text: preview(b.hex, b.size) };
+      extras.set(c, { ...extras.get(c), bytes: b.hex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [] });
       if (JSON.stringify(nv) === JSON.stringify(vals.get(c))) continue;
       const first = vals.get(c)?.k === 'raw' && (vals.get(c) as { text: string }).text === 'uninitialised';
       vals.set(c, nv);

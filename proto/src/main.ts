@@ -1,15 +1,16 @@
 import { baseName } from './skins/util';
+import { beatStarts, roomScene } from './room';
 import { connectLive, liveReplay, liveReveal, type LiveMsg } from './live';
 import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
 import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Payload, type Trace } from './interp';
 import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { doorsOf, folded, footprint, innerCells, Layout, opened } from './layout';
+import { doorsOf, folded, footprint, Layout } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, entityAt, evDuration, foldAt, frameAt, pointeeName, setAnimMode, spriteWorldRect, stageRect, staged, stationAt, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, evDuration, foldAt, frameAt, pointeeName, roomOf, setAnimMode, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
@@ -61,6 +62,7 @@ const S: ViewState & {
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
   sprites: Sprite[];
   project: Project | null; // M5: an open folder (or a bundled sample project)
+  room: string | null; // the machine the author entered (its function)
 } = {
   layout,
   model: null,
@@ -72,6 +74,7 @@ const S: ViewState & {
   playing: false,
   speed: 1,
   stepTarget: null,
+  room: null,
   follow: true,
   legend: null,
   sample: SAMPLES[0],
@@ -161,10 +164,8 @@ function analyze(src: string, fresh: boolean): void {
   modelRevision++;
   if (fresh) layout.reset();
   // an open machine whose code changed size: make room again
-  const innerSig = (m: Model | null) => [...opened].map((k) => `${k}:${JSON.stringify(innerCells(m?.byName.get(k) ?? null))}`).join('|');
-  const before = innerSig(S.model);
   const renamed = layout.sync(model);
-  if (opened.size && innerSig(model) !== before) layout.reflow(model);
+  if (S.room && !model.byName.has(S.room)) S.room = null; // the function you were inside is gone
   if (renamed.size) {
     for (const sprite of S.sprites) if (sprite.binding?.scope === 'fn' && sprite.binding.fn) {
       const next = renamed.get(`func:${sprite.binding.fn}`);
@@ -1173,6 +1174,32 @@ function stepBack(): void {
 
 const isCallish = (e: Ev) => e.k === 'call' || e.k === 'ret';
 
+// Inside a machine, ←/→ move one statement (beat) of that function.
+function roomBeats(): number[] {
+  const r = roomOf(S);
+  return r && S.trace ? beatStarts(S.trace, r.fn, r.plan) : [];
+}
+function nextBeat(): void {
+  const starts = roomBeats();
+  if (!S.trace || !starts.length) return;
+  const from = S.stepTarget ?? S.pos;
+  const cur = [...starts].reverse().find((b) => b <= from + 1e-9);
+  const next = starts.find((b) => b > from + 1e-9);
+  // play the current beat to its end (the next one's start), then stop
+  if (cur !== undefined && next !== undefined) {
+    S.pos = Math.max(S.pos, cur);
+    S.stepTarget = next;
+    S.playing = true;
+  } else if (next !== undefined) seek(next);
+}
+function prevBeat(): void {
+  const starts = roomBeats();
+  S.playing = false;
+  S.stepTarget = null;
+  const prev = [...starts].reverse().find((b) => b < S.pos - 1e-9);
+  S.pos = prev ?? 0;
+}
+
 function nextCall(): void {
   if (!S.trace) return;
   const from = S.stepTarget ?? Math.ceil(S.pos - 1e-9);
@@ -1249,16 +1276,23 @@ function toggleFold(t: { fn: string; name: string }): void {
   saveSoon();
 }
 
-// M5.5: open a machine to see its insides (or close it); neighbours make room.
-function toggleInside(id: string): void {
-  const n = layout.nodes.get(id);
-  if (!n?.fn || !S.model) return;
-  if (opened.has(n.name)) opened.delete(n.name);
-  else opened.add(n.name);
-  layout.reflow(S.model);
-  saveSoon();
-  const f = footprint(n);
-  if (opened.has(n.name)) view.ensureVisible(f.x, f.y, Math.min(f.w, view.w / view.cs - 3), Math.min(f.h, view.h / view.cs - 3));
+// Enter a machine: the room shows the function's insides, statement by
+// statement, and playback slows down inside it and skips everything else.
+function enterRoom(fn: string): void {
+  const f = S.model?.byName.get(fn);
+  if (!f || f.broken) return toast(f?.broken ? `${fn} has a syntax error` : 'no such function');
+  S.room = fn;
+  S.selected = null;
+  S.stepTarget = null;
+  S.speed = 1;
+  $('pb-speed').textContent = '1×';
+  view.enterRoom(view.machineRect(S, fn), performance.now());
+  if (S.trace && !roomScene(S.trace, f, roomOf(S)!.plan, S.pos).beat) toast(`inside ${f.cname}: press play — everything until it runs is skipped`);
+}
+
+function leaveRoom(): void {
+  if (!S.room) return;
+  view.leaveRoom(view.machineRect(S, S.room), performance.now());
 }
 
 function setAllModules(collapsed: boolean): void {
@@ -1330,6 +1364,10 @@ function bindMouse(): void {
     hideMenu();
     gridPane.focus({ preventScroll: true });
     const [x, y] = localXY(e);
+    if (S.room) {
+      if (e.button === 0 && view.roomAt(x, y)?.k === 'back') leaveRoom();
+      return;
+    }
     if (e.button === 1) {
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
@@ -1434,17 +1472,23 @@ function bindMouse(): void {
   canvas.addEventListener('auxclick', (e) => e.button === 1 && e.preventDefault());
 
   canvas.addEventListener('dblclick', (e) => {
+    if (S.room) {
+      // inside a machine: a statement jumps to its line; outside the room leaves it
+      const r = view.roomAt(...localXY(e));
+      const fn = S.model?.byName.get(S.room);
+      if (r?.k === 'station' && fn) return openAt(fn.file, r.line, 0);
+      if (r?.k === 'outside') leaveRoom();
+      return;
+    }
     const [wx, wy] = view.toWorld(...localXY(e));
     const hit = entityAt(S, wx, wy);
     if (!hit) return view.fit(S);
     if (hit.k === 'belt' && layout.waypoints.has(hit.key)) return resetRoute(hit.key);
     if (hit.k === 'module') return toggleModule(hit.file);
     if (hit.k === 'node' && (hit.copy ?? 1) === 1) {
-      // a statement inside an open machine: jump to it; the machine itself: open or close it
-      const at = stationAt(S, wx, wy);
-      const fn = at ? S.model?.byName.get(at.fn) : undefined;
-      if (at && fn) return openAt(fn.file, at.line, 0);
-      toggleInside(hit.id);
+      // enter the machine; the keyboard stays here (Esc, ←/→)
+      const n = layout.nodes.get(hit.id);
+      if (n) return enterRoom(n.name);
     }
     gotoCode(hit);
   });
@@ -1453,6 +1497,7 @@ function bindMouse(): void {
     'wheel',
     (e) => {
       e.preventDefault();
+      if (S.room) return; // the room fits itself
       const [x, y] = localXY(e);
       if (e.shiftKey) return view.panPx(-e.deltaY, 0);
       const d = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
@@ -1465,6 +1510,7 @@ function bindMouse(): void {
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const [x, y] = localXY(e);
+    if (S.room) return showMenu(e.clientX, e.clientY, [['Leave the machine (Esc)', leaveRoom]]);
     const [wx, wy] = view.toWorld(x, y);
     const hit = entityAt(S, wx, wy);
     S.selected = hit;
@@ -1472,7 +1518,7 @@ function bindMouse(): void {
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
       const nm = layout.nodes.get(hit.id)?.name;
-      if (nm && (hit.copy ?? 1) === 1) items.push([opened.has(nm) ? 'Close (hide inside)' : 'Open (see inside)', () => toggleInside(hit.id)]);
+      if (nm && (hit.copy ?? 1) === 1) items.push(['Enter (see inside)', () => enterRoom(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
     } else if (hit?.k === 'sprite') {
       items.push(['Bind…', () => { S.selected = hit; lastInspectorKey = ''; renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
@@ -1552,10 +1598,11 @@ function onKey(e: KeyboardEvent): void {
   const k = e.key;
   let handled = true;
   if (k === ' ') togglePlay();
-  else if (k === 'ArrowRight') (e.shiftKey ? nextCall : stepFwd)();
-  else if (k === 'ArrowLeft') (e.shiftKey ? prevCall : stepBack)();
+  else if (k === 'ArrowRight') (S.room ? nextBeat : e.shiftKey ? nextCall : stepFwd)();
+  else if (k === 'ArrowLeft') (S.room ? prevBeat : e.shiftKey ? prevCall : stepBack)();
   else if (k === 'Home') seek(0);
   else if (k === 'End') seek(N());
+  else if (k === 'Escape' && S.room) leaveRoom();
   else if (k === 'Escape') (S.selected = null), (S.legend = null), hideMenu();
   else if (k === 'f' || k === 'F') view.fit(S);
   else if (k === 'm' || k === 'M') setMode(animMode() === 'fast' ? 'focus' : 'fast');
@@ -1639,7 +1686,7 @@ function openHelp(): void {
         <div><h4>Canvas</h4>
           ${K(['Middle-drag'], 'pan')}${K(['Drag empty space'], 'pan')}${K(['Wheel'], 'zoom at the pointer')}
           ${K(['Click'], 'select a function or call')}${K(['Drag function'], 'move it (it stays put)')}${K(['Drag call'], 're-route it')}
-          ${K(['Double-click'], 'open a machine (see inside) · jump to code · reset route · fit')}${K(['Double-click statement'], 'jump to that line')}${K(['Right-click'], 'more')}
+          ${K(['Double-click'], 'enter a machine (see inside) · jump to code · reset route · fit')}${K(['Esc'], 'leave the machine')}${K(['Double-click statement'], 'jump to that line (inside a machine)')}${K(['Right-click'], 'more')}
         </div>
         <div><h4>Playback (canvas focused)</h4>
           ${K(['Space'], 'play / pause')}${K(['←', '→'], 'step')}${K(['Shift', '←/→'], 'previous / next call')}
@@ -1995,7 +2042,7 @@ function renderInspector(): void {
       ${row('called by', esc(callers.join(', ') || (node.name === 'main' ? 'process' : '—')))}
       ${f?.externals.length ? row('external', esc(f.externals.join(', '))) : ''}
       ${suggestionButtons([...f?.params ?? [], ...f?.locals ?? []], f?.name ?? '')}
-      <div class="foot"><span>double-click → ${opened.has(node.name) ? 'close' : 'see inside'}</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
+      <div class="foot"><span>double-click → enter (see inside)</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
     bindSuggestionButtons();
   } else if (e.k === 'static') {
     const id = S.trace ? [...S.trace.cells].find(([, c]) => c.frame === -1 && c.owner === e.fn && c.name === e.name)?.[0] : undefined;
@@ -2082,19 +2129,43 @@ function payloadText(d: Payload): string {
 
 let lastPbKey = '';
 let lastExec = '';
+// Inside a machine the playbar tells the statement, what it read and wrote.
+function roomLine(): { html: string; ev: Ev | null; key: string } | null {
+  const r = roomOf(S);
+  const t = S.trace;
+  if (!r || !t || !t.evs.length) return null;
+  const sc = roomScene(t, r.fn, r.plan, S.pos);
+  const name = `<span class="fn">${esc(r.fn.cname)}</span>`;
+  const b = sc.beat;
+  if (!b) return { html: `${name} <span class="no">hasn't run yet${S.playing ? ' — skipping ahead' : ''}</span>`, ev: null, key: 'none' };
+  const st = b.station !== null ? r.plan.stations[b.station] : null;
+  const ev = t.evs[b.from];
+  const key = `${b.from}|${sc.phase}|${sc.idle}`;
+  if (sc.idle) return { html: `${name} <span class="no">${sc.live ? `waits on a call` : 'is done — waiting for its next call'}${S.playing ? ', skipping ahead' : ''}</span>`, ev, key };
+  if (b.kind === 'entry') return { html: `${name} <span class="arrow">is called</span>: ${esc(sc.writes.filter((w) => w.key.startsWith('c:')).map((w) => `${w.key.slice(2)} = ${w.text}`).join(', '))}`, ev, key };
+  if (sc.waitingOn) return { html: `${name} <span class="arrow">waits on</span> <span class="fn">${esc(sc.waitingOn)}</span>…`, ev, key };
+  const where = st ? `<span class="no">l.${st.line + 1}</span> ` : '';
+  const code = esc(sc.compute || st?.text || '');
+  const res = b.kind === 'switch' && b.result !== undefined ? ` <span class="arrow">→</span> <span class="ret">${b.result}</span>` : '';
+  const wrote = sc.writes.slice(0, 4).map((w) => `${w.key.slice(2).replace('.', '->')}${w.index !== undefined ? `[${w.index}]` : ''} = ${w.text}`);
+  const out = b.kind === 'exit' && ev.k === 'ret' ? ` <span class="arrow">returns</span> <span class="ret">${esc(ev.val.k === 'void' ? 'void' : fmtVal(ev.val))}</span>` : '';
+  return { html: `${name} ${where}${code}${res}${wrote.length ? ` <span class="arrow">⇒</span> ${esc(wrote.join(', '))}` : ''}${out}`, ev, key };
+}
+
 function renderPlaybar(): void {
   const t = S.trace;
   const n = N();
   const fr = t && n ? frameAt(t, S.pos) : null;
-  const ev = fr ? (fr.ev ?? (fr.i > 0 ? t!.evs[fr.i - 1] : null)) : null;
-  const key = `${Math.floor(S.pos)}|${!!fr?.ev}|${S.playing}|${n}|${t?.exit ? 1 : 0}`;
+  const inRoom = roomLine();
+  const ev = inRoom ? inRoom.ev : fr ? (fr.ev ?? (fr.i > 0 ? t!.evs[fr.i - 1] : null)) : null;
+  const key = `${Math.floor(S.pos)}|${!!fr?.ev}|${S.playing}|${n}|${t?.exit ? 1 : 0}|${inRoom?.key ?? ''}`;
   if (key !== lastPbKey) {
     lastPbKey = key;
     const idx = fr ? (fr.ev ? fr.i + 1 : fr.i) : 0;
     $('pb-step').textContent = t
       ? `${t.engine === 'gdb' ? 'gdb  ' : ''}${String(idx).padStart(2, '0')} / ${String(n).padStart(2, '0')}${S.pos >= n && n ? '  done' : ''}`
       : S.gdb.status === 'running' ? 'running under gdb…' : 'no trace';
-    $('pb-event').innerHTML = ev ? describe(ev, t!) : t ? '<span class="no">ready — press play</span>' : '<span class="no">nothing to run</span>';
+    $('pb-event').innerHTML = inRoom ? inRoom.html : ev ? describe(ev, t!) : t ? '<span class="no">ready — press play</span>' : '<span class="no">nothing to run</span>';
     $('play-icon').innerHTML = S.playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
     document.querySelectorAll<HTMLButtonElement>('.pb-buttons button').forEach((b) => (b.disabled = !t));
   }
@@ -2216,8 +2287,25 @@ function frame(now: number): void {
     if (i >= n) S.playing = false;
     else {
       const before = S.pos;
-      const e = t.evs[i];
-      S.pos += (dt * (staged(e) ? Math.min(S.speed, FOCUS_MAX) : S.speed)) / evDuration(e);
+      // spend this frame's time across as many events as it covers (inside a
+      // machine, events elsewhere are only a few milliseconds long)
+      const room = roomOf(S);
+      let left = dt;
+      for (let guard = 0; left > 0 && S.pos < n && guard < 20000; guard++) {
+        const j = Math.floor(S.pos);
+        const e = t.evs[j];
+        const rate = !room && staged(e) ? Math.min(S.speed, FOCUS_MAX) : S.speed;
+        const d = durationAt(t, j, room);
+        const need = ((j + 1 - S.pos) * d) / rate;
+        if (need <= left) {
+          S.pos = j + 1;
+          left -= need;
+          if (S.stepTarget !== null && S.pos >= S.stepTarget) break;
+        } else {
+          S.pos += (left * rate) / d;
+          left = 0;
+        }
+      }
       // M4: freeze on the step where an invariant first breaks.
       const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
       if (hit) {
@@ -2243,8 +2331,10 @@ function frame(now: number): void {
       }
     }
   }
+  // leaving a machine: drop the room once it has shrunk back
+  if (S.room && view.roomGone(now)) S.room = null;
   // Follow the running function, but never fight the author's own panning.
-  if (S.follow && t && S.playing && !drag && now - lastPanAt > 2500) {
+  if (S.follow && t && S.playing && !drag && !S.room && now - lastPanAt > 2500) {
     const i = Math.floor(S.pos);
     // Focus: the camera follows the scene — the sender while its data is
     // read, both while it travels, the receiver while it's held there.

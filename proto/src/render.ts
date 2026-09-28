@@ -1,15 +1,19 @@
 // Grid engine: camera, hosts, hit-testing and playback timing. Routing lives
 // in route.ts; every pixel is delegated to the active skin (skins/*.ts).
-import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, innerCells, innerTop, type Layout } from './layout';
+import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
+import { roomScene, roomTimeline, slotsOf, slotValue } from './room';
+import type { FnInfo } from './parse';
 import type { Model } from './parse';
-import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type Trace, type V } from './interp';
+import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, hostKey, isModuleKey, procPlace, type Belt, type Scene } from './route';
+import { clip, fieldValue, pointeeName, staticCellId, valueOf } from './values';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo, StripInfo, ValueKind } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
 
 export { procPlace, type Belt };
+export { clip, pointeeName } from './values';
 
 export type Entity =
   | { k: 'node'; id: string; copy?: number }
@@ -32,6 +36,7 @@ export interface ViewState {
   editorFn: string | null;
   sprites?: Sprite[];
   violations?: Violation[];
+  room?: string | null; // the function whose machine the author has entered
 }
 
 // World footprint is shared by drawing, fitting and hit testing. A sampled
@@ -87,6 +92,7 @@ interface Scene3 { lead: number; pass: number; hold: number; total: number }
 const sceneCache = new WeakMap<Ev, Scene3>();
 const cardLines = new WeakMap<Ev, number>(); // filled by prepareStage()
 const clampS = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const ROOM_MS = 340; // entering or leaving a machine
 function sceneOf(e: Ev): Scene3 {
   let hit = sceneCache.get(e);
   if (hit) return hit;
@@ -196,6 +202,17 @@ export function prepareStage(trace: Trace | null): void {
 // Events that get a focus scene.
 export function staged(e: Ev | null): boolean {
   return MODE === 'focus' && !!e && (e.k === 'call' || e.k === 'ret' || (e.k === 'write' && e.via !== null));
+}
+
+// The room (a function the author entered) paces its own statements and
+// skips everything else; otherwise each event has its kind's duration.
+export function roomOf(s: { room?: string | null; model: Model | null }): { fn: FnInfo; plan: Plan } | null {
+  const fn = s.room ? s.model?.byName.get(s.room) : undefined;
+  return fn && !fn.broken ? { fn, plan: planOf(fn) } : null;
+}
+
+export function durationAt(trace: Trace, i: number, room: { fn: FnInfo; plan: Plan } | null): number {
+  return room ? roomTimeline(trace, room.fn, room.plan).dur[i] : evDuration(trace.evs[i]);
 }
 
 export function evDuration(e: Ev): number {
@@ -509,51 +526,6 @@ export function activeHostRect(s: ViewState): Rect | null {
   return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
 }
 
-function staticCellId(trace: Trace | null, fn: string, name: string): number | null {
-  if (!trace) return null;
-  for (const [id, c] of trace.cells) if (c.frame === -1 && c.owner === fn && c.name === name) return id;
-  return null;
-}
-
-export function pointeeName(trace: Trace | null, to: number, from: SnapFrame | null): string {
-  const c = trace?.cells.get(to);
-  if (!c) return '?';
-  if (!c.owner || c.owner === 'heap') return c.name;
-  if (from && from.cells.some((x) => x.id === to)) return c.name;
-  return `${c.owner}.${c.name}`;
-}
-
-function valueOf(c: SnapCell, frame: SnapFrame | null, trace: Trace | null, live: Set<number> | null): { text: string; kind: ValueKind } {
-  if (c.val.k === 'undef') return { text: '?', kind: 'undef' };
-  if (c.val.k === 'ptr') {
-    if (c.val.to === null && !c.val.label) return { text: 'NULL', kind: 'null' };
-    const dangling = c.val.to !== null && live !== null && !live.has(c.val.to);
-    if (c.str && !dangling) return { text: clip(c.str, 12), kind: 'ptr' }; // a char *: the text, not the address
-    const name = c.val.label ?? pointeeName(trace, c.val.to!, frame);
-    return { text: `→${name}`, kind: dangling ? 'dangling' : 'ptr' };
-  }
-  if (c.val.k === 'raw') return { text: c.val.text, kind: 'int' };
-  return { text: fmtVal(c.val, c.type), kind: 'int' };
-}
-
-// A quoted string cut to a readable length (never shrunk to fit).
-export function clip(q: string, n: number): string {
-  const inner = q.replace(/^"/, '').replace(/"?…?$/, '');
-  const whole = /"$/.test(q);
-  return inner.length <= n && whole ? q : `"${inner.slice(0, n)}…`;
-}
-
-function fieldValue(f: SnapField, trace: Trace | null): { text: string; kind: ValueKind } {
-  if (f.val.k === 'ptr') {
-    if (f.val.to === null && !f.val.label) return { text: 'NULL', kind: 'null' };
-    if (f.str) return { text: clip(f.str, 12), kind: 'ptr' };
-    return { text: `→${f.val.label ?? pointeeName(trace, f.val.to!, null)}`, kind: 'ptr' };
-  }
-  if (f.val.k === 'undef') return { text: '?', kind: 'undef' };
-  if (f.val.k === 'raw') return { text: f.val.text, kind: 'int' };
-  return { text: fmtVal(f.val, f.type), kind: 'int' };
-}
-
 // ---------------- M5.5: inside a machine ----------------
 
 // A switch's condition with the values it read: `buf->pos == buf->len` → `6 == 8`.
@@ -583,13 +555,18 @@ export function readoutOf(sw: Station, trace: Trace, snap: Snap | null, frameId:
 
 function interiorInfo(
   plan: Plan, state: InteriorState | null,
-  o: { x: number; y: number; z: number; title: string; mode: InteriorInfo['mode']; readout: (sw: Station, snap: number | null) => string },
+  o: {
+    x: number; y: number; z: number; title: string; mode: InteriorInfo['mode']; readout: (sw: Station, snap: number | null) => string;
+    override?: { station: number; text: string; result: boolean | null } | null; // the switch being worked right now
+    hot?: { station: number; text: string } | null; // a statement showing the values it read
+  },
 ): InteriorInfo {
   const P = (px: number, py: number): Pt => [o.x + px * o.z, o.y + py * o.z];
   const live = o.mode === 'live';
   const stations: StationInfo[] = plan.stations.map((st, i) => {
     let readout: StationInfo['readout'] = null;
-    if ((st.kind === 'if' || st.kind === 'loop') && state) {
+    if (o.override?.station === i) readout = { text: o.override.text, result: o.override.result };
+    else if ((st.kind === 'if' || st.kind === 'loop') && state) {
       const dec = state.decided.get(i);
       if (state.pending === i && live) {
         const v = o.readout(st, null);
@@ -600,8 +577,9 @@ function interiorInfo(
       }
     }
     const [x, y] = P(stopX(st.depth), rowMid(st.row));
+    const hot = o.hot?.station === i;
     return {
-      kind: st.kind, text: st.text, x, y, textX: o.x + textX(st.depth) * o.z, readout,
+      kind: st.kind, text: hot ? o.hot!.text : st.text, hot, x, y, textX: o.x + textX(st.depth) * o.z, readout,
       count: st.kind === 'loop' && state ? state.decided.get(i)?.count ?? null : null,
       state: !state ? 'idle' : state.current === i && live ? 'current' : state.visited.has(i) ? 'visited' : 'idle',
     };
@@ -618,23 +596,6 @@ function interiorInfo(
   const cur = state?.current ?? null;
   const token = live && cur !== null ? P(stopX(plan.stations[cur].depth), rowMid(plan.stations[cur].row)) : null;
   return { title: o.title, mode: o.mode, stations, tracks, token, row: ROW * o.z, head: { x: o.x, y: o.y, w: plan.w * o.z, h: HEAD * o.z } };
-}
-
-// The statement a click inside an opened machine lands on: its function and line.
-export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number } | null {
-  for (const n of s.layout.visible()) {
-    const fn = n.fn;
-    if (!fn || !innerCells(fn)) continue;
-    const plan = planOf(fn);
-    const lx = (wx - n.place.x) * CELL_PX;
-    const ly = (wy - n.place.y - innerTop(fn)) * CELL_PX;
-    if (lx < 0 || lx > plan.w || ly < HEAD || ly > plan.h) continue;
-    const row = Math.floor((ly - HEAD) / ROW);
-    let hit: Station | null = null;
-    for (const st of plan.stations) if (st.row <= row && st.kind !== 'else') hit = st;
-    return hit ? { fn: fn.name, line: hit.line } : null;
-  }
-  return null;
 }
 
 // The struct row a click lands on (to fold or unfold it), in world units.
@@ -1180,23 +1141,6 @@ export class GridView {
       g.restore();
     }
 
-    // ---- M5.5: opened machines show their insides under the frame panel ----
-    for (const n of s.layout.visible()) {
-      const fn = n.fn;
-      if (!fn || !innerCells(fn)) continue;
-      const plan = planOf(fn);
-      const X = this.sx(n.place.x);
-      const Y = this.sy(n.place.y + innerTop(fn));
-      const own = st.filter((f) => f.fn === fn.name).at(-1) ?? null;
-      const returned = !own && trace && fr ? lastReturned(trace, fn.name, fr.si) : null;
-      const shown = own ?? returned;
-      const state = trace && fr && shown ? interiorAt(trace, plan, shown.id, fr.si - 1) : null;
-      skin.interior(dc, { x: X, y: Y, w: plan.w * z, h: plan.h * z }, interiorInfo(plan, state, {
-        x: X, y: Y, z, title: `inside ${fn.cname}${own ? '' : returned ? ' · last run' : ''}`, mode: own ? 'live' : returned ? 'returned' : 'none',
-        readout: (sw, snapIdx) => readoutOf(sw, trace!, snapIdx === null ? snap : trace!.snaps[snapIdx], shown!.id, fn.name),
-      }));
-    }
-
     // ---- authored data sprites; all displayed values come from the selected snapshot ----
     for (const sprite of s.sprites ?? []) {
       const value = snap?.bound?.[sprite.id];
@@ -1390,6 +1334,268 @@ export class GridView {
     if (sel?.k === 'belt') {
       const b = scene.belts.find((x) => x.key === sel.key);
       if (b) skin.beltHandle(dc, this.sp(beltHandle(b)));
+    }
+    if (s.room) this.drawRoom(s, skin, now, dc);
+  }
+
+  // ---------------- enter the machine ----------------
+
+  private roomAnim: { from: Rect; start: number; dir: 1 | -1 } | null = null;
+  private roomHits: { rect: Rect; back: Rect; stations: { y0: number; y1: number; line: number }[] } | null = null;
+
+  // Grow the room out of the machine (a screen rect), or shrink it back.
+  enterRoom(from: Rect, now: number): void {
+    this.roomAnim = { from, start: now, dir: 1 };
+  }
+  leaveRoom(to: Rect, now: number): void {
+    this.roomAnim = { from: to, start: now, dir: -1 };
+  }
+  // True once a leave animation has finished (the room can be dropped).
+  roomGone(now: number): boolean {
+    return !!this.roomAnim && this.roomAnim.dir < 0 && now - this.roomAnim.start > ROOM_MS;
+  }
+  machineRect(s: ViewState, fn: string): Rect {
+    const n = s.layout.nodes.get(`func:${fn}`) ?? [...s.layout.nodes.values()].find((x) => x.name === fn);
+    return n ? this.rectW(n.place.x, n.place.y, MW, MH) : { x: this.w / 2, y: this.h / 2, w: 1, h: 1 };
+  }
+
+  roomAt(x: number, y: number): { k: 'back' } | { k: 'station'; line: number } | { k: 'inside' } | { k: 'outside' } | null {
+    const h = this.roomHits;
+    if (!h) return null;
+    const inR = (r: Rect) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    if (inR(h.back)) return { k: 'back' };
+    if (!inR(h.rect)) return { k: 'outside' };
+    for (const st of h.stations) if (y >= st.y0 && y < st.y1 && x > h.rect.x + h.rect.w * 0.3) return { k: 'station', line: st.line };
+    return { k: 'inside' };
+  }
+
+  private drawRoom(s: ViewState, skin: Skin, now: number, dc: Dc): void {
+    const room = roomOf(s);
+    const trace = s.trace;
+    if (!room || !trace || !trace.evs.length) return (this.roomHits = null), undefined;
+    const { fn, plan } = room;
+    const g = this.g;
+    const a = this.roomAnim;
+    let k = 1;
+    if (a) {
+      const u = Math.max(0, Math.min(1, (now - a.start) / ROOM_MS));
+      k = 1 - Math.pow(1 - u, 3);
+      if (a.dir < 0) k = 1 - k;
+    }
+    const full: Rect = { x: 14, y: 10, w: this.w - 28, h: this.h - 90 };
+    const from = a?.from ?? full;
+    const R: Rect = { x: from.x + (full.x - from.x) * k, y: from.y + (full.y - from.y) * k, w: from.w + (full.w - from.w) * k, h: from.h + (full.h - from.h) * k };
+    // the factory stays, faintly, around the room
+    g.save();
+    g.globalAlpha = k;
+    g.fillStyle = skin.spotlight;
+    g.fillRect(0, 0, this.w, this.h);
+    g.fillStyle = skin.spotlight;
+    g.fillRect(0, 0, this.w, this.h);
+    g.restore();
+    const sc = roomScene(trace, fn, plan, s.pos);
+    const headH = 40;
+    const title = `inside ${fn.cname}${sc.beat === null ? ' · not called yet' : sc.idle ? (sc.live ? ' · waiting on a call' : ' · waiting for the next call') : ''}`;
+    // the floor
+    g.save();
+    g.beginPath();
+    g.rect(R.x, R.y, R.w, R.h);
+    g.clip();
+    g.fillStyle = skin.casing;
+    g.fillRect(R.x, R.y, R.w, R.h);
+    skin.background(dc, this.cam.x, this.cam.y);
+    g.restore();
+    const hdc: Dc = { ...dc, z: 1.5, cs: CELL_PX * 1.5 };
+    skin.wall(hdc, R, { name: title, fns: 0, live: sc.live && !sc.idle, pinned: false, selected: false, hovered: false, head: { x: R.x, y: R.y, w: R.w, h: headH } });
+    const back: Rect = { x: R.x + R.w - 190, y: R.y + 6, w: 176, h: headH - 12 };
+    skin.plate(hdc, back.x + back.w / 2, back.y + back.h / 2, '← factory  (Esc)', 'void');
+    this.roomHits = { rect: R, back, stations: [] };
+    if (k < 0.97) return;
+
+    // ---- geometry: storage on the left, stations on the right, room for flights between ----
+    const slots = slotsOf(fn);
+    const b = sc.beat;
+    const before = b ? trace.snaps[b.before] : sc.snap;
+    const after = b ? trace.snaps[Math.min(b.after, trace.snaps.length - 1)] : sc.snap;
+    const fBefore = b ? before.stack.find((f) => f.id === b.frame) ?? null : null;
+    const fAfter = b ? after.stack.find((f) => f.id === b.frame) ?? fBefore : null;
+    const vals0 = slots.map((sl) => slotValue(sl, fn.name, fBefore, before, trace));
+    const vals1 = slots.map((sl) => slotValue(sl, fn.name, fAfter, after, trace));
+    const memN = slots.filter((_, i) => vals1[i].bytes || vals0[i].bytes).length;
+    const MEM_H = 66; // one strip on the memory floor, at zoom 1
+    const rowsH0 = INV_HEAD_PX + slots.length * SLOT_PX + 12;
+    const availH = R.h - headH - 30;
+    const z = Math.max(0.7, Math.min(1.8, availH / (Math.max(rowsH0, plan.h * 1.1) + memN * (MEM_H + 8) + 20), (R.w - 50) / (250 + 90 + plan.w * 1.1)));
+    const zI = z * 1.1;
+    const rdc: Dc = { ...dc, z, cs: CELL_PX * z };
+    const idc: Dc = { ...dc, z: zI, cs: CELL_PX * zI };
+    const top = R.y + headH + 14;
+    const SX = R.x + 22;
+    const SW = 250 * z;
+    const TX = SX + SW + 90 * z;
+    const content = sc.idle ? 0.8 : 1;
+
+    // which writes have landed, per chip (staggered)
+    const writes = sc.writes.slice(0, 10);
+    const chipU = (n: number, f: number) => Math.max(0, Math.min(1, (f - 0.1 * n) / 0.7));
+    const arrived = new Set<string>();
+    writes.forEach((w, n) => chipU(n, sc.landed) >= 1 && arrived.add(w.key));
+    if (sc.landed >= 1) for (const w of writes) arrived.add(w.key);
+
+    // ---- storage: variables on the left, the memory they point at along the floor ----
+    g.save();
+    g.globalAlpha *= content;
+    const anchors = new Map<string, Pt>();
+    const cells = new Map<string, Rect>(); // a slot's strip
+    const rows: RowInfo[] = [];
+    const stripsToDraw: { r: Rect; key: string; name: string; bytes: number[]; marks: { label: string; index: number }[] }[] = [];
+    let y = top + INV_HEAD_PX * z;
+    const memTop = R.y + R.h - 16 - memN * (MEM_H + 8) * z;
+    let my = memTop;
+    slots.forEach((sl, i) => {
+      const v = arrived.has(sl.key) ? vals1[i] : vals0[i];
+      const rect: Rect = { x: SX, y, w: SW, h: SLOT_PX * z };
+      const hit = writes.some((w) => w.key === sl.key) && arrived.has(sl.key);
+      rows.push({
+        name: sl.kind === 'field' ? `  .${sl.name}` : sl.kind === 'more' ? `  ${sl.name}` : sl.kind === 'static' ? `${sl.name} (static)` : sl.name,
+        value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit && !sc.idle ? Math.max(0, 1 - sc.landed * 0.6) : 0, rect, depth: sl.depth, fold: null,
+      });
+      anchors.set(sl.key, [SX + SW, y + rect.h / 2]);
+      y += rect.h;
+      const bytes = v.bytes ?? vals1[i].bytes;
+      if (bytes) {
+        const r: Rect = { x: SX, y: my, w: R.x + R.w - 22 - SX, h: MEM_H * z };
+        const path = sl.kind === 'field' ? `${sl.key.slice(2).split('.')[0]}->${sl.name}` : sl.name;
+        stripsToDraw.push({ r, key: sl.key, name: path, bytes, marks: v.marks });
+        cells.set(sl.key, r);
+        my += (MEM_H + 8) * z;
+      }
+    });
+    const panel: Rect = { x: SX, y: top, w: SW, h: y - top + 6 * z };
+    skin.frame(rdc, panel, { mode: sc.live ? 'live' : sc.beat ? 'returned' : 'none', stacked: 0, rows, head: { x: SX, y: top, w: SW, h: INV_HEAD_PX * z } });
+    for (const st of stripsToDraw) {
+      const wrote = writes.filter((w) => w.key === st.key && w.index !== undefined && arrived.has(st.key));
+      // the pointer's row points down at its memory
+      const from = anchors.get(st.key);
+      if (from) {
+        g.save();
+        g.strokeStyle = skin.casing === '#000' ? '#555' : 'rgba(128,128,128,0.6)';
+        g.setLineDash([3, 3]);
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(from[0] - 6, from[1]);
+        g.lineTo(from[0] + 10 * z, from[1]);
+        g.lineTo(from[0] + 10 * z, st.r.y);
+        g.stroke();
+        g.restore();
+      }
+      skin.strip(rdc, st.r, {
+        label: `${st.name} → memory (${st.bytes.length} bytes shown)`, bound: true, bytes: st.bytes, length: st.bytes.length, pointer: null,
+        markers: [...st.marks.map((m) => ({ label: m.label, index: m.index, sampledIndex: m.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
+        selected: false, hovered: false,
+      });
+    }
+    g.restore();
+
+    // ---- stations ----
+    const frameId = b?.frame ?? null;
+    const state: InteriorState | null = frameId !== null ? interiorAt(trace, plan, frameId, sc.interiorAt) : null;
+    const active = b?.station ?? null;
+    const override = b && active !== null && b.kind === 'switch' && !sc.idle
+      ? { station: active, text: `${sc.compute} → ${sc.landed >= 1 || sc.phase === 'write' ? String(b.result ?? '?') : '…'}`, result: sc.phase === 'write' ? b.result ?? null : null }
+      : null;
+    const info = interiorInfo(plan, state, {
+      x: TX, y: top, z: zI, title: 'stations', mode: sc.live ? 'live' : sc.beat ? 'returned' : 'none',
+      readout: (sw, snapIdx) => (frameId === null ? '' : readoutOf(sw, trace, snapIdx === null ? after : trace.snaps[snapIdx], frameId, fn.name)),
+      override,
+      hot: b && active !== null && b.kind !== 'switch' && !sc.idle && sc.phase !== 'read' && sc.compute ? { station: active, text: sc.compute } : null,
+    });
+    g.save();
+    g.globalAlpha *= content;
+    skin.interior(idc, { x: TX, y: top, w: plan.w * zI, h: plan.h * zI }, info);
+    g.restore();
+    const stopOf = (k2: number): Pt => [TX + stopX(plan.stations[k2].depth) * zI, top + rowMid(plan.stations[k2].row) * zI];
+    this.roomHits.stations = plan.stations.filter((st) => st.kind !== 'else').map((st) => ({ y0: top + (HEAD + st.row * ROW) * zI, y1: top + (HEAD + (st.row + (st.kind === 'if' || st.kind === 'loop' ? 2 : 1)) * ROW) * zI, line: st.line }));
+
+    // ---- doors ----
+    const entry: Pt = [SX + SW + 45 * z, R.y + headH];
+    const exit: Pt = [TX + stopX(0) * zI, R.y + R.h];
+    skin.door(dc, entry, false, b?.kind === 'entry' && !sc.idle);
+    skin.door(dc, exit, false, b?.kind === 'exit' && !sc.idle);
+    if (b?.kind === 'entry' || (b && sc.idle === false)) {
+      const caller = trace.evs[b.kind === 'entry' ? b.from : b.from]?.k === 'call' ? (trace.evs[b.from] as { caller: string | null }).caller : null;
+      if (b.kind === 'entry') skin.plate(rdc, entry[0], entry[1] + 16 * z, `from ${caller ?? 'the process'}`, 'void');
+    }
+
+    // ---- flights ----
+    if (!b || sc.idle) return;
+    const curve = (p: Pt, q: Pt): [Pt, Pt, Pt, Pt] => {
+      const dx = (q[0] - p[0]) * 0.45;
+      return [p, [p[0] + dx, p[1]], [q[0] - dx, q[1]], q];
+    };
+    const at = active !== null ? stopOf(active) : exit;
+    const cellAt = (key: string, index: number | undefined): Pt => {
+      const r = cells.get(key);
+      if (r && index !== undefined) {
+        const shown = Math.min(24, stripsToDraw.find((x) => x.key === key)!.bytes.length);
+        const pad = Math.max(4, 7 * z);
+        const tw = r.w - pad * 2;
+        const th = Math.max(11, r.h * 0.27);
+        return [r.x + pad + (Math.min(index, shown - 1) + 0.5) * (tw / shown), r.y + r.h * 0.31 + th / 2];
+      }
+      return anchors.get(key) ?? [SX + SW, top];
+    };
+    const B = b.bounds;
+    const ev = trace.evs[b.from];
+    // reads: slot → station
+    if (b.kind !== 'entry' && (sc.phase === 'read' || (b.kind === 'exit' && sc.p < 0.6))) {
+      const f = b.kind === 'exit' ? sc.p / 0.6 : sc.p / B.read;
+      sc.reads.slice(0, 8).forEach((r, n) => {
+        const u = chipU(n, f);
+        if (u <= 0 || u >= 1) return;
+        const [x, yy] = bez(curve(anchors.get(r.key) ?? [SX + SW, top], at), u);
+        skin.pulse(rdc, x, yy);
+        skin.plate(rdc, x, yy - 12 * z, r.text, 'arg');
+      });
+    }
+    // calls: out through the callee's door, back in with the result
+    if (b.calls.length && active !== null) {
+      const c = b.calls.find((x) => x.call <= Math.floor(s.pos) && (x.ret === null || x.ret >= Math.floor(s.pos))) ?? b.calls[0];
+      const door: Pt = [R.x + R.w, at[1]];
+      skin.door(dc, door, true, sc.phase === 'out' || sc.phase === 'wait' || sc.phase === 'in');
+      skin.plate(dc, door[0] - 60, door[1] - 18, c.fn, 'void');
+      const call = trace.evs[c.call];
+      const args = call.k === 'call' ? `${c.fn}(${call.args.map((x) => argLabel(x.val, x.text, trace, trace.snaps[c.call + 1])).join(', ')})` : c.fn;
+      if (sc.phase === 'out') {
+        const u = Math.max(0, Math.min(1, (sc.p - B.compute) / Math.max(0.01, B.out - B.compute)));
+        const [x, yy] = bez(curve(at, door), u);
+        skin.plate(rdc, x, yy - 12 * z, clip(args, 40), 'arg');
+      } else if (sc.phase === 'wait') {
+        skin.plate(rdc, door[0] - 90 * z, door[1] + 16 * z, `waiting on ${c.fn}…`, 'void');
+        skin.pulse(rdc, door[0], door[1]);
+      } else if (sc.phase === 'in' && c.ret !== null) {
+        const r = trace.evs[c.ret];
+        const u = Math.max(0, Math.min(1, (sc.p - B.out) / Math.max(0.01, B.in - B.out)));
+        const [x, yy] = bez(curve(door, at), u);
+        skin.plate(rdc, x, yy - 12 * z, r.k === 'ret' ? (r.val.k === 'void' ? 'void' : retLabel(r.val, trace)) : '', 'ret');
+      }
+    }
+    // writes: station (or the entry door) → slot
+    if (sc.phase === 'write' || b.kind === 'entry') {
+      const origin: Pt = b.kind === 'entry' ? entry : at;
+      writes.forEach((w, n) => {
+        const u = chipU(n, sc.landed);
+        if (u <= 0 || u >= 1) return;
+        const [x, yy] = bez(curve(origin, cellAt(w.key, w.index)), u);
+        skin.pulse(rdc, x, yy);
+        skin.plate(rdc, x, yy - 12 * z, w.text, 'ret');
+      });
+    }
+    // exit: the result leaves through the door under the stations
+    if (b.kind === 'exit' && sc.p >= 0.6 && ev?.k === 'ret') {
+      const u = (sc.p - 0.6) / 0.4;
+      const [x, yy] = bez(curve(at, exit), Math.min(1, u));
+      skin.plate(rdc, x, yy - 12 * z, ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
     }
   }
 
