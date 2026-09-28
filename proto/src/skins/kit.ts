@@ -51,6 +51,8 @@ export interface Theme {
 
 export interface WindowStyle {
   border: number; // frame thickness, px at zoom 1
+  corner: number; // window corner radius, px at zoom 1
+  squareBottom?: boolean; // rounded only at the top (XP)
   titleH: number; // title bar height, px at zoom 1
   face: string; // a machine's client area
   workspace: string; // a file's client area (behind its machines)
@@ -95,6 +97,7 @@ export function makeSkin(t: Theme): Skin {
     blurb: t.blurb,
     casing: p.bg,
     spotlight: t.spotlight,
+    solidMachines: !!t.window,
     strip(dc, r, info) { drawStrip(dc, r, info, sprite); },
     sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, sprite); },
     crate(dc, x, y, c) { drawCrate(dc, x, y, c, sprite); },
@@ -164,12 +167,13 @@ export function makeSkin(t: Theme): Skin {
       if (t.window) {
         const W = t.window;
         const b = Math.max(1, W.border * dc.z);
-        W.frame(dc, r, w.live, w.kind === 'module' ? W.workspace : W.face);
+        // on a desktop, the selected window is simply the active one: no box around it
+        const active = w.live || w.selected;
+        W.frame(dc, r, active, w.kind === 'module' ? W.workspace : W.face);
         if (w.head.h <= 0) return;
         const th = Math.max(8, Math.min(w.head.h - b, W.titleH * dc.z));
         const note = w.note ? ` - ${w.note[0].toUpperCase()}${w.note.slice(1)}` : '';
-        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, `${w.name}${note}${w.pinned ? ' (pinned)' : ''}`, w.live, true);
-        if (w.selected || w.hovered) outline(dc, r, w.selected);
+        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, `${w.name}${note}${w.pinned ? ' (pinned)' : ''}`, active, true);
         return;
       }
       t.card(dc, r, { fill: 'transparent', stroke: w.live ? p.accent : p.line, lw: 1.2, glow: w.live ? p.accent : null, kind: 'wall' });
@@ -188,6 +192,28 @@ export function makeSkin(t: Theme): Skin {
 
     attention(dc, r, a) {
       const g = dc.g;
+      if (t.window) {
+        // a window that wants attention: its title bar flashes, and a soft
+        // ring follows its own corners (no square brackets on a desktop)
+        const W = t.window;
+        const b = Math.max(1, W.border * dc.z);
+        const c = W.corner * dc.z;
+        g.save();
+        rrect(g, r.x + b, r.y + b, r.w - 2 * b, Math.min(r.h - 2 * b, W.titleH * dc.z), [Math.max(0, c - b), Math.max(0, c - b), 0, 0]);
+        g.fillStyle = p.accent;
+        g.globalAlpha = 0.35 * a;
+        g.fill();
+        rrect(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, W.squareBottom ? [c + 2, c + 2, 0, 0] : c + 2);
+        g.strokeStyle = p.accent;
+        g.globalAlpha = 0.2 * a;
+        g.lineWidth = Math.max(4, 7 * dc.z);
+        g.stroke();
+        g.globalAlpha = 0.7 * a;
+        g.lineWidth = Math.max(1, 1.5 * dc.z);
+        g.stroke();
+        g.restore();
+        return;
+      }
       g.save();
       g.strokeStyle = p.accent;
       // a wide faint halo, then the corners (a blur here is too costly to paint)
@@ -217,7 +243,7 @@ export function makeSkin(t: Theme): Skin {
       const r = snapR(r0);
       if (t.window) {
         const W = t.window;
-        const active = n.state === 'running' || n.state === 'error';
+        const active = n.state === 'running' || n.state === 'error' || n.selected;
         const b = Math.max(1, W.border * dc.z);
         W.frame(dc, r, active, W.face);
         const th = Math.max(8, W.titleH * dc.z);
@@ -238,7 +264,6 @@ export function makeSkin(t: Theme): Skin {
         if (n.editing) (g.fillStyle = p.accent), g.fillRect(r.x + b, r.y + b + th, px(dc, 3, 2), r.h - th - 2 * b);
         t.nodeDecor?.(dc, r, n, t);
         ports(dc, r, n.inPorts, n.outPorts, active ? p.accent : p.line);
-        if (n.selected || n.hovered) outline(dc, r, n.selected);
         return;
       }
       t.card(dc, r, { fill: p.card, stroke: n.state === 'running' ? p.accent : n.state === 'error' ? p.err : n.hovered ? p.dim : p.line, lw: n.state === 'running' ? 2 : 1.2, glow: glowOf(n.state), kind: 'node' });

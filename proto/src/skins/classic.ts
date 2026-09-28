@@ -150,6 +150,7 @@ export const classic: Skin = {
   blurb: 'a 90s desktop: windows, floppies, marching ants',
   casing: TEAL,
   spotlight: 'rgba(0,40,40,0.62)',
+  solidMachines: true,
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },

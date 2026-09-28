@@ -59,6 +59,7 @@ export const metroTheme: Theme = {
 
   window: {
     border: 1,
+    corner: 0,
     titleH: 26,
     face: '#1d1d1d',
     workspace: 'rgba(255,255,255,0.04)',

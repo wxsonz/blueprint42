@@ -583,4 +583,11 @@ questions. Newest last.
   images: the gray pattern, OS 9 blue, Aurora, a dusk mountain, coastal
   waves, and the lake. The skin list is ordered Windows, then Mac by era,
   then the rest.
+- **Decision (author: "XP never had a square focus border"):** On the
+  desktop skins, selection and attention speak the OS's language. A
+  selected machine is the active window (active title bar), with no box
+  and no hover outline. Focus mode's "look here" flashes the window's
+  title bar and draws a ring along the window's own corners (square-bottomed
+  on XP). Skins that paint whole windows set `solidMachines`, so the engine
+  doesn't lay its square floor behind rounded corners.
 

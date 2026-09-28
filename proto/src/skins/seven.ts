@@ -87,6 +87,7 @@ export const sevenTheme: Theme = {
 
   window: {
     border: 7,
+    corner: 6,
     titleH: 24,
     face: '#f0f0f0',
     workspace: 'rgba(180,210,240,0.35)',

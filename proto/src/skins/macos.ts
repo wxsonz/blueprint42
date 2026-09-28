@@ -117,7 +117,7 @@ export const system7Theme: Theme = {
     });
   },
   window: {
-    border: 1, titleH: 19, face: '#ffffff', workspace: '#ffffff',
+    border: 1, corner: 0, titleH: 19, face: '#ffffff', workspace: '#ffffff',
     frame(dc, r) {
       const g = dc.g;
       const R = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) };
@@ -189,7 +189,7 @@ export const platinumTheme: Theme = {
     });
   },
   window: {
-    border: 4, titleH: 20, face: '#dddddd', workspace: '#c4c4d8',
+    border: 4, corner: 0, titleH: 20, face: '#dddddd', workspace: '#c4c4d8',
     frame(dc, r, active, client) {
       const g = dc.g;
       const b = Math.max(2, 4 * dc.z);
@@ -258,7 +258,7 @@ export const leopardTheme: Theme = {
     });
   },
   window: {
-    border: 1, titleH: 22, face: '#e8e8e8', workspace: 'rgba(230,230,240,0.25)',
+    border: 1, corner: 5, titleH: 22, face: '#e8e8e8', workspace: 'rgba(230,230,240,0.25)',
     frame(dc, r, active, client) {
       const g = dc.g;
       rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 5 * dc.z));
@@ -328,7 +328,7 @@ export const yosemiteTheme: Theme = {
     });
   },
   window: {
-    border: 1, titleH: 22, face: '#f6f6f6', workspace: 'rgba(255,255,255,0.18)',
+    border: 1, corner: 5, titleH: 22, face: '#f6f6f6', workspace: 'rgba(255,255,255,0.18)',
     frame(dc, r, active, client) {
       const g = dc.g;
       rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 5 * dc.z));
@@ -387,7 +387,7 @@ export const bigSurTheme: Theme = {
     });
   },
   window: {
-    border: 1, titleH: 30, face: '#f5f5f7', workspace: 'rgba(255,255,255,0.18)',
+    border: 1, corner: 10, titleH: 30, face: '#f5f5f7', workspace: 'rgba(255,255,255,0.18)',
     frame(dc, r, active, client) {
       const g = dc.g;
       rrect(g, r.x, r.y, r.w, r.h, Math.max(3, 10 * dc.z));
@@ -481,7 +481,7 @@ export const tahoeTheme: Theme = {
     });
   },
   window: {
-    border: 1, titleH: 34, face: 'rgba(250,251,253,0.9)', workspace: 'rgba(255,255,255,0.1)',
+    border: 1, corner: 18, titleH: 34, face: 'rgba(250,251,253,0.9)', workspace: 'rgba(255,255,255,0.1)',
     frame(dc, r, active, client) {
       liquidGlass(dc, r, Math.max(4, 18 * dc.z), client, active);
     },

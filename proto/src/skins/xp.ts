@@ -82,6 +82,8 @@ export const xpTheme: Theme = {
 
   window: {
     border: 4,
+    corner: 8,
+    squareBottom: true,
     titleH: 24,
     face: FACE,
     workspace: '#7a9bd9',

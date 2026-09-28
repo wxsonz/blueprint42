@@ -1454,11 +1454,15 @@ export class GridView {
     const geo = fn.broken ? null : geomOf(fn);
     const shown = frame ?? returned;
     const name = `${fn.cname}(${fn.params.map((p) => p.name).join(', ')})${h.copy > 1 ? ` #${h.copy}` : ''}`;
-    g.save();
-    g.fillStyle = skin.casing;
-    g.globalAlpha *= 0.85;
-    g.fillRect(R.x, R.y, R.w, R.h);
-    g.restore();
+    // a floor under see-through walls (skins that paint whole windows don't
+    // need one, and a square floor would show past their rounded corners)
+    if (!skin.solidMachines) {
+      g.save();
+      g.fillStyle = skin.casing;
+      g.globalAlpha *= 0.85;
+      g.fillRect(R.x, R.y, R.w, R.h);
+      g.restore();
+    }
     const headH = (geo?.head ?? 0.8) * cs;
     const note = state === 'running' ? 'running' : state === 'waiting' ? 'waiting on a call' : state === 'error' ? 'crashed here' : frame ? '' : returned ? 'done' : '';
     skin.wall(dc, R, { name, fns: 0, note, kind: 'machine', live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });

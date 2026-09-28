@@ -176,6 +176,7 @@ export interface Skin {
   blurb: string;
   casing: string; // canvas background colour, used to cut gaps where lines cross
   spotlight: string; // focus mode: the veil over everything but the sender and receiver
+  solidMachines?: boolean; // its wall paints a machine's whole body (rounded corners and all): no floor under it
   background(dc: Dc, camX: number, camY: number): void;
   belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean; count: number }): void;
   node(dc: Dc, r: Rect, n: NodeInfo): void;
