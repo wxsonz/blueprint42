@@ -1217,3 +1217,8 @@ questions. Newest last.
   wave's own shape, `ps3Wave`, shared with the ribbon, mapped from the grid
   canvas to the page). Each edge is one stroke with a gradient sampled
   along it.
+- The PS3's duel and feed are trophy notifications: a near-black box with a
+  thin light border inside a dark one, a dark square tile holding the icon
+  (the feed's arrow; the duel's →, ↩ or ✎ by kind), the title in white
+  Rodin and the values in grey beneath. They stay black whatever the theme
+  colour, as the console's notifications do.

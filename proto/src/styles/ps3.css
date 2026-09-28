@@ -141,8 +141,36 @@ html[data-skin='ps3'] .pane.focused { border-color: rgba(255,255,255,0.3); box-s
 html[data-skin='ps3'] .pane-head { background: transparent; border-bottom: none; position: relative; }
 html[data-skin='ps3'] .pane-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45) 6%, rgba(255,255,255,0.36) 70%, transparent); }
 html[data-skin='ps3'] .pane.focused .pane-head::after { background: linear-gradient(90deg, transparent, #ffffff 6%, rgba(255,255,255,0.8) 70%, transparent); box-shadow: 0 0 5px rgba(255,255,255,0.7); }
-html[data-skin='ps3'] #duel .d-say { box-shadow: 0 1px 5px -2px rgba(255,255,255,0.8); }
-html[data-skin='ps3'] #duel .d-card { background: color-mix(in srgb, var(--xmb-deep) 45%, transparent); }
+/* the duel and the feed are trophy notifications: a near-black box, a thin
+   light border inside a dark one, a dark square tile holding the icon,
+   the title in white Rodin and a grey line under it */
+html[data-skin='ps3'] #duel, html[data-skin='ps3'] #feed .kf {
+  background: rgba(10,10,12,0.95); border: 1px solid rgba(255,255,255,0.38); border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.7), 0 6px 18px rgba(0,0,0,0.35); }
+html[data-skin='ps3'] #duel::before { background: none; }
+html[data-skin='ps3'] #duel .d-say { background: none; box-shadow: none; border-bottom: 1px solid rgba(255,255,255,0.12); text-align: left;
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px; font: 400 16px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; }
+html[data-skin='ps3'] #duel .d-say::before { content: '→'; flex: none; display: grid; place-items: center; width: 34px; height: 34px; background: #2a2a2d; color: #ffffff; font: 700 18px 'M PLUS Rounded 1c', sans-serif; }
+html[data-skin='ps3'] #duel.ret .d-say::before { content: '↩'; }
+html[data-skin='ps3'] #duel.write .d-say::before { content: '✎'; }
+html[data-skin='ps3'] #duel .d-say .t { overflow: hidden; text-overflow: ellipsis; }
+html[data-skin='ps3'] #duel .d-say b.v { background: #2a2a2d; }
+html[data-skin='ps3'] #duel .d-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.14); border-radius: 2px; }
+html[data-skin='ps3'] #duel .d-role b { color: rgba(255,255,255,0.9) !important; }
+html[data-skin='ps3'] #duel .d-verb, html[data-skin='ps3'] #duel.call .d-verb, html[data-skin='ps3'] #duel.ret .d-verb, html[data-skin='ps3'] #duel.write .d-verb { color: #ffffff; font: 400 13px 'M PLUS Rounded 1c', sans-serif; letter-spacing: 0.04em; }
+html[data-skin='ps3'] #duel .d-track { border-top: 1px solid rgba(255,255,255,0.25); }
+html[data-skin='ps3'] #duel .d-what { color: rgba(255,255,255,0.5); }
+/* a feed row: the tile (the arrow) on the left over both lines, the two
+   functions as the title, the values as the grey line */
+html[data-skin='ps3'] #feed .kf { grid-template-columns: auto auto auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 1px; padding: 6px 12px 6px 6px; font: 400 14px 'M PLUS Rounded 1c', sans-serif; }
+html[data-skin='ps3'] #feed .kf .act { grid-column: 1; grid-row: 1 / span 2; width: 34px; height: 34px; background: #2a2a2d; color: #ffffff !important; }
+html[data-skin='ps3'] #feed .kf .act svg { width: 20px; height: 15px; }
+html[data-skin='ps3'] #feed .kf .fn { grid-row: 1; font-weight: 400; color: #ffffff; }
+html[data-skin='ps3'] #feed .kf .act + .fn { grid-column: 3; }
+html[data-skin='ps3'] #feed .kf .act + .fn::before { content: '›'; color: rgba(255,255,255,0.5); margin-right: 3px; }
+html[data-skin='ps3'] #feed .kf .ico { border-radius: 2px; }
+html[data-skin='ps3'] #feed .kf .data { grid-column: 2 / -1; grid-row: 2; font: 400 12.5px 'M PLUS Rounded 1c', sans-serif; color: rgba(255,255,255,0.5); }
+html[data-skin='ps3'] #feed .kf .data b { color: rgba(255,255,255,0.72); font-weight: 400; }
 html[data-skin='ps3'] #duel .d-role, html[data-skin='ps3'] #duel .d-head { background: transparent; }
 /* jelly: pale cyan, lit from above, a soft rim, a shadow under it */
 html[data-skin='ps3'] #duel .d-head .ico { border-radius: 6px; color: #ffffff; text-shadow: 0 1px 1px rgba(0,0,0,0.4); background-image: linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0) 55%); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 1px 3px var(--jel-shade); }
