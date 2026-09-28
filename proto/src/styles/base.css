@@ -80,6 +80,9 @@ kbd {
 
 /* ---------- top bar ---------- */
 #top {
+  /* above the panes: a skin that gives the bar a filter (Aero's blur) makes it its own layer, and its pop-ups must not fall behind */
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 12px;

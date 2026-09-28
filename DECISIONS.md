@@ -748,3 +748,34 @@ questions. Newest last.
     tint, since they're big and the lens there cost for little. The lens
     costs about 3 ms a frame at 2× DPR (scaled draws leave the fast copy
     path); the adaptive resolution absorbs it.
+- **Decision (author: Tahoe should be frosted, the way later releases
+  toned Liquid Glass down):** Tahoe's windows are frosted glass: a 12 px
+  blur, no lens, a whiter frost and a softer rim. It's also back on the
+  fast copy path (the lens cost about 3 ms).
+- **Decision (author: Windows 7 put the skin list behind the viewer):**
+  The Aero blur (`backdrop-filter`) made `#top` its own layer, below the
+  panes that come after it. `#top` now sits at `z-index: 30` for every
+  skin.
+- **Decision (author: console skins; picked PS1–PS5, Wii, GameCube, N64,
+  Switch, SNES and GBA):** Eleven kit themes in `skins/consoles.ts`, with
+  Wii and Switch in light and dark. Each has a cached wallpaper and
+  window chrome in the console's own style:
+  - **PS1:** grey plastic with the △○✕□ buttons.
+  - **PS2:** the boot towers, and dark blue glass.
+  - **PS3:** the XMB wave, and the highlight band.
+  - **PS4:** bokeh, flat tiles and the white focus.
+  - **PS5:** the white focus ring.
+  - **Wii:** white channels with the blue glow.
+  - **GameCube:** isometric cubes.
+  - **N64:** four-colour title bars and segmented progress.
+  - **Switch:** a focus outline that breathes, and Joy-Con dots.
+  - **SNES:** purple bars and the Super Famicom buttons.
+  - **GBA:** a screen inside a bezel.
+
+  Their chrome and editor CSS (about 110 variables each) is generated
+  from about 20 base colours by a script that isn't kept in the repo.
+  The files are ordinary CSS now. New web fonts: Rubik, Exo 2, Nunito,
+  Jost and Chakra Petch.
+
+  Checked headlessly: close-ups, duel title contrast (all at least
+  4.6:1) and the text-size audit.

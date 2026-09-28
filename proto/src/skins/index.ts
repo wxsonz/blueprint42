@@ -11,11 +11,12 @@ import { xp } from './xp';
 import { seven } from './seven';
 import { metro, metroLight } from './metro';
 import { bigsur, bigsurDark, leopard, platinum, system7, tahoe, tahoeDark, yosemite } from './macos';
+import { gamecube, gba, n64, nswitch, nswitchDark, ps1, ps2, ps3, ps4, ps5, snes, wii, wiiDark } from './consoles';
 import type { Skin } from './types';
 
 // A skin with a variantOf is the other mode (light/dark) of that skin: the
 // picker lists only bases, and the ☀/☾ button flips between the two.
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave, ps1, ps2, ps3, ps4, ps5, wii, wiiDark, gamecube, n64, nswitch, nswitchDark, snes, gba];
 
 // The other mode of a skin, if it has one.
 export function otherMode(skin: Skin): Skin | undefined {
@@ -24,6 +25,19 @@ export function otherMode(skin: Skin): Skin | undefined {
 
 // Web fonts each skin draws with on the canvas; loaded before first paint.
 export const SKIN_FONTS: Record<string, string[]> = {
+  ps1: ['500 12px Rubik', '12px "Share Tech Mono"'],
+  ps2: ['600 12px "Exo 2"', '12px "Share Tech Mono"'],
+  ps3: ['300 12px "Open Sans"', '12px "JetBrains Mono"'],
+  ps4: ['300 12px Rubik', '12px "JetBrains Mono"'],
+  ps5: ['500 12px Rubik', '12px "JetBrains Mono"'],
+  wii: ['700 12px Nunito', '12px "JetBrains Mono"'],
+  'wii-dark': ['700 12px Nunito', '12px "JetBrains Mono"'],
+  gamecube: ['600 12px Jost', '12px "JetBrains Mono"'],
+  n64: ['700 12px "Chakra Petch"', '12px "Share Tech Mono"'],
+  switch: ['700 12px Nunito', '12px "JetBrains Mono"'],
+  'switch-dark': ['700 12px Nunito', '12px "JetBrains Mono"'],
+  snes: ['700 12px "Pixelify Sans"', '12px "Share Tech Mono"'],
+  gba: ['700 12px "Pixelify Sans"', '12px "Share Tech Mono"'],
   amp: ['16px VT323', '8px Silkscreen'],
   classic: ['11px Cousine'],
   aqua: [],

@@ -435,11 +435,12 @@ export const bigSurTheme = bigSurOf(false);
 
 // Glass: a translucent body that lets the backdrop through, a bright rim
 // where light catches the edge, and a soft inner highlight near the top.
-// see: the glass sits on the wallpaper and bends it (a window or a file's
-// wall); cards inside windows only tint, there's no wallpaper under them.
+// see: the glass sits on the wallpaper and frosts it (a window); cards
+// inside windows only tint, there's no wallpaper under them. Frosted, not
+// lensed: Tahoe's later releases dialled Liquid Glass back to clarity.
 function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean, dark = false, see = false): void {
   const g = dc.g;
-  if (see) glassBehind(dc, r, rad, 4, 1.07);
+  if (see) glassBehind(dc, r, rad, 12);
   rrect(g, r.x, r.y, r.w, r.h, rad);
   g.fillStyle = tint;
   g.fill();
@@ -461,10 +462,10 @@ function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean
     const k = Math.max(1.5, 4 * dc.z);
     rrect(g, r.x + k / 2 + 1, r.y + k / 2 + 1, r.w - k - 2, r.h - k - 2, Math.max(1, rad - k / 2 - 1));
     const edge = g.createLinearGradient(r.x, r.y, r.x + r.w * 0.4, r.y + r.h);
-    edge.addColorStop(0, `rgba(255,255,255,${dark ? 0.35 : 0.7})`);
+    edge.addColorStop(0, `rgba(255,255,255,${dark ? 0.22 : 0.45})`);
     edge.addColorStop(0.35, 'rgba(255,255,255,0.05)');
     edge.addColorStop(0.7, 'rgba(0,0,0,0)');
-    edge.addColorStop(1, `rgba(0,10,30,${dark ? 0.35 : 0.18})`);
+    edge.addColorStop(1, `rgba(0,10,30,${dark ? 0.2 : 0.1})`);
     g.strokeStyle = edge;
     g.lineWidth = k;
     g.stroke();
@@ -530,8 +531,8 @@ function tahoeOf(dark: boolean): Theme {
         const g = dc.g;
         const rad = Math.max(4, 18 * dc.z);
         const th = 34 * dc.z;
-        // clear glass over the lake, and the content on a frosted sheet under the title band
-        liquidGlass(dc, r, rad, dark ? 'rgba(30,34,44,0.3)' : 'rgba(255,255,255,0.14)', active, dark, true);
+        // frosted glass over the lake, and the content on a whiter sheet under the title band
+        liquidGlass(dc, r, rad, dark ? 'rgba(30,34,44,0.42)' : 'rgba(255,255,255,0.34)', active, dark, true);
         const k = Math.max(1, 6 * dc.z);
         const inner = Math.max(2, 10 * dc.z);
         rrect(g, r.x + k, r.y + th, r.w - 2 * k, Math.max(0, r.h - th - k), [inner, inner, Math.max(2, rad - k), Math.max(2, rad - k)]);

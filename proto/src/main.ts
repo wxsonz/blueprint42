@@ -45,6 +45,19 @@ import './styles/leopard.css';
 import './styles/yosemite.css';
 import './styles/bigsur.css';
 import './styles/tahoe.css';
+import './styles/ps1.css';
+import './styles/ps2.css';
+import './styles/ps3.css';
+import './styles/ps4.css';
+import './styles/ps5.css';
+import './styles/wii.css';
+import './styles/wii-dark.css';
+import './styles/gamecube.css';
+import './styles/n64.css';
+import './styles/switch.css';
+import './styles/switch-dark.css';
+import './styles/snes.css';
+import './styles/gba.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
