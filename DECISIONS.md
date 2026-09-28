@@ -649,4 +649,14 @@ questions. Newest last.
   path and corner rivets, and it costs ~1 ms. Running machines and lamps
   glow with halos, not blur. Measured while zooming, paint forced: 13.9 →
   4.9 ms.
+- **Decision (author: the overlays were vague):** The duel opens with a
+  plain sentence ("get_next_line calls gnl_fill_line with fd = 0, …",
+  "gnl_fill_line returns 0 to get_next_line", "gnl_consume changes
+  get_next_line's bufs: … ➜ …"), and each card has a role title (CALLER
+  / CALLED / RETURNING / WRITER / OWNER) with a short line on what that
+  side is doing. Focus mode's return card is rewritten as statements:
+  ① it was called with (typed), ② it gives back (typed, or "nothing
+  (void)"), ③ it changed, through its pointers (`buf->len  23 ➜ 0`, one
+  big line each, or "nothing it can reach changed"), ④ left as they were.
+  While that card is up, the duel stays hidden.
 

@@ -2489,8 +2489,14 @@ const DUEL_ICON = {
 let duelShown: { key: string; since: number } | null = null;
 function renderDuel(now: number): void {
   const el = $('duel');
-  const d = view.duel;
   const t = S.trace;
+  // Focus mode's return card is saying it already: one overlay at a time
+  if (!stageCard.hidden) {
+    el.hidden = true;
+    duelShown = null;
+    return;
+  }
+  const d = view.duel;
   if (!d || !t) {
     // keep the last one up long enough to read, then let it go
     if (duelShown && now - duelShown.since > 1500) {
@@ -2508,7 +2514,8 @@ function renderDuel(now: number): void {
   const name = (fn: string | null | undefined) => (!fn ? 'process' : S.model?.byName.get(fn)?.cname ?? fn);
   const head = (fn: string, at: { line: number } | null) => `<div class="d-head">${feedIcon(fn).replace('<span class="fn">', '').replace(/<\/span>$/, '')}${at ? `<span class="d-at">line ${at.line + 1}</span>` : ''}</div>`;
   const e = t.evs[d.i];
-  let left = '', right = '', verb = '', what = '';
+  let left = '', right = '', verb = '', what = '', say = '';
+  const role = (title: string, sub: string) => `<div class="d-role"><b>${esc(title)}</b> <span>${esc(sub)}</span></div>`;
   if (e.k === 'call') {
     const callerFrame = t.snaps[d.i].stack.at(-1);
     const at = t.engine === 'interp' ? { line: e.line, file: e.file } : callerFrame ? frameLine(t, callerFrame.id, d.i) : null;
@@ -2516,7 +2523,7 @@ function renderDuel(now: number): void {
     const fn = S.model?.byName.get(e.fn);
     const span = fn ? callSpan(code, fn.cname) : null;
     const body = span ? `${hlC(code.slice(0, span[0]))}<mark>${hlC(code.slice(span[0], span[1]))}</mark>${hlC(code.slice(span[1]))}` : hlC(code || `${e.fn}(…)`);
-    left = `<div class="d-card send">${head(name(e.caller), at)}<pre class="d-code">${body}</pre></div>`;
+    left = `<div class="d-card send">${role('caller', `${name(e.caller)} makes the call${at ? ` on line ${at.line + 1}` : ''}`)}${head(name(e.caller), at)}<pre class="d-code">${body}</pre></div>`;
     const snap = t.snaps[d.i + 1];
     const params = (fn?.params ?? []).map((p, k) => {
       const a = e.args[k];
@@ -2524,15 +2531,16 @@ function renderDuel(now: number): void {
       return `  ${hlC(`${p.type} ${p.name}`)} = <span class="val">${esc(v)}</span>`;
     });
     const sig = fn ? `${hlC(`${fn.isStatic ? 'static ' : ''}${fn.ret}`)}\n${hlC(fn.cname)}(${params.length ? `\n${params.join(',\n')}\n` : ''})` : esc(e.fn);
-    right = `<div class="d-card recv">${head(name(e.fn), fn ? { line: fn.nameLine } : null)}<pre class="d-code">${sig}</pre></div>`;
+    right = `<div class="d-card recv">${role('called', `${name(e.fn)} starts with these values`)}${head(name(e.fn), fn ? { line: fn.nameLine } : null)}<pre class="d-code">${sig}</pre></div>`;
     verb = `calls ${DUEL_ICON.call}`;
     what = e.args.map((a) => `${a.name} = ${a.data ? payloadText(a.data) : argLabel(a.val, a.text, t, snap)}`).join(', ') || 'no arguments';
+    say = `<b>${esc(name(e.caller))}</b> calls <b>${esc(name(e.fn))}</b>${e.args.length ? ` with ${esc(what)}` : ''}`;
   } else if (e.k === 'ret') {
     const fn = S.model?.byName.get(e.fn);
     const value = e.data ? payloadText(e.data) : e.val.k === 'void' ? 'void' : retLabel(e.val, t);
     const at = frameLine(t, e.frame!, d.i, fn?.endLine ?? -1);
     const code = at ? srcLine(at.file, at.line) : '}';
-    left = `<div class="d-card send">${head(name(e.fn), at)}<pre class="d-code">${hlC(code)}\n<span class="syn-com">// </span>${hlC(fn?.ret ?? '')} <span class="val">${esc(value)}</span></pre></div>`;
+    left = `<div class="d-card send">${role('returning', `${name(e.fn)} is done and hands back`)}${head(name(e.fn), at)}<pre class="d-code">${hlC(code)}\n<span class="syn-com">// </span>${hlC(fn?.ret ?? '')} <span class="val">${esc(value)}</span></pre></div>`;
     const st = t.snaps[d.i].stack;
     const k = st.findIndex((f) => f.id === e.frame);
     const caller = k > 0 ? st[k - 1] : null;
@@ -2540,22 +2548,24 @@ function renderDuel(now: number): void {
     const ccode = cat ? srcLine(cat.file, cat.line) : '';
     const span = fn ? callSpan(ccode, fn.cname) : null;
     const got = span ? `<span class="faint">${hlC(ccode)}</span>\n${hlC(ccode.slice(0, span[0]))}<span class="val">${esc(value)}</span>${hlC(ccode.slice(span[1]))}` : hlC(ccode || 'main');
-    right = `<div class="d-card recv">${head(name(e.caller), cat)}<pre class="d-code">${got}</pre></div>`;
+    right = `<div class="d-card recv">${role('caller', `${name(e.caller)} gets it back here${cat ? ` (line ${cat.line + 1})` : ''}`)}${head(name(e.caller), cat)}<pre class="d-code">${got}</pre></div>`;
     verb = `returns ${DUEL_ICON.ret}`;
     what = value;
+    say = `<b>${esc(name(e.fn))}</b> returns <b class="v">${esc(value)}</b> to <b>${esc(name(e.caller))}</b>`;
   } else if (e.k === 'write') {
     const info = t.cells.get(e.cell);
     const at = d.beatFrom !== undefined ? { line: t.evs[d.beatFrom].line, file: t.evs[d.beatFrom].file } : null;
     const writer = t.snaps[d.i].stack.find((f) => f.id === e.frame)?.fn;
-    left = `<div class="d-card send">${head(name(writer), at)}<pre class="d-code">${hlC(at ? srcLine(at.file, at.line) : '')}</pre></div>`;
+    left = `<div class="d-card send">${role('writer', `${name(writer)} writes through a pointer`)}${head(name(writer), at)}<pre class="d-code">${hlC(at ? srcLine(at.file, at.line) : '')}</pre></div>`;
     const oldCell = [...t.snaps[d.i].statics, ...t.snaps[d.i].stack.flatMap((f) => f.cells)].find((c) => c.id === e.cell);
     const owner = info?.frame === -1 ? info.owner : t.snaps[d.i + 1]?.stack.find((f) => f.id === info?.frame)?.fn;
-    right = `<div class="d-card recv">${head(name(owner), null)}<pre class="d-code">${hlC(`${oldCell?.type ?? ''} ${info?.name ?? '?'}`)}${info?.frame === -1 ? ' <span class="syn-com">// static</span>' : ''}\n  <span class="old">${esc(oldCell ? fmtVal(oldCell.val) : '?')}</span>\n→ <span class="val">${esc(fmtVal(e.val))}</span></pre></div>`;
+    right = `<div class="d-card recv">${role('owner', `${name(owner)}'s ${info?.name ?? 'variable'} changes`)}${head(name(owner), null)}<pre class="d-code">${hlC(`${oldCell?.type ?? ''} ${info?.name ?? '?'}`)}${info?.frame === -1 ? ' <span class="syn-com">// static</span>' : ''}\n  <span class="old">${esc(oldCell ? fmtVal(oldCell.val) : '?')}</span>\n→ <span class="val">${esc(fmtVal(e.val))}</span></pre></div>`;
     verb = `writes into ${DUEL_ICON.write}`;
     what = `${info?.name ?? ''} = ${fmtVal(e.val)}`;
+    say = `<b>${esc(name(writer))}</b> changes <b>${esc(name(owner))}</b>'s ${esc(info?.name ?? '')}: <span class="old">${esc(oldCell ? fmtVal(oldCell.val) : '?')}</span> ➜ <b class="v">${esc(fmtVal(e.val))}</b>`;
   } else return;
   el.className = d.kind;
-  el.innerHTML = `${left}<div class="d-mid"><div class="d-verb">${verb}</div><div class="d-track"><span class="chip" style="left:${Math.max(4, d.p * 100)}%">${esc(clipFeed(what, 36))}</span></div>${what.length > 36 ? `<div class="d-what" title="${esc(what)}">${esc(what)}</div>` : ''}</div>${right}`;
+  el.innerHTML = `<div class="d-say">${say}</div>${left}<div class="d-mid"><div class="d-verb">${verb}</div><div class="d-track"><span class="chip" style="left:${Math.max(4, d.p * 100)}%">${esc(clipFeed(what, 36))}</span></div>${what.length > 36 ? `<div class="d-what" title="${esc(what)}">${esc(what)}</div>` : ''}</div>${right}`;
   el.hidden = false;
 }
 
@@ -2582,14 +2592,30 @@ function renderStageCard(): void {
   const c = returnCard(t, fr.i);
   if (!c) return void (stageCard.hidden = true);
   const name = (k: string | null) => (k ? S.model?.byName.get(k)?.cname ?? k : 'process');
-  const row = (r: { name: string; depth: 0 | 1; in: string; out?: string; changed?: boolean }, cls = '') =>
-    `<tr class="${r.depth ? 'f' : ''} ${cls}"><td class="n">${r.depth ? '.' : ''}${esc(r.name)}</td><td class="i">${esc(r.in)}</td><td class="o${r.changed ? ' chg' : r.out !== undefined && !r.changed && cls !== 'ret' ? ' same' : ''}">${r.out !== undefined ? esc(r.out) : ''}</td></tr>`;
+  const fn = S.model?.byName.get(c.fn);
+  // full names: a field under its variable reads buf->pos
+  let parent = '';
+  const rows = c.rows.map((r) => {
+    if (!r.depth) parent = r.name;
+    return { ...r, full: r.depth ? `${parent}->${r.name}` : r.name };
+  });
+  const typeOf = (n: string) => fn?.params.find((p) => p.name === n)?.type;
+  const called = rows.filter((r) => !r.depth).map((r) => `<span class="ty">${esc(typeOf(r.name) ?? '')}</span> ${esc(r.name)} = <b>${esc(r.in)}</b>`).join(', ') || '<span class="none">no arguments</span>';
+  const changed = rows.filter((r) => r.changed);
+  const kept = rows.filter((r) => r.out !== undefined && !r.changed);
+  const ret = c.ret[0];
+  const gives = !ret || fn?.ret === 'void' ? '<span class="none">nothing (void)</span>'
+    : c.ret.length > 1 ? `<span class="ty">${esc(fn?.ret ?? '')}</span> <b>{${c.ret.slice(1).map((r) => `${esc(r.name)}: ${esc(r.out ?? r.in)}`).join(', ')}}</b>`
+    : `<span class="ty">${esc(fn?.ret ?? '')}</span> <b class="ret">${esc(ret.out ?? ret.in)}</b>`;
   stageCard.innerHTML = `<div class="sc-title"><span class="fn">${esc(name(c.fn))}</span> <span class="k">returns to</span> <span class="fn">${esc(name(c.caller))}</span></div>
-    <table><thead><tr><th></th><th>in — called with</th><th>out — at return</th></tr></thead><tbody>
-    ${c.rows.map((r) => row(r)).join('') || '<tr><td class="n">(no arguments)</td><td></td><td></td></tr>'}
-    <tr class="sep"><td colspan="3"></td></tr>
-    ${c.ret.map((r) => row(r, 'ret')).join('')}
-    </tbody></table>`;
+    <div class="sc-body">
+      <div class="sc-sec"><div class="sc-h">① it was called with</div><div class="sc-line">${called}</div></div>
+      <div class="sc-sec"><div class="sc-h">② it gives back</div><div class="sc-line big">${gives}</div></div>
+      <div class="sc-sec"><div class="sc-h">③ it changed, through its pointers</div>${changed.length
+        ? changed.map((r) => `<div class="sc-chg"><span class="nm">${esc(r.full)}</span><span class="was">${esc(r.in)}</span><span class="to">➜</span><span class="now">${esc(r.out ?? '')}</span></div>`).join('')
+        : '<div class="sc-line none">nothing it can reach changed</div>'}</div>
+      ${kept.length ? `<div class="sc-sec quiet"><div class="sc-h">④ left as they were</div><div class="sc-line">${kept.map((r) => `${esc(r.full)} = ${esc(r.out ?? '')}`).join(' · ')}</div></div>` : ''}
+    </div>`;
   stageCard.hidden = false;
 }
 

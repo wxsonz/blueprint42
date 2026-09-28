@@ -420,16 +420,20 @@ kbd {
 #stage-card .sc-title { padding: var(--ptitle-pad, 6px 10px); background: var(--ptitle-bg); color: var(--ptitle-fg); border-bottom: var(--ptitle-border, none); font: var(--ptitle-font, 600 13px var(--font-ui)); }
 #stage-card .sc-title .fn { font-family: var(--font-mono); }
 #stage-card .sc-title .k { opacity: 0.75; font-weight: 400; }
-#stage-card table { border-collapse: collapse; width: 100%; font: 13px/1.5 var(--font-mono); }
-#stage-card th { text-align: left; padding: 6px 12px 2px; font: 600 0.78em var(--font-ui); text-transform: uppercase; letter-spacing: 0.1em; color: var(--panel-dim); }
-#stage-card td { padding: 1px 12px; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
-#stage-card td.n { color: var(--panel-dim); }
-#stage-card tr.f td.n { padding-left: 28px; }
-#stage-card td.o.chg { color: var(--run, var(--accent)); font-weight: 700; }
-#stage-card td.o.chg::before { content: '● '; font-size: 0.8em; }
-#stage-card td.same { color: var(--panel-dim); }
-#stage-card tr.sep td { padding: 0; border-top: var(--rule, 1px solid rgba(128,128,128,0.3)); height: 6px; }
-#stage-card tr.ret td.o { color: var(--ok, var(--accent)); font-weight: 700; }
+#stage-card .sc-body { padding: 8px 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+#stage-card .sc-h { font: 700 11px var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--panel-dim); margin-bottom: 3px; }
+#stage-card .sc-line { font: 13px/1.5 var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
+#stage-card .sc-line.big { font-size: 16px; }
+#stage-card .ty { color: var(--panel-dim); }
+#stage-card .none { color: var(--panel-dim); font-style: italic; }
+#stage-card b.ret { color: var(--ok, var(--accent)); }
+#stage-card .sc-chg { display: grid; grid-template-columns: minmax(90px, auto) auto auto 1fr; gap: 10px; align-items: baseline; font: 15px/1.6 var(--font-mono); }
+#stage-card .sc-chg .nm { color: var(--panel-fg); font-weight: 700; }
+#stage-card .sc-chg .was { color: var(--panel-dim); text-decoration: line-through; }
+#stage-card .sc-chg .to { color: var(--run, var(--accent)); }
+#stage-card .sc-chg .now { color: var(--run, var(--accent)); font-weight: 800; }
+#stage-card .sc-sec.quiet { opacity: 0.7; }
+#stage-card .sc-sec.quiet .sc-line { font-size: 12px; white-space: normal; }
 
 /* the skin picker */
 .skin-pick {
@@ -457,12 +461,23 @@ kbd {
 @keyframes kf-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; } }
 
 /* ---------- the duel: who sends what to whom, spelled out ---------- */
-#duel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px;
+#duel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 10px 14px;
   width: min(94%, 980px); padding: 12px; background: rgba(0, 0, 0, 0.86); border-radius: 10px; box-shadow: 0 0 0 2px #000, 0 12px 40px rgba(0, 0, 0, 0.55); pointer-events: none; transition: opacity 0.25s; }
 #duel.out { opacity: 0; }
 #duel .d-card { background: var(--ed-bg); color: var(--ed-fg); border-radius: 6px; box-shadow: 0 0 0 2px #000; overflow: hidden; min-width: 0; }
 #duel .d-card.send { animation: duel-l 0.28s ease-out; }
 #duel .d-card.recv { animation: duel-r 0.28s ease-out; }
+#duel .d-say { grid-column: 1 / -1; text-align: center; font: 14px var(--font-ui, sans-serif); color: rgba(255, 255, 255, 0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#duel .d-say b { color: #fff; }
+#duel .d-say b.v { color: var(--lcd-ret, #6ee7a0); }
+#duel .d-say .old { color: rgba(255, 255, 255, 0.6); text-decoration: line-through; }
+#duel .d-role { padding: 5px 10px; font: 11px var(--font-ui, sans-serif); background: #000; color: rgba(255, 255, 255, 0.75); }
+#duel .d-role b { text-transform: uppercase; letter-spacing: 0.1em; margin-right: 4px; }
+#duel .d-card.send .d-role b { color: var(--tl-call, #4a90e2); }
+#duel.ret .d-card.send .d-role b { color: var(--tl-ret, #3fb950); }
+#duel.write .d-card.send .d-role b { color: var(--tl-ptr, #e0a040); }
+#duel .d-card.recv .d-role b { color: #fff; }
+#duel .d-mid { align-self: center; }
 #duel .d-head { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: var(--panel-bg); color: var(--panel-fg); font: 700 12.5px var(--font-ui, sans-serif); }
 #duel .d-head .ico { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: #fff; font: 700 9.5px var(--font-mono, monospace); }
 #duel .d-head .d-at { margin-left: auto; font: 11px var(--font-mono, monospace); color: var(--panel-dim); font-weight: 400; }
