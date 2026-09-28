@@ -168,6 +168,18 @@ export const ps1Theme: Theme = {
   p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),
+  // storage and stations as the windows are built: bevelled grey plastic under
+  // a dark title bar with the logo's colours along its edge
+  panel(dc, r, head, title, live) {
+    const g = dc.g;
+    plastic(dc, r, Math.max(1, 3 * dc.z), '#e4e3de', '#f6f5f1', '#8f8e89');
+    const bar = { x: r.x + 2 * dc.z, y: r.y + 2 * dc.z, w: r.w - 4 * dc.z, h: Math.max(6, head.h - 2 * dc.z) };
+    g.fillStyle = live ? '#26262b' : '#6f6e72';
+    g.fillRect(bar.x, bar.y, bar.w, bar.h);
+    const k = Math.max(1, 2 * dc.z);
+    if (live) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
+    text(dc, { ...bar, h: bar.h - k }, title.toUpperCase(), RUBIK, 10, live ? '#f2f2f2' : '#d6d6d9', { w: 600, x: bar.x + 6 * dc.z });
+  },
   // the PAL BIOS: a grey blocked background, each block bevelled, then
   // quantised to 15-bit colour with the PS1's 4×4 ordered dither (once, cached)
   background(dc) {
@@ -197,10 +209,27 @@ export const ps1Theme: Theme = {
   window: {
     border: 5, corner: 4, titleH: 24, face: '#f1f0ec', workspace: 'rgba(255,255,255,0.04)',
     // the console's grey plastic, bevelled, with the logo's colours under a dark title bar
-    frame(dc, r, active, face) {
+    frame(dc, r, active, face, kind) {
       softShadow(dc, r, 4, 8, 'rgba(0,0,0,0.7)', 3 * dc.z);
       plastic(dc, r, Math.max(1, 4 * dc.z), active ? '#c8c7c2' : '#b0afaa', '#eeede8', '#6f6e69');
       client(dc, r, Math.max(2, 5 * dc.z), 24 * dc.z, face, 0, '#8f8e89');
+      // a machine is the console's top: its vent grille down the left side
+      if (kind === 'machine' && r.h > 60 * dc.z) {
+        const g = dc.g;
+        const x = r.x + 7 * dc.z;
+        const w = Math.max(3, 6 * dc.z);
+        const top = r.y + 34 * dc.z;
+        const bottom = r.y + r.h - 12 * dc.z;
+        const step = Math.max(3, 5 * dc.z);
+        g.fillStyle = 'rgba(0,0,0,0.05)';
+        g.fillRect(x - 1, top - 1, w + 2, bottom - top + 2);
+        for (let y = top; y < bottom; y += step) {
+          g.fillStyle = 'rgba(70,70,66,0.45)';
+          g.fillRect(x, y, w, Math.max(1, step * 0.35));
+          g.fillStyle = 'rgba(255,255,255,0.55)';
+          g.fillRect(x, y + Math.max(1, step * 0.35), w, Math.max(0.5, step * 0.15));
+        }
+      }
     },
     titleBar(dc, r, title, active, buttons) {
       const g = dc.g;

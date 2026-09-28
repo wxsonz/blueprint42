@@ -45,6 +45,9 @@ export interface Theme {
   nodeDecor?(dc: Dc, r: Rect, n: NodeInfo, t: Theme): void;
   wallDecor?(dc: Dc, r: Rect, head: Rect, live: boolean, t: Theme): void;
   pulseColor?: string;
+  // optional: the skin's own panel for a machine's storage and stations
+  // (body and titled head); without it, the kit's plain card and caption
+  panel?(dc: Dc, r: Rect, head: Rect, title: string, live: boolean): void;
   // desktop themes: machines and files are windows
   window?: WindowStyle;
 }
@@ -57,7 +60,7 @@ export interface WindowStyle {
   titleH: number; // title bar height, px at zoom 1
   face: string; // a machine's client area
   workspace: string; // a file's client area (behind its machines)
-  frame(dc: Dc, r: Rect, active: boolean, client: string): void; // the whole window: frame and client fill
+  frame(dc: Dc, r: Rect, active: boolean, client: string, kind?: 'machine' | 'module' | 'node'): void; // the whole window: frame and client fill
   titleBar(dc: Dc, r: Rect, title: string, active: boolean, buttons: boolean): void;
   progress(dc: Dc, r: Rect, fill: number, anim: boolean): void;
 }
@@ -66,7 +69,7 @@ const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
 
 export function makeSkin(t: Theme): Skin {
   const { p } = t;
-  const sprite: SpritePalette = { body: p.card, edge: p.line, track: p.track, cell: p.cell, text: p.fg, muted: p.dim, accent: p.accent, marker: p.ret, selection: p.accent, font: (s) => t.mono(s), radius: t.radius };
+  const sprite: SpritePalette = { body: p.card, edge: p.line, track: p.track, cell: p.cell, text: p.fg, muted: p.dim, accent: p.accent, marker: p.ret, selection: p.accent, font: (s) => t.mono(s), radius: t.radius, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined };
   const cap = (s: string) => (t.upper ? s.toUpperCase() : s);
   const R = (dc: Dc) => px(dc, t.radius, t.radius ? 1 : 0);
   const snapR = (r: Rect): Rect => (t.pixel ? { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) } : r);
@@ -170,7 +173,7 @@ export function makeSkin(t: Theme): Skin {
         const b = Math.max(1, W.border * dc.z);
         // on a desktop, the selected window is simply the active one: no box around it
         const active = w.live || w.selected;
-        W.frame(dc, r, active, w.kind === 'module' ? W.workspace : W.face);
+        W.frame(dc, r, active, w.kind === 'module' ? W.workspace : W.face, w.kind === 'module' ? 'module' : 'machine');
         if (w.head.h <= 0) return;
         const th = Math.max(8, Math.min(w.head.h - b, W.titleH * dc.z));
         const note = w.note ? ` - ${w.note[0].toUpperCase()}${w.note.slice(1)}` : '';
@@ -248,7 +251,7 @@ export function makeSkin(t: Theme): Skin {
         const W = t.window;
         const active = n.state === 'running' || n.state === 'error' || n.selected;
         const b = Math.max(1, W.border * dc.z);
-        W.frame(dc, r, active, W.face);
+        W.frame(dc, r, active, W.face, 'node');
         const th = Math.max(8, W.titleH * dc.z);
         W.titleBar(dc, titleRect(r, b, th, W), n.stale ? `${n.name} (Not Responding)` : n.name, active, true);
         const pad = px(dc, 8, 3);
@@ -310,14 +313,20 @@ export function makeSkin(t: Theme): Skin {
         const o = px(dc, 4) * k;
         t.card(dc, { x: r.x + o, y: r.y + o, w: r.w, h: r.h }, { fill: p.panel, stroke: p.line, lw: 1, glow: null, kind: 'frame' });
       }
-      t.card(dc, r, { fill: p.panel, stroke: f.mode === 'live' ? p.line : p.faint, lw: 1, glow: null, kind: 'frame' });
-      g.globalAlpha = f.mode === 'live' ? 1 : f.mode === 'returned' ? 0.65 : 0.4;
+      const label = f.mode === 'live' ? 'STORAGE' : f.mode === 'returned' ? 'LAST RUN' : 'NOT RUNNING';
       const pad = px(dc, 9);
-      g.textAlign = 'left';
-      g.textBaseline = 'middle';
-      g.fillStyle = f.mode === 'live' ? p.dim : p.faint;
-      g.font = t.ui(px(dc, 9.5, 7), 700);
-      g.fillText(f.mode === 'live' ? 'STORAGE' : f.mode === 'returned' ? 'LAST RUN' : 'NOT RUNNING', r.x + pad, f.head.y + f.head.h / 2 + 1);
+      if (t.panel) {
+        t.panel(dc, r, f.head, label, f.mode === 'live');
+        g.globalAlpha = f.mode === 'live' ? 1 : f.mode === 'returned' ? 0.65 : 0.4;
+      } else {
+        t.card(dc, r, { fill: p.panel, stroke: f.mode === 'live' ? p.line : p.faint, lw: 1, glow: null, kind: 'frame' });
+        g.globalAlpha = f.mode === 'live' ? 1 : f.mode === 'returned' ? 0.65 : 0.4;
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+        g.fillStyle = f.mode === 'live' ? p.dim : p.faint;
+        g.font = t.ui(px(dc, 9.5, 7), 700);
+        g.fillText(label, r.x + pad, f.head.y + f.head.h / 2 + 1);
+      }
       for (const row of f.rows) {
         const rr = row.rect;
         if (row.recent || row.flash > 0) {

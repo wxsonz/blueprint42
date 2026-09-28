@@ -14,6 +14,8 @@ export interface SpritePalette {
   selection: string;
   font: (size: number) => string;
   radius: number;
+  // a skin's own panel (body and titled head), used instead of the default look
+  panel?: (dc: Dc, r: Rect, head: Rect, title: string, live: boolean) => void;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -220,18 +222,21 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
   const right = r.x + r.w - Math.max(3, 6 * z);
   const cut = (s: string, max: number) => cutText(g, s, max);
   g.save();
-  box(g, r, p.radius * z, p.body, p.edge);
-  g.save();
-  rrect(g, i.head.x + 1, i.head.y + 1, i.head.w - 2, i.head.h - 1, [p.radius * z, p.radius * z, 0, 0]);
-  g.fillStyle = i.mode === 'live' ? p.accent : p.muted;
-  g.globalAlpha *= 0.2;
-  g.fill();
-  g.restore();
-  g.font = p.font(fs);
-  g.textBaseline = 'middle';
-  g.textAlign = 'left';
-  g.fillStyle = i.mode === 'none' ? p.muted : p.text;
-  g.fillText(cut(i.title, i.head.w - 12 * z), i.head.x + 6 * z, i.head.y + i.head.h / 2);
+  if (p.panel) p.panel(dc, r, i.head, i.title, i.mode === 'live');
+  else {
+    box(g, r, p.radius * z, p.body, p.edge);
+    g.save();
+    rrect(g, i.head.x + 1, i.head.y + 1, i.head.w - 2, i.head.h - 1, [p.radius * z, p.radius * z, 0, 0]);
+    g.fillStyle = i.mode === 'live' ? p.accent : p.muted;
+    g.globalAlpha *= 0.2;
+    g.fill();
+    g.restore();
+    g.font = p.font(fs);
+    g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    g.fillStyle = i.mode === 'none' ? p.muted : p.text;
+    g.fillText(cut(i.title, i.head.w - 12 * z), i.head.x + 6 * z, i.head.y + i.head.h / 2);
+  }
   if (i.mode !== 'live') g.globalAlpha *= 0.75;
 
   // tracks: the way taken is lit

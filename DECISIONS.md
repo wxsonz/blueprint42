@@ -992,3 +992,14 @@ questions. Newest last.
   - The playbar is plain dithered plastic, and the vent grille is a
     slim, softer 8 px strip along its bottom edge, like the vent on the
     console's side.
+- **Decision (author: PS1 storage and stations look off; put the grille on
+  the machine instead):**
+  - The kit gets an optional `Theme.panel(dc, r, head, title, live)`,
+    used for a machine's storage (kit `frame`) and stations
+    (`drawInterior`, through `SpritePalette.panel`) instead of the plain
+    card and caption. The PS1's is bevelled grey plastic under a dark
+    title bar with the logo stripe, like its windows.
+  - `WindowStyle.frame` now learns the window's kind (`machine`, `module`
+    or `node`), so the PS1 draws the console's vent grille down the left
+    side of each machine, as if the function were the console's top. The
+    grille is gone from the playbar.
