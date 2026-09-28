@@ -1,0 +1,163 @@
+/* PlayStation 4 — generated from a short spec (see docs/decisions/); edit freely. */
+html[data-skin='ps4'] {
+  --font-ui: 'Source Sans 3', 'Open Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+  --ui-size: 14px;
+  --bg: #0538bc;
+  --fg: #ffffff;
+  --fg-dim: #c6d6ff;
+  --accent: #5fb1ff;
+  --ok: #6ee7a8;
+  --bad: #ff6b6b;
+  --warn: #ffd166;
+  --run: #6ee7a8;
+  --wait: #ffd166;
+  --bar-bg: transparent;
+  --bar-fg: #ffffff;
+  --bar-border: none;
+  --brand-font: 300 18px 'Source Sans 3', sans-serif;
+  --logo: #ffffff;
+  --btn-bg: rgba(60,120,250,0.3);
+  --btn-bg-hover: rgba(90,150,255,0.45);
+  --btn-fg: #ffffff;
+  --btn-border: 1px solid rgba(170,200,255,0.6);
+  --btn-radius: 0px;
+  --btn-bg-on: rgba(60,120,250,0.45);
+  --btn-fg-on: #ffffff;
+  --btn-shadow-on: none;
+  --primary-bg: #ffffff;
+  --primary-fg: #0638c4;
+  --sw-off: #777777;
+  --sw-on: #5fb1ff;
+  --sw-knob: #ffffff;
+  --panes-bg: transparent;
+  --pane-bg: rgba(80,140,255,0.16);
+  --pane-border: rgba(150,190,255,0.45);
+  --pane-radius: 0px;
+  --head-h: 34px;
+  --head-bg: transparent;
+  --head-fg: #c6d6ff;
+  --head-fg-active: #ffffff;
+  --head-font: 300 15px 'Source Sans 3', sans-serif;
+  --panel-bg: rgba(14,62,205,0.97);
+  --panel-fg: #ffffff;
+  --panel-dim: #c6d6ff;
+  --panel-border: 1px solid rgba(170,200,255,0.6);
+  --panel-radius: 0px;
+  --panel-shadow: 0 10px 30px rgba(0,10,60,0.45);
+  --ptitle-bg: transparent;
+  --ptitle-fg: #ffffff;
+  --ptitle-border: 1px solid rgba(150,190,255,0.5);
+  --ptitle-pad: 8px 12px;
+  --field-bg: #03052a;
+  --field-fg: #ffffff;
+  --field-border: 1px solid #dfe8ff;
+  --field-radius: 0px;
+  --rule: 1px solid rgba(150,190,255,0.35);
+  --pb-bg: transparent;
+  --pb-border: none;
+  --lcd-bg: transparent;
+  --lcd-fg: #ffffff;
+  --lcd-font: Rubik, 'Open Sans', sans-serif;
+  --lcd-small: 11.5px;
+  --lcd-big: 13.5px;
+  --lcd-fn: #5fb1ff;
+  --lcd-ptr: #ffb454;
+  --lcd-ret: #6ee7a8;
+  --tl-bg: rgba(0,12,70,0.3);
+  --tl-border: none;
+  --tl-call: #5fb1ff;
+  --tl-ret: #6ee7a8;
+  --tl-ptr: #ffb454;
+  --tl-write: #555555;
+  --tl-eval: #333333;
+  --tl-err: #ff6b6b;
+  --tl-head: #ffffff;
+  --st-bg: transparent;
+  --st-fg: #c6d6ff;
+  --st-border: none;
+  --st-font: 12px Rubik, 'Open Sans', sans-serif;
+  --mode-fg: #0b2466;
+  --mode-normal-bg: #ffffff;
+  --mode-insert-bg: #6ee7a8;
+  --mode-visual-bg: #ffd166;
+  --menu-hover-bg: #5fb1ff;
+  --menu-hover-fg: #0b2466;
+  --scrim: rgba(0,0,0,0.55);
+  --ed-bg: rgba(2,20,110,0.3);
+  --ed-fg: #ffffff;
+  --ed-font: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+  --ed-size: 13.5px;
+  --ed-cursor: #5fb1ff;
+  --ed-gutter: rgba(2,16,90,0.3);
+  --ed-gutter-fg: #8aa6e8;
+  --ed-gutter-active: #ffffff;
+  --ed-active: rgba(255,255,255,0.05);
+  --ed-sel: color-mix(in srgb, #5fb1ff 35%, transparent);
+  --ed-exec: color-mix(in srgb, #5fb1ff 20%, transparent);
+  --ed-exec-bar: #5fb1ff;
+  --ed-err: color-mix(in srgb, #ff6b6b 18%, transparent);
+  --ed-err-bar: #ff6b6b;
+  --syn-kw: #7aa8ff;
+  --syn-type: #5ad1c0;
+  --syn-def: #f0e3a0;
+  --syn-fn: #f0e3a0;
+  --syn-var: #ffffff;
+  --syn-num: #b9e39a;
+  --syn-str: #f0a07a;
+  --syn-com: #6f7c93;
+  --syn-macro: #d59ae8;
+  --syn-op: #c9d1e0;
+  --syn-punct: #9aa3b4;
+}
+
+/* PS4, from its system screens: royal blue with soft streaks of light, a
+   pale hairline under the header and over the button guide, content on
+   lighter see-through blue with thin pale edges, focus a white border */
+html[data-skin='ps4'] body { background:
+  radial-gradient(ellipse 50% 45% at 50% 40%, rgba(20,80,235,0.28), transparent 70%),
+  linear-gradient(174deg, #0a5fae, #0746c4 35%, #0538bc 55%, #031a78 82%, #010a2e); }
+html[data-skin='ps4'] #app, html[data-skin='ps4'] #panes, html[data-skin='ps4'] #top, html[data-skin='ps4'] #playbar, html[data-skin='ps4'] #status { background: transparent; border: none; box-shadow: none; }
+html[data-skin='ps4'] #top { border-bottom: 1px solid rgba(130,175,255,0.6); }
+html[data-skin='ps4'] #playbar { border-top: 1px solid rgba(130,175,255,0.6); }
+html[data-skin='ps4'] .pane { border: 1px solid rgba(150,190,255,0.45); border-radius: 0; }
+html[data-skin='ps4'] .pane-head { border-bottom: 1px solid rgba(150,190,255,0.35); }
+html[data-skin='ps4'] .pane.focused { box-shadow: 0 0 0 2px #ffffff; }
+html[data-skin='ps4'] .seg button[aria-pressed='true'], html[data-skin='ps4'] .seg button.on { box-shadow: inset 0 0 0 2px #ffffff; }
+html[data-skin='ps4'] .btn:focus-visible, html[data-skin='ps4'] .seg button:focus-visible { outline: 3px solid #ffffff; outline-offset: -3px; }
+
+/* the duel and the feed are the PS4's trophy notification: a dark charcoal
+   box with large rounded corners and no border, a square tile with a thin
+   edge holding the icon, the title in white SST and a grey line under it */
+html[data-skin='ps4'] #duel, html[data-skin='ps4'] #feed .kf {
+  background: rgba(34,34,38,0.96); border: none; border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0,8,50,0.4); }
+html[data-skin='ps4'] #duel::before { background: none; }
+html[data-skin='ps4'] #duel { padding: 0 14px 14px; }
+html[data-skin='ps4'] #duel .d-say { background: none; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; margin: 0 -14px;
+  display: flex; align-items: center; gap: 14px; padding: 12px 18px; font: 400 17px 'Source Sans 3', sans-serif; color: #ffffff; }
+html[data-skin='ps4'] #duel .d-say::before { content: '→'; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 3px;
+  background: #3a3a40; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); color: #ffffff; font: 600 18px 'Source Sans 3', sans-serif; }
+html[data-skin='ps4'] #duel.ret .d-say::before { content: '↩'; }
+html[data-skin='ps4'] #duel.write .d-say::before { content: '✎'; }
+html[data-skin='ps4'] #duel .d-say .t { overflow: hidden; text-overflow: ellipsis; }
+html[data-skin='ps4'] #duel .d-say b.v { background: #3a3a40; }
+html[data-skin='ps4'] #duel .d-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; }
+html[data-skin='ps4'] #duel .d-role, html[data-skin='ps4'] #duel .d-head { background: transparent; }
+html[data-skin='ps4'] #duel .d-role b { color: rgba(255,255,255,0.9) !important; }
+html[data-skin='ps4'] #duel .d-verb, html[data-skin='ps4'] #duel.call .d-verb, html[data-skin='ps4'] #duel.ret .d-verb, html[data-skin='ps4'] #duel.write .d-verb { color: #ffffff; font: 400 14px 'Source Sans 3', sans-serif; letter-spacing: 0.03em; }
+html[data-skin='ps4'] #duel .d-track { border-top: 1px solid rgba(255,255,255,0.25); }
+html[data-skin='ps4'] #duel .d-what { color: #9a9aa2; }
+html[data-skin='ps4'] #feed .kf { grid-template-columns: auto auto auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 1px; padding: 8px 16px 8px 8px; font: 400 15px 'Source Sans 3', sans-serif; }
+html[data-skin='ps4'] #feed .kf .act { grid-column: 1; grid-row: 1 / span 2; width: 36px; height: 36px; border-radius: 3px; background: #3a3a40; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); color: #ffffff !important; }
+html[data-skin='ps4'] #feed .kf .act svg { width: 20px; height: 15px; }
+html[data-skin='ps4'] #feed .kf .fn { grid-row: 1; font-weight: 400; color: #ffffff; }
+html[data-skin='ps4'] #feed .kf .act + .fn { grid-column: 3; }
+html[data-skin='ps4'] #feed .kf .act + .fn::before { content: '›'; color: #9a9aa2; margin-right: 3px; }
+html[data-skin='ps4'] #feed .kf .ico { border-radius: 2px; }
+html[data-skin='ps4'] #feed .kf .data { grid-column: 2 / -1; grid-row: 2; font: 400 13px 'Source Sans 3', sans-serif; color: #9a9aa2; }
+html[data-skin='ps4'] #feed .kf .data b { color: #c4c4ca; font-weight: 400; }
+/* the value in flight: the input field, as on the grid */
+html[data-skin='ps4'] #duel .chip { background: #03052a; color: #ffffff; border-radius: 0; box-shadow: inset 0 0 0 1px #dfe8ff; font-weight: 400; }
+/* the grid shows the sky as it is: no tint over it */
+html[data-skin='ps4'] #grid-pane, html[data-skin='ps4'] #grid-wrap { background: transparent; }

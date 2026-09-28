@@ -1,0 +1,162 @@
+/* PlayStation — generated from a short spec (see docs/decisions/); edit freely. */
+html[data-skin='ps1'] {
+  --font-ui: Rubik, 'Open Sans', sans-serif;
+  --font-mono: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
+  --ui-size: 13px;
+  --bg: #0a0b14;
+  --fg: #ecebf2;
+  --fg-dim: #a3a3b3;
+  --accent: #6aa8ff;
+  --ok: #3ed6a0;
+  --bad: #ff4d5e;
+  --warn: #ffbf47;
+  --run: #3ed6a0;
+  --wait: #ffbf47;
+  --bar-bg: linear-gradient(#c9c7bf, #a9a7a0);
+  --bar-fg: #1d1d22;
+  --bar-border: 1px solid #5f5d57;
+  --brand-font: 700 15px Rubik, 'Open Sans', sans-serif;
+  --logo: #2a2a30;
+  --btn-bg: linear-gradient(#e3e1d9, #bdbbb3);
+  --btn-bg-hover: linear-gradient(#f1efe8, #cdcbc3);
+  --btn-fg: #1d1d22;
+  --btn-border: 1px solid #6f6d67;
+  --btn-radius: 3px;
+  --btn-bg-on: #2a2a30;
+  --btn-fg-on: #ffffff;
+  --btn-shadow-on: none;
+  --primary-bg: #6aa8ff;
+  --primary-fg: #ffffff;
+  --sw-off: #777777;
+  --sw-on: #6aa8ff;
+  --sw-knob: #ffffff;
+  --panes-bg: #0a0b14;
+  --pane-bg: #15161f;
+  --pane-border: #3a3b48;
+  --pane-radius: 3px;
+  --head-h: 34px;
+  --head-bg: #2a2a30;
+  --head-fg: #b8b8c0;
+  --head-fg-active: #ffffff;
+  --head-font: 600 12.5px Rubik, 'Open Sans', sans-serif;
+  --panel-bg: #1a1b25;
+  --panel-fg: #ecebf2;
+  --panel-dim: #a3a3b3;
+  --panel-border: 1px solid #4a4b5a;
+  --panel-radius: 3px;
+  --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  --ptitle-bg: #2a2a30;
+  --ptitle-fg: #f2f2f2;
+  --ptitle-border: 2px solid #6aa8ff;
+  --ptitle-pad: 8px 12px;
+  --field-bg: #0e0f17;
+  --field-fg: #ecebf2;
+  --field-border: 1px solid #3a3b48;
+  --field-radius: 4px;
+  --rule: 1px solid #2a2b36;
+  --pb-bg: linear-gradient(#c9c7bf, #a9a7a0);
+  --pb-border: 1px solid #5f5d57;
+  --lcd-bg: #101118;
+  --lcd-fg: #dfe6f5;
+  --lcd-font: Rubik, 'Open Sans', sans-serif;
+  --lcd-small: 11.5px;
+  --lcd-big: 13.5px;
+  --lcd-fn: #6aa8ff;
+  --lcd-ptr: #ff85c0;
+  --lcd-ret: #3ed6a0;
+  --tl-bg: #0e0f17;
+  --tl-border: none;
+  --tl-call: #6aa8ff;
+  --tl-ret: #3ed6a0;
+  --tl-ptr: #ff85c0;
+  --tl-write: #555555;
+  --tl-eval: #333333;
+  --tl-err: #ff4d5e;
+  --tl-head: #ecebf2;
+  --st-bg: #2a2a30;
+  --st-fg: #ecebf2;
+  --st-border: none;
+  --st-font: 12px Rubik, 'Open Sans', sans-serif;
+  --mode-fg: #ffffff;
+  --mode-normal-bg: #6aa8ff;
+  --mode-insert-bg: #3ed6a0;
+  --mode-visual-bg: #ffbf47;
+  --menu-hover-bg: #6aa8ff;
+  --menu-hover-fg: #ffffff;
+  --scrim: rgba(0,0,0,0.55);
+  --ed-bg: #0e0f17;
+  --ed-fg: #ecebf2;
+  --ed-font: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
+  --ed-size: 13.5px;
+  --ed-cursor: #6aa8ff;
+  --ed-gutter: #0e0f17;
+  --ed-gutter-fg: #5f5f70;
+  --ed-gutter-active: #ecebf2;
+  --ed-active: rgba(255,255,255,0.05);
+  --ed-sel: color-mix(in srgb, #6aa8ff 35%, transparent);
+  --ed-exec: color-mix(in srgb, #6aa8ff 20%, transparent);
+  --ed-exec-bar: #6aa8ff;
+  --ed-err: color-mix(in srgb, #ff4d5e 18%, transparent);
+  --ed-err-bar: #ff4d5e;
+  --syn-kw: #7aa8ff;
+  --syn-type: #5ad1c0;
+  --syn-def: #f0e3a0;
+  --syn-fn: #f0e3a0;
+  --syn-var: #ecebf2;
+  --syn-num: #b9e39a;
+  --syn-str: #f0a07a;
+  --syn-com: #6f7c93;
+  --syn-macro: #d59ae8;
+  --syn-op: #c9d1e0;
+  --syn-punct: #9aa3b4;
+}
+/* The PlayStation, grey all through like the console: the PAL BIOS's grey
+   blocks behind everything, the logo's four colours as the one splash of
+   colour, the console's vent grille on the playbar, round buttons (Play
+   green, Pause red), and the PS1's ordered dither over the whole screen. */
+html[data-skin='ps1'] {
+  --bg: #9c9b96; --fg: #1c1c20; --fg-dim: #4a4a50; --accent: #0072ce;
+  --bar-bg: linear-gradient(#d2d1cc, #b6b5b0); --bar-fg: #1c1c20;
+  --panes-bg: transparent; --pane-bg: #d9d8d3; --pane-border: #6f6e69; --pane-radius: 4px;
+  --head-bg: linear-gradient(#cfcec9, #b9b8b3); --head-fg: #3a3a40; --head-fg-active: #111114;
+  --panel-bg: #e4e3de; --panel-fg: #1c1c20; --panel-dim: #55555c; --panel-border: 1px solid #6f6e69; --panel-shadow: 3px 3px 0 rgba(0,0,0,0.35);
+  --ptitle-bg: #26262b; --ptitle-fg: #f2f2f2; --ptitle-border: 3px solid #0072ce;
+  --field-bg: #f1f0ec; --field-fg: #1c1c20; --field-border: 1px solid #8f8e89; --rule: 1px solid #b0afaa;
+  --btn-bg: linear-gradient(#e0dfda, #bdbcb7); --btn-bg-hover: linear-gradient(#eeede8, #cbcac5); --btn-fg: #2a2a30; --btn-bg-on: linear-gradient(#3a3a40, #26262b); --btn-fg-on: #f2f2f2;
+  --lcd-bg: #1a1b1f; --lcd-fg: #c9f7d0; --lcd-fn: #ffd27a; --lcd-ptr: #ff9ac8; --lcd-ret: #3dff6a;
+  --tl-bg: #cfcec9; --tl-border: 1px solid #8f8e89; --tl-eval: #bdbcb7; --tl-write: #a3a29d; --tl-head: #1c1c20;
+  --st-bg: #bdbcb7; --st-fg: #1c1c20; --menu-hover-bg: #0072ce; --menu-hover-fg: #ffffff;
+  --ed-bg: #e8e7e2; --ed-fg: #1c1c20; --ed-gutter: #d6d5d0; --ed-gutter-fg: #85847e; --ed-gutter-active: #1c1c20;
+  --ed-active: rgba(0,0,0,0.05); --ed-sel: rgba(0,114,206,0.25); --ed-cursor: #0072ce; --ed-exec: rgba(0,114,206,0.16); --ed-exec-bar: #0072ce;
+  --syn-kw: #0059a8; --syn-type: #00864a; --syn-def: #1c1c20; --syn-fn: #1c1c20; --syn-var: #1c1c20; --syn-num: #c4122f;
+  --syn-str: #a0520a; --syn-com: #8a8983; --syn-macro: #b0307a; --syn-op: #3a3a40; --syn-punct: #5a5a60;
+  --ed-ws: rgba(0,0,0,0.18);
+}
+html[data-skin='ps1'] body { background: linear-gradient(90deg, rgba(255,255,255,0.4) 0 1px, transparent 1px calc(100% - 1px), rgba(0,0,0,0.3) calc(100% - 1px)) 0 0 / 48px 48px, linear-gradient(rgba(255,255,255,0.4) 0 1px, transparent 1px calc(100% - 1px), rgba(0,0,0,0.3) calc(100% - 1px)) 0 0 / 48px 48px, linear-gradient(135deg, #b3b2ad, #8f8e89); }
+html[data-skin='ps1'] #app, html[data-skin='ps1'] #panes { background: transparent; }
+html[data-skin='ps1'] .brand .logo { background: linear-gradient(90deg, #e4002b 0 25%, #f9b51b 25% 50%, #00a651 50% 75%, #0072ce 75%); }
+html[data-skin='ps1'] #top { background: linear-gradient(#d2d1cc, #b6b5b0); color: #1c1c20; border-bottom: 2px solid #26262b; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+html[data-skin='ps1'] .btn, html[data-skin='ps1'] .seg button { border-radius: 4px; background: linear-gradient(#e0dfda, #bdbcb7); border: 1px solid #75746e; box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 0 rgba(0,0,0,0.25); color: #2a2a30; }
+html[data-skin='ps1'] .seg button[aria-pressed='true'] { background: linear-gradient(#3a3a40, #26262b); color: #f2f2f2; box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); }
+/* round buttons, like the console's lid button: convex grey */
+html[data-skin='ps1'] .pb-buttons button { width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f1f0eb, #c3c2bd 55%, #9d9c97); border: 1px solid #6f6e69; box-shadow: 0 2px 0 rgba(0,0,0,0.3), inset 0 -2px 3px rgba(0,0,0,0.15); color: #3a3a40; }
+html[data-skin='ps1'] .pb-buttons button:active { box-shadow: inset 0 2px 3px rgba(0,0,0,0.35); }
+/* the light shows the state: red while paused, green while playing */
+html[data-skin='ps1'] .pb-buttons button.primary { color: #e4002b; box-shadow: 0 0 0 2px #e4002b, 0 2px 0 rgba(0,0,0,0.3); }
+html[data-skin='ps1'] .pb-buttons button.primary.playing { color: #00a651; box-shadow: 0 0 0 2px #00a651, 0 2px 0 rgba(0,0,0,0.3); }
+html[data-skin='ps1'] .pane { box-shadow: 3px 3px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.6); }
+html[data-skin='ps1'] .pane-head { border-bottom: 1px solid #8f8e89; }
+html[data-skin='ps1'] #status { background: #bdbcb7; color: #1c1c20; border-top: 1px solid #8f8e89; }
+
+/* the PS1's ordered dither, only where the console would show it: on shaded
+   plastic and gradients (bars, domed buttons); never on text or flat panels */
+html[data-skin='ps1'] #top { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='rgb%28100%2C100%2C100%29'/%3E%3Crect x='2' y='0' width='2' height='2' fill='rgb%28130%2C130%2C130%29'/%3E%3Crect x='4' y='0' width='2' height='2' fill='rgb%28107%2C107%2C107%29'/%3E%3Crect x='6' y='0' width='2' height='2' fill='rgb%28137%2C137%2C137%29'/%3E%3Crect x='0' y='2' width='2' height='2' fill='rgb%28145%2C145%2C145%29'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgb%28115%2C115%2C115%29'/%3E%3Crect x='4' y='2' width='2' height='2' fill='rgb%28152%2C152%2C152%29'/%3E%3Crect x='6' y='2' width='2' height='2' fill='rgb%28122%2C122%2C122%29'/%3E%3Crect x='0' y='4' width='2' height='2' fill='rgb%28111%2C111%2C111%29'/%3E%3Crect x='2' y='4' width='2' height='2' fill='rgb%28141%2C141%2C141%29'/%3E%3Crect x='4' y='4' width='2' height='2' fill='rgb%28104%2C104%2C104%29'/%3E%3Crect x='6' y='4' width='2' height='2' fill='rgb%28134%2C134%2C134%29'/%3E%3Crect x='0' y='6' width='2' height='2' fill='rgb%28156%2C156%2C156%29'/%3E%3Crect x='2' y='6' width='2' height='2' fill='rgb%28126%2C126%2C126%29'/%3E%3Crect x='4' y='6' width='2' height='2' fill='rgb%28149%2C149%2C149%29'/%3E%3Crect x='6' y='6' width='2' height='2' fill='rgb%28119%2C119%2C119%29'/%3E%3C/svg%3E") 0 0 / 8px 8px, linear-gradient(#d2d1cc, #b6b5b0); background-blend-mode: overlay, normal; }
+html[data-skin='ps1'] #playbar { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='rgb%28100%2C100%2C100%29'/%3E%3Crect x='2' y='0' width='2' height='2' fill='rgb%28130%2C130%2C130%29'/%3E%3Crect x='4' y='0' width='2' height='2' fill='rgb%28107%2C107%2C107%29'/%3E%3Crect x='6' y='0' width='2' height='2' fill='rgb%28137%2C137%2C137%29'/%3E%3Crect x='0' y='2' width='2' height='2' fill='rgb%28145%2C145%2C145%29'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgb%28115%2C115%2C115%29'/%3E%3Crect x='4' y='2' width='2' height='2' fill='rgb%28152%2C152%2C152%29'/%3E%3Crect x='6' y='2' width='2' height='2' fill='rgb%28122%2C122%2C122%29'/%3E%3Crect x='0' y='4' width='2' height='2' fill='rgb%28111%2C111%2C111%29'/%3E%3Crect x='2' y='4' width='2' height='2' fill='rgb%28141%2C141%2C141%29'/%3E%3Crect x='4' y='4' width='2' height='2' fill='rgb%28104%2C104%2C104%29'/%3E%3Crect x='6' y='4' width='2' height='2' fill='rgb%28134%2C134%2C134%29'/%3E%3Crect x='0' y='6' width='2' height='2' fill='rgb%28156%2C156%2C156%29'/%3E%3Crect x='2' y='6' width='2' height='2' fill='rgb%28126%2C126%2C126%29'/%3E%3Crect x='4' y='6' width='2' height='2' fill='rgb%28149%2C149%2C149%29'/%3E%3Crect x='6' y='6' width='2' height='2' fill='rgb%28119%2C119%2C119%29'/%3E%3C/svg%3E") 0 0 / 8px 8px, linear-gradient(#cfcec9, #b3b2ad); background-blend-mode: overlay, normal; }
+html[data-skin='ps1'] .pb-buttons button { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='rgb%28100%2C100%2C100%29'/%3E%3Crect x='2' y='0' width='2' height='2' fill='rgb%28130%2C130%2C130%29'/%3E%3Crect x='4' y='0' width='2' height='2' fill='rgb%28107%2C107%2C107%29'/%3E%3Crect x='6' y='0' width='2' height='2' fill='rgb%28137%2C137%2C137%29'/%3E%3Crect x='0' y='2' width='2' height='2' fill='rgb%28145%2C145%2C145%29'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgb%28115%2C115%2C115%29'/%3E%3Crect x='4' y='2' width='2' height='2' fill='rgb%28152%2C152%2C152%29'/%3E%3Crect x='6' y='2' width='2' height='2' fill='rgb%28122%2C122%2C122%29'/%3E%3Crect x='0' y='4' width='2' height='2' fill='rgb%28111%2C111%2C111%29'/%3E%3Crect x='2' y='4' width='2' height='2' fill='rgb%28141%2C141%2C141%29'/%3E%3Crect x='4' y='4' width='2' height='2' fill='rgb%28104%2C104%2C104%29'/%3E%3Crect x='6' y='4' width='2' height='2' fill='rgb%28134%2C134%2C134%29'/%3E%3Crect x='0' y='6' width='2' height='2' fill='rgb%28156%2C156%2C156%29'/%3E%3Crect x='2' y='6' width='2' height='2' fill='rgb%28126%2C126%2C126%29'/%3E%3Crect x='4' y='6' width='2' height='2' fill='rgb%28149%2C149%2C149%29'/%3E%3Crect x='6' y='6' width='2' height='2' fill='rgb%28119%2C119%2C119%29'/%3E%3C/svg%3E") 0 0 / 8px 8px, radial-gradient(circle at 35% 30%, #f1f0eb, #c3c2bd 55%, #9d9c97); background-blend-mode: overlay, normal; }
+
+/* panels (the duel, the return card, the inspector) match the windows: the
+   dark title bar, and colours that read on grey */
+html[data-skin='ps1'] { --tl-call: #0063b3; --tl-ret: #00864a; --tl-ptr: #b0307a; --ok: #00864a; }
+html[data-skin='ps1'] #duel .d-code .val, html[data-skin='ps1'] #duel .d-say b.v { color: #00864a; }
+html[data-skin='ps1'] #duel .d-say b.v { color: #7fe0a8; }
+html[data-skin='ps1'] #duel .d-card { box-shadow: 2px 2px 0 rgba(0,0,0,0.25); }

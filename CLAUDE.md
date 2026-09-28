@@ -4,26 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Working on blueprint42 (formerly ft_blueprint)
 
-Read `SPEC.md` first. Principles in §1 override convenience.
+Read `docs/SPEC.md` first. Principles in §1 override convenience.
 
-- M0–M6 are implemented in `proto/` (M6: live edits from any editor, nvim
-  plugin in `proto/nvim/`). Nothing further is planned; ask the author. M3 came before M2 by the author's decision in `DECISIONS.md`.
+- M0–M6 are implemented at the repo root (M6: live edits from any editor, nvim
+  plugin in `nvim/`). Nothing further is planned; ask the author. M3 came before M2 by the author's decision in `docs/decisions/`.
 - Record every deviation from the recommended stack, and every answer to an
-  open question from SPEC §6, in `DECISIONS.md` (date, decision, why).
+  open question from SPEC §6, as a new numbered file in `docs/decisions/`
+  (`NNN-short-name.md`: title, date, decision, why) with a line in its
+  `README.md` index.
 - `samples/line_reader/` is the acceptance-test fixture for M1–M5.5 (a
   get_next_line-style reader written for this repo; its tests pin exact
   values from real runs, so treat it as read-only). The author's real
   get_next_line (`samples/gnl_v3/`, if present locally) is private: never
   commit, publish or bundle it.
-- Input model (author's call, see `DECISIONS.md`): vim is an optional mode
+- Input model (author's call, see `docs/decisions/`): vim is an optional mode
   of the **editor** only. The canvas is mouse-first like a node editor
   (middle-drag pan, wheel zoom, drag to move/re-route, double-click,
   right-click menu), plus conventional player keys (Space, ←/→, Home/End).
   Don't add vim-style bindings to the canvas.
 - Look and feel lives in skins. New visuals go through the `Skin` interface
-  (`proto/src/skins/types.ts`) and every skin, never hard-coded colours in
+  (`src/skins/types.ts`) and every skin, never hard-coded colours in
   the engine.
-- Filesystem rule (M5): only `proto/server/project.mjs` reads or writes the
+- Filesystem rule (M5): only `server/project.mjs` reads or writes the
   author's files, only inside a folder opened this session, and writes
   happen only after the author confirms the Save dialog. Never auto-save.
   Samples stay bundled at build time. Test projects go in a temp or
@@ -35,16 +37,15 @@ Read `SPEC.md` first. Principles in §1 override convenience.
 
 ## Current state
 
-`proto/` is the app: M0, M1, M3 (real execution under gdb), M2 (author
+The app lives at the repo root: M0, M1, M3 (real execution under gdb), M2 (author
 sprites and bindings), M4 (invariants and truth checks), M5 (projects:
 folders, modules, Makefile builds, confirmed saves), M5.5 (machines are
 their insides: statements animated in place with real reads and writes) and
-M6 (live edits and cursor from any editor; `proto/nvim/` is the Neovim
+M6 (live edits and cursor from any editor; `nvim/` is the Neovim
 plugin: `:B42Connect [port]`, `:B42Open`; the old `:Ftb…` names still work).
 No linter yet.
 
 ```sh
-cd proto
 npm install
 npm run dev      # vite dev server + the trace server at POST /api/trace
 npm run dev -- ~/42/get_next_line   # …and open that folder (like `code <folder>`)
@@ -58,7 +59,7 @@ npm run build    # type-check + production build (static; interpreter only)
 The integration tests (`test/trace.test.ts`) need `cc` and `gdb` with
 Python on PATH. `npm run preview` also serves the trace server.
 
-Pipeline in `proto/src/`: `parse.ts` (tree-sitter → symbol model) →
+Pipeline in `src/`: `parse.ts` (tree-sitter → symbol model) →
 `layout.ts` (positions by stable id, pinning, belt waypoints, rename
 heuristic) → `route.ts` (scene: recursive-copy slots, per-call ports,
 channel/corridor routing, crossings) → `interp.ts` (runs `main`, emits events plus a snapshot before
@@ -128,7 +129,7 @@ editor to its definition; the editor cursor highlights its node).
   parsing keeps its last node and is marked stale; the grid is never
   cleared on broken input. Re-parse is debounced ~150 ms.
 - Rename tracking (keeping a machine's position across a rename) is an open
-  question in SPEC §6. Pick an approach, record it in `DECISIONS.md`.
+  question in SPEC §6. Pick an approach, record it in `docs/decisions/`.
 
 ## The line reader as a parser test
 

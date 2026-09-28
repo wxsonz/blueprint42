@@ -56,7 +56,6 @@ You need Node 20+, and for real execution `cc` and `gdb` built with Python
 (any Linux distribution's gdb is).
 
 ```sh
-cd proto
 npm install
 npm run dev                  # http://localhost:5173
 npm run dev -- ~/42/libft    # …and open that folder, like `code <folder>`
@@ -80,8 +79,8 @@ the program.
 
 ### Neovim
 
-Add the plugin from `proto/nvim` (for lazy.nvim:
-`{ dir = '<repo>/proto/nvim', opts = { port = 5173 } }`), start the page with
+Add the plugin from `nvim/` (for lazy.nvim:
+`{ dir = '<repo>/nvim', opts = { port = 5173 } }`), start the page with
 `npm run dev`, then `:B42Connect` in nvim. `:B42Open` opens the current
 project in the page.
 
@@ -96,12 +95,16 @@ which is what makes this possible to draw at all.
 
 ```
 README.md             this file
-SPEC.md               principles, metaphor, architecture, milestones
-DECISIONS.md          every decision along the way, with the reason
-CLAUDE.md, HANDOFF.md working notes for an agent picking this up
+src/                  the app (Vite + TypeScript, tree-sitter); skins in src/skins/
+server/               the local server: compiles, traces under gdb, opens folders
+test/                 unit and integration tests
+nvim/                 the Neovim plugin
 samples/line_reader/  a get_next_line-style line reader: an example, and the
                       fixture the acceptance tests run on
-proto/                the app (Vite + TypeScript, tree-sitter, a gdb tracer)
+docs/SPEC.md          principles, metaphor, architecture, milestones
+docs/decisions/       every decision along the way, one file each, with the reason
+docs/HANDOFF.md,      working notes for an agent picking this up
+  CLAUDE.md
 ```
 
 ```sh
