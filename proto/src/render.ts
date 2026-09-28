@@ -1052,6 +1052,7 @@ export class GridView {
         state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
         exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
         out: finished ? trace?.stdout : undefined,
+        args: trace?.args,
         selected: selKey === 'p',
         hovered: hovKey === 'p',
       });

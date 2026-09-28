@@ -430,6 +430,16 @@ export function interiorAt(trace: Trace, plan: Plan, frame: number, i: number): 
     if (s !== current) since = run.idx[k];
     current = s;
   }
+  // A statement the compiler drops (`(void)ac;`) has no line for gdb to stop
+  // on, but it ran if the frame got to the next statement in its block (no
+  // goto under the Norminette). From the back, so a run of them fills in.
+  const st = plan.stations;
+  for (let k = st.length - 1; k >= 0; k--) {
+    if (visited.has(k) || st[k].kind !== 'do') continue;
+    let j = k + 1;
+    while (j < st.length && st[j].depth > st[k].depth) j++;
+    if (j < st.length && st[j].depth === st[k].depth && visited.has(j)) visited.add(k);
+  }
   // before the frame's first stop: the first station
   if (current === null && plan.stations.length) current = 0;
   const decided = new Map<number, { d: Decision; count: number | null }>();

@@ -21,12 +21,20 @@ export function valueOf(c: SnapCell, frame: SnapFrame | null, trace: Trace | nul
   if (c.val.k === 'ptr') {
     if (c.val.to === null && !c.val.label) return { text: 'NULL', kind: 'null' };
     const dangling = c.val.to !== null && live !== null && !live.has(c.val.to);
-    if (c.str && !dangling) return { text: clip(c.str, 12), kind: 'ptr' }; // a char *: the text, not the address
+    if (c.str && !dangling) return { text: c.str.startsWith('{') ? clipList(c.str, 22) : clip(c.str, 12), kind: 'ptr' }; // a char *: the text, not the address
     const name = c.val.label ?? pointeeName(trace, c.val.to!, frame);
     return { text: `→${name}`, kind: dangling ? 'dangling' : 'ptr' };
   }
+  // a pointer into memory no frame owns (argv's array, say) that gdb could
+  // read the strings behind: those, not the address
+  if (c.val.k === 'raw' && c.str) return { text: c.str.startsWith('{') ? clipList(c.str, 22) : clip(c.str, 12), kind: 'ptr' };
   if (c.val.k === 'raw') return { text: c.val.text, kind: 'int' };
   return { text: fmtVal(c.val, c.type), kind: 'int' };
+}
+
+// A list of strings ({"./a.out", "200"}) cut to about n characters.
+export function clipList(q: string, n: number): string {
+  return q.length <= n ? q : `${q.slice(0, n).replace(/,?\s*"?[^"]*$/, '')}, …}`;
 }
 
 // A quoted string cut to a readable length (never shrunk to fit).

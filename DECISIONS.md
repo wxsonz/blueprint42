@@ -1387,3 +1387,18 @@ questions. Newest last.
   (`--head-fg`), pale in skins whose title bars are dark (Seven, XP…), but
   they sit on the pane's body: they use `--fg` / `--fg-dim` now. Checked in
   all 33 skins (contrast 3.3:1 at the lowest, Game Boy's hint line).
+- Four fixes from running a `main(int ac, char **av)` with an argument:
+  - The process box printed `$ ./a.out` whatever the arguments: the trace
+    server echoes the arguments it ran with, and every skin's prompt shows
+    them (`$ ./a.out 200`, quoted when needed).
+  - It showed the last lines of output with no sign of the rest: the
+    prompt row now says how many lines are above (`+2 ↑`, or a line saying
+    so in the terminal-style skins).
+  - `av` was an address: for a `char **` the tracer reads the strings it
+    points at (up to the NULL that ends the list, 8 at most) and it shows
+    as `{"./a.out", "200"}`, in storage and on belts. The program is run
+    as `./a.out` (a bash exec-wrapper setting argv[0]), as from a
+    terminal, not as the temp path it was built at.
+  - `(void)ac;` stayed "never reached": the compiler drops it, so gdb never
+    stops there. A plain statement is now counted as run when the frame
+    reaches the next statement in its block (no goto under the Norminette).

@@ -82,6 +82,7 @@ export interface Trace {
   error: { msg: string; line: number; file?: string } | null;
   truncated: boolean;
   stdout?: string;
+  args?: string[]; // the command-line arguments it ran with (gdb engine)
   heapSlots?: Map<number, number>; // heap cell -> shelf slot, stable for the block's life
   leaks?: { cell: number; size: number; line: number | null; file?: string }[];
   warnings?: string[];

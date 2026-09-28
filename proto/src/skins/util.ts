@@ -135,6 +135,19 @@ export function scale(dc: Dc, px: number, min = 0): number {
 }
 
 // Last few lines a program printed, for the process terminal.
+// The program's command line as a shell would echo it: `a.out 200 "two words"`.
+export function argLine(args: string[] | undefined, prog = 'a.out'): string {
+  const q = (a: string) => (a === '' || /[\s"'\\$`]/.test(a) ? `"${a.replace(/(["\\$`])/g, '\\$1')}"` : a);
+  return [prog, ...(args ?? []).map(q)].join(' ');
+}
+
+// How many lines of output there are before the last n (0 if they all fit).
+export function hiddenLines(out: string | undefined, n: number): number {
+  if (!out) return 0;
+  const lines = out.replace(/\n$/, '').split('\n');
+  return Math.max(0, lines.length - n);
+}
+
 export function tailLines(out: string | undefined, n: number): string[] {
   if (!out) return [];
   const lines = out.replace(/\n$/, '').split('\n');

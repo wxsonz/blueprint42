@@ -3,6 +3,7 @@
 # statics, live heap blocks, and the calls / returns / mallocs / frees that
 # happened since the previous stop. Config comes from $FTB_CFG.
 import json
+import shutil
 import os
 import re
 import shlex
@@ -26,6 +27,14 @@ for cmd in (
 ):
     try:
         gdb.execute(cmd, to_string=True)
+    except gdb.error:
+        pass
+
+# The program sees itself as ./a.out, as when run from a terminal after cc,
+# not as the temp path it was built at (argv[0] would show that folder).
+if shutil.which("bash"):
+    try:
+        gdb.execute("set exec-wrapper bash -c 'exec -a ./a.out \"$0\" \"$@\"'", to_string=True)
     except gdb.error:
         pass
 
@@ -127,6 +136,22 @@ def ser(v, depth=0):
                 if raw is not None:
                     out["str"] = raw.split(b"\0")[0].decode("latin-1")
                     out["strFull"] = b"\0" in raw
+            elif out["v"] and is_charp(target):
+                # a char ** (argv, a split's result): the strings it points at,
+                # up to the NULL that ends the list, 8 at most
+                size = target.sizeof
+                ps = read_bytes(out["v"], size * 8)
+                if ps is not None:
+                    strs, full = [], False
+                    for i in range(8):
+                        q = int.from_bytes(ps[i * size:(i + 1) * size], "little")
+                        if not q:
+                            full = True
+                            break
+                        raw = read_bytes(q, 24)
+                        strs.append(raw.split(b"\0")[0].decode("latin-1") if raw is not None else "?")
+                    out["strs"] = strs
+                    out["strsFull"] = full
             elif out["v"] and depth < 1 and target.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
                 # what a struct pointer carries: its pointee's fields, one level deep
                 try:

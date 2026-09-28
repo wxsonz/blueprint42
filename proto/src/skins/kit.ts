@@ -6,7 +6,7 @@ import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
 import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { arrowHead, baseName, beltMid, brackets, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -380,7 +380,12 @@ export function makeSkin(t: Theme): Skin {
       g.textBaseline = 'top';
       g.fillStyle = p.dim;
       g.font = t.mono(px(dc, 12, 7));
-      g.fillText('$ ./a.out', r.x + pad, r.y + pad);
+      const more = hiddenLines(pr.out, 2);
+      // the command as it ran; if the output is longer than fits, how many lines are above
+      const moreText = more ? `+${more} ↑` : '';
+      const moreW = more ? g.measureText(moreText).width + px(dc, 6) : 0;
+      g.fillText(fitText(g, `$ ./${argLine(pr.args)}`, t.mono, px(dc, 12, 7), r.w - pad * 2 - moreW, 6), r.x + pad, r.y + pad);
+      if (more) (g.textAlign = 'right'), g.fillText(moreText, r.x + r.w - pad, r.y + pad), (g.textAlign = 'left');
       const out = tailLines(pr.out, 2);
       g.fillStyle = p.fg;
       out.forEach((l, i) => g.fillText(fitText(g, l, t.mono, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));

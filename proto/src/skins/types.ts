@@ -76,6 +76,7 @@ export interface ProcInfo {
   state: 'idle' | 'running' | 'done' | 'crashed';
   exit: string | null;
   out?: string; // what the program printed (shown once it has finished)
+  args?: string[]; // its command-line arguments, for the prompt line
   selected: boolean;
   hovered: boolean;
 }

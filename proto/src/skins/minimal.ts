@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { arrowHead, baseName, beltMid, brackets, dirName, fitText, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -345,7 +345,11 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.textAlign = 'left';
     g.textBaseline = 'top';
     g.fillStyle = DIM;
-    g.fillText('$ ./a.out', r.x + pad, r.y + pad);
+    const more = hiddenLines(p.out, 2);
+    const moreText = more ? `+${more} ↑` : '';
+    const moreW = more ? g.measureText(moreText).width + px(dc, 6) : 0;
+    g.fillText(fitText(g, `$ ./${argLine(p.args)}`, MONO, px(dc, 12, 7), r.w - pad * 2 - moreW, 6), r.x + pad, r.y + pad);
+    if (more) (g.textAlign = 'right'), g.fillText(moreText, r.x + r.w - pad, r.y + pad), (g.textAlign = 'left');
     const out = tailLines(p.out, 2);
     g.font = MONO(px(dc, 10.5, 7));
     g.fillStyle = FG;

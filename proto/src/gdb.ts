@@ -12,6 +12,8 @@ interface GVal {
   v?: number;
   str?: string;
   strFull?: boolean;
+  strs?: string[]; // a char **: the strings it points at, up to its NULL
+  strsFull?: boolean;
   text?: string;
   fields?: (GVal & { name: string })[];
   items?: (GVal & { index: number })[];
@@ -53,6 +55,7 @@ export interface GResult {
   signal?: string | null;
   truncated?: boolean;
   stdout?: string;
+  args?: string[];
   stderr?: string;
   ms?: number;
   flags?: string[];
@@ -262,9 +265,13 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     if (g.kind === 'ptr') return resolve(g.v!);
     return { k: 'raw', text: text(g) };
   };
+  const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/"/g, '\\"');
   const quote = (g: GVal): string | undefined => {
-    if (g.kind !== 'ptr' || g.str === undefined || !g.v) return undefined;
-    const s = g.str.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/"/g, '\\"');
+    if (g.kind !== 'ptr' || !g.v) return undefined;
+    // a char **: its strings, as a list ({"./a.out", "200"})
+    if (g.strs) return `{${g.strs.map((x) => `"${esc(x.length > 24 ? x.slice(0, 24) : x)}"`).join(', ')}${g.strsFull ? '' : ', …'}}`;
+    if (g.str === undefined) return undefined;
+    const s = esc(g.str);
     return `"${s.length > 40 ? s.slice(0, 40) : s}"${!g.strFull || s.length > 40 ? '…' : ''}`;
   };
   const structOf = (g: GVal): GVal | null => (g.kind === 'struct' ? g : g.kind === 'ptr' && g.deref?.kind === 'struct' ? g.deref : null);
@@ -482,6 +489,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     error,
     truncated: !!r.truncated,
     stdout: r.stdout,
+    args: r.args,
     heapSlots,
     leaks,
     warnings,
