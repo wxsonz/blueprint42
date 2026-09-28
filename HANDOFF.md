@@ -6,12 +6,13 @@ why), then this file (current state and the next job).
 
 ## Where things stand (2026-09-28)
 
-- `main` has everything through M5 (fast-forwarded from `m5-open-project`).
-  M5.5 is on branch `m5.5-inside`. Nothing is pushed (there is no remote).
-- **Done:** M0, M1, M3, M2, M4, M5 and M5.5. M3 was built before M2 on
+- `main` has everything through M5.5. M6 is on branch `m6-live`. Nothing
+  is pushed (there is no remote).
+- **Done:** M0, M1, M3, M2, M4, M5, M5.5 and M6. M3 was built before M2 on
   purpose (see `DECISIONS.md` and SPEC §4).
-- **Next job: M6** (nvim bridge).
-- **Checks:** 69 tests pass (`npm test`), including automated M2, M3, M4
+- **Next job:** none planned; see SPEC "Later / parking lot" and ask the
+  author.
+- **Checks:** 72 tests pass (`test/live.test.ts` covers the live routes) (`npm test`), including automated M2, M3, M4
   and M5.5 acceptance tests on the real GNL (`npx vitest run -t "acceptance"`),
   `test/interior.test.ts` (stations, gdb and interpreter switch results,
   room-making, blueprint round-trip), and M5 tests:
@@ -166,11 +167,34 @@ frame panel as a small railway; double-click a statement to jump to it.
 - The interior shows the newest live frame of the function (recursion: the
   deepest), else its last finished run, dimmed.
 
-## Next milestone: M6 (SPEC §4)
+## M6: live edits from any editor
 
-- **M6, Neovim bridge:** nvim becomes the editor and ft_blueprint the view
-  next to it. M5's poll already follows files saved from nvim; the bridge
-  would sync unsaved buffers and the cursor.
+The page doesn't care where an edit comes from (author's call). Any editor
+pushes a file's text and cursor; the page applies it like typing.
+- `server/live.mjs`: `POST /api/live/push` (edit, close, open, reveal,
+  replay) and `POST /api/live/stream` (newline-separated JSON, held open;
+  `role: 'page' | 'editor'`). Same guard as every route (localhost, `x-ftb`
+  header, same origin when there is an Origin). It keeps the editors'
+  latest unsaved text in memory so a reloaded page catches up; it never
+  touches the disk. Absolute paths map to `{ root, rel }` only inside a
+  folder the page opened (`project.mjs` `openedRootOf`).
+- `src/live.ts` (the page's stream and `liveReveal`/`liveReplay`) and
+  `main.ts` `onLive`: an edit becomes a minimal change in the in-app editor
+  (or the file's text if it isn't open), the page follows the editor's
+  cursor and file, a `close` puts the file back to its disk text, and
+  `openAt` asks the editors to jump too. Files showing an editor's unsaved
+  text (`liveFrom`) aren't hot-exit backed up and don't block closing the
+  tab. The disk poll counts "disk now equals our text" as saved, not a
+  conflict.
+- `proto/nvim/`: the Neovim plugin (Lua, uses `curl`, Neovim 0.10+). With
+  lazy.nvim: `{ dir = '~/42me/ft_blueprint/proto/nvim', opts = { port = 5173 } }`,
+  then `:FtbConnect [port]`, `:FtbOpen [dir]`, `:FtbDisconnect`.
+  `opts.auto = true` connects on startup.
+- Checked end to end with headless nvim + the dev server + headless
+  Chromium: typing shows up, the cursor highlights its machine, a grid
+  double-click moves nvim's cursor, and quitting without saving reverts.
+- Known: while the program plays, the in-app editor follows the running
+  line, which can switch its file away from the one nvim is on.
 
 ## Gotchas learned the hard way
 
@@ -196,5 +220,4 @@ frame panel as a small railway; double-click a statement to jump to it.
 
 ## Open questions for the author
 
-- Merge `cleanup-and-trace` into `main`?
 - Default skin (currently Amp; the choice is remembered per browser).

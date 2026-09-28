@@ -6,3 +6,4 @@ export function listDir(dir?: string): Promise<{ dir: string; parent: string | n
 export function openProject(dir: string): Promise<{ root: string; name: string; files: ProjectFile[]; truncated: boolean }>;
 export function pollProject(root: string, known: Record<string, number>): Promise<{ changed: ProjectFile[]; removed: string[] }>;
 export function saveFiles(root: string, writes: { path: string; text: string; base: number | null }[], force?: boolean): Promise<{ saved: { path: string; mtime: number }[]; conflicts: { path: string; mtime: number | null; text: string | null }[] }>;
+export function openedRootOf(real: string): string | null;

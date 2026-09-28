@@ -128,9 +128,9 @@ export function setDoc(view: EditorView, doc: string): void {
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: 0 } });
 }
 
-export function jumpTo(view: EditorView, line: number, col: number): void {
+export function jumpTo(view: EditorView, line: number, col: number, focus = true): void {
   const l = view.state.doc.line(Math.min(line + 1, view.state.doc.lines));
   const pos = Math.min(l.from + col, l.to);
   view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
-  view.focus();
+  if (focus) view.focus();
 }

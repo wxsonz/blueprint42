@@ -84,6 +84,13 @@ export async function openProject(dir) {
   return { root, name: basename(root), files: withText, truncated };
 }
 
+// The folder opened this session that holds a real path (the deepest one), or null.
+export function openedRootOf(real) {
+  let best = null;
+  for (const r of opened) if (inside(r, real) && (!best || r.length > best.length)) best = r;
+  return best;
+}
+
 function openedRoot(root) {
   if (typeof root !== 'string' || !opened.has(root)) throw new Error('that folder is not open');
   return root;

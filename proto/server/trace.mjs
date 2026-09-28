@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { META, listDir, openProject, pollProject, safeRel, saveFiles, wanted } from './project.mjs';
+import { livePush, liveStream } from './live.mjs';
 
 const TRACER = fileURLToPath(new URL('./tracer.py', import.meta.url));
 const SRC = 'sandbox.c';
@@ -197,7 +198,8 @@ function allowed(req) {
   return req.method === 'POST' && req.headers['x-ftb'] === '1' && local && (!origin || new URL(origin).hostname === host.replace(/^\[|\]$/g, ''));
 }
 
-// Routes: POST /api/trace, and (M5) /api/fs/{initial,list,open,poll,save}.
+// Routes: POST /api/trace, (M5) /api/fs/{initial,list,open,poll,save}, and
+// (M6) /api/live/{push,stream} for edits from any editor (server/live.mjs).
 // `initial` is the folder named on the command line (npm run dev -- <path>).
 export function traceMiddleware(opts = {}) {
   const routes = {
@@ -207,9 +209,11 @@ export function traceMiddleware(opts = {}) {
     '/api/fs/open': async (b) => ({ ok: true, ...(await openProject(b.dir)) }),
     '/api/fs/poll': async (b) => ({ ok: true, ...(await pollProject(b.root, b.known)) }),
     '/api/fs/save': async (b) => ({ ok: true, ...(await saveFiles(b.root, b.writes, !!b.force)) }),
+    '/api/live/push': (b) => livePush(b),
   };
   return async (req, res, next) => {
-    const route = routes[req.url];
+    const stream = req.url === '/api/live/stream';
+    const route = stream ? liveStream : routes[req.url];
     if (!route) return next();
     if (!allowed(req)) {
       res.statusCode = 403;
@@ -222,6 +226,13 @@ export function traceMiddleware(opts = {}) {
         res.statusCode = 413;
         return res.end('too large');
       }
+    }
+    if (stream) {
+      let b = {};
+      try {
+        b = JSON.parse(body || '{}');
+      } catch { /* defaults */ }
+      return void liveStream(b, req, res);
     }
     let result;
     try {

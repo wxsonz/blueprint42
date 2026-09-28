@@ -1,3 +1,5 @@
+import { baseName } from './skins/util';
+import { connectLive, liveReplay, liveReveal, type LiveMsg } from './live';
 import { EditorView } from '@codemirror/view';
 import { Vim } from '@replit/codemirror-vim';
 import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
@@ -489,7 +491,7 @@ function writeProjectBackup(p: Project): void {
   if (S.project === p) syncActive();
   const buffers: ProjectSaved['buffers'] = {};
   for (const f of p.files.values()) {
-    if (!isSource(f.path) || !isDirty(f)) continue;
+    if (!isSource(f.path) || !isDirty(f) || liveFrom.has(f.path)) continue; // an editor's unsaved text lives in that editor
     buffers[f.path] = { text: f.text, base: f.disk === null ? null : hash(f.disk) };
   }
   const saved: ProjectSaved = {
@@ -608,6 +610,8 @@ function loadProject(p: Project): void {
   renderAlerts();
   renderStatus();
   startPolling();
+  // an editor may already have unsaved text in this folder
+  if (p.root) void liveReplay().then((ms) => S.project === p && ms.forEach(onLive));
   if (restored) toast(`restored ${restored} unsaved file${restored === 1 ? '' : 's'} from this browser`);
   else if (p.truncated) toast('large folder: only the first 800 source files were loaded');
 }
@@ -640,6 +644,85 @@ function switchFile(path: string, at?: { line: number; col: number }): void {
 function openAt(file: string | undefined, line: number, col = 0): void {
   if (S.project && file) switchFile(file, { line, col });
   else jumpTo(editor, line, col);
+  // the connected editors (nvim…) go there too
+  if (S.project?.root && file && liveEditors.length) void liveReveal(S.project.root, file, line, col);
+}
+
+// ---- M6: live edits from any editor (the nvim plugin, …) ----
+// The page doesn't care where an edit comes from: an editor's unsaved text
+// for a file is applied like typing here, and the latest change wins.
+let liveEditors: string[] = [];
+const liveFrom = new Map<string, string>(); // project path → the editor whose unsaved text it shows
+const liveOutside = new Set<string>();
+
+function renderLive(): void {
+  const el = $('st-live');
+  el.hidden = !liveEditors.length;
+  el.innerHTML = liveEditors.length ? `<span class="ok">●</span> live: ${esc(liveEditors.join(', '))}` : '';
+  el.title = 'edits in these editors show here as you type';
+}
+
+// New text for a project file, as a minimal change so cursors and scroll stay put.
+function setFileText(p: Project, f: PFile, text: string): void {
+  if (f.path === p.active) {
+    const old = editor.state.doc.toString();
+    let a = 0;
+    while (a < old.length && a < text.length && old[a] === text[a]) a++;
+    let b = 0;
+    while (b < old.length - a && b < text.length - a && old[old.length - 1 - b] === text[text.length - 1 - b]) b++;
+    editor.dispatch({ changes: { from: a, to: old.length - b, insert: text.slice(a, text.length - b) } }); // onChange re-parses
+  } else {
+    f.text = text;
+    f.state = null;
+    renderProjectChrome();
+    clearTimeout(debounce);
+    debounce = window.setTimeout(() => analyze('', false), 150);
+  }
+}
+
+function onLive(m: LiveMsg): void {
+  if (m.k === 'ping') return;
+  if (m.k === 'hello' || m.k === 'editors') {
+    liveEditors = m.editors;
+    return renderLive();
+  }
+  if (m.k === 'open') return void openFolder(m.dir);
+  const p = S.project;
+  if (!p?.root || m.root !== p.root || !m.rel) {
+    if (m.k === 'edit' && m.text !== undefined && !liveOutside.has(m.path)) {
+      liveOutside.add(m.path);
+      toast(`${m.source} is editing ${baseName(m.path)}, outside the open folder (:FtbOpen there opens its folder here)`);
+    }
+    return;
+  }
+  syncActive();
+  const rel = m.rel;
+  let f = p.files.get(rel);
+  if (m.k === 'close') {
+    // the editor dropped its unsaved text: back to what's on disk
+    if (!f || !liveFrom.has(rel)) return;
+    liveFrom.delete(rel);
+    if (f.disk !== null) return setFileText(p, f, f.disk);
+    p.files.delete(rel);
+    p.tabs = p.tabs.filter((t) => t !== rel);
+    if (p.active === rel) switchFile(p.tabs[0] ?? [...p.files.keys()].find(isSource) ?? '');
+    renderProjectChrome();
+    return analyze('', false);
+  }
+  if (m.text !== undefined && f?.text !== m.text) {
+    if (!f) p.files.set(rel, (f = { path: rel, text: m.text, disk: null, mtime: null, state: null }));
+    else if (isDirty(f) && !liveFrom.has(rel)) toast(`${rel}: your edits here were replaced by ${m.source}'s`);
+    setFileText(p, f, m.text);
+  }
+  if (f && m.text !== undefined) {
+    if (isDirty(f)) liveFrom.set(rel, m.source);
+    else liveFrom.delete(rel);
+  }
+  // follow the editor's cursor (without taking the keyboard)
+  if (f && m.line !== undefined) {
+    if (p.active !== rel) switchFile(rel);
+    if (p.active === rel) jumpTo(editor, m.line, m.col ?? 0, false);
+  }
 }
 
 function closeTab(path: string): void {
@@ -729,6 +812,15 @@ async function pollOnce(): Promise<void> {
       }
       if (f.disk === nf.text) {
         f.mtime = nf.mtime; // touched, same content
+        continue;
+      }
+      if (f.text === nf.text) {
+        // saved elsewhere (nvim) with the text we already show: clean now
+        f.disk = nf.text;
+        f.mtime = nf.mtime;
+        delete f.conflict;
+        liveFrom.delete(f.path);
+        changed = true;
         continue;
       }
       if (isDirty(f) && !f.path.startsWith(`${META}/`)) {
@@ -2192,6 +2284,10 @@ async function boot(): Promise<void> {
 
   $('vim-toggle').addEventListener('click', toggleVim);
   renderVimToggle();
+  connectLive(onLive, () => {
+    liveEditors = [];
+    renderLive();
+  });
   $('btn-help').addEventListener('click', openHelp);
   $('btn-revert').addEventListener('click', revertSample);
   const lineLinks = (e: MouseEvent) => {
@@ -2224,7 +2320,7 @@ async function boot(): Promise<void> {
     if (!S.project || S.project.readOnly) return;
     writeProjectBackup(S.project);
     // the backup keeps edits across a reload; closing still deserves a warning
-    if (dirtyFiles().some((f) => isSource(f.path))) e.preventDefault();
+    if (dirtyFiles().some((f) => isSource(f.path) && !liveFrom.has(f.path))) e.preventDefault();
   });
   $('btn-blueprint-save').addEventListener('click', exportBlueprint);
   $('btn-blueprint-load').addEventListener('click', () => $<HTMLInputElement>('blueprint-file').click());

@@ -234,6 +234,14 @@ reads "Blueprint".
   in-app editor is optional.
 - The endgame for "open any project like an IDE" is nvim as the IDE and
   ft_blueprint as the view next to it, not rebuilding nvim.
+- (Author, 2026-09-28) The page doesn't care where an edit comes from: any
+  editor pushes a file's text and cursor to the local server and the view
+  follows. nvim is the first client; the in-app editor stays editable.
+
+✅ Accept: with the project open in the page, an unsaved edit in nvim shows
+in the grid as you type; your nvim cursor highlights its machine; a
+double-click on the grid moves nvim's cursor there; quitting nvim without
+saving puts the page back to what's on disk.
 
 ### Later / parking lot
 - Shareable static exports (blueprint plus recorded timeline) for campus and
