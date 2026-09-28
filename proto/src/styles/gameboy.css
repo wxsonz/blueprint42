@@ -2,6 +2,10 @@
 html[data-skin='gameboy'] {
   --font-ui: 'Press Start 2P', monospace;
   --font-mono: VT323, monospace;
+  --mono-scale: 1.4;
+  /* labels and notes in the overlays: the pixel UI font is too small there */
+  --label-font: VT323, monospace;
+  --label-scale: 1.45;
   --ui-size: 9px;
   --bg: #9bbc0f;
   --fg: #0f380f;
@@ -113,3 +117,7 @@ html[data-skin='gameboy'] {
 html[data-skin='gameboy'] * { image-rendering: pixelated; }
 html[data-skin='gameboy'] .cm-content .tok-keyword, html[data-skin='gameboy'] .cm-content .ͼb { font-weight: 700; text-decoration: underline; }
 html[data-skin='gameboy'] .pane-head .title::before { content: '▶ '; }
+
+/* body text in the panels reads in VT323; Press Start 2P stays for heads and buttons */
+html[data-skin='gameboy'] .ins-body { font: 16px VT323, monospace; }
+html[data-skin='gameboy'] .pane-head .btn { white-space: nowrap; }

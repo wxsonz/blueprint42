@@ -59,7 +59,7 @@ html[data-skin='blueprint'] {
   --lcd-bg: transparent;
   --lcd-fg: #eef5ff;
   --lcd-font: 'Share Tech Mono', monospace;
-  --lcd-small: 10.5px;
+  --lcd-small: 12px;
   --lcd-big: 13px;
   --lcd-fn: #ffe066;
   --lcd-ptr: #ffa3b8;

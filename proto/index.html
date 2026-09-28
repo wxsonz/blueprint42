@@ -27,6 +27,11 @@
         <button id="skins" class="skin-pick" aria-haspopup="listbox" aria-label="Skin"></button>
         <div id="skin-list" class="skin-list" role="listbox" hidden></div>
         <button id="skin-mode" class="btn sm" hidden title="Light or dark">☾</button>
+        <span class="ui-zoom" title="Zoom the whole app (Ctrl+wheel, Ctrl+= / Ctrl+− / Ctrl+0)">
+          <button id="ui-zoom-out" class="btn sm" aria-label="Zoom out">−</button>
+          <button id="ui-zoom-read" class="btn sm" title="Back to 100%"></button>
+          <button id="ui-zoom-in" class="btn sm" aria-label="Zoom in">+</button>
+        </span>
         <button id="btn-help" class="btn" title="Help">?</button>
       </header>
 
@@ -70,7 +75,6 @@
             </span>
             <button id="btn-tidy" class="btn sm" title="Put every machine back where the auto layout wants it (undo right after)">Tidy</button>
             <button id="btn-fit" class="btn sm" title="Fit everything (F, or double-click empty space)">Fit</button>
-            <span id="zoom-read" class="info"></span>
           </div>
           <div class="pane-body" id="grid-wrap">
             <canvas id="grid"></canvas>

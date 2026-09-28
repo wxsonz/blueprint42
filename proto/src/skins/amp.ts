@@ -41,7 +41,7 @@ function strip(dc: Dc, r: Rect, text: string, active: boolean): void {
   const g = dc.g;
   g.fillStyle = '#16161f';
   g.fillRect(r.x, r.y, r.w, r.h);
-  const fs = px(dc, 8, 6);
+  const fs = px(dc, 10, 6);
   g.font = PIX(fs);
   const t = fitText(g, text, PIX, fs, r.w * 0.66, 5);
   const tw = g.measureText(t).width;
@@ -471,7 +471,7 @@ export const amp: Skin = {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText(fitText(g, c.value ?? '--', VT, px(dc, 20, 9), r.w - 6, 7), r.x + r.w / 2, r.y + r.h / 2 + 1);
-    g.font = PIX(px(dc, 7, 5));
+    g.font = PIX(px(dc, 9, 5));
     g.fillStyle = c.selected || c.recent ? LCD : '#a8a8c0';
     g.textAlign = 'left';
     g.fillText(c.name.toUpperCase(), r.x + r.w + px(dc, 6), r.y + r.h / 2 + 1);

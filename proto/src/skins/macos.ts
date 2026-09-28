@@ -87,7 +87,7 @@ const S7 = SANS('"Pixelify Sans", Chicago, "Geneva", monospace');
 export const system7Theme: Theme = {
   id: 'system7', name: 'System 7', blurb: '1-bit: black, white and a striped title bar',
   radius: 0, pixel: true, spotlight: 'rgba(0,0,0,0.5)',
-  ui: (px, w) => S7(px * 1.05, w), mono: MONO('Monaco, "VT323", monospace'),
+  ui: (px, w) => S7(px * 1.05, w), mono: (px, w) => MONO('VT323, monospace')(Math.round(px * 1.35), w),
   p: {
     bg: '#9a9a9a', card: '#ffffff', panel: '#ffffff', line: '#000000',
     fg: '#000000', dim: '#333333', faint: '#808080', accent: '#000000', ptr: '#000000', ret: '#000000', wait: '#555555', err: '#000000',

@@ -28,7 +28,9 @@ export const gameboyTheme: Theme = {
   pixel: true,
   upper: true,
   spotlight: 'rgba(15,56,15,0.55)',
-  ui: (px) => `${Math.max(6, Math.round(px * 0.62))}px "Press Start 2P", monospace`,
+  // Press Start 2P for titles only: below 13px it shrinks to unreadable, so
+  // small labels use VT323 (tall and narrow, ~1.35× to match a sans)
+  ui: (px) => (px >= 13 ? `${Math.round(px * 0.62)}px "Press Start 2P", monospace` : `${Math.round(px * 1.35)}px VT323, monospace`),
   mono: (px) => `${Math.round(px * 1.35)}px VT323, monospace`,
   p: {
     bg: C3, card: C2, panel: C3, line: C0,

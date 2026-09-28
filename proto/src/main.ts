@@ -1568,6 +1568,7 @@ function bindMouse(): void {
     'wheel',
     (e) => {
       e.preventDefault();
+      if (e.ctrlKey) return; // Ctrl+wheel zooms the whole app (see setUiZoom)
       const [x, y] = localXY(e);
       if (e.shiftKey) return view.panPx(-e.deltaY, 0);
       const d = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
@@ -1622,8 +1623,9 @@ function showMenu(x: number, y: number, items: [string, () => void][]): void {
   menu.innerHTML = items.map(([label], i) => `<button data-i="${i}">${esc(label)}</button>`).join('');
   menu.hidden = false;
   const r = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(x, window.innerWidth - r.width - 4)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - r.height - 4)}px`;
+  // x, y and the rect are window pixels; left/top are in the app's zoomed px
+  menu.style.left = `${Math.min(x, window.innerWidth - r.width - 4) / uiZoom}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - r.height - 4) / uiZoom}px`;
   menu.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
     b.addEventListener('click', () => {
       hideMenu();
@@ -1974,7 +1976,6 @@ function renderLiveStatus(): void {
   $('st-pos').textContent = `Ln ${S.cursor.line + 1}, Col ${S.cursor.col + 1}`;
   editorPane.classList.toggle('focused', f === 'editor');
   gridPane.classList.toggle('focused', f === 'canvas');
-  $('zoom-read').textContent = `${Math.round(view.cam.zoom * 100)}%`;
   $('st-hint').textContent = f === 'canvas' ? 'Space play · ←/→ step · middle-drag pan · wheel zoom' : 'Ctrl+Enter run';
 }
 
@@ -2654,13 +2655,36 @@ function renderStageCard(): void {
       : `<span class="note">same</span>`;
     return `<tr class="${kind}${r.depth ? ' f' : ''}"><td class="n">${nm}</td><td class="b">${esc(r.in)}</td><td class="a">${after}</td></tr>`;
   };
-  stageCard.innerHTML = `<div class="sc-title"><span class="fn">${esc(name(c.fn))}</span> <span class="k">is done and returns to</span> <span class="fn">${esc(name(c.caller))}</span></div>
+  stageCard.innerHTML = `<div class="sc-title"><span class="t"><span class="fn">${esc(name(c.fn))}</span> <span class="k">is done and returns to</span> <span class="fn">${esc(name(c.caller))}</span></span></div>
     <div class="sc-gives"><span class="lbl">gives back</span> ${gives}</div>
     <table><thead><tr><th></th><th>before <span>(when called)</span></th><th>after <span>(now, at return)</span></th></tr></thead><tbody>
     ${rows.map(tr).join('') || '<tr><td class="n none" colspan="3">no arguments</td></tr>'}
     </tbody></table>
     <div class="sc-foot">${nChanged ? `${nChanged} value${nChanged === 1 ? '' : 's'} changed through its pointers` : 'nothing it could reach changed'}</div>`;
   stageCard.hidden = false;
+}
+
+// ---------------- app zoom ----------------
+// Ctrl+wheel and Ctrl+= / − / 0 zoom the whole app, like the browser's own
+// zoom, but here the level is known and shown. CSS zoom on <html>; the
+// canvases measure their boxes, so they stay sharp.
+const UI_ZOOMS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+let uiZoom = 1;
+function setUiZoom(z: number): void {
+  uiZoom = Math.min(3, Math.max(0.5, Math.round(z * 100) / 100));
+  const html = document.documentElement;
+  html.style.zoom = uiZoom === 1 ? '' : String(uiZoom);
+  html.style.setProperty('--ui-zoom', String(uiZoom));
+  $('ui-zoom-read').textContent = `${Math.round(uiZoom * 100)}%`;
+  try {
+    localStorage.setItem('ftb.zoom', String(uiZoom));
+  } catch {}
+  view.resize();
+  hideMenu();
+}
+function stepUiZoom(dir: 1 | -1): void {
+  const next = dir > 0 ? UI_ZOOMS.find((z) => z > uiZoom + 0.001) : [...UI_ZOOMS].reverse().find((z) => z < uiZoom - 0.001);
+  if (next !== undefined) setUiZoom(next);
 }
 
 // ---------------- main loop ----------------
@@ -2918,6 +2942,42 @@ async function boot(): Promise<void> {
   bindMouse();
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('resize', () => view.resize());
+  try {
+    const z = Number(localStorage.getItem('ftb.zoom'));
+    setUiZoom(z > 0 ? z : 1);
+  } catch {
+    setUiZoom(1);
+  }
+  $('ui-zoom-in').addEventListener('click', () => stepUiZoom(1));
+  $('ui-zoom-out').addEventListener('click', () => stepUiZoom(-1));
+  $('ui-zoom-read').addEventListener('click', () => setUiZoom(1));
+  let wheelAcc = 0;
+  window.addEventListener(
+    'wheel',
+    (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      // a mouse notch is one step; a trackpad pinch adds up small deltas
+      wheelAcc += e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
+      if (Math.abs(wheelAcc) < 50) return;
+      stepUiZoom(wheelAcc < 0 ? 1 : -1);
+      wheelAcc = 0;
+    },
+    { passive: false },
+  );
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (e.key === '=' || e.key === '+') stepUiZoom(1);
+      else if (e.key === '-' || e.key === '_') stepUiZoom(-1);
+      else if (e.key === '0') setUiZoom(1);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true },
+  );
   new ResizeObserver(() => view.resize()).observe($('grid-wrap'));
 
   renderSampleTabs();
@@ -2938,7 +2998,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS } });
 }
 
 boot().catch((err) => {

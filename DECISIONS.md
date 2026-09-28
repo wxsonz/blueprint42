@@ -685,3 +685,29 @@ questions. Newest last.
   Only base skins are listed; the ☀/☾ button still picks the mode, and
   picking a skin keeps the stored mode. It closes on Escape or a click
   outside.
+- **Decision (author: Factory titles still unreadable; tiny fonts in Game
+  Boy, System 7, Amp):** Audited every skin headlessly, measuring the real
+  x-height of each visible DOM text, not its px size. Fixes:
+  - Text never sits on stripes. Factory's panel titles are steel with the
+    hazard band above them. System 7 and OS 9 cut a plate out of the
+    stripes for the title, as the real Mac did (`--ptitle-plate`), and do
+    the same for the pane-head info.
+  - VT323 draws small for its px size. `base.css` multiplies every mono
+    size by `--mono-scale` (1.4 in Amp, Game Boy and System 7), and the
+    overlays' labels and notes use `--label-font` / `--label-scale`.
+    Amp and Game Boy use VT323 there instead of their tiny pixel UI font.
+  - System 7 uses VT323 on purpose (Monaco isn't there on Linux, and the
+    fallback was tuned for nothing).
+  - On the canvas, Game Boy keeps Press Start 2P for titles (13 px and
+    up) and draws smaller labels in VT323. System 7's canvas mono is
+    VT323 at 1.35×. Amp's caption strips grow from 8 to 10 px.
+- **Decision (author: the canvas zoom readout is useless; wants a zoom
+  for everything):** The header has an app zoom (`− 100% +`, click the %
+  to reset). Ctrl+wheel anywhere, the canvas included, and Ctrl+= / − / 0
+  step through browser-like levels (50–300 %), remembered in
+  `ftb.zoom`. It's CSS `zoom` on `<html>`: the canvases measure their
+  boxes, so they stay sharp and hit-testing is unchanged. `#app`'s
+  height divides out the zoom because viewport units ignore it, and the
+  context menu divides it out of its position. The page can't read or
+  set the browser's own zoom reliably, which is why it's our own. The
+  plain wheel still zooms the camera, and its % readout is gone.

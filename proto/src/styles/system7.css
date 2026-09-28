@@ -1,7 +1,8 @@
 /* System 7 — 1-bit. */
 html[data-skin='system7'] {
   --font-ui: 'Pixelify Sans', Chicago, Geneva, monospace;
-  --font-mono: Monaco, VT323, monospace;
+  --font-mono: VT323, monospace;
+  --mono-scale: 1.4;
   --ui-size: 13px;
   --bg: #ffffff;
   --fg: #000000;
@@ -49,6 +50,8 @@ html[data-skin='system7'] {
   --ptitle-fg: #000000;
   --ptitle-border: 1px solid #000000;
   --ptitle-pad: 8px 12px;
+  --ptitle-plate: #ffffff;
+  --ptitle-plate-pad: 1px 6px;
   --field-bg: #ffffff;
   --field-fg: #000000;
   --field-border: 1px solid #000000;
@@ -58,9 +61,9 @@ html[data-skin='system7'] {
   --pb-border: 1px solid #000000;
   --lcd-bg: #ffffff;
   --lcd-fg: #000000;
-  --lcd-font: Monaco, VT323, monospace;
-  --lcd-small: 10.5px;
-  --lcd-big: 13px;
+  --lcd-font: VT323, monospace;
+  --lcd-small: 15px;
+  --lcd-big: 17px;
   --lcd-fn: #000000;
   --lcd-ptr: #000000;
   --lcd-ret: #000000;
@@ -76,7 +79,7 @@ html[data-skin='system7'] {
   --st-bg: #ffffff;
   --st-fg: #000000;
   --st-border: 1px solid #000000;
-  --st-font: 12px Monaco, VT323, monospace;
+  --st-font: 16px VT323, monospace;
   --mode-fg: #ffffff;
   --mode-normal-bg: #000000;
   --mode-insert-bg: #000000;
@@ -86,8 +89,8 @@ html[data-skin='system7'] {
   --scrim: rgba(0,0,0,0.3);
   --ed-bg: #ffffff;
   --ed-fg: #000000;
-  --ed-font: Monaco, VT323, monospace;
-  --ed-size: 14px;
+  --ed-font: VT323, monospace;
+  --ed-size: 19px;
   --ed-cursor: #000000;
   --ed-gutter: #ffffff;
   --ed-gutter-fg: #888888;
@@ -110,5 +113,6 @@ html[data-skin='system7'] {
   --syn-op: #000000;
   --syn-punct: #444444;
 }
+html[data-skin='system7'] .pane-head .info { background: #ffffff; padding: 0 5px; color: #000; }
 html[data-skin='system7'] .pane-head .title { background: #ffffff; padding: 0 6px; }
 html[data-skin='system7'] .cm-content .tok-keyword { font-weight: 700; }

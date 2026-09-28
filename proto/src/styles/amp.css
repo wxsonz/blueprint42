@@ -2,6 +2,10 @@
 html[data-skin='amp'] {
   --font-ui: 'Silkscreen', 'DejaVu Sans Mono', monospace;
   --font-mono: 'VT323', 'DejaVu Sans Mono', monospace;
+  --mono-scale: 1.4;
+  /* labels and notes in the overlays: the pixel UI font is too small there */
+  --label-font: VT323, monospace;
+  --label-scale: 1.45;
   --ui-size: 11px;
   --bg: #07070b;
   --fg: #d8d8f0;

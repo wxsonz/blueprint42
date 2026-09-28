@@ -49,6 +49,8 @@ html[data-skin='platinum'] {
   --ptitle-fg: #1d1d1f;
   --ptitle-border: 1px solid rgba(0,0,0,0.12);
   --ptitle-pad: 8px 12px;
+  --ptitle-plate: #dddddd;
+  --ptitle-plate-pad: 1px 6px;
   --field-bg: #ffffff;
   --field-fg: #1d1d1f;
   --field-border: 1px solid rgba(0,0,0,0.2);
@@ -110,4 +112,5 @@ html[data-skin='platinum'] {
   --syn-op: #1d1d1f;
   --syn-punct: #5c5c5c;
 }
+html[data-skin='platinum'] .pane-head .info { background: #dddddd; padding: 0 5px; color: #000; }
 html[data-skin='platinum'] .pane-head .title { background: #dddddd; padding: 0 6px; }

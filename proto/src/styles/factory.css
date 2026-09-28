@@ -45,10 +45,11 @@ html[data-skin='factory'] {
   --panel-border: 2px solid #0b0c0d;
   --panel-radius: 3px;
   --panel-shadow: 0 8px 24px rgba(0,0,0,0.6);
-  --ptitle-bg: repeating-linear-gradient(-45deg, #f2c200 0 10px, #1a1a1a 10px 20px);
+  /* the stripes are a band above the title, never under the text */
+  --ptitle-bg: repeating-linear-gradient(-45deg, #f2c200 0 8px, #1a1a1a 8px 16px) top left / 100% 6px no-repeat, linear-gradient(#3a3e44, #2b2e33);
   --ptitle-fg: #ffffff;
   --ptitle-border: 2px solid #0b0c0d;
-  --ptitle-pad: 8px 12px;
+  --ptitle-pad: 12px 12px 7px;
   --field-bg: #141618;
   --field-fg: #ece6d6;
   --field-border: 1px solid #0b0c0d;
