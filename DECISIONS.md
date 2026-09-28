@@ -1381,3 +1381,5 @@ questions. Newest last.
   list is `WIP` in `skins/index.ts`: Windows 8, Yosemite, Big Sur, Tahoe,
   PS5, Game Boy, GameCube, Wii, Switch (a light/dark variant shares its
   base's mark). Remove an id when its polish pass is done.
+- Leopard and the "Just for fun" skins (Amp, Blueprint, Factory,
+  Synthwave) are marked in progress too.
