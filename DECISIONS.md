@@ -1223,7 +1223,7 @@ questions. Newest last.
   Rodin and the values in grey beneath. They stay black whatever the theme
   colour, as the console's notifications do.
 - The PS3 colour picker opens as one strip widening from the current colour
-  (0.3 s, linear) with each drop fading in as the edge passes its place,
+  (0.16 s, a light ease-out) with each drop fading in as the edge passes its place,
   and closes the same way in reverse (the far drops first). Pure CSS: each
   drop's place from the right (`--i`, the current one 0) orders it and
   staggers its fade; `--n` sizes the strip.
