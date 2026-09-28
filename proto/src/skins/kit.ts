@@ -559,4 +559,52 @@ export function backdrop(dc: Dc, id: string, paint: (g: CanvasRenderingContext2D
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.drawImage(c, 0, 0);
   g.restore();
+  lastBackdrop = c;
+}
+
+// Glass: the wallpaper seen through a window, blurred (Aero) and, with
+// lens > 1, magnified about the window's centre (Liquid Glass bends what's
+// behind it). The wallpaper is fixed to the screen, so what lies behind a
+// window is the same pixels of the cached backdrop; its blurred copy is made
+// once per size, and each window is one clipped image draw.
+let lastBackdrop: HTMLCanvasElement | null = null;
+const blurredOf = new WeakMap<HTMLCanvasElement, Map<number, HTMLCanvasElement>>();
+export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, number, number], blur: number, lens = 1): boolean {
+  const src = lastBackdrop;
+  if (!src) return false;
+  const g = dc.g;
+  const t = g.getTransform();
+  let byBlur = blurredOf.get(src);
+  if (!byBlur) blurredOf.set(src, (byBlur = new Map()));
+  let b = byBlur.get(blur);
+  if (!b) {
+    b = document.createElement('canvas');
+    b.width = src.width;
+    b.height = src.height;
+    const bg = b.getContext('2d')!;
+    bg.drawImage(src, 0, 0); // under the blur, so the edges don't fade to nothing
+    bg.filter = `blur(${Math.round(blur * (t.a || 1))}px)`;
+    bg.drawImage(src, 0, 0);
+    byBlur.set(blur, b);
+  }
+  g.save();
+  rrect(g, r.x, r.y, r.w, r.h, rad);
+  g.clip();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  // only the window's own rectangle (in device pixels, on the canvas): a
+  // clipped full-screen draw costs the whole screen, for every window
+  const x0 = Math.max(0, Math.floor(t.a * r.x + t.e));
+  const y0 = Math.max(0, Math.floor(t.d * r.y + t.f));
+  const x1 = Math.min(b.width, Math.ceil(t.a * (r.x + r.w) + t.e));
+  const y1 = Math.min(b.height, Math.ceil(t.d * (r.y + r.h) + t.f));
+  if (x1 > x0 && y1 > y0) {
+    // with a lens, each destination pixel shows the source nearer the centre
+    const cx = t.a * (r.x + r.w / 2) + t.e;
+    const cy = t.d * (r.y + r.h / 2) + t.f;
+    const sx0 = cx + (x0 - cx) / lens;
+    const sy0 = cy + (y0 - cy) / lens;
+    g.drawImage(b, sx0, sy0, (x1 - x0) / lens, (y1 - y0) / lens, x0, y0, x1 - x0, y1 - y0);
+  }
+  g.restore();
+  return true;
 }

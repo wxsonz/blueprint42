@@ -2,7 +2,7 @@
 // Leopard, OS X Yosemite, macOS Big Sur and macOS Tahoe (Liquid Glass).
 // (Mac OS X 10.0–10.4 "Aqua" is its own hand-written skin.) Mac windows put
 // their controls on the left and centre their titles.
-import { backdrop, makeSkin, plainCard, type Theme } from './kit';
+import { backdrop, glassBehind, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Rect } from './types';
 import { fitText, rrect } from './util';
 
@@ -435,8 +435,11 @@ export const bigSurTheme = bigSurOf(false);
 
 // Glass: a translucent body that lets the backdrop through, a bright rim
 // where light catches the edge, and a soft inner highlight near the top.
-function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean, dark = false): void {
+// see: the glass sits on the wallpaper and bends it (a window or a file's
+// wall); cards inside windows only tint, there's no wallpaper under them.
+function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean, dark = false, see = false): void {
   const g = dc.g;
+  if (see) glassBehind(dc, r, rad, 4, 1.07);
   rrect(g, r.x, r.y, r.w, r.h, rad);
   g.fillStyle = tint;
   g.fill();
@@ -453,10 +456,23 @@ function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean
   g.strokeStyle = rim;
   g.lineWidth = Math.max(1, 1.5 * dc.z);
   g.stroke();
+  if (see) {
+    // the lensing edge: light caught along the top-left, a shade along the bottom-right
+    const k = Math.max(1.5, 4 * dc.z);
+    rrect(g, r.x + k / 2 + 1, r.y + k / 2 + 1, r.w - k - 2, r.h - k - 2, Math.max(1, rad - k / 2 - 1));
+    const edge = g.createLinearGradient(r.x, r.y, r.x + r.w * 0.4, r.y + r.h);
+    edge.addColorStop(0, `rgba(255,255,255,${dark ? 0.35 : 0.7})`);
+    edge.addColorStop(0.35, 'rgba(255,255,255,0.05)');
+    edge.addColorStop(0.7, 'rgba(0,0,0,0)');
+    edge.addColorStop(1, `rgba(0,10,30,${dark ? 0.35 : 0.18})`);
+    g.strokeStyle = edge;
+    g.lineWidth = k;
+    g.stroke();
+  }
 }
 
 function tahoeOf(dark: boolean): Theme {
-  const glassFace = dark ? 'rgba(28,32,40,0.82)' : 'rgba(250,251,253,0.9)';
+  const glassFace = dark ? 'rgba(28,32,40,0.72)' : 'rgba(250,251,253,0.76)';
   const cardTint = dark ? 'rgba(40,44,54,0.72)' : 'rgba(255,255,255,0.62)';
   const panelTint = dark ? 'rgba(24,27,34,0.86)' : 'rgba(255,255,255,0.82)';
   return {
@@ -474,7 +490,7 @@ function tahoeOf(dark: boolean): Theme {
     },
     pulseColor: 'rgba(10,132,255,0.85)',
     card(dc, r, o) {
-      if (o.kind === 'wall') return liquidGlass(dc, r, Math.max(4, 18 * dc.z), dark ? 'rgba(20,24,32,0.3)' : 'rgba(255,255,255,0.12)', false, dark);
+      if (o.kind === 'wall') return liquidGlass(dc, r, Math.max(4, 18 * dc.z), dark ? 'rgba(20,24,32,0.22)' : 'rgba(255,255,255,0.08)', false, dark);
       liquidGlass(dc, r, Math.max(3, (o.kind === 'plate' ? r.h / 2 / Math.max(dc.z, 0.01) : 12) * dc.z), o.kind === 'frame' || o.kind === 'plate' ? panelTint : cardTint, !!o.glow, dark);
       if (o.glow) {
         const g = dc.g;
@@ -511,7 +527,16 @@ function tahoeOf(dark: boolean): Theme {
     window: {
       border: 1, corner: 18, titleH: 34, face: glassFace, workspace: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)',
       frame(dc, r, active, client) {
-        liquidGlass(dc, r, Math.max(4, 18 * dc.z), client, active, dark);
+        const g = dc.g;
+        const rad = Math.max(4, 18 * dc.z);
+        const th = 34 * dc.z;
+        // clear glass over the lake, and the content on a frosted sheet under the title band
+        liquidGlass(dc, r, rad, dark ? 'rgba(30,34,44,0.3)' : 'rgba(255,255,255,0.14)', active, dark, true);
+        const k = Math.max(1, 6 * dc.z);
+        const inner = Math.max(2, 10 * dc.z);
+        rrect(g, r.x + k, r.y + th, r.w - 2 * k, Math.max(0, r.h - th - k), [inner, inner, Math.max(2, rad - k), Math.max(2, rad - k)]);
+        g.fillStyle = client;
+        g.fill();
       },
       titleBar(dc, r, title, active) {
         const g = dc.g;

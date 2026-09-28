@@ -1,7 +1,7 @@
 // "Windows 7" — Aero: glass frames over the Harmony wallpaper, dark title
 // text with a soft white glow, glossy caption buttons with the wide red
 // close, the green shine-sweep progress bar.
-import { backdrop, makeSkin, plainCard, type Theme } from './kit';
+import { backdrop, glassBehind, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Rect } from './types';
 import { fitText, rrect } from './util';
 
@@ -95,23 +95,51 @@ export const sevenTheme: Theme = {
       const g = dc.g;
       const b = Math.max(2, 7 * dc.z);
       const rad = Math.max(2, 6 * dc.z);
-      // glass: a pale blue frame you can partly see through, with highlights
+      const th = 24 * dc.z;
+      // a soft drop shadow, from two strokes (no blur: it's per frame)
+      rrect(g, r.x - 1, r.y, r.w + 2, r.h + 2, rad + 1);
+      g.strokeStyle = 'rgba(0,10,30,0.22)';
+      g.lineWidth = Math.max(2, 5 * dc.z);
+      g.stroke();
+      // Aero glass: the wallpaper, blurred, through a tinted frame
+      glassBehind(dc, r, rad, 8);
       rrect(g, r.x, r.y, r.w, r.h, rad);
-      const glass = g.createLinearGradient(0, r.y, 0, r.y + Math.min(r.h, 120 * dc.z));
-      glass.addColorStop(0, active ? 'rgba(190,220,250,0.88)' : 'rgba(215,228,242,0.8)');
-      glass.addColorStop(1, active ? 'rgba(130,180,230,0.82)' : 'rgba(190,205,222,0.78)');
-      g.fillStyle = glass;
+      g.fillStyle = active ? 'rgba(96,152,218,0.34)' : 'rgba(200,212,228,0.52)';
       g.fill();
-      g.strokeStyle = 'rgba(0,15,40,0.7)';
+      const hi = g.createLinearGradient(0, r.y, 0, r.y + th * 1.2);
+      hi.addColorStop(0, 'rgba(255,255,255,0.5)');
+      hi.addColorStop(0.5, 'rgba(255,255,255,0.18)');
+      hi.addColorStop(1, 'rgba(255,255,255,0.06)');
+      g.fillStyle = hi;
+      g.fill();
+      // the diagonal light streaks across the glass
+      g.save();
+      g.clip();
+      g.fillStyle = active ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.09)';
+      const lean = Math.min(r.h, 160 * dc.z) * 0.8;
+      for (const [u, w] of [[0.14, 26], [0.2, 9], [0.52, 34], [0.6, 12], [0.83, 20]]) {
+        const x = r.x + r.w * u;
+        g.beginPath();
+        g.moveTo(x, r.y);
+        g.lineTo(x + w * dc.z, r.y);
+        g.lineTo(x + w * dc.z - lean, r.y + lean * 1.25);
+        g.lineTo(x - lean, r.y + lean * 1.25);
+        g.closePath();
+        g.fill();
+      }
+      g.restore();
+      // a dark outer edge and a white inner line
+      rrect(g, r.x, r.y, r.w, r.h, rad);
+      g.strokeStyle = 'rgba(0,15,40,0.75)';
       g.lineWidth = 1;
       g.stroke();
       rrect(g, r.x + 1, r.y + 1, r.w - 2, r.h - 2, rad);
-      g.strokeStyle = 'rgba(255,255,255,0.7)';
+      g.strokeStyle = 'rgba(255,255,255,0.65)';
       g.stroke();
       g.fillStyle = client;
-      g.fillRect(r.x + b, r.y + b + 24 * dc.z, r.w - 2 * b, Math.max(0, r.h - 2 * b - 24 * dc.z));
-      g.strokeStyle = 'rgba(0,20,50,0.35)';
-      g.strokeRect(r.x + b - 0.5, r.y + b + 24 * dc.z - 0.5, r.w - 2 * b + 1, Math.max(0, r.h - 2 * b - 24 * dc.z) + 1);
+      g.fillRect(r.x + b, r.y + b + th, r.w - 2 * b, Math.max(0, r.h - 2 * b - th));
+      g.strokeStyle = 'rgba(0,20,50,0.45)';
+      g.strokeRect(r.x + b - 0.5, r.y + b + th - 0.5, r.w - 2 * b + 1, Math.max(0, r.h - 2 * b - th) + 1);
     },
     titleBar(dc, r, title, active, buttons) {
       const g = dc.g;

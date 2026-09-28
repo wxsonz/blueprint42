@@ -728,3 +728,23 @@ questions. Newest last.
   - Barebone light's `--ptitle-fg` was the dark skin's white.
   - A duel that began fading out stayed invisible if the same event came
     back.
+- **Decision (author: Aero and Liquid Glass don't look right):** Both
+  drew opaque boxes. `kit.ts` `glassBehind()` now shows the skin's own
+  wallpaper through a window. The wallpaper is fixed to the screen, so
+  what's behind a window is the same pixels of the cached backdrop:
+  - a blurred copy is made once per size;
+  - each window draws only its own rectangle from it;
+  - with `lens > 1` it's magnified about the window's centre.
+
+  The two skins:
+  - **Windows 7:** frames are blurred Harmony under a blue tint, with a
+    top shine, diagonal streaks and the dark and white double edge. The
+    DOM chrome became Aero too: the page is Harmony, the top bar and
+    playbar are glass (a light blur over the static wallpaper), and each
+    pane has a 6 px glass frame. Costs about 0.5 ms a frame.
+  - **Tahoe:** windows are clear glass that bends the lake (4 px blur,
+    1.07× lens), with a lensing edge (light top-left, shade bottom-right)
+    and the content on a lighter frosted sheet. File walls stay plain
+    tint, since they're big and the lens there cost for little. The lens
+    costs about 3 ms a frame at 2× DPR (scaled draws leave the fast copy
+    path); the adaptive resolution absorbs it.
