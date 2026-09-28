@@ -1066,3 +1066,14 @@ questions. Newest last.
   glow in the lights' colours (blue for arguments, teal for returns),
   fading toward the tail, with a glowing head. Skins without it draw
   nothing extra.
+- **Decision (author: where would the PS2's grille go?):** On the right
+  edge of each machine: the console standing up, with its raised side
+  block and two columns of short vertical slits. The machine's title bar
+  gets the front bay's two lights: power (green while active) and eject
+  (blue, as on the hardware).
+- **Decision (author: still too much blue; Sony uses it very sparingly, so
+  not on everything active):** What's active or pressed is silver: live
+  belts, active window corners, the progress line, pressed and primary
+  buttons, switches, cursor, selection and argument trails. Blue is left
+  only where Sony put it: the logo, plus the eject light and the boot
+  screen's fog and lights (the reference).

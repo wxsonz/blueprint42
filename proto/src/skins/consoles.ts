@@ -297,12 +297,13 @@ export const ps1Theme: Theme = {
 // space; a jet-black monolith of stacked, squared-off ridges; the logo's
 // single blue lines bending at right angles "as if prisms were refracting a
 // laser"; a blue gradient stand; and the boot towers.
-// the logo's blue: royal at the top, lighter at the bottom; used sparingly
-const PS2_BLUE = '#3f6bff';
+// what's active is silver, as on the console's face; Sony keeps its blue
+// for the logo (here: the eject light and the boot screen's fog and lights)
+const PS2_SILVER = '#d6d6dc';
 const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
   bg: '#000000', card: '#0d0d10', panel: '#08080a', line: '#2c2c33',
-  fg: '#e4e4e8', dim: '#8e8e97', faint: '#55555e', accent: PS2_BLUE, ptr: '#a38cff', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
+  fg: '#e4e4e8', dim: '#8e8e97', faint: '#55555e', accent: PS2_SILVER, ptr: '#a38cff', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
   param: '#8fa4ff', cell: '#17171d', track: '#060607',
 };
 // the ridges: stacked, squared-off grooves across a black slab
@@ -550,14 +551,14 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
 export const ps2Theme: Theme = {
   id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith and the boot screen: blue fog, glass cubes, sharp trails of light',
   p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 0, spotlight: 'rgba(0,0,0,0.65)',
-  pulseColor: 'rgba(63,107,255,0.9)',
+  pulseColor: 'rgba(230,230,240,0.85)',
   card(dc, r, o) {
     const g = dc.g;
     if (o.fill !== 'transparent') {
       g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.35)' : o.kind === 'frame' || o.kind === 'plate' ? ps2P.panel : ps2P.card;
       g.fillRect(r.x, r.y, r.w, r.h);
     }
-    g.strokeStyle = o.glow ? PS2_BLUE : 'rgba(255,255,255,0.1)';
+    g.strokeStyle = o.glow ? PS2_SILVER : 'rgba(255,255,255,0.1)';
     g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
@@ -565,8 +566,8 @@ export const ps2Theme: Theme = {
   // the tail over a faint glow, a glowing head under the data
   trail(dc, pts, kind) {
     const g = dc.g;
-    const col = kind === 'ret' ? '#5fd0c8' : '#6f8cff';
-    const hot = kind === 'ret' ? '#c8fff6' : '#d4ddff';
+    const col = kind === 'ret' ? '#5fd0c8' : '#a4a4b4';
+    const hot = kind === 'ret' ? '#c8fff6' : '#ffffff';
     const n = pts.length - 1;
     if (n < 1) return;
     g.save();
@@ -604,8 +605,8 @@ export const ps2Theme: Theme = {
   },
   window: {
     border: 2, corner: 0, titleH: 26, face: 'rgba(4,5,9,0.25)', workspace: 'rgba(255,255,255,0.02)',
-    // a black slab: stacked ridges along the head, thin blue lines turning at the corners
-    frame(dc, r, active, face) {
+    // a black slab: stacked ridges along the head, thin lines turning at the corners
+    frame(dc, r, active, face, kind) {
       const g = dc.g;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
       // smoked, not solid: the dancing lights glow through between the panels
@@ -618,17 +619,60 @@ export const ps2Theme: Theme = {
       g.lineWidth = 1;
       g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
       const len = Math.min(r.w, r.h) * 0.22;
-      brackets(g, r, len, Math.max(1, (active ? 2 : 1.2) * dc.z), active ? PS2_BLUE : 'rgba(150,150,165,0.35)');
-      if (active) {
-        // the line glows faintly where it runs
-        g.fillStyle = 'rgba(63,107,255,0.1)';
-        g.fillRect(r.x, r.y + r.h - 3 * dc.z, r.w, 3 * dc.z);
+      brackets(g, r, len, Math.max(1, (active ? 2 : 1.2) * dc.z), active ? PS2_SILVER : 'rgba(150,150,165,0.35)');
+      // a machine is the console standing up: the raised side block down its
+      // right edge, with two columns of short vertical slits
+      if (kind === 'machine' && r.h > 60 * dc.z) {
+        const z = dc.z;
+        const bw = Math.max(5, 10 * z);
+        const x = r.x + r.w - 4 * z - bw;
+        const top = r.y + 32 * z;
+        const bottom = r.y + r.h - 10 * z;
+        g.fillStyle = '#16161a';
+        g.fillRect(x, top, bw, bottom - top);
+        g.fillStyle = 'rgba(255,255,255,0.12)';
+        g.fillRect(x, top, 1, bottom - top);
+        g.fillStyle = 'rgba(0,0,0,0.7)';
+        g.fillRect(x + bw - 1, top, 1, bottom - top);
+        const sw = Math.max(1, 1.6 * z);
+        const sh = Math.max(3, 7 * z);
+        const step = sh + Math.max(1.5, 3 * z);
+        for (let y = top + 4 * z; y + sh < bottom - 3 * z; y += step)
+          for (const cx of [x + bw * 0.32, x + bw * 0.68]) {
+            g.fillStyle = '#000000';
+            g.fillRect(cx - sw / 2, y, sw, sh);
+            g.fillStyle = 'rgba(255,255,255,0.16)';
+            g.fillRect(cx - sw / 2, y + sh, sw, Math.max(0.5, 0.6 * z));
+          }
       }
     },
-    titleBar(dc, r, title, active) {
+    titleBar(dc, r, title, active, buttons) {
       text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#f0f0f3' : '#7c7c85', { w: 500, x: r.x + 10 * dc.z });
+      // the front bay's two lights: power (green when running) and eject (blue)
+      if (buttons && r.w > 110 * dc.z) {
+        const g = dc.g;
+        const z = dc.z;
+        const y = r.y + r.h / 2;
+        const s = Math.max(2, 3 * z);
+        const ex = r.x + r.w - 12 * z;
+        const px = ex - 14 * z;
+        g.fillStyle = active ? '#39e07a' : '#1f3a29';
+        g.fillRect(px - s, y - s, s * 2, s * 2);
+        if (active) {
+          g.fillStyle = 'rgba(57,224,122,0.25)';
+          g.fillRect(px - s * 2, y - s * 2, s * 4, s * 4);
+        }
+        g.fillStyle = active ? '#4f78ff' : '#26305a';
+        g.beginPath();
+        g.moveTo(ex - s, y + s * 0.2);
+        g.lineTo(ex + s, y + s * 0.2);
+        g.lineTo(ex, y - s);
+        g.closePath();
+        g.fill();
+        g.fillRect(ex - s, y + s * 0.55, s * 2, Math.max(1, s * 0.4));
+      }
     },
-    // one thin blue line, turning up at its end
+    // one thin silver line, turning up at its end
     progress(dc, r, fill, anim) {
       const g = dc.g;
       const y = r.y + r.h / 2;
@@ -636,7 +680,7 @@ export const ps2Theme: Theme = {
       g.fillRect(r.x, y, r.w, 1);
       const x = anim ? r.x + r.w * ((dc.time * 0.45) % 1) : r.x + r.w * fill;
       if (x <= r.x + 1) return;
-      g.strokeStyle = PS2_BLUE;
+      g.strokeStyle = PS2_SILVER;
       g.lineWidth = Math.max(1, 1.5 * dc.z);
       g.beginPath();
       g.moveTo(r.x, y);

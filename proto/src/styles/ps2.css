@@ -6,7 +6,7 @@ html[data-skin='ps2'] {
   --bg: #050506;
   --fg: #e4e4e8;
   --fg-dim: #8e8e97;
-  --accent: #5b7fff;
+  --accent: #cfcfd6;
   --ok: #58e0c0;
   --bad: #ff5a6e;
   --warn: #ffcc55;
@@ -22,13 +22,13 @@ html[data-skin='ps2'] {
   --btn-fg: #e4e4e8;
   --btn-border: 1px solid rgba(255,255,255,0.16);
   --btn-radius: 4px;
-  --btn-bg-on: #1c2fd8;
+  --btn-bg-on: #2e2e34;
   --btn-fg-on: #ffffff;
   --btn-shadow-on: none;
-  --primary-bg: #2d5bff;
+  --primary-bg: #3a3a41;
   --primary-fg: #ffffff;
   --sw-off: #777777;
-  --sw-on: #2d5bff;
+  --sw-on: #9a9aa3;
   --sw-knob: #ffffff;
   --panes-bg: #050506;
   --pane-bg: #0a0a0c;
@@ -61,12 +61,12 @@ html[data-skin='ps2'] {
   --lcd-font: 'Exo 2', 'Open Sans', sans-serif;
   --lcd-small: 11.5px;
   --lcd-big: 13.5px;
-  --lcd-fn: #6f8cff;
+  --lcd-fn: #e4e4e8;
   --lcd-ptr: #b48cff;
   --lcd-ret: #58e0c0;
   --tl-bg: #070709;
   --tl-border: none;
-  --tl-call: #5b7fff;
+  --tl-call: #b9b9c2;
   --tl-ret: #58e0c0;
   --tl-ptr: #b48cff;
   --tl-write: #555555;
@@ -78,27 +78,27 @@ html[data-skin='ps2'] {
   --st-border: none;
   --st-font: 12px 'Exo 2', 'Open Sans', sans-serif;
   --mode-fg: #ffffff;
-  --mode-normal-bg: #2d5bff;
+  --mode-normal-bg: #4a4a52;
   --mode-insert-bg: #58e0c0;
   --mode-visual-bg: #ffcc55;
-  --menu-hover-bg: #2d5bff;
+  --menu-hover-bg: #34343b;
   --menu-hover-fg: #ffffff;
   --scrim: rgba(0,0,0,0.55);
   --ed-bg: #08080a;
   --ed-fg: #e4e4e8;
   --ed-font: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
-  --ed-cursor: #5b7fff;
+  --ed-cursor: #f0f0f3;
   --ed-gutter: #08080a;
   --ed-gutter-fg: #55555e;
   --ed-gutter-active: #e4e4e8;
   --ed-active: rgba(255,255,255,0.05);
-  --ed-sel: color-mix(in srgb, #2d5bff 40%, transparent);
-  --ed-exec: color-mix(in srgb, #2d5bff 22%, transparent);
-  --ed-exec-bar: #2d5bff;
+  --ed-sel: color-mix(in srgb, #ffffff 18%, transparent);
+  --ed-exec: color-mix(in srgb, #ffffff 9%, transparent);
+  --ed-exec-bar: #cfcfd6;
   --ed-err: color-mix(in srgb, #ff5a6e 18%, transparent);
   --ed-err-bar: #ff5a6e;
-  --syn-kw: #7f95ff;
+  --syn-kw: #b3b6cc;
   --syn-type: #5ad1c0;
   --syn-def: #f0e3a0;
   --syn-fn: #f0e3a0;
@@ -111,9 +111,9 @@ html[data-skin='ps2'] {
   --syn-punct: #9d9da6;
 }
 
-/* the PlayStation 2: a black monolith. Ridged black and graphite slabs; blue
-   only where the logo would put it: thin lines turning at right angles and
-   the pressed buttons, in the logo's royal-to-light gradient */
+/* the PlayStation 2: a black monolith. Ridged black and graphite slabs,
+   silver for what's active or pressed; blue only where Sony put it: the
+   logo (and the eject light, the boot screen's fog and lights) */
 html[data-skin='ps2'] body { background: #000000; }
 html[data-skin='ps2'] #app, html[data-skin='ps2'] #panes { background: transparent; }
 html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); }
@@ -122,8 +122,8 @@ html[data-skin='ps2'] #playbar { border-top: 1px solid #26262b; }
 html[data-skin='ps2'] #status { background: #000000; color: #7c7c85; }
 html[data-skin='ps2'] .brand .name, html[data-skin='ps2'] .pane-head .title { font-family: Orbitron, 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: #e4e4e8; }
 html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='ps2'] .pb-buttons button { border-radius: 0; background: transparent; border: 1px solid rgba(255,255,255,0.14); color: #cfcfd6; box-shadow: none; }
-html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { border-color: #2d5bff; color: #ffffff; }
-html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#1a1ad6, #2f7cff); border-color: #2d5bff; color: #ffffff; }
-html[data-skin='ps2'] .pane { background: linear-gradient(#2d5bff,#2d5bff) top left / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) top left / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) top right / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) top right / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom left / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom left / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom right / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom right / 1px 18px no-repeat, #06070a; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
+html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { border-color: #9a9aa3; color: #ffffff; }
+html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#3c3c43, #1e1e22); border-color: #8e8e97; color: #ffffff; }
+html[data-skin='ps2'] .pane { background: linear-gradient(#55555e,#55555e) top left / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) top left / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) top right / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) top right / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) bottom left / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) bottom left / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) bottom right / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) bottom right / 1px 18px no-repeat, #06070a; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
 html[data-skin='ps2'] .pane-head { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); border-bottom: 1px solid #1f1f24; }
-html[data-skin='ps2'] .pane.focused { border-color: rgba(45,91,255,0.55); }
+html[data-skin='ps2'] .pane.focused { border-color: #4a4a52; }
