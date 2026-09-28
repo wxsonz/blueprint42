@@ -3,126 +3,127 @@ html[data-skin='ps2'] {
   --font-ui: 'Exo 2', 'Open Sans', sans-serif;
   --font-mono: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 13px;
-  --bg: #02040c;
-  --fg: #dbe8ff;
-  --fg-dim: #8fa6cc;
-  --accent: #4fb3ff;
+  --bg: #050506;
+  --fg: #e4e4e8;
+  --fg-dim: #8e8e97;
+  --accent: #5b7fff;
   --ok: #58e0c0;
   --bad: #ff5a6e;
   --warn: #ffcc55;
   --run: #58e0c0;
   --wait: #ffcc55;
-  --bar-bg: linear-gradient(#0b1a3a, #040a1c);
-  --bar-fg: #dbe8ff;
-  --bar-border: 1px solid #1d3f73;
+  --bar-bg: linear-gradient(#141417, #08080a);
+  --bar-fg: #e4e4e8;
+  --bar-border: 1px solid #232328;
   --brand-font: 700 15px 'Exo 2', 'Open Sans', sans-serif;
-  --logo: #4fb3ff;
-  --btn-bg: rgba(79,179,255,0.08);
-  --btn-bg-hover: rgba(79,179,255,0.2);
-  --btn-fg: #dbe8ff;
-  --btn-border: 1px solid rgba(79,179,255,0.45);
+  --logo: #2d5bff;
+  --btn-bg: rgba(255,255,255,0.04);
+  --btn-bg-hover: rgba(255,255,255,0.1);
+  --btn-fg: #e4e4e8;
+  --btn-border: 1px solid rgba(255,255,255,0.16);
   --btn-radius: 4px;
-  --btn-bg-on: #1d4f9c;
+  --btn-bg-on: #1c2fd8;
   --btn-fg-on: #ffffff;
   --btn-shadow-on: none;
-  --primary-bg: #4fb3ff;
+  --primary-bg: #2d5bff;
   --primary-fg: #ffffff;
   --sw-off: #777777;
-  --sw-on: #4fb3ff;
+  --sw-on: #2d5bff;
   --sw-knob: #ffffff;
-  --panes-bg: #02040c;
-  --pane-bg: #060d1e;
-  --pane-border: #1d3f73;
+  --panes-bg: #050506;
+  --pane-bg: #0a0a0c;
+  --pane-border: #232328;
   --pane-radius: 6px;
   --head-h: 34px;
-  --head-bg: linear-gradient(#123a7a, #0a1f45);
-  --head-fg: #8fa6cc;
-  --head-fg-active: #e6f1ff;
+  --head-bg: linear-gradient(#18181c, #0c0c0f);
+  --head-fg: #8e8e97;
+  --head-fg-active: #f0f0f3;
   --head-font: 600 12.5px 'Exo 2', 'Open Sans', sans-serif;
-  --panel-bg: #08132b;
-  --panel-fg: #dbe8ff;
-  --panel-dim: #8fa6cc;
-  --panel-border: 1px solid #4fb3ff;
+  --panel-bg: #0c0c0f;
+  --panel-fg: #e4e4e8;
+  --panel-dim: #8e8e97;
+  --panel-border: 1px solid #2a2a31;
   --panel-radius: 6px;
-  --panel-shadow: 0 0 0 1px rgba(79,179,255,0.25), 0 10px 30px rgba(0,0,0,0.6);
-  --ptitle-bg: linear-gradient(#1d4f9c, #0a1f45);
-  --ptitle-fg: #e6f1ff;
+  --panel-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.7);
+  --ptitle-bg: linear-gradient(#1c1c21, #0e0e11);
+  --ptitle-fg: #f0f0f3;
   --ptitle-border: none;
   --ptitle-pad: 8px 12px;
-  --field-bg: #040a18;
-  --field-fg: #dbe8ff;
-  --field-border: 1px solid #1d3f73;
+  --field-bg: #070709;
+  --field-fg: #e4e4e8;
+  --field-border: 1px solid #26262c;
   --field-radius: 4px;
-  --rule: 1px solid #12284d;
-  --pb-bg: linear-gradient(#081733, #020610);
-  --pb-border: 1px solid #1d3f73;
+  --rule: 1px solid #1c1c21;
+  --pb-bg: linear-gradient(#131316, #060607);
+  --pb-border: 1px solid #232328;
   --lcd-bg: transparent;
-  --lcd-fg: #dbe8ff;
+  --lcd-fg: #e4e4e8;
   --lcd-font: 'Exo 2', 'Open Sans', sans-serif;
   --lcd-small: 11.5px;
   --lcd-big: 13.5px;
-  --lcd-fn: #4fb3ff;
+  --lcd-fn: #6f8cff;
   --lcd-ptr: #b48cff;
   --lcd-ret: #58e0c0;
-  --tl-bg: #040a18;
+  --tl-bg: #070709;
   --tl-border: none;
-  --tl-call: #4fb3ff;
+  --tl-call: #5b7fff;
   --tl-ret: #58e0c0;
   --tl-ptr: #b48cff;
   --tl-write: #555555;
   --tl-eval: #333333;
   --tl-err: #ff5a6e;
-  --tl-head: #dbe8ff;
-  --st-bg: #040a18;
-  --st-fg: #8fa6cc;
+  --tl-head: #e4e4e8;
+  --st-bg: #070709;
+  --st-fg: #8e8e97;
   --st-border: none;
   --st-font: 12px 'Exo 2', 'Open Sans', sans-serif;
   --mode-fg: #ffffff;
-  --mode-normal-bg: #4fb3ff;
+  --mode-normal-bg: #2d5bff;
   --mode-insert-bg: #58e0c0;
   --mode-visual-bg: #ffcc55;
-  --menu-hover-bg: #4fb3ff;
+  --menu-hover-bg: #2d5bff;
   --menu-hover-fg: #ffffff;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: #050b1a;
-  --ed-fg: #dbe8ff;
+  --ed-bg: #08080a;
+  --ed-fg: #e4e4e8;
   --ed-font: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
-  --ed-cursor: #4fb3ff;
-  --ed-gutter: #050b1a;
-  --ed-gutter-fg: #566b90;
-  --ed-gutter-active: #dbe8ff;
+  --ed-cursor: #5b7fff;
+  --ed-gutter: #08080a;
+  --ed-gutter-fg: #55555e;
+  --ed-gutter-active: #e4e4e8;
   --ed-active: rgba(255,255,255,0.05);
-  --ed-sel: color-mix(in srgb, #4fb3ff 35%, transparent);
-  --ed-exec: color-mix(in srgb, #4fb3ff 20%, transparent);
-  --ed-exec-bar: #4fb3ff;
+  --ed-sel: color-mix(in srgb, #2d5bff 40%, transparent);
+  --ed-exec: color-mix(in srgb, #2d5bff 22%, transparent);
+  --ed-exec-bar: #2d5bff;
   --ed-err: color-mix(in srgb, #ff5a6e 18%, transparent);
   --ed-err-bar: #ff5a6e;
-  --syn-kw: #7aa8ff;
+  --syn-kw: #7f95ff;
   --syn-type: #5ad1c0;
   --syn-def: #f0e3a0;
   --syn-fn: #f0e3a0;
-  --syn-var: #dbe8ff;
+  --syn-var: #e4e4e8;
   --syn-num: #b9e39a;
   --syn-str: #f0a07a;
-  --syn-com: #6f7c93;
+  --syn-com: #6e6e78;
   --syn-macro: #d59ae8;
-  --syn-op: #c9d1e0;
-  --syn-punct: #9aa3b4;
+  --syn-op: #cfcfd6;
+  --syn-punct: #9d9da6;
 }
 
-/* the PlayStation 2: a black monolith in space. Ridged black slabs, one thin
-   electric-blue line turning at right angles, the Earth's blue from below */
-html[data-skin='ps2'] body { background: linear-gradient(rgba(20,90,220,0) 72%, rgba(20,90,220,0.3)), #000000; }
+/* the PlayStation 2: a black monolith. Ridged black and graphite slabs; blue
+   only where the logo would put it: thin lines turning at right angles and
+   the pressed buttons, in the logo's royal-to-light gradient */
+html[data-skin='ps2'] body { background: #000000; }
 html[data-skin='ps2'] #app, html[data-skin='ps2'] #panes { background: transparent; }
 html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); }
-html[data-skin='ps2'] #top { border-bottom: 1px solid rgba(47,140,255,0.55); }
-html[data-skin='ps2'] #playbar { border-top: 1px solid rgba(47,140,255,0.55); }
-html[data-skin='ps2'] #status { background: #000000; color: #6f84a8; }
-html[data-skin='ps2'] .brand .name, html[data-skin='ps2'] .pane-head .title { font-family: Orbitron, 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: #6fb2ff; }
-html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='ps2'] .pb-buttons button { border-radius: 0; background: transparent; border: 1px solid rgba(47,140,255,0.4); color: #b9cdf0; box-shadow: none; }
-html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { border-color: #2f8cff; color: #ffffff; }
-html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#0b3d91, #2f8cff); border-color: #2f8cff; color: #ffffff; }
-html[data-skin='ps2'] .pane { background: linear-gradient(#2f8cff,#2f8cff) top left / 18px 1px no-repeat, linear-gradient(#2f8cff,#2f8cff) top left / 1px 18px no-repeat, linear-gradient(#2f8cff,#2f8cff) top right / 18px 1px no-repeat, linear-gradient(#2f8cff,#2f8cff) top right / 1px 18px no-repeat, linear-gradient(#2f8cff,#2f8cff) bottom left / 18px 1px no-repeat, linear-gradient(#2f8cff,#2f8cff) bottom left / 1px 18px no-repeat, linear-gradient(#2f8cff,#2f8cff) bottom right / 18px 1px no-repeat, linear-gradient(#2f8cff,#2f8cff) bottom right / 1px 18px no-repeat, #06070a; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
-html[data-skin='ps2'] .pane-head { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); border-bottom: 1px solid rgba(47,140,255,0.3); }
-html[data-skin='ps2'] .pane.focused { border-color: rgba(47,140,255,0.5); }
+html[data-skin='ps2'] #top { border-bottom: 1px solid #26262b; }
+html[data-skin='ps2'] #playbar { border-top: 1px solid #26262b; }
+html[data-skin='ps2'] #status { background: #000000; color: #7c7c85; }
+html[data-skin='ps2'] .brand .name, html[data-skin='ps2'] .pane-head .title { font-family: Orbitron, 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: #e4e4e8; }
+html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='ps2'] .pb-buttons button { border-radius: 0; background: transparent; border: 1px solid rgba(255,255,255,0.14); color: #cfcfd6; box-shadow: none; }
+html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { border-color: #2d5bff; color: #ffffff; }
+html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#1a1ad6, #2f7cff); border-color: #2d5bff; color: #ffffff; }
+html[data-skin='ps2'] .pane { background: linear-gradient(#2d5bff,#2d5bff) top left / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) top left / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) top right / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) top right / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom left / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom left / 1px 18px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom right / 18px 1px no-repeat, linear-gradient(#2d5bff,#2d5bff) bottom right / 1px 18px no-repeat, #06070a; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
+html[data-skin='ps2'] .pane-head { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); border-bottom: 1px solid #1f1f24; }
+html[data-skin='ps2'] .pane.focused { border-color: rgba(45,91,255,0.55); }

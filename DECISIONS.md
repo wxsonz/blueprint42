@@ -1038,3 +1038,13 @@ questions. Newest last.
   - The towers and Earth glow are gone. Machine windows are smoked (80%)
     instead of solid, so the lights pass behind them; storage and
     stations stay opaque under text.
+- **Decision (author: too much blue; the PS2 is darker, with its iconic
+  blue):** The chrome and canvas are black and graphite with white-grey
+  text. Blue (the logo's: royal `#1a1ad6` to `#2f7cff`, lines in
+  `#3f6bff`) is kept for the corner lines, the active window, pressed and
+  primary buttons, the cursor and selection. The fog is darker and
+  thinner. The Earth glow under the page is gone.
+- **Fix (author: zoomed far in, the cubes shift oddly):** Parallax used
+  the camera's corner in zoomed pixels, so zooming changed the offset and
+  the cubes wrapped. It now uses the world point at the view's middle,
+  in px at zoom 1, so zoom only scales the layers.
