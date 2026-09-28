@@ -946,3 +946,12 @@ questions. Newest last.
     - the chrome: ridged black bars with a thin blue rule, square outlined
       buttons that fill with the stand's gradient when on, and panes with
       blue corner brackets.
+  - **PS5**, after Yujin Morisawa's design (Push Square, Creative Bloq): the
+    DualSense's grip is about 40,000 tiny △○✕□ layered together, his
+    Easter egg. The canvas and page carry that texture, barely visible
+    (it's drawn above the backdrop's shading, or it vanishes). The playbar
+    is the Control Center: a dark rounded tray with round buttons.
+  - **PS4**, after the console (Tom's Guide): a parallelogram of matte and
+    gloss split by a slim light bar, blue while working. The light bar
+    runs under the top bar and under the active window's title strip.
+  - **PS3** stays the XMB, which was already referenced.

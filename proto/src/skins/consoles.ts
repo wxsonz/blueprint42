@@ -505,6 +505,13 @@ export const ps4Theme: Theme = {
       // the title strip: translucent white, as under a focused tile
       g.fillStyle = active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)';
       g.fillRect(r.x, r.y, r.w, 28 * dc.z);
+      // the console's light bar, under the title strip: blue while it works
+      if (active) {
+        g.fillStyle = 'rgba(95,177,255,0.35)';
+        g.fillRect(r.x, r.y + 28 * dc.z - 2 * dc.z, r.w, 4 * dc.z);
+        g.fillStyle = '#8fd0ff';
+        g.fillRect(r.x, r.y + 28 * dc.z - 0.75 * dc.z, r.w, Math.max(1, 1.5 * dc.z));
+      }
       if (active) {
         g.strokeStyle = 'rgba(255,255,255,0.25)';
         g.lineWidth = Math.max(3, 8 * dc.z);
@@ -585,6 +592,13 @@ export const ps5Theme: Theme = {
       shade.addColorStop(1, 'rgba(11,12,16,0.95)');
       g.fillStyle = shade;
       g.fillRect(0, 0, W, H);
+      // the DualSense's grip: tiny △○✕□, layered, barely there (Morisawa's Easter egg)
+      g.strokeStyle = 'rgba(255,255,255,0.06)';
+      g.lineWidth = 1;
+      const kinds = ['tri', 'circ', 'cross', 'sq'] as const;
+      for (let y = 6, row = 0; y < H; y += 13, row++) {
+        for (let x = 6 + (row % 2) * 6, k = row; x < W; x += 13, k++) psSymbol(g, kinds[k % 4], x, y, 2.6);
+      }
     });
   },
   window: {

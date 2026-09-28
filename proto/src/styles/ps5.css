@@ -114,7 +114,7 @@ html[data-skin='ps5'] {
 /* PS5: the selected game's art behind everything, dark glass over it, text
    tabs like "Games  Media" (light, the active one bold), the clock top-right,
    and the white ring standing off whatever has focus */
-html[data-skin='ps5'] body { background: linear-gradient(rgba(11,12,16,0.1), rgba(11,12,16,0.6) 55%, rgba(11,12,16,0.96)), radial-gradient(circle at 72% 18%, rgba(46,92,150,0.75), transparent 55%), radial-gradient(circle at 35% 5%, rgba(150,70,60,0.45), transparent 45%), radial-gradient(circle at 90% 55%, rgba(210,140,70,0.28), transparent 40%), #0b0c10; }
+html[data-skin='ps5'] body { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.05' stroke-width='1'%3E%3Cpath d='M3.5 8l3-5 3 5z'/%3E%3Ccircle cx='19' cy='5.5' r='2.7'/%3E%3Cpath d='M3.5 16.5l5 5M8.5 16.5l-5 5'/%3E%3Crect x='16.3' y='16.3' width='5.4' height='5.4'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(rgba(11,12,16,0.1), rgba(11,12,16,0.6) 55%, rgba(11,12,16,0.96)), radial-gradient(circle at 72% 18%, rgba(46,92,150,0.75), transparent 55%), radial-gradient(circle at 35% 5%, rgba(150,70,60,0.45), transparent 45%), radial-gradient(circle at 90% 55%, rgba(210,140,70,0.28), transparent 40%), #0b0c10; }
 html[data-skin='ps5'] #app, html[data-skin='ps5'] #panes, html[data-skin='ps5'] #top, html[data-skin='ps5'] #playbar, html[data-skin='ps5'] #status { background: transparent; border: none; }
 html[data-skin='ps5'] #samples button, html[data-skin='ps5'] #project-chip button { background: transparent; border: none; box-shadow: none; font-weight: 300; font-size: 16px; color: #d6d8de; padding: 3px 10px; }
 html[data-skin='ps5'] #samples button[aria-pressed='true'], html[data-skin='ps5'] #samples button.on { font-weight: 600; color: #ffffff; background: transparent; }
@@ -123,3 +123,8 @@ html[data-skin='ps5'] #top .sysclock s { display: none; }
 html[data-skin='ps5'] .pane { backdrop-filter: none; }
 html[data-skin='ps5'] .pane.focused { box-shadow: 0 0 0 4px #0b0c10, 0 0 0 7px #ffffff; }
 html[data-skin='ps5'] .pb-buttons button { border-radius: 50%; }
+
+/* the Control Center: the playbar as a dark rounded tray of round buttons */
+html[data-skin='ps5'] #playbar { background: rgba(24,25,31,0.92); border-radius: 17px 17px 0 0; margin: 0 12px; box-shadow: 0 -8px 24px rgba(0,0,0,0.45); }
+html[data-skin='ps5'] .pb-buttons button { width: 38px; height: 38px; background: rgba(255,255,255,0.08); border: none; color: #ffffff; }
+html[data-skin='ps5'] .pb-buttons button:hover, html[data-skin='ps5'] .pb-buttons button.primary { background: #ffffff; color: #0b0c10; box-shadow: 0 0 0 3px #0b0c10, 0 0 0 5px rgba(255,255,255,0.8); }
