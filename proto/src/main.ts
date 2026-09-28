@@ -1704,10 +1704,47 @@ async function applySkin(skin: Skin): Promise<void> {
   document.documentElement.dataset.skin = skin.id;
   store.set('skin', skin.id);
   renderSkinPicker();
+  renderTints();
   renderDock();
   await Promise.all((SKIN_FONTS[skin.id] ?? []).map((f) => document.fonts.load(f).catch(() => null)));
   renderDock();
   lastPbKey = '';
+}
+
+// Skins with theme colours (the PS3's XMB) get a row of swatches on the top
+// bar; picking one fades the canvas (the skin) and the chrome (CSS variables
+// that transition) to it. The choice is remembered per skin, in this browser.
+function renderTints(): void {
+  const box = $('tints');
+  const sk = S.skin;
+  const root = document.documentElement.style;
+  if (!sk.tints?.length || !sk.tint) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  const saved = store.get(`tint.${sk.id}`);
+  let cur = sk.tints.some((t) => t.id === saved) ? saved! : sk.tints[0].id;
+  const set = (id: string, instant: boolean) => {
+    cur = id;
+    // at load, jump straight to it: no fade from the default colour
+    if (instant) root.setProperty('transition', 'none');
+    for (const [k, v] of Object.entries(sk.tint!(id, instant))) root.setProperty(k, v);
+    if (instant) {
+      void getComputedStyle(document.documentElement).getPropertyValue('--xmb-mid'); // settle before transitions return
+      root.removeProperty('transition');
+    }
+    box.querySelectorAll<HTMLElement>('button').forEach((b) => b.setAttribute('aria-checked', `${b.dataset.id === id}`));
+  };
+  box.innerHTML = `<span class="row">${sk.tints.map((t) => `<button role="radio" data-id="${esc(t.id)}" title="${esc(t.name)}" style="--c:${esc(t.colour)}"></button>`).join('')}</span>`;
+  box.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('button[data-id]');
+    if (!b || b.dataset.id === cur) return;
+    store.set(`tint.${sk.id}`, b.dataset.id!);
+    set(b.dataset.id!, false);
+  };
+  box.hidden = false;
+  set(cur, true);
 }
 
 // A little live preview of a skin: its floor with its machine on it, drawn
@@ -2776,7 +2813,7 @@ function adaptQuality(now: number): void {
 }
 
 function frame(now: number): void {
-  if (!S.playing && now - lastInputAt > 400 && view.settled() && now - lastDrawAt < 66) {
+  if (!S.playing && now - lastInputAt > 400 && view.settled() && !S.skin.busy?.() && now - lastDrawAt < 66) {
     lastT = now;
     requestAnimationFrame(frame);
     return;

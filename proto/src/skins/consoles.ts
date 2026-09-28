@@ -817,15 +817,16 @@ export const ps2Theme: Theme = {
 // PS3, the XrossMediaBar in its classic blue: teal at the top sinking to
 // navy, a ribbon of translucent sheets twisting across the middle, and white
 // sparkles drifting through, all animated (stateless in time, like the PS2's
-// boot screen) with a little parallax. Windows are plain frosted rectangles
-// with a white hairline under the title; the things you touch (values in
-// flight, the progress bead, the icons) are jelly: glossy pale-cyan blobs.
+// boot screen) but fixed behind the grid (no parallax). The colour can be
+// changed from the top bar and cross-fades, as the XMB's theme colour does.
+// Windows are frosted rectangles with a fading white line under the title,
+// focus is a breathing halo, lines are soft light, and the things you touch
+// (values in flight, counts, icons) are jelly: glossy pale-cyan blobs.
 const ps3P: Palette = {
   bg: '#1a5b98', card: 'rgba(6,34,86,0.42)', panel: 'rgba(6,30,78,0.5)', line: 'rgba(255,255,255,0.3)',
   fg: '#ffffff', dim: 'rgba(255,255,255,0.75)', faint: 'rgba(255,255,255,0.45)', accent: '#ffffff', ptr: '#ffe08a', ret: '#b8ffb0', wait: '#ffe08a', err: '#ff9a9a',
   param: '#e6f2ff', cell: 'rgba(255,255,255,0.14)', track: 'rgba(0,20,60,0.35)',
 };
-const ps3Pan = newPan();
 // the sparkles: most gather around the ribbon, the rest anywhere; a few are
 // big soft bokeh
 const ps3Dust = Array.from({ length: 170 }, (_, i) => {
@@ -834,35 +835,30 @@ const ps3Dust = Array.from({ length: 170 }, (_, i) => {
   return {
     x: hash(i * 3 + 1), y: near ? 0.55 + (hash(i * 5 + 7) - 0.5) * 0.36 : hash(i * 5 + 7),
     v: 0.003 + 0.009 * hash(i * 7 + 3), r: big ? 2.5 + 3 * hash(i * 11 + 5) : 0.5 + 1.2 * hash(i * 11 + 5) ** 3,
-    a: big ? 0.16 : 0.3 + 0.6 * hash(i * 13 + 9), f: 0.6 + 2.2 * hash(i * 19 + 4), ph: 6.28 * hash(i * 29 + 8), depth: 0.03 + 0.07 * hash(i * 31 + 1),
+    a: big ? 0.16 : 0.3 + 0.6 * hash(i * 13 + 9), f: 0.6 + 2.2 * hash(i * 19 + 4), ph: 6.28 * hash(i * 29 + 8),
   };
 });
 let ps3Spark: HTMLCanvasElement | null = null;
 let ps3Rib: HTMLCanvasElement | null = null;
 let ps3RibKey = '';
 let ps3RibT = 0;
-function ps3Xmb(dc: Dc, camX: number, camY: number): void {
+function ps3Xmb(dc: Dc): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 30 : dc.time;
   const W = dc.vw;
   const H = dc.vh;
-  trackPan(ps3Pan, dc, camX, camY);
-  const soft = (v: number, lim: number) => lim * Math.tanh(v / lim);
-  const sc = Math.min(1.4, Math.max(0.8, dc.z ** 0.12));
   g.save();
   // the ribbon: N lines across a bundle whose width swings through zero, so
   // it twists; neighbouring lines are joined by faint sheets. It is soft, so
   // it's drawn at half the size and scaled up.
-  const ox = -soft(ps3Pan.x * 0.02, W * 0.05);
-  const oy = -soft(ps3Pan.y * 0.02, H * 0.06);
   const RS = 0.5;
   const rw = Math.ceil(W * RS);
   const rh = Math.ceil(H * RS);
   ps3Rib ??= document.createElement('canvas');
   if (ps3Rib.width !== rw || ps3Rib.height !== rh) (ps3Rib.width = rw), (ps3Rib.height = rh);
   const rg = ps3Rib.getContext('2d')!;
-  // it moves slowly: repaint it about 24 times a second, or when the view moves
-  const key = `${rw}x${rh} ${ox.toFixed(1)} ${oy.toFixed(1)} ${sc.toFixed(3)}`;
+  // it moves slowly: repaint it about 24 times a second
+  const key = `${rw}x${rh}`;
   const fresh = key === ps3RibKey && Math.abs(t - ps3RibT) < 1 / 24;
   if (!fresh) {
     ps3RibKey = key;
@@ -880,10 +876,10 @@ function ps3Xmb(dc: Dc, camX: number, camY: number): void {
         const yc = rh * (0.56 + 0.06 * Math.sin(6.28 * 0.55 * u + 0.9 + 0.11 * t) + 0.025 * Math.sin(6.28 * 1.3 * u + 2 - 0.19 * t));
         const a = rh * (0.02 + 0.08 * Math.sin(6.28 * 0.62 * u + 1 + 0.14 * t));
         const w = rh * 0.01 * Math.sin(6.28 * 1.7 * u + i * 0.6 + 0.33 * t);
-        return rh / 2 + (yc + o * a + w + oy * RS - rh / 2) * sc;
+        return yc + o * a + w;
       }));
     }
-    const X = (x: number) => rw / 2 + (x + ox * RS - rw / 2) * sc;
+    const X = (x: number) => x;
     const shade = rg.createLinearGradient(0, 0, rw, 0);
     shade.addColorStop(0, 'rgba(190,220,255,0.6)');
     shade.addColorStop(0.45, 'rgba(205,230,255,1)');
@@ -917,7 +913,7 @@ function ps3Xmb(dc: Dc, camX: number, camY: number): void {
   }
   g.imageSmoothingEnabled = true;
   g.drawImage(ps3Rib, 0, 0, rw, rh, 0, 0, W, H);
-  // the sparkles: drifting right, bobbing, twinkling; nearer ones pan more
+  // the sparkles: drifting right, bobbing, twinkling
   if (!ps3Spark) {
     ps3Spark = document.createElement('canvas');
     ps3Spark.width = ps3Spark.height = 32;
@@ -931,11 +927,11 @@ function ps3Xmb(dc: Dc, camX: number, camY: number): void {
   }
   const wrap = (v: number, span: number) => ((v % span) + span) % span;
   for (const d of ps3Dust) {
-    const x = wrap(d.x * W * 1.2 + t * d.v * W - ps3Pan.x * d.depth, W * 1.2) - W * 0.1;
-    const y = wrap(d.y * H + Math.sin(t * 0.3 + d.ph) * H * 0.01 - ps3Pan.y * d.depth, H * 1.1) - H * 0.05;
+    const x = wrap(d.x * W * 1.2 + t * d.v * W, W * 1.2) - W * 0.1;
+    const y = wrap(d.y * H + Math.sin(t * 0.3 + d.ph) * H * 0.01, H * 1.1) - H * 0.05;
     g.globalAlpha = d.a * (0.55 + 0.45 * Math.sin(t * d.f + d.ph));
-    const r = d.r * 3 * sc;
-    g.drawImage(ps3Spark, W / 2 + (x - W / 2) * sc - r, H / 2 + (y - H / 2) * sc - r, r * 2, r * 2);
+    const r = d.r * 3;
+    g.drawImage(ps3Spark, x - r, y - r, r * 2, r * 2);
   }
   g.restore();
 }
@@ -1008,10 +1004,99 @@ function jellyIcon(g: CanvasRenderingContext2D, s: number, draw: (h: CanvasRende
   g.drawImage(blob, 0, 0, s, s);
   g.restore();
 }
+// The theme colours, picked from the top bar: the XMB's blue, then its
+// classic colours. Each becomes a sky (top, middle, bottom); changing it
+// cross-fades from whatever is showing, over 2.5 s.
+export const PS3_TINTS = [
+  { id: 'blue', name: 'XMB blue', colour: '#1d64a0' },
+  { id: 'silver', name: 'Silver', colour: '#b8bcc4' },
+  { id: 'gold', name: 'Gold', colour: '#c9a634' },
+  { id: 'lime', name: 'Lime', colour: '#69a83a' },
+  { id: 'pink', name: 'Pink', colour: '#e083b0' },
+  { id: 'green', name: 'Green', colour: '#2f9e4e' },
+  { id: 'purple', name: 'Purple', colour: '#8a5cc2' },
+  { id: 'teal', name: 'Teal', colour: '#23a4a8' },
+  { id: 'sky', name: 'Sky', colour: '#2f7fd0' },
+  { id: 'magenta', name: 'Magenta', colour: '#b0409f' },
+  { id: 'orange', name: 'Orange', colour: '#e39a22' },
+  { id: 'brown', name: 'Brown', colour: '#8a5a34' },
+  { id: 'red', name: 'Red', colour: '#c22e2e' },
+];
+type Rgb = [number, number, number];
+type Sky = { top: Rgb; mid: Rgb; bot: Rgb };
+const rgbOf = (hex: string): Rgb => {
+  const n = parseInt(hex.slice(1), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255];
+};
+const toward = (c: Rgb, to: number, f: number): Rgb => c.map((v) => v + (to - v) * f) as Rgb;
+function skyOf(id: string): Sky {
+  if (id === 'blue') return { top: rgbOf('#3a8fae'), mid: rgbOf('#1d64a0'), bot: rgbOf('#122a78') };
+  const c = rgbOf(PS3_TINTS.find((x) => x.id === id)?.colour ?? '#1d64a0');
+  return { top: toward(c, 255, 0.12), mid: c, bot: toward(c, 0, 0.62) };
+}
+const css = (c: Rgb, a = 1) => `rgba(${c.map(Math.round).join(',')},${a})`;
+const PS3_FADE = 2500;
+const ps3Fade: { from: Sky; to: Sky; t0: number } = { from: skyOf('blue'), to: skyOf('blue'), t0: -1e9 };
+function ps3Now(): { sky: Sky; busy: boolean } {
+  const f = Math.min(1, (performance.now() - ps3Fade.t0) / PS3_FADE);
+  if (f >= 1) return { sky: ps3Fade.to, busy: false };
+  const e = f * f * (3 - 2 * f);
+  const lerp = (a: Rgb, b: Rgb) => a.map((v, i) => v + (b[i] - v) * e) as Rgb;
+  const { from, to } = ps3Fade;
+  return { sky: { top: lerp(from.top, to.top), mid: lerp(from.mid, to.mid), bot: lerp(from.bot, to.bot) }, busy: true };
+}
+// the frosted fills follow the colour: its dark end, see-through
+function ps3Fills(sky: Sky): void {
+  const deep = toward(sky.bot, 0, 0.35);
+  ps3P.card = css(deep, 0.42);
+  ps3P.panel = css(deep, 0.5);
+  ps3P.track = css(deep, 0.35);
+  ps3P.bg = css(sky.mid);
+}
+function ps3Sky(g: CanvasRenderingContext2D, W: number, H: number, sky: Sky): void {
+  const grad = g.createLinearGradient(0, 0, W * 0.25, H);
+  grad.addColorStop(0, css(sky.top));
+  grad.addColorStop(0.42, css(sky.mid));
+  grad.addColorStop(1, css(sky.bot));
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  const tl = g.createRadialGradient(W * 0.85, 0, 0, W * 0.85, 0, W * 0.6);
+  tl.addColorStop(0, 'rgba(255,255,255,0.14)');
+  tl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = tl;
+  g.fillRect(0, 0, W, H);
+  const br = g.createRadialGradient(W * 0.7, H, 0, W * 0.7, H, W * 0.5);
+  br.addColorStop(0, 'rgba(10,0,40,0.25)');
+  br.addColorStop(1, 'rgba(10,0,40,0)');
+  g.fillStyle = br;
+  g.fillRect(0, 0, W, H);
+}
+// focus, the XMB way: a soft white halo that breathes
+function ps3Halo(dc: Dc, r: Rect, rad: number, k = 1): void {
+  const g = dc.g;
+  const b = ps2Still ? 0.8 : 0.6 + 0.4 * Math.sin((dc.time || 0) * 2.5);
+  g.save();
+  rrect(g, r.x, r.y, r.w, r.h, rad);
+  g.shadowColor = `rgba(255,255,255,${0.55 * b * k})`;
+  g.shadowBlur = Math.max(8, 18 * dc.z);
+  g.strokeStyle = `rgba(255,255,255,${0.18 * b * k})`;
+  g.lineWidth = 1;
+  g.stroke();
+  g.restore();
+}
+// a line of soft light: a faint wide glow under a thin core
+function ps3Light(g: CanvasRenderingContext2D, pts: [number, number][], z: number, core: number): void {
+  g.save();
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  strokeLine(g, pts, Math.max(3, 6 * z), `rgba(255,255,255,${0.07 + core * 0.06})`);
+  strokeLine(g, pts, Math.max(1, 1.2 * z), `rgba(255,255,255,${core})`);
+  g.restore();
+}
 export const ps3Theme: Theme = {
-  id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB in blue: the wave, the sparkles, frosted panes and jelly icons',
+  id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB: the wave, the sparkles, frosted panes, jelly icons; pick its colour on the top bar',
   p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 3, spotlight: 'rgba(0,16,50,0.5)',
-  pulseColor: 'rgba(255,255,255,0.95)', flow: '#d6f2ff',
+  pulseColor: 'rgba(255,255,255,0.95)', flow: '#ffffff',
   card(dc, r, o) {
     const g = dc.g;
     if (o.kind === 'plate') {
@@ -1019,90 +1104,153 @@ export const ps3Theme: Theme = {
       jelly(g, r.x, r.y, r.w, r.h, r.h / 2, !!o.glow);
       return;
     }
-    rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
+    const rad = Math.max(1, 3 * dc.z);
+    if (o.glow) ps3Halo(dc, r, rad, 0.8);
+    rrect(g, r.x, r.y, r.w, r.h, rad);
     if (o.fill !== 'transparent') {
-      g.fillStyle = o.kind === 'wall' ? 'rgba(4,24,64,0.16)' : o.kind === 'frame' ? ps3P.panel : ps3P.card;
+      g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.08)' : o.kind === 'frame' ? ps3P.panel : ps3P.card;
       g.fill();
+    } else if (o.kind === 'wall') {
+      // a wall is only its outline elsewhere: here the faintest line
+      g.strokeStyle = 'rgba(255,255,255,0.14)';
+      g.lineWidth = 1;
+      g.stroke();
     }
-    g.strokeStyle = o.glow ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.22)';
-    g.lineWidth = 1;
+  },
+  // belts are soft light; live ones carry sparkles along, the data's way
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const core = o.live || o.selected ? 0.9 : o.hovered ? 0.65 : 0.35;
+    ps3Light(g, pts, z, core);
+    const w = new Walk(pts);
+    const end = w.at(w.length);
+    // a soft chevron, not a hard arrowhead
+    const L = Math.max(4, 6 * z);
+    g.save();
+    g.lineCap = 'round';
+    g.strokeStyle = `rgba(255,255,255,${core})`;
+    g.lineWidth = Math.max(1, 1.4 * z);
+    g.beginPath();
+    g.moveTo(end.x - end.dx * L - end.dy * L * 0.7, end.y - end.dy * L + end.dx * L * 0.7);
+    g.lineTo(end.x, end.y);
+    g.lineTo(end.x - end.dx * L + end.dy * L * 0.7, end.y - end.dy * L - end.dx * L * 0.7);
     g.stroke();
+    if (o.live && w.length > 4 && ps3Spark) {
+      const gap = Math.max(40, 90 * z);
+      const run = ((dc.time || 0) * 80 * z) % gap;
+      for (let d = run; d < w.length; d += gap) {
+        const q = w.at(o.dir < 0 ? w.length - d : d);
+        const tw = 0.6 + 0.4 * Math.sin((dc.time || 0) * 3 + d * 0.05);
+        const r = Math.max(4, 7 * z) * tw;
+        g.globalAlpha = 0.9;
+        g.drawImage(ps3Spark, q.x - r, q.y - r, r * 2, r * 2);
+      }
+    }
+    g.restore();
+    countBadge(dc, pts, o, t);
   },
   panel(dc, r, head, title, live) {
     const g = dc.g;
-    g.fillStyle = 'rgba(4,26,70,0.34)';
+    g.fillStyle = ps3P.card;
     g.fillRect(r.x, r.y, r.w, r.h);
-    g.fillStyle = live ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
-    g.fillRect(r.x, head.y + head.h - 1, r.w, 1);
+    ps3Rule(g, r.x, head.y + head.h - 1, r.w, live ? 0.9 : 0.4, live);
     text(dc, head, title, RODIN_R, 11.5, live ? '#ffffff' : 'rgba(255,255,255,0.75)', { w: 400, x: head.x + 8 * dc.z });
   },
-  background(dc, camX, camY) {
-    backdrop(dc, 'ps3-blue', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, W * 0.25, H);
-      sky.addColorStop(0, '#3a8fae');
-      sky.addColorStop(0.42, '#1d64a0');
-      sky.addColorStop(1, '#122a78');
-      g.fillStyle = sky;
-      g.fillRect(0, 0, W, H);
-      const tl = g.createRadialGradient(W * 0.85, 0, 0, W * 0.85, 0, W * 0.6);
-      tl.addColorStop(0, 'rgba(90,180,200,0.45)');
-      tl.addColorStop(1, 'rgba(90,180,200,0)');
-      g.fillStyle = tl;
-      g.fillRect(0, 0, W, H);
-      const br = g.createRadialGradient(W * 0.7, H, 0, W * 0.7, H, W * 0.5);
-      br.addColorStop(0, 'rgba(40,40,140,0.4)');
-      br.addColorStop(1, 'rgba(40,40,140,0)');
-      g.fillStyle = br;
-      g.fillRect(0, 0, W, H);
-    });
-    ps3Xmb(dc, camX, camY);
+  background(dc) {
+    const { sky, busy } = ps3Now();
+    ps3Fills(sky);
+    if (busy) {
+      // fading: paint the sky straight in, every frame
+      const g = dc.g;
+      g.save();
+      ps3Sky(g, dc.vw, dc.vh, sky);
+      g.restore();
+    } else backdrop(dc, `ps3-${sky.mid.join(',')}`, (g, W, H) => ps3Sky(g, W, H, sky));
+    ps3Xmb(dc);
   },
   window: {
-    border: 0, corner: 3, titleH: 28, face: 'rgba(6,32,84,0.4)', workspace: 'rgba(4,24,64,0.12)',
-    // a plain frosted rectangle: a pale veil over a dark one, a faint white edge
+    border: 0, corner: 3, titleH: 28, face: 'rgba(0,0,0,0.12)', workspace: 'rgba(0,0,0,0.05)',
+    // just frosting: lighter at the top, no outline; focus is the halo
     frame(dc, r, active, face) {
       const g = dc.g;
-      rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
+      const rad = Math.max(1, 3 * dc.z);
+      if (active) ps3Halo(dc, r, rad);
+      rrect(g, r.x, r.y, r.w, r.h, rad);
+      g.fillStyle = ps3P.card;
+      g.fill();
       g.fillStyle = face;
       g.fill();
-      const veil = g.createLinearGradient(0, r.y, 0, r.y + Math.min(r.h, 160 * dc.z));
-      veil.addColorStop(0, 'rgba(160,210,240,0.14)');
-      veil.addColorStop(1, 'rgba(160,210,240,0.03)');
+      const veil = g.createLinearGradient(0, r.y, 0, r.y + r.h);
+      veil.addColorStop(0, 'rgba(255,255,255,0.1)');
+      veil.addColorStop(Math.min(1, (160 * dc.z) / Math.max(1, r.h)), 'rgba(255,255,255,0.03)');
+      veil.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = veil;
       g.fill();
-      g.strokeStyle = active ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.22)';
-      g.lineWidth = 1;
-      g.stroke();
     },
-    // the title in white Rodin over a white hairline, the way a settings
-    // page heads itself; brighter and glowing when active
+    // the title in white Rodin over a white line that fades out at both ends
     titleBar(dc, r, title, active) {
-      const g = dc.g;
       text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.78)', { w: 400, x: r.x + 10 * dc.z, halo: active ? 'rgba(255,255,255,0.35)' : 'rgba(0,20,60,0.5)' });
-      g.save();
-      const y = r.y + r.h - 1;
-      if (active) {
-        g.shadowColor = 'rgba(255,255,255,0.8)';
-        g.shadowBlur = 6;
-      }
-      g.fillStyle = active ? '#ffffff' : 'rgba(255,255,255,0.45)';
-      g.fillRect(r.x, y, r.w, 1);
-      g.restore();
+      ps3Rule(dc.g, r.x, r.y + r.h - 1, r.w, active ? 1 : 0.45, active);
     },
-    // a white hairline and a jelly bead riding it
+    // the install bar: a see-through capsule, a glossy fill; running, a soft
+    // light slides along it
     progress(dc, r, fill, anim) {
       const g = dc.g;
-      const y = r.y + r.h / 2;
-      g.fillStyle = 'rgba(255,255,255,0.25)';
-      g.fillRect(r.x, y - 0.5, r.w, 1);
-      const x = anim ? r.x + r.w * ((dc.time * 0.4) % 1) : r.x + r.w * fill;
-      g.fillStyle = 'rgba(255,255,255,0.85)';
-      g.fillRect(r.x, y - 1, x - r.x, 2);
-      const d = Math.max(7, r.h * 0.9);
-      jelly(g, x - d / 2, y - d / 2, d, d, d / 2, true);
+      const h = Math.max(4, Math.min(r.h, 7 * dc.z));
+      const y = r.y + (r.h - h) / 2;
+      g.save();
+      rrect(g, r.x, y, r.w, h, h / 2);
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 1;
+      g.stroke();
+      g.clip();
+      const bar = (x0: number, x1: number, a: number) => {
+        if (x1 - x0 < 1) return;
+        const body = g.createLinearGradient(0, y, 0, y + h);
+        body.addColorStop(0, `rgba(255,255,255,${a})`);
+        body.addColorStop(1, `rgba(150,215,245,${a})`);
+        g.fillStyle = body;
+        rrect(g, x0, y, x1 - x0, h, h / 2);
+        g.fill();
+      };
+      if (anim) {
+        const seg = r.w * 0.3;
+        const x = r.x - seg + ((dc.time * 0.45) % 1) * (r.w + seg);
+        const grad = g.createLinearGradient(x, 0, x + seg, 0);
+        grad.addColorStop(0, 'rgba(200,235,255,0)');
+        grad.addColorStop(0.7, 'rgba(230,246,255,0.85)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(x, y, seg, h);
+      } else bar(r.x, r.x + r.w * fill, 0.9);
+      const gl = g.createLinearGradient(0, y, 0, y + h / 2);
+      gl.addColorStop(0, 'rgba(255,255,255,0.35)');
+      gl.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gl;
+      g.fillRect(r.x, y, r.w, h / 2);
+      g.restore();
     },
   },
 };
+// a white rule that fades out at both ends; glowing when lit
+function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a: number, glow: boolean): void {
+  const grad = g.createLinearGradient(x, 0, x + w, 0);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.06, `rgba(255,255,255,${a})`);
+  grad.addColorStop(0.7, `rgba(255,255,255,${a * 0.8})`);
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.save();
+  if (glow) {
+    g.shadowColor = 'rgba(255,255,255,0.8)';
+    g.shadowBlur = 6;
+  }
+  g.fillStyle = grad;
+  g.fillRect(x, y, w, 1);
+  g.restore();
+}
 
 // PS4, after a recreation's measured CSS (d4v1-sudo/Ps4-UI): the bright
 // #0e6cc4 blue of the default theme with soft light waves and dust, square
@@ -1554,6 +1702,15 @@ export const ps3 = makeSkin(ps3Theme);
 {
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));
+  ps3.tints = PS3_TINTS;
+  ps3.tint = (id, instant) => {
+    const to = skyOf(id);
+    ps3Fade.from = instant || ps2Still ? to : ps3Now().sky;
+    ps3Fade.to = to;
+    ps3Fade.t0 = instant || ps2Still ? -1e9 : performance.now();
+    return { '--xmb-top': css(to.top), '--xmb-mid': css(to.mid), '--xmb-bot': css(to.bot) };
+  };
+  ps3.busy = () => ps3Now().busy;
 }
 export const ps4 = makeSkin(ps4Theme);
 export const ps5 = makeSkin(ps5Theme);

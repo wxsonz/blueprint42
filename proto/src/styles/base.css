@@ -560,3 +560,6 @@ kbd {
 .syn-kw { color: var(--syn-kw); } .syn-ty { color: var(--syn-type); } .syn-fn { color: var(--syn-fn); } .syn-num { color: var(--syn-num); } .syn-str { color: var(--syn-str); } .syn-mac { color: var(--syn-macro); } .syn-com { color: var(--syn-com); }
 @keyframes duel-l { from { transform: translateX(-60px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes duel-r { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* theme colours a skin offers (PS3): a row of swatches on the top bar */
+.tints:not([hidden]) { display: inline-flex; align-items: center; gap: 5px; margin: 0 6px; }

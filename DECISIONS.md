@@ -1157,3 +1157,23 @@ questions. Newest last.
   shadow): values in flight and counts, the progress bead, the play button
   and the legend icons (the kit's flat icon, thickened and glossed, with
   its own lines pressed in).
+
+## 2026-09-28: PS3, second pass: XMB lines and focus, theme colours
+
+- No parallax on the PS3 background: the wave and sparkles stay put while
+  the grid pans and zooms (parallax is the PS2's thing).
+- Lines are soft light: a faint wide glow under a thin white core, a soft
+  chevron instead of an arrowhead, and live belts carry sparkles along in
+  the data's direction. Progress is the install bar: a see-through capsule
+  with a glossy fill, and a soft light sliding along it while running.
+  Windows are frosting only (no outline), the title line fades out at both
+  ends, and focus is a slowly breathing white halo (canvas and panes).
+- Theme colours: `Skin.tints`, `tint(id, instant)` and `busy()` (all
+  optional). The PS3 offers the XMB blue plus the XMB's classic colours as
+  jelly swatches on the top bar, folded to the current one until pointed
+  at. Picking one cross-fades over 2.5 s: the canvas lerps its sky and
+  frosted fills (drawing at full rate while `busy()`), and the chrome
+  follows through `@property`-registered `--xmb-*` colours that transition.
+  The choice is remembered per skin in this browser (`ftb.tint.<skin>`);
+  on load it applies without a fade. The real XMB picks colour from a panel
+  that slides in from the right; the author chose the top bar for now.

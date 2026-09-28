@@ -198,6 +198,11 @@ export interface Skin {
   beltHandle(dc: Dc, p: Pt): void; // drag handle on a selected belt
   ghost(dc: Dc, r: Rect, label: string): void; // reserved slot for a recursive copy
   icon(g: CanvasRenderingContext2D, kind: IconKind, s: number): void;
+  // optional: colours the author can pick from the top bar (PS3's XMB);
+  // tint() switches (fading unless instant) and returns the CSS variables to set
+  tints?: { id: string; name: string; colour: string }[];
+  tint?(id: string, instant?: boolean): Record<string, string>;
+  busy?(): boolean; // still animating on its own (a fade): draw at full rate
   module(dc: Dc, r: Rect, m: ModuleInfo): void;
   wall(dc: Dc, r: Rect, w: WallInfo): void; // drawn under belts and machines
   door(dc: Dc, p: Pt, vertical: boolean, live: boolean): void; // where a belt passes through a wall
