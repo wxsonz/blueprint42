@@ -71,7 +71,12 @@ const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
 
 export function makeSkin(t: Theme): Skin {
   const { p } = t;
-  const sprite: SpritePalette = { body: p.card, edge: p.line, track: p.track, cell: p.cell, text: p.fg, muted: p.dim, accent: p.accent, marker: p.ret, selection: p.accent, font: (s) => t.mono(s), radius: t.radius, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined };
+  // read live from the palette: a theme may change its colours (PS3's tints)
+  const sprite: SpritePalette = {
+    get body() { return p.card; }, get edge() { return p.line; }, get track() { return p.track; }, get cell() { return p.cell; },
+    get text() { return p.fg; }, get muted() { return p.dim; }, get accent() { return p.accent; }, get marker() { return p.ret; }, get selection() { return p.accent; },
+    font: (s) => t.mono(s), radius: t.radius, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined,
+  };
   const cap = (s: string) => (t.upper ? s.toUpperCase() : s);
   const R = (dc: Dc) => px(dc, t.radius, t.radius ? 1 : 0);
   const snapR = (r: Rect): Rect => (t.pixel ? { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) } : r);
@@ -101,7 +106,7 @@ export function makeSkin(t: Theme): Skin {
     id: t.id,
     name: t.name,
     blurb: t.blurb,
-    casing: p.bg,
+    get casing() { return p.bg; }, // live: a theme may change its colours
     spotlight: t.spotlight,
     solidMachines: !!t.window,
     strip(dc, r, info) { drawStrip(dc, r, info, sprite); },

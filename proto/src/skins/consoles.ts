@@ -936,15 +936,17 @@ function ps3Xmb(dc: Dc): void {
   g.restore();
 }
 // jelly: a rounded blob, pale cyan, lit from above, with a soft rim and a shadow
+// the jelly's colours follow the theme colour (set with the sky, in ps3Fills)
+const ps3Jel = { hi: [170, 232, 250], lo: [55, 135, 195], shade: [0, 24, 70], icon: ['#d2f1fb', '#63b4d8'] };
 function jelly(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rad: number, glow = false): void {
   g.save();
   rrect(g, x, y, w, h, rad);
-  g.shadowColor = 'rgba(0,24,70,0.45)';
+  g.shadowColor = `rgba(${ps3Jel.shade.join(',')},0.45)`;
   g.shadowBlur = Math.min(8, h * 0.4);
   g.shadowOffsetY = Math.min(2, h * 0.08);
   const body = g.createLinearGradient(0, y, 0, y + h);
-  body.addColorStop(0, glow ? 'rgba(170,232,250,0.95)' : 'rgba(140,210,236,0.85)');
-  body.addColorStop(1, glow ? 'rgba(70,165,215,0.95)' : 'rgba(55,135,195,0.85)');
+  body.addColorStop(0, `rgba(${ps3Jel.hi.map(Math.round).join(',')},${glow ? 0.95 : 0.85})`);
+  body.addColorStop(1, `rgba(${ps3Jel.lo.map(Math.round).join(',')},${glow ? 0.95 : 0.85})`);
   g.fillStyle = body;
   g.fill();
   g.shadowColor = 'transparent';
@@ -983,8 +985,8 @@ function jellyIcon(g: CanvasRenderingContext2D, s: number, draw: (h: CanvasRende
   bg.drawImage(flat, 0, 0);
   bg.globalCompositeOperation = 'source-in';
   const body = bg.createLinearGradient(0, 0, 0, S);
-  body.addColorStop(0, '#d2f1fb');
-  body.addColorStop(1, '#63b4d8');
+  body.addColorStop(0, ps3Jel.icon[0]);
+  body.addColorStop(1, ps3Jel.icon[1]);
   bg.fillStyle = body;
   bg.fillRect(0, 0, S, S);
   bg.globalCompositeOperation = 'source-atop';
@@ -1052,6 +1054,12 @@ function ps3Fills(sky: Sky): void {
   ps3P.panel = css(deep, 0.5);
   ps3P.track = css(deep, 0.35);
   ps3P.bg = css(sky.mid);
+  // jelly: the colour, lifted toward white at the top
+  ps3Jel.hi = toward(sky.mid, 255, 0.55);
+  ps3Jel.lo = toward(sky.mid, 0, 0.12);
+  ps3Jel.shade = deep;
+  const to = ps3Fade.to.mid;
+  ps3Jel.icon = [css(toward(to, 255, 0.75)), css(toward(to, 255, 0.25))];
 }
 function ps3Sky(g: CanvasRenderingContext2D, W: number, H: number, sky: Sky): void {
   const grad = g.createLinearGradient(0, 0, W * 0.25, H);
@@ -1193,21 +1201,14 @@ export const ps3Theme: Theme = {
   },
   window: {
     border: 0, corner: 3, titleH: 28, face: 'rgba(0,0,0,0.12)', workspace: 'rgba(0,0,0,0.05)',
-    // just a tinted pane: lighter at the top, no outline; focus is the halo
-    frame(dc, r, active, face) {
+    // files and machines have no pane at all: the window is its title and
+    // line, and what's inside (storage, stations, the function box) floats
+    // on the sky; only the function box itself is a tinted panel
+    frame(dc, r, _active, _face, kind) {
+      if (kind !== 'node') return;
       const g = dc.g;
-      const rad = Math.max(1, 3 * dc.z);
-      if (active) ps3Halo(dc, r, rad);
-      rrect(g, r.x, r.y, r.w, r.h, rad);
+      rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
       g.fillStyle = ps3P.card;
-      g.fill();
-      g.fillStyle = face;
-      g.fill();
-      const veil = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-      veil.addColorStop(0, 'rgba(255,255,255,0.1)');
-      veil.addColorStop(Math.min(1, (160 * dc.z) / Math.max(1, r.h)), 'rgba(255,255,255,0.03)');
-      veil.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = veil;
       g.fill();
     },
     // the title in white Rodin over a white line that fades out at both ends
@@ -1732,6 +1733,7 @@ export const ps3 = makeSkin(ps3Theme);
     ps3Fade.from = instant || ps2Still ? to : ps3Now().sky;
     ps3Fade.to = to;
     ps3Fade.t0 = instant || ps2Still ? -1e9 : performance.now();
+    ps3Fills(ps3Now().sky);
     return { '--xmb-top': css(to.top), '--xmb-mid': css(to.mid), '--xmb-bot': css(to.bot) };
   };
   ps3.busy = () => ps3Now().busy;

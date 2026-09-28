@@ -1185,3 +1185,12 @@ questions. Newest last.
   steady glow drifting slowly along (about 36 px/s, one per ~320 px), with
   sparkles winking in and out at random spots just off the line, each coming
   back somewhere else (seeded per belt, so belts don't wink in step).
+- Fourth pass: files and machines lose their pane entirely; a window is its
+  title and fading line, with its storage, stations and function box (the
+  only tinted panel left) floating on the sky. Everything follows the theme
+  colour: the jelly (value bubbles, counts, icons, the play button, the
+  duel's chip and badges) is the colour lifted toward white, and the
+  chrome's old fixed cyan (accent, cursor, selection, call colour) is a pale
+  mix of it. The kit's sprite palette (memory strips, storage) and `casing`
+  now read the palette live instead of copying it at load, so a theme that
+  changes colours at run time is followed everywhere.

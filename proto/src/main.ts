@@ -1742,6 +1742,7 @@ function renderTints(): void {
     if (!b || b.dataset.id === cur) return;
     store.set(`tint.${sk.id}`, b.dataset.id!);
     set(b.dataset.id!, false);
+    renderDock(); // its icons take the new colour
   };
   box.hidden = false;
   set(cur, true);
