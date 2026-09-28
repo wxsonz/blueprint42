@@ -1501,10 +1501,111 @@ function ps4Mobius(dc: Dc): void {
   g.drawImage(ps4MobSoft!, 0, 0, w, h, 0, 0, W, H);
   g.restore();
 }
+// A belt as the PS4's progress bar: a flat track; live, a white fill runs
+// along it the data's way. The gimmick: as a fill moves, controller symbols
+// (○ □ △ ✕, picked at random) burst out behind it, drifting off the line,
+// turning and fading. Stateless: a symbol is spawned at the fill's head on a
+// fixed tick, so its place and age follow from the time alone.
+function ps4Span(g: CanvasRenderingContext2D, w: Walk, a: number, b: number): void {
+  a = Math.max(0, a);
+  b = Math.min(w.length, b);
+  if (b - a < 0.5) return;
+  const p = w.at(a);
+  g.beginPath();
+  g.moveTo(p.x, p.y);
+  for (const s of w.segs) if (s.at > a && s.at < b) g.lineTo(s.x, s.y);
+  const q = w.at(b);
+  g.lineTo(q.x, q.y);
+  g.stroke();
+}
+function ps4Symbol(g: CanvasRenderingContext2D, kind: number, x: number, y: number, r: number, rot: number): void {
+  g.save();
+  g.translate(x, y);
+  g.rotate(rot);
+  g.beginPath();
+  if (kind === 0) g.arc(0, 0, r, 0, Math.PI * 2);
+  else if (kind === 1) g.rect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7);
+  else if (kind === 2) {
+    g.moveTo(0, -r);
+    g.lineTo(r * 0.95, r * 0.7);
+    g.lineTo(-r * 0.95, r * 0.7);
+    g.closePath();
+  } else {
+    g.moveTo(-r, -r);
+    g.lineTo(r, r);
+    g.moveTo(r, -r);
+    g.lineTo(-r, r);
+  }
+  g.stroke();
+  g.restore();
+}
+function ps4Belt(dc: Dc, pts: [number, number][], o: { live: boolean; dir: number; selected: boolean; hovered: boolean }): void {
+  const g = dc.g;
+  const z = dc.z;
+  const w = new Walk(pts);
+  const L = w.length;
+  if (L < 1) return;
+  g.save();
+  g.lineCap = 'butt';
+  g.lineJoin = 'miter';
+  const th = Math.max(3, 4 * z);
+  g.lineWidth = th;
+  g.strokeStyle = o.live ? 'rgba(255,255,255,0.28)' : o.selected || o.hovered ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)';
+  ps4Span(g, w, 0, L);
+  if (o.live) {
+    const t = ps2Still ? 20 : dc.time || 0;
+    const speed = 90 * z;
+    const gap = Math.max(160, 380 * z);
+    const seg = Math.min(L * 0.4, Math.max(40, 110 * z));
+    const along = (d: number) => (o.dir < 0 ? L - d : d);
+    // the fills: white segments, their heads leading the data's way
+    g.strokeStyle = '#ffffff';
+    const D = t * speed;
+    for (let head = D % gap; head < L + seg; head += gap) {
+      const a = along(head - seg), b = along(head);
+      ps4Span(g, w, Math.min(a, b), Math.max(a, b));
+    }
+    // the symbols, spawned at a head every tick, living `life` seconds
+    const tick = 0.11;
+    const life = 1.1;
+    const seed = Math.round(L / z);
+    g.lineWidth = Math.max(1, 1.3 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    const now = Math.floor(t / tick);
+    for (let j = 0; j * tick < life; j++) {
+      const i = now - j;
+      const ts = i * tick;
+      const age = t - ts;
+      if (age < 0 || age > life) continue;
+      const Ds = ts * speed;
+      for (let m = Math.floor((Ds - L) / gap); m <= Math.floor(Ds / gap); m++) {
+        const head = Ds - m * gap;
+        if (head < 0 || head > L) continue;
+        const h = (k: number) => hash(i * 7 + m * 131 + seed * 3 + k * 977);
+        if (h(0) < 0.35) continue; // not every tick: a burst, not a stream
+        const q = w.at(along(head));
+        const side = h(1) < 0.5 ? -1 : 1;
+        const out = age * (18 + 34 * h(2)) * z + th;
+        const back = age * (8 + 16 * h(3)) * z * (o.dir < 0 ? -1 : 1);
+        const x = q.x - q.dx * back - q.dy * out * side;
+        const y = q.y - q.dy * back + q.dx * out * side;
+        const f = 1 - age / life;
+        g.strokeStyle = `rgba(210,228,255,${0.85 * f ** 1.5})`;
+        ps4Symbol(g, Math.floor(h(4) * 4), x, y, (3 + 2.5 * h(5)) * z * (0.8 + 0.4 * (1 - f)), h(6) * 6.28 + age * (h(7) - 0.5) * 4);
+      }
+    }
+  }
+  g.restore();
+}
 export const ps4Theme: Theme = {
   id: 'ps4', name: 'PlayStation 4', blurb: 'the system screens: royal blue, lighter cards with pale edges, a white border on focus',
   p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 0, spotlight: 'rgba(0,10,60,0.5)',
   pulseColor: 'rgba(255,255,255,0.9)',
+  belt(dc, pts, o, t) {
+    ps4Belt(dc, pts, o);
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     const g = dc.g;
     if (o.kind === 'plate') {

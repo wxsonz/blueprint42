@@ -1274,3 +1274,10 @@ questions. Newest last.
   no border, a square tile with a thin edge holding the icon, the title in
   white SST and grey beneath. The duel's value box is the PS4's input field
   (navy, white edge), as values on the grid are.
+- PS4 belts are its progress bar: a flat track, and on live belts white
+  fills running along it the data's way. The gimmick: controller symbols
+  (○ □ △ ✕, at random) burst out behind each fill as it moves, drifting off
+  the line, turning, fading within about a second; pale outlines, in
+  keeping with the skin's plainness. Stateless: symbols spawn at a fill's
+  head on a fixed tick (some ticks skipped, so they come in bursts), so each
+  one's place and age follow from the time.
