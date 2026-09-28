@@ -3,7 +3,7 @@ html[data-skin='tahoe'] {
   --font-ui: 'SF Pro Text', Inter, sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, monospace;
   --ui-size: 12.5px;
-  --bg: linear-gradient(160deg, #16325c, #4c7fb8 45%, #2a4a74);
+  --bg: linear-gradient(160deg, #bfe3fb, #5aa4e0 45%, #1d5fb0);
   --fg: #1d1d1f;
   --fg-dim: #6e6e73;
   --accent: #0a84ff;
@@ -30,10 +30,10 @@ html[data-skin='tahoe'] {
   --sw-off: #d1d1d6;
   --sw-on: #34c759;
   --sw-knob: #ffffff;
-  --panes-bg: linear-gradient(160deg, #16325c, #4c7fb8 45%, #2a4a74);
+  --panes-bg: linear-gradient(160deg, #bfe3fb, #5aa4e0 45%, #1d5fb0);
   --pane-bg: rgba(255,255,255,0.92);
   --pane-border: rgba(255,255,255,0.8);
-  --pane-radius: 16px;
+  --pane-radius: 22px;
   --head-h: 34px;
   --head-bg: rgba(255,255,255,0.7);
   --head-fg: #6e6e73;
@@ -111,4 +111,4 @@ html[data-skin='tahoe'] {
   --syn-punct: #5c5c5c;
 }
 html[data-skin='tahoe'] .pane, html[data-skin='tahoe'] #dock, html[data-skin='tahoe'] .dlg { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 30px rgba(10,30,60,0.35); backdrop-filter: none; }
-html[data-skin='tahoe'] #panes { background: linear-gradient(160deg, #16325c, #4c7fb8 45%, #2a4a74); }
+html[data-skin='tahoe'] #panes { background: linear-gradient(160deg, #bfe3fb, #5aa4e0 45%, #1d5fb0); }

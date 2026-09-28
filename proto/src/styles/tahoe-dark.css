@@ -30,10 +30,10 @@ html[data-skin='tahoe-dark'] {
   --sw-off: #d1d1d6;
   --sw-on: #34c759;
   --sw-knob: #ffffff;
-  --panes-bg: linear-gradient(160deg, #050b1a, #12264a 45%, #0e1d36);
+  --panes-bg: linear-gradient(160deg, #120c32, #2a1f66 50%, #0a0822);
   --pane-bg: rgba(24,27,34,0.94);
   --pane-border: rgba(255,255,255,0.2);
-  --pane-radius: 16px;
+  --pane-radius: 22px;
   --head-h: 34px;
   --head-bg: #2a2a2c;
   --head-fg: #a1a1a6;
@@ -111,5 +111,4 @@ html[data-skin='tahoe-dark'] {
   --syn-punct: #a1a1a6;
 }
 html[data-skin='tahoe-dark'] .pane, html[data-skin='tahoe-dark'] #dock, html[data-skin='tahoe-dark'] .dlg { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 30px rgba(10,30,60,0.35); backdrop-filter: none; }
-html[data-skin='tahoe-dark'] #panes { background: linear-gradient(160deg, #16325c, #4c7fb8 45%, #2a4a74); }
-html[data-skin='tahoe-dark'] #panes { background: linear-gradient(160deg, #050b1a, #12264a 45%, #0e1d36); }
+html[data-skin='tahoe-dark'] #panes { background: linear-gradient(160deg, #120c32, #2a1f66 50%, #0a0822); }

@@ -433,135 +433,160 @@ export const bigSurTheme = bigSurOf(false);
 
 // ---------------- macOS Tahoe, Liquid Glass (light and dark) ----------------
 
-// Glass: a translucent body that lets the backdrop through, a bright rim
-// where light catches the edge, and a soft inner highlight near the top.
-// see: the glass sits on the wallpaper and frosts it (a window); cards
-// inside windows only tint, there's no wallpaper under them. Frosted, not
-// lensed: Tahoe's later releases dialled Liquid Glass back to clarity.
-function liquidGlass(dc: Dc, r: Rect, rad: number, tint: string, strong: boolean, dark = false, see = false): void {
-  const g = dc.g;
-  if (see) glassBehind(dc, r, rad, 12);
-  rrect(g, r.x, r.y, r.w, r.h, rad);
-  g.fillStyle = tint;
-  g.fill();
-  const hi = g.createLinearGradient(0, r.y, 0, r.y + Math.min(r.h, 60 * dc.z));
-  const a = (dark ? 0.35 : 1) * (strong ? 0.55 : 0.35);
-  hi.addColorStop(0, `rgba(255,255,255,${a})`);
-  hi.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = hi;
-  g.fill();
-  const rim = g.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
-  rim.addColorStop(0, dark ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.95)');
-  rim.addColorStop(0.5, dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.25)');
-  rim.addColorStop(1, dark ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.8)');
-  g.strokeStyle = rim;
-  g.lineWidth = Math.max(1, 1.5 * dc.z);
-  g.stroke();
-  if (see) {
-    // the lensing edge: light caught along the top-left, a shade along the bottom-right
-    const k = Math.max(1.5, 4 * dc.z);
-    rrect(g, r.x + k / 2 + 1, r.y + k / 2 + 1, r.w - k - 2, r.h - k - 2, Math.max(1, rad - k / 2 - 1));
-    const edge = g.createLinearGradient(r.x, r.y, r.x + r.w * 0.4, r.y + r.h);
-    edge.addColorStop(0, `rgba(255,255,255,${dark ? 0.22 : 0.45})`);
-    edge.addColorStop(0.35, 'rgba(255,255,255,0.05)');
-    edge.addColorStop(0.7, 'rgba(0,0,0,0)');
-    edge.addColorStop(1, `rgba(0,10,30,${dark ? 0.2 : 0.1})`);
-    g.strokeStyle = edge;
-    g.lineWidth = k;
-    g.stroke();
-  }
-}
 
+// Tahoe, after Apple's own description: windows with a toolbar have 26pt
+// corners and a calm, near-solid surface (frosted a little by the wallpaper);
+// the title is plain bold text by the traffic lights; the glass lives on the
+// toolbar's capsules; content sits in flat grouped cards; the wallpaper is
+// the abstract wave (light blue by day, violet by night).
 function tahoeOf(dark: boolean): Theme {
-  const glassFace = dark ? 'rgba(28,32,40,0.72)' : 'rgba(250,251,253,0.76)';
-  const cardTint = dark ? 'rgba(40,44,54,0.72)' : 'rgba(255,255,255,0.62)';
-  const panelTint = dark ? 'rgba(24,27,34,0.86)' : 'rgba(255,255,255,0.82)';
+  const surface = dark ? 'rgba(34,34,40,0.9)' : 'rgba(246,246,249,0.9)';
+  const group = dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.92)';
+  const groupLine = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)';
   return {
-    id: dark ? 'tahoe-dark' : 'tahoe', name: 'macOS Tahoe', blurb: dark ? 'frosted glass at night' : 'frosted glass over the lake at dusk',
-    radius: 14, spotlight: 'rgba(6,14,34,0.5)',
+    id: dark ? 'tahoe-dark' : 'tahoe', name: 'macOS Tahoe', blurb: dark ? 'frosted glass at night, over the violet wave' : 'frosted glass and 26pt corners over the blue wave',
+    radius: 12, spotlight: dark ? 'rgba(8,4,24,0.5)' : 'rgba(10,30,60,0.35)',
     ui: INTER, mono: MONO('"SF Mono", "JetBrains Mono", Menlo, monospace'),
     p: dark ? {
-      bg: '#0b1a30', card: cardTint, panel: panelTint, line: 'rgba(255,255,255,0.25)',
-      fg: '#f2f4f8', dim: '#aab2c0', faint: '#6b7384', accent: '#0a84ff', ptr: '#64a8ff', ret: '#30d158', wait: '#ff9f0a', err: '#ff453a',
-      param: '#64a8ff', cell: 'rgba(10,132,255,0.3)', track: 'rgba(0,0,0,0.35)',
+      bg: '#1a1540', card: group, panel: 'rgba(40,40,46,0.96)', line: groupLine,
+      fg: '#f2f2f5', dim: '#a8a8b3', faint: '#6e6e7a', accent: '#0a84ff', ptr: '#64a8ff', ret: '#30d158', wait: '#ff9f0a', err: '#ff453a',
+      param: '#64a8ff', cell: 'rgba(10,132,255,0.28)', track: 'rgba(255,255,255,0.06)',
     } : {
-      bg: '#23466e', card: cardTint, panel: panelTint, line: 'rgba(255,255,255,0.7)',
-      fg: '#111418', dim: '#4a5260', faint: '#8a92a0', accent: '#0a84ff', ptr: '#0a6fe0', ret: '#1f9d55', wait: '#ff9f0a', err: '#ff453a',
-      param: '#0a6fe0', cell: 'rgba(10,132,255,0.2)', track: 'rgba(255,255,255,0.7)',
+      bg: '#5aa4e0', card: group, panel: 'rgba(255,255,255,0.96)', line: groupLine,
+      fg: '#1d1d1f', dim: '#5e5e66', faint: '#9a9aa2', accent: '#0a84ff', ptr: '#0a6fe0', ret: '#1f9d55', wait: '#e08600', err: '#e5362c',
+      param: '#0a6fe0', cell: 'rgba(10,132,255,0.16)', track: 'rgba(0,0,0,0.04)',
     },
     pulseColor: 'rgba(10,132,255,0.85)',
+    // flat grouped cards, the way Settings and Finder group content
     card(dc, r, o) {
-      if (o.kind === 'wall') return liquidGlass(dc, r, Math.max(4, 18 * dc.z), dark ? 'rgba(20,24,32,0.22)' : 'rgba(255,255,255,0.08)', false, dark);
-      liquidGlass(dc, r, Math.max(3, (o.kind === 'plate' ? r.h / 2 / Math.max(dc.z, 0.01) : 12) * dc.z), o.kind === 'frame' || o.kind === 'plate' ? panelTint : cardTint, !!o.glow, dark);
-      if (o.glow) {
-        const g = dc.g;
-        rrect(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, Math.max(4, 14 * dc.z));
-        g.strokeStyle = 'rgba(10,132,255,0.55)'; g.lineWidth = Math.max(2, 3 * dc.z); g.stroke();
+      const g = dc.g;
+      const rad = Math.max(3, (o.kind === 'plate' ? r.h / 2 / Math.max(dc.z, 0.01) : o.kind === 'wall' ? 26 : 12) * dc.z);
+      if (o.kind === 'wall') {
+        glassBehind(dc, r, rad, 12);
+        rrect(g, r.x, r.y, r.w, r.h, rad);
+        g.fillStyle = dark ? 'rgba(30,26,60,0.35)' : 'rgba(255,255,255,0.22)';
+        g.fill();
+        g.strokeStyle = dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)';
+        g.lineWidth = 1;
+        g.stroke();
+        return;
       }
+      rrect(g, r.x, r.y, r.w, r.h, rad);
+      if (o.fill !== 'transparent') {
+        g.fillStyle = o.kind === 'frame' || o.kind === 'plate' ? (dark ? 'rgba(48,48,56,0.96)' : 'rgba(255,255,255,0.97)') : group;
+        g.fill();
+      }
+      g.strokeStyle = o.glow ? '#0a84ff' : groupLine;
+      g.lineWidth = o.glow ? Math.max(1.5, 2.5 * dc.z) : 1;
+      g.stroke();
     },
-    // Lake Tahoe: blue mountains over still water, at dusk or at night
+    // the default wallpaper: a wave seen from just under the surface of the lake
     background(dc) {
-      backdrop(dc, dark ? 'tahoe-dark' : 'tahoe', (g, W, H) => {
-        const sky = g.createLinearGradient(0, 0, 0, H * 0.55);
-        const st = dark ? ['#050b1a', '#12264a', '#2b4a78'] : ['#16325c', '#4c7fb8', '#a9c7e6'];
-        sky.addColorStop(0, st[0]); sky.addColorStop(0.6, st[1]); sky.addColorStop(1, st[2]);
-        g.fillStyle = sky; g.fillRect(0, 0, W, H * 0.56);
-        if (dark) {
-          g.fillStyle = 'rgba(255,255,255,0.75)';
-          for (let k = 0; k < 70; k++) g.fillRect((k * 937) % W, ((k * 613) % Math.round(H * 0.45)), 1, 1);
+      backdrop(dc, dark ? 'tahoe-wave-dark' : 'tahoe-wave', (g, W, H) => {
+        const base = g.createLinearGradient(0, 0, W * 0.4, H);
+        if (dark) (base.addColorStop(0, '#120c32'), base.addColorStop(0.5, '#2a1f66'), base.addColorStop(1, '#0a0822'));
+        else (base.addColorStop(0, '#bfe3fb'), base.addColorStop(0.45, '#5aa4e0'), base.addColorStop(1, '#1d5fb0'));
+        g.fillStyle = base;
+        g.fillRect(0, 0, W, H);
+        // layered bands of the wave, each a curved sheet with its own light
+        const bands: [number, number, string, string][] = dark
+          ? [[0.25, 0.22, 'rgba(120,90,230,0.55)', 'rgba(60,40,150,0)'], [0.45, 0.2, 'rgba(90,120,255,0.45)', 'rgba(40,60,170,0)'], [0.66, 0.18, 'rgba(170,110,255,0.35)', 'rgba(80,40,160,0)']]
+          : [[0.28, 0.22, 'rgba(255,255,255,0.7)', 'rgba(150,210,250,0)'], [0.48, 0.2, 'rgba(110,200,245,0.6)', 'rgba(40,120,210,0)'], [0.68, 0.18, 'rgba(40,110,210,0.55)', 'rgba(20,70,160,0)']];
+        for (const [y, amp, c0, c1] of bands) {
+          const top = (x: number) => H * y + Math.sin((x / W) * Math.PI * 1.6 + y * 6) * H * amp * 0.5 - (x / W) * H * 0.18;
+          g.beginPath();
+          g.moveTo(0, top(0));
+          for (let x = 0; x <= W; x += W / 40) g.lineTo(x, top(x));
+          g.lineTo(W, H);
+          g.lineTo(0, H);
+          g.closePath();
+          const fill = g.createLinearGradient(0, H * (y - amp), 0, H * (y + amp * 1.5));
+          fill.addColorStop(0, c0);
+          fill.addColorStop(1, c1);
+          g.fillStyle = fill;
+          g.fill();
+          // the bright crest
+          g.beginPath();
+          for (let x = 0; x <= W; x += W / 40) (x === 0 ? g.moveTo(x, top(x)) : g.lineTo(x, top(x)));
+          g.strokeStyle = dark ? 'rgba(200,180,255,0.35)' : 'rgba(255,255,255,0.75)';
+          g.lineWidth = 1.5;
+          g.stroke();
         }
-        const ridge = (y: number, amp: number, col: string, seed: number) => {
-          g.fillStyle = col;
-          g.beginPath(); g.moveTo(0, H * 0.56);
-          for (let x = 0; x <= W; x += W / 24) g.lineTo(x, H * y - Math.abs(Math.sin(x / W * 7 + seed)) * H * amp - Math.sin(x / W * 17 + seed) * H * amp * 0.25);
-          g.lineTo(W, H * 0.56); g.closePath(); g.fill();
-        };
-        ridge(0.5, 0.14, dark ? '#16294a' : '#3a5f8f', 1.3);
-        ridge(0.54, 0.09, dark ? '#0e1d36' : '#2a4a74', 4.1);
-        const lake = g.createLinearGradient(0, H * 0.56, 0, H);
-        lake.addColorStop(0, dark ? '#1f3a63' : '#6d97c7'); lake.addColorStop(1, dark ? '#030916' : '#0f2748');
-        g.fillStyle = lake; g.fillRect(0, H * 0.56, W, H * 0.44);
-        g.fillStyle = `rgba(255,255,255,${dark ? 0.07 : 0.12})`;
-        for (let k = 0; k < 18; k++) g.fillRect(W * ((k * 0.37) % 1), H * (0.6 + (k % 7) * 0.05), W * 0.08, 1);
       });
     },
     window: {
-      border: 1, corner: 18, titleH: 34, face: glassFace, workspace: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)',
-      frame(dc, r, active, client) {
+      border: 1, corner: 26, titleH: 34, face: surface, workspace: dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.12)',
+      frame(dc, r, active, face) {
         const g = dc.g;
-        const rad = Math.max(4, 18 * dc.z);
-        const th = 34 * dc.z;
-        // frosted glass over the lake, and the content on a whiter sheet under the title band
-        liquidGlass(dc, r, rad, dark ? 'rgba(30,34,44,0.42)' : 'rgba(255,255,255,0.34)', active, dark, true);
-        const k = Math.max(1, 6 * dc.z);
-        const inner = Math.max(2, 10 * dc.z);
-        rrect(g, r.x + k, r.y + th, r.w - 2 * k, Math.max(0, r.h - th - k), [inner, inner, Math.max(2, rad - k), Math.max(2, rad - k)]);
-        g.fillStyle = client;
+        const rad = Math.max(4, 26 * dc.z);
+        // a large soft shadow, from strokes
+        rrect(g, r.x, r.y + 3 * dc.z, r.w, r.h, rad);
+        g.strokeStyle = dark ? 'rgba(0,0,0,0.3)' : 'rgba(10,30,70,0.12)';
+        g.lineWidth = Math.max(3, 12 * dc.z);
+        g.stroke();
+        // frosted: the wallpaper, well blurred, under a near-solid surface
+        glassBehind(dc, r, rad, 14);
+        rrect(g, r.x, r.y, r.w, r.h, rad);
+        g.fillStyle = face;
         g.fill();
+        // the rim: a hairline outside, a light catch inside
+        g.strokeStyle = dark ? 'rgba(0,0,0,0.6)' : active ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,0.1)';
+        g.lineWidth = 1;
+        g.stroke();
+        rrect(g, r.x + 1, r.y + 1, r.w - 2, r.h - 2, rad - 1);
+        g.strokeStyle = dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.85)';
+        g.stroke();
       },
-      titleBar(dc, r, title, active) {
+      titleBar(dc, r, title, active, buttons) {
         const g = dc.g;
-        const d = Math.max(6, Math.min(r.h - 16 * dc.z, 13 * dc.z));
-        const left = trafficLights(dc, r.x + 14 * dc.z, r.y + r.h / 2, d, active, 'glass');
-        // the title rides a small glass pill
-        const fs = Math.max(7, 13 * dc.z);
-        const t = fitText(g, title, (x) => INTER(x, 600), fs, r.x + r.w - left - 40 * dc.z);
-        const w = g.measureText(t).width + 22 * dc.z;
-        const pill = { x: left + 14 * dc.z, y: r.y + r.h * 0.18, w, h: r.h * 0.64 };
-        liquidGlass(dc, pill, pill.h / 2, dark ? (active ? 'rgba(70,76,90,0.8)' : 'rgba(50,54,64,0.6)') : active ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)', active, dark);
-        g.fillStyle = dark ? (active ? '#f2f4f8' : '#8a92a0') : active ? '#111418' : '#8a92a0';
-        g.textAlign = 'left'; g.textBaseline = 'middle';
-        g.fillText(t, pill.x + 11 * dc.z, r.y + r.h / 2);
+        const d = Math.max(5, Math.min(r.h * 0.42, 12 * dc.z));
+        const left = trafficLights(dc, r.x + 14 * dc.z, r.y + r.h / 2 + 2 * dc.z, d, active, 'flat');
+        let right = r.x + r.w - 12 * dc.z;
+        // a glass capsule of toolbar buttons at the trailing edge
+        if (buttons && r.w > 220 * dc.z) {
+          const ch = Math.max(8, r.h * 0.72);
+          const cw = ch * 2.3;
+          const cap = { x: right - cw, y: r.y + (r.h - ch) / 2 + 2 * dc.z, w: cw, h: ch };
+          rrect(g, cap.x, cap.y, cap.w, cap.h, ch / 2);
+          g.fillStyle = dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.75)';
+          g.fill();
+          g.strokeStyle = dark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.08)';
+          g.lineWidth = 1;
+          g.stroke();
+          g.fillStyle = active ? (dark ? '#e6e6ea' : '#3a3a40') : '#9a9aa2';
+          const cy = cap.y + ch / 2;
+          const dot = Math.max(1, 1.4 * dc.z);
+          for (const k of [-1, 0, 1]) (g.beginPath(), g.arc(cap.x + cw * 0.3 + k * dot * 3, cy, dot, 0, Math.PI * 2), g.fill());
+          g.beginPath();
+          g.arc(cap.x + cw * 0.7, cy - dot * 0.6, dot * 2.6, 0, Math.PI * 2);
+          g.strokeStyle = g.fillStyle;
+          g.lineWidth = Math.max(1, 1.3 * dc.z);
+          g.stroke();
+          right = cap.x - 8 * dc.z;
+        }
+        const fs = Math.max(7, 13.5 * dc.z);
+        const t = fitText(g, title, (x) => INTER(x, 700), fs, Math.max(0, right - left - 16 * dc.z));
+        g.fillStyle = dark ? (active ? '#f2f2f5' : '#8e8e98') : active ? '#1d1d1f' : '#8e8e96';
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+        g.fillText(t, left + 14 * dc.z, r.y + r.h / 2 + 2 * dc.z);
       },
       progress(dc, r, fill, anim) {
+        // a thin capsule, the system's
         const g = dc.g;
-        liquidGlass(dc, r, r.h / 2, dark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.5)', false, dark);
-        const w = anim ? r.w * (0.3 + 0.7 * ((dc.time * 0.35) % 1)) : r.w * fill;
-        if (w <= 2) return;
-        rrect(g, r.x + 2, r.y + 2, w - 4, r.h - 4, (r.h - 4) / 2);
-        const blue = g.createLinearGradient(0, r.y, 0, r.y + r.h);
-        blue.addColorStop(0, '#6cb4ff'); blue.addColorStop(1, '#0a84ff');
-        g.fillStyle = blue; g.fill();
+        const h = Math.max(3, Math.min(r.h, 6 * dc.z));
+        const y = r.y + (r.h - h) / 2;
+        rrect(g, r.x, y, r.w, h, h / 2);
+        g.fillStyle = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
+        g.fill();
+        const x0 = anim ? r.x + r.w * (((dc.time * 0.5) % 1.3) - 0.3) : r.x;
+        const w = anim ? r.w * 0.3 : r.w * fill;
+        const a = Math.max(r.x, x0);
+        const b = Math.min(r.x + r.w, x0 + w);
+        if (b - a < 1) return;
+        rrect(g, a, y, b - a, h, h / 2);
+        g.fillStyle = '#0a84ff';
+        g.fill();
       },
     },
   };

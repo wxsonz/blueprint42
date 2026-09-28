@@ -797,3 +797,32 @@ questions. Newest last.
     short.
   - The open list's height went from 1577 to 1232 px in Game Boy and Amp,
     against about 1090 px in the other skins.
+- **Decision (author: Windows 7 and Tahoe look "not quite right"):** Both
+  are redrawn from references, not from memory.
+  - **Windows 7** (MakeAero's generator values; NameThatUI):
+    - a 9 px frame with 8 px corners;
+    - "Sky" glass, `hsl(210 65% 52%)` at about 0.52;
+    - a strong top shine (0.62), streaks at 0.22;
+    - a dark outer line, a bright inner hairline and a soft inner glow;
+    - caption buttons hanging from the top edge: 19 px tall, 1.45 : 2.3
+      widths, square on top, with the split-gloss red close
+      (`#e6a99f → #d16b5b | #cf4b34 → #d8654c`);
+    - a dark caption on a white glow.
+    
+    The glass, tint and shine cover only the frame ring (`glassBehind`
+    got a `hole`), since the client area covers the rest; that took the
+    skin from about 15 to about 9 ms a frame (Minimal is 6–9).
+  - **Tahoe** (WWDC 2025 notes via Zed #38233, lapcat, MacStories, OSXDaily):
+    - toolbar windows have 26 pt corners;
+    - the title is plain bold text by the traffic lights, not a pill;
+    - the glass is a capsule of toolbar buttons at the trailing edge;
+    - the window is a calm, near-solid frosted surface (0.9 over a 14 px
+      blur);
+    - content sits in flat grouped cards (white or 7% white, a hairline,
+      12 pt corners);
+    - the progress bar is a thin blue capsule;
+    - the wallpaper is the default abstract wave (blue by day, violet by
+      night), not the lake-and-mountains scene;
+    - the DOM panes follow: the wave palette and 22 px corners.
+    
+    `liquidGlass` is gone.

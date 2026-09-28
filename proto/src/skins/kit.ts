@@ -569,7 +569,9 @@ export function backdrop(dc: Dc, id: string, paint: (g: CanvasRenderingContext2D
 // once per size, and each window is one clipped image draw.
 let lastBackdrop: HTMLCanvasElement | null = null;
 const blurredOf = new WeakMap<HTMLCanvasElement, Map<number, HTMLCanvasElement>>();
-export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, number, number], blur: number, lens = 1): boolean {
+// hole: a rect inside r that something opaque will cover anyway (a window's
+// client area); the glass skips it, which saves most of the pixels.
+export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, number, number], blur: number, lens = 1, hole?: Rect): boolean {
   const src = lastBackdrop;
   if (!src) return false;
   const g = dc.g;
@@ -589,7 +591,8 @@ export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, numb
   }
   g.save();
   rrect(g, r.x, r.y, r.w, r.h, rad);
-  g.clip();
+  if (hole) g.rect(hole.x, hole.y, hole.w, hole.h);
+  g.clip(hole ? 'evenodd' : 'nonzero');
   g.setTransform(1, 0, 0, 1, 0, 0);
   // only the window's own rectangle (in device pixels, on the canvas): a
   // clipped full-screen draw costs the whole screen, for every window
