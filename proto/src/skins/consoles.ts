@@ -303,9 +303,38 @@ const PS2_SILVER = '#d6d6dc';
 const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
   bg: '#000000', card: '#0d0d10', panel: '#08080a', line: '#2c2c33',
-  fg: '#e4e4e8', dim: '#8e8e97', faint: '#55555e', accent: PS2_SILVER, ptr: '#a38cff', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
-  param: '#8fa4ff', cell: '#17171d', track: '#060607',
+  fg: '#e4e4e8', dim: '#8e8e97', faint: '#55555e', accent: PS2_SILVER, ptr: '#b3a8c4', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
+  param: '#c4c4cc', cell: '#17171d', track: '#060607',
 };
+// the console's matte plastic: a fine, dense grain of light and dark
+// specks, pre-rendered once as a tile and laid over a surface anchored to
+// it (so it moves with the window, never swims)
+let ps2GrainTile: HTMLCanvasElement | null = null;
+function ps2Grain(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, a = 1): void {
+  if (!ps2GrainTile) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const cg = c.getContext('2d')!;
+    const img = cg.createImageData(128, 128);
+    for (let i = 0; i < 128 * 128; i++) {
+      const r = hash(i * 7 + 3);
+      const light = r > 0.5;
+      const v = light ? 255 : 0;
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+      img.data[i * 4 + 3] = light ? (r - 0.5) * 2 * 26 : (0.5 - r) * 2 * 60;
+    }
+    cg.putImageData(img, 0, 0);
+    ps2GrainTile = c;
+  }
+  const pat = g.createPattern(ps2GrainTile, 'repeat');
+  if (!pat) return;
+  g.save();
+  g.translate(Math.round(x), Math.round(y));
+  g.globalAlpha *= a;
+  g.fillStyle = pat;
+  g.fillRect(0, 0, w, h);
+  g.restore();
+}
 // the ridges: stacked, squared-off grooves across a black slab
 function ridges(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, step: number): void {
   for (let yy = y + step / 2; yy < y + h; yy += step) {
@@ -557,6 +586,7 @@ export const ps2Theme: Theme = {
     if (o.fill !== 'transparent') {
       g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.35)' : o.kind === 'frame' || o.kind === 'plate' ? ps2P.panel : ps2P.card;
       g.fillRect(r.x, r.y, r.w, r.h);
+      if (o.kind !== 'wall') ps2Grain(g, r.x, r.y, r.w, r.h, 0.8);
     }
     g.strokeStyle = o.glow ? PS2_SILVER : 'rgba(255,255,255,0.1)';
     g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
@@ -610,8 +640,9 @@ export const ps2Theme: Theme = {
       const g = dc.g;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
       // smoked, not solid: the dancing lights glow through between the panels
-      g.fillStyle = 'rgba(8,9,14,0.8)';
+      g.fillStyle = 'rgba(12,12,15,0.82)';
       g.fillRect(r.x, r.y, r.w, r.h);
+      ps2Grain(g, r.x, r.y, r.w, r.h);
       ridges(g, r.x, r.y, r.w, 26 * dc.z, Math.max(3, 5 * dc.z));
       g.fillStyle = face;
       g.fillRect(r.x + 2 * dc.z, r.y + 26 * dc.z, r.w - 4 * dc.z, Math.max(0, r.h - 28 * dc.z));

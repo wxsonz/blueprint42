@@ -62,13 +62,13 @@ html[data-skin='ps2'] {
   --lcd-small: 11.5px;
   --lcd-big: 13.5px;
   --lcd-fn: #e4e4e8;
-  --lcd-ptr: #b48cff;
+  --lcd-ptr: #b3a8c4;
   --lcd-ret: #58e0c0;
   --tl-bg: #070709;
   --tl-border: none;
   --tl-call: #b9b9c2;
   --tl-ret: #58e0c0;
-  --tl-ptr: #b48cff;
+  --tl-ptr: #b3a8c4;
   --tl-write: #555555;
   --tl-eval: #333333;
   --tl-err: #ff5a6e;
@@ -112,11 +112,11 @@ html[data-skin='ps2'] {
 }
 
 /* the PlayStation 2: a black monolith. Ridged black and graphite slabs,
-   silver for what's active or pressed; blue only where Sony put it: the
-   logo (and the eject light, the boot screen's fog and lights) */
+   silver for what's active or pressed, the console's matte grain on the
+   plastic; blue only for real lights (and the printed logo) */
 html[data-skin='ps2'] body { background: #000000; }
 html[data-skin='ps2'] #app, html[data-skin='ps2'] #panes { background: transparent; }
-html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); }
+html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.3 0 0 0 -0.14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#141418 0 3px, #08080a 3px 5px); }
 html[data-skin='ps2'] #top { border-bottom: 1px solid #26262b; }
 html[data-skin='ps2'] #playbar { border-top: 1px solid #26262b; }
 html[data-skin='ps2'] #status { background: #000000; color: #7c7c85; }
@@ -125,5 +125,7 @@ html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='p
 html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { border-color: #9a9aa3; color: #ffffff; }
 html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#3c3c43, #1e1e22); border-color: #8e8e97; color: #ffffff; }
 html[data-skin='ps2'] .pane { background: linear-gradient(#55555e,#55555e) top left / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) top left / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) top right / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) top right / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) bottom left / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) bottom left / 1px 18px no-repeat, linear-gradient(#55555e,#55555e) bottom right / 18px 1px no-repeat, linear-gradient(#55555e,#55555e) bottom right / 1px 18px no-repeat, #06070a; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
-html[data-skin='ps2'] .pane-head { background: repeating-linear-gradient(#0d0e12 0 3px, #040506 3px 5px); border-bottom: 1px solid #1f1f24; }
+html[data-skin='ps2'] .pane-head { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.3 0 0 0 -0.14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#141418 0 3px, #08080a 3px 5px); border-bottom: 1px solid #1f1f24; }
 html[data-skin='ps2'] .pane.focused { border-color: #4a4a52; }
+html[data-skin='ps2'] #status, html[data-skin='ps2'] .pb-buttons button, html[data-skin='ps2'] .btn { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.3 0 0 0 -0.14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }
+html[data-skin='ps2'] #duel::before, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.3 0 0 0 -0.14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }

@@ -1077,3 +1077,13 @@ questions. Newest last.
   buttons, switches, cursor, selection and argument trails. Blue is left
   only where Sony put it: the logo, plus the eject light and the boot
   screen's fog and lights (the reference).
+- **Decision (author: blue only for actual lights; muted objects with the
+  console's grainy texture):** Blue is left only on real lights: the
+  eject light, the boot screen's lights and their fog, and the trails.
+  The printed logo keeps it too, as on the console's top. Pointers and
+  parameters are muted greys (lilac-grey `#b3a8c4`, `#c4c4cc`).
+  Surfaces get the PS2's matte grain:
+  - on the canvas, a 128 px tile of light and dark specks laid over
+    windows and cards, anchored to each surface so it moves with it;
+  - in the chrome, a faint SVG `feTurbulence` layer on the bars, pane
+    heads, buttons, status line, duel, return card and inspector.
