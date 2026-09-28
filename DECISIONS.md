@@ -1048,3 +1048,21 @@ questions. Newest last.
   the camera's corner in zoomed pixels, so zooming changed the offset and
   the cubes wrapped. It now uses the world point at the view's middle,
   in px at zoom 1, so zoom only scales the layers.
+- **Fix (author: zooming out still drifts):** Zoom is anchored at the
+  mouse, so zooming far out moves the view's middle across thousands of
+  world px. The parallax now adds up how far the grid actually moved on
+  screen, frame by frame; a zoom moves it at most the mouse's distance
+  from the middle. Each layer's zoom is clamped to 0.7–1.8×.
+- **Decision (author: data in flight should leave a light trail):** A new
+  optional skin hook, `Skin.trail(dc, pts, kind)` (`Theme.trail` in the
+  kit), gets the stretch of path that data just travelled, oldest point
+  first, and draws under the data. The engine passes it for:
+  - a call's argument train along its belt (about seven cells behind the
+    tail);
+  - a return riding back;
+  - a write's pulse along its wire;
+  - reads and writes inside a machine.
+  Only the PS2 sets it for now: a white-hot hairline over a wide faint
+  glow in the lights' colours (blue for arguments, teal for returns),
+  fading toward the tail, with a glowing head. Skins without it draw
+  nothing extra.

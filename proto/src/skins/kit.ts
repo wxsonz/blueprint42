@@ -48,6 +48,7 @@ export interface Theme {
   // optional: the skin's own panel for a machine's storage and stations
   // (body and titled head); without it, the kit's plain card and caption
   panel?(dc: Dc, r: Rect, head: Rect, title: string, live: boolean): void;
+  trail?(dc: Dc, pts: Pt[], kind: 'arg' | 'ret'): void; // Skin.trail
   // desktop themes: machines and files are windows
   window?: WindowStyle;
 }
@@ -107,6 +108,7 @@ export function makeSkin(t: Theme): Skin {
     crate(dc, x, y, c) { drawCrate(dc, x, y, c, sprite); },
     interior(dc, r, i) { drawInterior(dc, r, i, sprite); },
     background(dc, camX, camY) { t.background(dc, camX, camY); },
+    trail: t.trail,
 
     belt(dc, pts, o) {
       if (t.belt) return t.belt(dc, pts, o, t);

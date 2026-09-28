@@ -672,6 +672,21 @@ export function retLabel(v: V, trace: Trace): string {
   return fmtVal(v);
 }
 
+// Light trails for data in flight (skins with a trail hook): the stretch of
+// a path just travelled, oldest point first.
+const TRAIL_N = 14;
+function walkTrail(walk: PathWalk, from: number, to: number): Pt[] {
+  const pts: Pt[] = [];
+  for (let k = 0; k <= TRAIL_N; k++) pts.push(walk.at(Math.max(0, Math.min(walk.length, from + ((to - from) * k) / TRAIL_N))));
+  return pts;
+}
+function bezTrail(c: [Pt, Pt, Pt, Pt], u: number, span = 0.35): Pt[] {
+  const pts: Pt[] = [];
+  const u0 = Math.max(0, u - span);
+  for (let k = 0; k <= TRAIL_N; k++) pts.push(bez(c, u0 + ((u - u0) * k) / TRAIL_N));
+  return pts;
+}
+
 function bez(c: [Pt, Pt, Pt, Pt], t: number): Pt {
   const u = 1 - t;
   const f = (i: 0 | 1) => u * u * u * c[0][i] + 3 * u * u * t * c[1][i] + 3 * u * t * t * c[2][i] + t * t * t * c[3][i];
@@ -1294,6 +1309,10 @@ export class GridView {
           const head0 = focus ? (L - sizes[0] * 0.5) * fit : 0;
           const head1 = focus ? walk.length - sizes[0] * fit * 0.5 : walk.length;
           const head = head0 + ease * Math.max(0, head1 - head0);
+          if (skin.trail && ev.args.length) {
+            const tail = head - L * fit;
+            skin.trail(ddc, walkTrail(walk, tail - unit * 7, head), 'arg');
+          }
           let gap = 0;
           ev.args.forEach((a, k) => {
             const d = head - gap;
@@ -1317,7 +1336,9 @@ export class GridView {
           const result = ev.val.k === 'void' ? 'void' : `returns ${retLabel(ev.val, trace)}`;
           const crate: CrateInfo | null = changes.length ? { title: `${result} · changed`, rows: changes.slice(0, 6), more: Math.max(0, changes.length - 6), kind: 'ret' } : null;
           const half = (ev.data?.k === 'struct' || crate ? 1.3 : 0.4) * ddc.z * CELL_PX;
-          const p = walk.at(MODE === 'focus' ? Math.min(walk.length - half, Math.max(half, (1 - ease) * walk.length)) : (1 - ease) * walk.length);
+          const d = MODE === 'focus' ? Math.min(walk.length - half, Math.max(half, (1 - ease) * walk.length)) : (1 - ease) * walk.length;
+          const p = walk.at(d);
+          if (skin.trail) skin.trail(ddc, walkTrail(walk, d + ddc.z * CELL_PX * 7, d), 'ret');
           if (crate) skin.crate(ddc, p[0], p[1], crate);
           else if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
           else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret');
@@ -1328,7 +1349,10 @@ export class GridView {
         const a = anchors.get(ev.via);
         const b = anchors.get(ev.cell);
         if (a && b) {
-          const [x, y] = bez(this.wireCurve(a, b), Math.max(0.08, Math.min(0.92, ph!.travel)));
+          const wc = this.wireCurve(a, b);
+          const u = Math.max(0.08, Math.min(0.92, ph!.travel));
+          const [x, y] = bez(wc, u);
+          if (skin.trail) skin.trail(ddc, bezTrail(wc, u), 'arg');
           skin.pulse(ddc, x, y);
           skin.plate(ddc, x, y - cs * 0.42, fmtVal(ev.val), 'arg');
         }
@@ -1577,7 +1601,9 @@ export class GridView {
       readsOf(act.beat, fn, trace).slice(0, 8).forEach((r, n) => {
         const u = chipU(n, act.p / READ_END);
         if (u <= 0 || u >= 1) return;
-        const [x, y] = bez(curve(slotAt.get(r.key) ?? [X + W, Y], at), u);
+        const c = curve(slotAt.get(r.key) ?? [X + W, Y], at);
+        const [x, y] = bez(c, u);
+        if (skin.trail) skin.trail(dc, bezTrail(c, u), 'arg');
         skin.pulse(dc, x, y);
         skin.plate(dc, x, y - 12 * z, r.text, 'arg');
       });
@@ -1593,7 +1619,9 @@ export class GridView {
         const tw = mm.r.w - pad * 2;
         to = [mm.r.x + pad + (Math.min(w.index, shownN - 1) + 0.5) * (tw / shownN), mm.r.y + mm.r.h * 0.31 + Math.max(11, mm.r.h * 0.27) / 2];
       }
-      const [x, y] = bez(curve(at, to), u);
+      const c = curve(at, to);
+      const [x, y] = bez(c, u);
+      if (skin.trail) skin.trail(dc, bezTrail(c, u), 'ret');
       skin.pulse(dc, x, y);
       skin.plate(dc, x, y - 12 * z, w.text, 'ret');
     });

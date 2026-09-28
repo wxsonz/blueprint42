@@ -192,6 +192,9 @@ export interface Skin {
   wire(dc: Dc, pts: Pt[], complete: boolean): void;
   dangling(dc: Dc, p: Pt): void;
   pulse(dc: Dc, x: number, y: number): void;
+  // optional: the path data in flight just travelled, oldest point first,
+  // drawn under the data itself (a light trail); skins without it draw nothing
+  trail?(dc: Dc, pts: Pt[], kind: 'arg' | 'ret'): void;
   beltHandle(dc: Dc, p: Pt): void; // drag handle on a selected belt
   ghost(dc: Dc, r: Rect, label: string): void; // reserved slot for a recursive copy
   icon(g: CanvasRenderingContext2D, kind: IconKind, s: number): void;

@@ -408,19 +408,26 @@ function ps2Sprite(col: string): HTMLCanvasElement {
 // motion (fog least, then the lights, the cubes most, each at its own
 // depth), and zooms by a small power of the grid's zoom. Cubes wrap around;
 // the fog and lights ease to a stop so they never leave the screen.
+const ps2Pan = { x: 0, y: 0, cx: NaN, cy: NaN, vw: 0, vh: 0 };
 function ps2Boot(dc: Dc, camX: number, camY: number): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 40 : dc.time;
   const W = dc.vw;
   const H = dc.vh;
-  // the world point at the middle of the view, in px at zoom 1: zooming
-  // about the middle leaves it alone, so zoom only scales the layers
-  const base = dc.cs / dc.z;
-  const panX = (camX + W / 2 / dc.cs) * base;
-  const panY = (camY + H / 2 / dc.cs) * base;
+  // how far the grid has moved on screen, added up frame by frame: a zoom
+  // (anchored at the mouse) moves the grid at most the mouse's distance
+  // from the middle, so zooming far out or in never flings the layers
+  const cx = camX + W / 2 / dc.cs;
+  const cy = camY + H / 2 / dc.cs;
+  const P = ps2Pan;
+  if (P.vw === W && P.vh === H && Number.isFinite(P.cx)) (P.x += (cx - P.cx) * dc.cs), (P.y += (cy - P.cy) * dc.cs);
+  Object.assign(P, { cx, cy, vw: W, vh: H });
+  const panX = P.x;
+  const panY = P.y;
   const soft = (v: number, lim: number) => lim * Math.tanh(v / lim);
+  const zoomOf = (zf: number) => Math.min(1.8, Math.max(0.7, dc.z ** zf));
   const layer = (k: number, zf: number, lim: number) => {
-    const sc = dc.z ** zf;
+    const sc = zoomOf(zf);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.translate(W / 2 - soft(panX * k, lim), H / 2 - soft(panY * k, lim));
     g.scale(sc, sc);
@@ -445,7 +452,7 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
   // there, the near ones tinted by where they point and crossed by a
   // reflection band that slides as the cube turns; no outlines
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const sc = dc.z ** 0.35;
+  const sc = zoomOf(0.35);
   const wrap = (v: number, lo: number, span: number) => lo + ((((v - lo) % span) + span) % span);
   const u = Math.min(W, H) * sc;
   const LX = -0.45, LY = -0.6, LZ = 0.66; // the light: above, left, in front
@@ -553,6 +560,39 @@ export const ps2Theme: Theme = {
     g.strokeStyle = o.glow ? PS2_BLUE : 'rgba(255,255,255,0.1)';
     g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  },
+  // data in flight leaves the boot lights' trail: a hairline fading toward
+  // the tail over a faint glow, a glowing head under the data
+  trail(dc, pts, kind) {
+    const g = dc.g;
+    const col = kind === 'ret' ? '#5fd0c8' : '#6f8cff';
+    const hot = kind === 'ret' ? '#c8fff6' : '#d4ddff';
+    const n = pts.length - 1;
+    if (n < 1) return;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.lineCap = 'round';
+    g.strokeStyle = col;
+    const core = Math.max(1, Math.min(2, 1.3 * dc.z));
+    for (let i = 1; i <= n; i++) {
+      const f = (i / n) ** 1.5;
+      g.beginPath();
+      g.moveTo(pts[i - 1][0], pts[i - 1][1]);
+      g.lineTo(pts[i][0], pts[i][1]);
+      g.strokeStyle = col;
+      g.globalAlpha = f * 0.22;
+      g.lineWidth = core * 7;
+      g.stroke();
+      g.strokeStyle = hot;
+      g.globalAlpha = f;
+      g.lineWidth = core;
+      g.stroke();
+    }
+    const [x, y] = pts[n];
+    const d = Math.max(14, 24 * dc.z);
+    g.globalAlpha = 0.9;
+    g.drawImage(ps2Sprite(col), x - d / 2, y - d / 2, d, d);
+    g.restore();
   },
   // the boot screen: black space, the fog, the cubes and the lights
   background(dc, camX, camY) {
