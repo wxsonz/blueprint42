@@ -46,7 +46,7 @@ html[data-skin='barebone-light'] {
   --panel-radius: 0px;
   --panel-shadow: none;
   --ptitle-bg: transparent;
-  --ptitle-fg: #e6e8eb;
+  --ptitle-fg: #111111;
   --ptitle-border: none;
   --ptitle-pad: 8px 12px;
   --field-bg: #ffffff;

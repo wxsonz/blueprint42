@@ -711,3 +711,20 @@ questions. Newest last.
   context menu divides it out of its position. The page can't read or
   set the browser's own zoom reliably, which is why it's our own. The
   plain wheel still zooms the camera, and its % readout is gone.
+- **Decision (author: the duel ignores the skin):** The duel is built from
+  the skin's own variables now, with nothing hard-coded:
+  - the sentence is the skin's title bar (`--ptitle-*`, with the stripe
+    plate);
+  - the frame is the skin's panel (`--panel-*`, painted by `::before`
+    over `--bg`, so translucent and gradient panels still hide the
+    canvas);
+  - the cards use the skin's field borders;
+  - the role strip, track and chip take panel and editor colours.
+  
+  Skins can tune it with `--duel-say-size` (Game Boy uses 10px). Checked
+  headlessly in all 23 skins, including title contrast.
+
+  Fixed on the way:
+  - Barebone light's `--ptitle-fg` was the dark skin's white.
+  - A duel that began fading out stayed invisible if the same event came
+    back.

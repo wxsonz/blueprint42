@@ -6,6 +6,7 @@ html[data-skin='gameboy'] {
   /* labels and notes in the overlays: the pixel UI font is too small there */
   --label-font: VT323, monospace;
   --label-scale: 1.45;
+  --duel-say-size: 10px;
   --ui-size: 9px;
   --bg: #9bbc0f;
   --fg: #0f380f;

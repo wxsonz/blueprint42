@@ -175,3 +175,6 @@ html[data-skin='amp'] #toast { font-family: 'VT323', monospace; font-size: 17px;
 html[data-skin='amp'] #menu button { font-family: 'VT323', monospace; font-size: 17px; }
 html[data-skin='amp'] .pb-buttons button { width: 30px; height: 24px; }
 html[data-skin='amp'] .pb-buttons button.primary { width: 36px; }
+
+/* the timeline's dark return green is for bars; as text in the duel it needs to glow */
+html[data-skin='amp'] #duel { --tl-ret: #3cdc3c; }
