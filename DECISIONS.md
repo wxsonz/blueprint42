@@ -914,3 +914,8 @@ questions. Newest last.
   - **N64, SNES and GBA** had no system UI to reference, so they stay
     hardware-inspired: plastics, button colours, the screen bezel, the
     N64 logo colours.
+- **PS3 readability:** light months (amber, silver, gold) washed out the
+  white chrome text. The gradient now starts only 12% toward white (it
+  was 28%), and the chrome text carries a soft dark shadow, as the XMB's
+  does. Audited all ten reworked console skins: duel titles are at least
+  6.6:1, and no text has an x-height below 5 px.

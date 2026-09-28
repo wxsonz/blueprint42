@@ -116,7 +116,7 @@ html[data-skin='ps3'] {
 html[data-skin='ps3'] body { background:
   repeating-linear-gradient(170deg, transparent 0 7px, rgba(255,255,255,0.05) 7px 8px) 0 55% / 100% 22% no-repeat,
   radial-gradient(ellipse 90% 18% at 50% 58%, rgba(255,255,255,0.14), transparent 70%),
-  linear-gradient(color-mix(in srgb, var(--xmb, #2f7fd0) 72%, white), var(--xmb, #2f7fd0) 45%, color-mix(in srgb, var(--xmb, #2f7fd0) 38%, black)); }
+  linear-gradient(color-mix(in srgb, var(--xmb, #2f7fd0) 88%, white), var(--xmb, #2f7fd0) 40%, color-mix(in srgb, var(--xmb, #2f7fd0) 38%, black)); }
 html[data-skin='ps3'] #app, html[data-skin='ps3'] #panes, html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status { background: transparent; border: none; box-shadow: none; }
 html[data-skin='ps3'] .btn, html[data-skin='ps3'] .seg button { color: rgba(255,255,255,0.8); }
 html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.06)); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
@@ -124,3 +124,5 @@ html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseli
 html[data-skin='ps3'] #top .sysclock i { font-size: 1em; margin-left: 0.25em; }
 html[data-skin='ps3'] .pane.focused { box-shadow: 0 0 0 1px rgba(255,255,255,0.55), 0 0 18px rgba(255,255,255,0.25); }
 html[data-skin='ps3'] #top .sysclock s { order: -1; margin-right: 10px; }
+html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status, html[data-skin='ps3'] .pane-head { text-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.4); }
+html[data-skin='ps3'] #top .lbl { color: rgba(255,255,255,0.85); }

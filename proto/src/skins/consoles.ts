@@ -303,7 +303,7 @@ export function xmbColour(d = new Date()): { top: string; mid: string; bot: stri
   const b = parseInt(XMB_MONTHS[(m + 1) % 12].slice(1), 16);
   const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - f) + ((b >> sh) & 255) * f);
   const hex = `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
-  return { top: mix(hex, 255, 0.28), mid: hex, bot: mix(hex, 0, 0.62) };
+  return { top: mix(hex, 255, 0.12), mid: hex, bot: mix(hex, 0, 0.62) };
 }
 const ps3P: Palette = {
   bg: '#2f7fd0', card: 'rgba(0,0,0,0.3)', panel: 'rgba(0,0,0,0.42)', line: 'rgba(255,255,255,0.22)',
