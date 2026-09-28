@@ -1177,3 +1177,11 @@ questions. Newest last.
   The choice is remembered per skin in this browser (`ftb.tint.<skin>`);
   on load it applies without a fade. The real XMB picks colour from a panel
   that slides in from the right; the author chose the top bar for now.
+- Third pass, for cost and taste: no blur anywhere in the PS3 skin (CSS
+  `backdrop-filter` on panes, the duel, the inspector and the colour strip;
+  canvas `shadowBlur` on the focus halo and title lines). Panes are a deeper
+  tint of the colour instead, the halo is three faint widening rings, and it
+  no longer breathes. Titles no longer glow. On live belts the data is a
+  steady glow drifting slowly along (about 36 px/s, one per ~320 px), with
+  sparkles winking in and out at random spots just off the line, each coming
+  back somewhere else (seeded per belt, so belts don't wink in step).

@@ -46,7 +46,7 @@ html[data-skin='ps3'] {
   --head-fg: #b8c6e6;
   --head-fg-active: #ffffff;
   --head-font: 400 14px 'M PLUS Rounded 1c', sans-serif;
-  --panel-bg: color-mix(in srgb, var(--xmb-deep) 62%, transparent);
+  --panel-bg: color-mix(in srgb, var(--xmb-deep) 88%, transparent);
   --panel-fg: #ffffff;
   --panel-dim: #b8c6e6;
   --panel-border: 1px solid rgba(255,255,255,0.14);
@@ -118,8 +118,8 @@ html[data-skin='ps3'] {
   --syn-punct: #9aa3b4;
 }
 
-/* the XMB in its classic blue (the canvas draws the wave and sparkles over
-   the same sky). Panes and panels are plain frosted rectangles with a white
+/* the XMB in its theme colour (the canvas draws the wave and sparkles over
+   the same sky). Panes and panels are plain tinted rectangles with a white
    hairline under their titles; the top and play bars are set off by white
    hairlines as a settings page is; buttons are jelly. */
 html[data-skin='ps3'] body { background:
@@ -130,16 +130,13 @@ html[data-skin='ps3'] #app, html[data-skin='ps3'] #panes, html[data-skin='ps3'] 
 html[data-skin='ps3'] #top { border: none; border-bottom: 1px solid rgba(255,255,255,0.75); box-shadow: 0 1px 6px -2px rgba(255,255,255,0.5); }
 html[data-skin='ps3'] #playbar { border: none; border-top: 1px solid rgba(255,255,255,0.75); box-shadow: 0 -1px 6px -2px rgba(255,255,255,0.5); }
 html[data-skin='ps3'] #status { border: none; }
-html[data-skin='ps3'] .pane { background: color-mix(in srgb, var(--xmb-deep) 22%, transparent); border: 1px solid rgba(255,255,255,0.12); border-radius: 3px; backdrop-filter: blur(14px); box-shadow: none; }
-html[data-skin='ps3'] .pane { transition: box-shadow 0.4s; }
-html[data-skin='ps3'] .pane.focused { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 18px rgba(255,255,255,0.3); animation: ps3-breathe 2.5s ease-in-out infinite; }
-@keyframes ps3-breathe { 50% { box-shadow: 0 0 10px rgba(255,255,255,0.14); } }
-@media (prefers-reduced-motion: reduce) { html[data-skin='ps3'] .pane.focused { animation: none; } }
+/* no backdrop blur (too costly on a big pane): a deeper tint of the colour instead */
+html[data-skin='ps3'] .pane { background: color-mix(in srgb, var(--xmb-deep) 38%, transparent); border: 1px solid rgba(255,255,255,0.12); border-radius: 3px; box-shadow: none; }
+html[data-skin='ps3'] .pane.focused { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 14px rgba(255,255,255,0.18); }
 html[data-skin='ps3'] .pane-head { background: transparent; border-bottom: none; position: relative; }
 html[data-skin='ps3'] .pane-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45) 6%, rgba(255,255,255,0.36) 70%, transparent); }
 html[data-skin='ps3'] .pane.focused .pane-head::after { background: linear-gradient(90deg, transparent, #ffffff 6%, rgba(255,255,255,0.8) 70%, transparent); box-shadow: 0 0 5px rgba(255,255,255,0.7); }
-html[data-skin='ps3'] #duel, html[data-skin='ps3'] #stage-card, html[data-skin='ps3'] #inspector { backdrop-filter: blur(16px); }
-html[data-skin='ps3'] #duel .d-say { box-shadow: 0 1px 5px -2px rgba(255,255,255,0.8); text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
+html[data-skin='ps3'] #duel .d-say { box-shadow: 0 1px 5px -2px rgba(255,255,255,0.8); }
 html[data-skin='ps3'] #duel .d-card { background: color-mix(in srgb, var(--xmb-deep) 45%, transparent); }
 html[data-skin='ps3'] #duel .d-role, html[data-skin='ps3'] #duel .d-head { background: transparent; }
 /* jelly: pale cyan, lit from above, a soft rim, a shadow under it */
@@ -147,16 +144,15 @@ html[data-skin='ps3'] #duel .d-head .ico { border-radius: 6px; color: #ffffff; t
 html[data-skin='ps3'] #duel .chip { background: linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0) 55%), linear-gradient(#a6dcf0, #3f8fc6); color: #ffffff; text-shadow: 0 1px 2px rgba(0,30,80,0.6); box-shadow: inset 0 0 0 1px rgba(230,250,255,0.6), 0 2px 5px rgba(0,24,70,0.45); }
 html[data-skin='ps3'] .btn, html[data-skin='ps3'] .seg button { color: rgba(255,255,255,0.85); border-radius: 3px; }
 html[data-skin='ps3'] .btn:hover, html[data-skin='ps3'] .seg button:hover { background: rgba(255,255,255,0.12); }
-html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.28), rgba(255,255,255,0.05)); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
+html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.28), rgba(255,255,255,0.05)); }
 html[data-skin='ps3'] .pb-buttons button { background: transparent; border: none; box-shadow: none; }
 html[data-skin='ps3'] .pb-buttons button svg { fill: #b4e3f4; filter: drop-shadow(0 -0.5px 0 rgba(255,255,255,0.8)) drop-shadow(0 1px 2px rgba(0,24,70,0.7)); }
 html[data-skin='ps3'] .pb-buttons button:hover svg { fill: #d8f3fc; }
 html[data-skin='ps3'] .pb-buttons button.primary { width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(ellipse 70% 45% at 50% 22%, rgba(255,255,255,0.75), rgba(255,255,255,0) 70%), radial-gradient(circle at 50% 60%, #3fb2f0, #0a62c4 75%); box-shadow: inset 0 0 0 1px rgba(200,240,255,0.6), inset 0 -3px 6px rgba(0,30,90,0.4), 0 2px 8px rgba(0,20,70,0.55); }
 html[data-skin='ps3'] .pb-buttons button.primary svg { fill: #ffffff; filter: drop-shadow(0 1px 1px rgba(0,30,90,0.6)); }
-html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseline; gap: 0; font: 300 15px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
+html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseline; gap: 0; font: 300 15px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; }
 html[data-skin='ps3'] #top .sysclock i { font-size: 1em; margin-left: 0.25em; }
 html[data-skin='ps3'] #top .sysclock s { order: -1; margin-right: 10px; }
-html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status, html[data-skin='ps3'] .pane-head { text-shadow: 0 1px 3px rgba(0,20,60,0.5); }
 html[data-skin='ps3'] #top .lbl { color: rgba(255,255,255,0.85); }
 /* the theme colours: small jelly drops */
 html[data-skin='ps3'] .tints button { width: 14px; height: 14px; border-radius: 50%; padding: 0; border: none; cursor: pointer;
@@ -171,5 +167,5 @@ html[data-skin='ps3'] .tints button { margin: 0 2.5px; transition: width 0.25s e
 html[data-skin='ps3'] .tints:not(:hover):not(:focus-within) button:not([aria-checked='true']) { width: 0; margin: 0; opacity: 0; }
 /* open, it lies over the clock, on a frosted strip */
 html[data-skin='ps3'] .tints > .row { position: absolute; right: 0; top: 0; height: 20px; display: flex; align-items: center; flex-direction: row-reverse; padding: 0 2px; border-radius: 10px; transition: background 0.2s, box-shadow 0.2s; }
-html[data-skin='ps3'] .tints:hover > .row, html[data-skin='ps3'] .tints:focus-within > .row { background: color-mix(in srgb, var(--xmb-deep) 55%, transparent); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+html[data-skin='ps3'] .tints:hover > .row, html[data-skin='ps3'] .tints:focus-within > .row { background: color-mix(in srgb, var(--xmb-deep) 80%, transparent); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
 html[data-skin='ps3'] .tints button[aria-checked='true'] { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 0 0 2px #ffffff, 0 0 8px rgba(255,255,255,0.7); }

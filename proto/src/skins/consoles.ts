@@ -1071,17 +1071,19 @@ function ps3Sky(g: CanvasRenderingContext2D, W: number, H: number, sky: Sky): vo
   g.fillStyle = br;
   g.fillRect(0, 0, W, H);
 }
-// focus, the XMB way: a soft white halo that breathes
+// focus, the XMB way: a soft white halo. Rings widening outward, fainter
+// each time (a shadow blur was too costly on big windows)
 function ps3Halo(dc: Dc, r: Rect, rad: number, k = 1): void {
   const g = dc.g;
-  const b = ps2Still ? 0.8 : 0.6 + 0.4 * Math.sin((dc.time || 0) * 2.5);
+  const s = Math.max(2, 3 * dc.z);
   g.save();
-  rrect(g, r.x, r.y, r.w, r.h, rad);
-  g.shadowColor = `rgba(255,255,255,${0.55 * b * k})`;
-  g.shadowBlur = Math.max(8, 18 * dc.z);
-  g.strokeStyle = `rgba(255,255,255,${0.18 * b * k})`;
-  g.lineWidth = 1;
-  g.stroke();
+  g.lineWidth = s;
+  for (let i = 3; i >= 1; i--) {
+    const o = s * (i - 0.5);
+    rrect(g, r.x - o, r.y - o, r.w + 2 * o, r.h + 2 * o, rad + o);
+    g.strokeStyle = `rgba(255,255,255,${(0.05 * k) / i})`;
+    g.stroke();
+  }
   g.restore();
 }
 // a line of soft light: a faint wide glow under a thin core
@@ -1117,7 +1119,8 @@ export const ps3Theme: Theme = {
       g.stroke();
     }
   },
-  // belts are soft light; live ones carry sparkles along, the data's way
+  // belts are soft light; on live ones the data is a steady glow drifting
+  // the data's way, with sparkles winking near the line
   belt(dc, pts, o, t) {
     const g = dc.g;
     const z = dc.z;
@@ -1137,14 +1140,33 @@ export const ps3Theme: Theme = {
     g.lineTo(end.x - end.dx * L + end.dy * L * 0.7, end.y - end.dy * L - end.dx * L * 0.7);
     g.stroke();
     if (o.live && w.length > 4 && ps3Spark) {
-      const gap = Math.max(40, 90 * z);
-      const run = ((dc.time || 0) * 80 * z) % gap;
+      const time = ps2Still ? 30 : dc.time || 0;
+      // the data: a steady glow drifting slowly along, one every ~320 px
+      const gap = Math.max(160, 320 * z);
+      const run = (time * 36 * z) % gap;
       for (let d = run; d < w.length; d += gap) {
         const q = w.at(o.dir < 0 ? w.length - d : d);
-        const tw = 0.6 + 0.4 * Math.sin((dc.time || 0) * 3 + d * 0.05);
-        const r = Math.max(4, 7 * z) * tw;
-        g.globalAlpha = 0.9;
+        const r = Math.max(6, 11 * z);
+        g.globalAlpha = 0.85;
         g.drawImage(ps3Spark, q.x - r, q.y - r, r * 2, r * 2);
+      }
+      // and sparkles winking in and out at random spots near the line; each
+      // shows for a moment, then comes back somewhere else. Seeded by the
+      // belt's length on the grid, so belts don't wink in step
+      const seed = Math.round(w.length / z);
+      const n = Math.ceil(w.length / Math.max(18, 36 * z));
+      for (let k = 0; k < n; k++) {
+        const per = 1.4 + 2.2 * hash(seed + k * 13);
+        const u = (time + per * hash(seed * 3 + k * 7)) / per;
+        const life = u - Math.floor(u);
+        if (life > 0.35) continue; // resting between winks
+        const c = Math.floor(u) * 31 + k * 17 + seed;
+        const q = w.at(hash(c) * w.length);
+        const off = (hash(c + 5) - 0.5) * Math.max(8, 14 * z);
+        const a = Math.sin((life / 0.35) * Math.PI);
+        const r = Math.max(1.5, (1.5 + 2.5 * hash(c + 9)) * z) * (0.6 + 0.4 * a) * 2;
+        g.globalAlpha = a * 0.9;
+        g.drawImage(ps3Spark, q.x - q.dy * off - r, q.y + q.dx * off - r, r * 2, r * 2);
       }
     }
     g.restore();
@@ -1171,7 +1193,7 @@ export const ps3Theme: Theme = {
   },
   window: {
     border: 0, corner: 3, titleH: 28, face: 'rgba(0,0,0,0.12)', workspace: 'rgba(0,0,0,0.05)',
-    // just frosting: lighter at the top, no outline; focus is the halo
+    // just a tinted pane: lighter at the top, no outline; focus is the halo
     frame(dc, r, active, face) {
       const g = dc.g;
       const rad = Math.max(1, 3 * dc.z);
@@ -1190,7 +1212,7 @@ export const ps3Theme: Theme = {
     },
     // the title in white Rodin over a white line that fades out at both ends
     titleBar(dc, r, title, active) {
-      text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.78)', { w: 400, x: r.x + 10 * dc.z, halo: active ? 'rgba(255,255,255,0.35)' : 'rgba(0,20,60,0.5)' });
+      text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.75)', { w: 400, x: r.x + 10 * dc.z });
       ps3Rule(dc.g, r.x, r.y + r.h - 1, r.w, active ? 1 : 0.45, active);
     },
     // the install bar: a see-through capsule, a glossy fill; running, a soft
@@ -1235,7 +1257,8 @@ export const ps3Theme: Theme = {
     },
   },
 };
-// a white rule that fades out at both ends; glowing when lit
+// a white rule that fades out at both ends; lit, a faint band around it
+// (no shadow blur: too costly)
 function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a: number, glow: boolean): void {
   const grad = g.createLinearGradient(x, 0, x + w, 0);
   grad.addColorStop(0, 'rgba(255,255,255,0)');
@@ -1243,11 +1266,12 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
   grad.addColorStop(0.7, `rgba(255,255,255,${a * 0.8})`);
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   g.save();
-  if (glow) {
-    g.shadowColor = 'rgba(255,255,255,0.8)';
-    g.shadowBlur = 6;
-  }
   g.fillStyle = grad;
+  if (glow) {
+    g.globalAlpha = 0.15;
+    g.fillRect(x, y - 1.5, w, 4);
+    g.globalAlpha = 1;
+  }
   g.fillRect(x, y, w, 1);
   g.restore();
 }
