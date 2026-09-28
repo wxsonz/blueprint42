@@ -1246,3 +1246,11 @@ questions. Newest last.
   PS4 keeps its own touch: on the active window the rule is the console's
   light bar, glowing blue. The translucent title strip, drop shadow and
   thick white focus border are gone.
+- PS4 colours from its system screens (Friends, Communities, Remote Play):
+  royal blue (#0c4ad8 top left, #0638c4, #041f8c bottom right) crossed by
+  a few broad soft streaks of light, no dust. Where the PS3 puts dark panels
+  inside its frames, the PS4's are lighter see-through blue with thin pale
+  edges (storage, stations, the function box, panes, the duel and feed),
+  as its content cards are. Values in flight are its input field: dark
+  navy with a white edge. Focus is a crisp white border; the header and
+  the play bar are set off by pale hairlines.

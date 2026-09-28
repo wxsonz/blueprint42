@@ -1374,57 +1374,77 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
   g.restore();
 }
 
-// PS4, after a recreation's measured CSS (d4v1-sudo/Ps4-UI): the bright
-// #0e6cc4 blue of the default theme with soft light waves and dust, square
-// content tiles, the focused one in a 3px white border, titles on a
-// translucent white strip (rgba(255,255,255,.2)), SST at light weights.
+// PS4, from its system screens (Friends, Communities, Remote Play): a deep
+// royal blue, lighter at the top left and sinking to navy at the bottom
+// right, crossed by a few broad soft streaks of light; the content on
+// lighter see-through blue cards with thin pale edges; fields dark navy
+// with a white edge; focus a crisp white border; SST at light weights.
 const ps4P: Palette = {
-  bg: '#0e6cc4', card: 'rgba(4,34,84,0.55)', panel: 'rgba(3,28,70,0.72)', line: 'rgba(255,255,255,0.28)',
-  fg: '#ffffff', dim: '#cfe0f5', faint: '#8fb0d8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
-  param: '#bfe0ff', cell: 'rgba(255,255,255,0.18)', track: 'rgba(0,20,60,0.45)',
+  bg: '#0638c4', card: 'rgba(80,140,255,0.24)', panel: 'rgba(80,140,255,0.18)', line: 'rgba(150,190,255,0.5)',
+  fg: '#ffffff', dim: '#c6d6ff', faint: '#8aa6e8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
+  param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
 export const ps4Theme: Theme = {
-  id: 'ps4', name: 'PlayStation 4', blurb: 'the home screen: bright blue, square tiles, a white frame on focus',
-  p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 1, spotlight: 'rgba(0,20,60,0.5)',
+  id: 'ps4', name: 'PlayStation 4', blurb: 'the system screens: royal blue, lighter cards with pale edges, a white border on focus',
+  p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 0, spotlight: 'rgba(0,10,60,0.5)',
   pulseColor: 'rgba(255,255,255,0.9)',
   card(dc, r, o) {
     const g = dc.g;
+    if (o.kind === 'plate') {
+      // values in flight: the dark navy input field with a white edge
+      g.fillStyle = 'rgba(3,5,42,0.92)';
+      g.fillRect(r.x, r.y, r.w, r.h);
+      g.strokeStyle = o.glow ? '#ffffff' : 'rgba(220,230,255,0.8)';
+      g.lineWidth = 1;
+      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      return;
+    }
     if (o.fill !== 'transparent') {
-      g.fillStyle = o.kind === 'wall' ? 'rgba(255,255,255,0.05)' : o.kind === 'frame' || o.kind === 'plate' ? ps4P.panel : ps4P.card;
+      g.fillStyle = o.kind === 'wall' ? 'rgba(255,255,255,0.04)' : o.kind === 'frame' ? ps4P.panel : ps4P.card;
       g.fillRect(r.x, r.y, r.w, r.h);
     }
-    g.strokeStyle = o.glow ? '#ffffff' : 'rgba(255,255,255,0.22)';
+    // focus is a crisp white border; otherwise a thin pale edge
+    g.strokeStyle = o.glow ? '#ffffff' : 'rgba(150,190,255,0.45)';
     g.lineWidth = o.glow ? Math.max(2, 3 * dc.z) : 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
+  // storage and stations: a lighter card, its title over a pale rule
+  panel(dc, r, head, title, live) {
+    const g = dc.g;
+    g.fillStyle = ps4P.card;
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = live ? 'rgba(200,220,255,0.8)' : 'rgba(150,190,255,0.45)';
+    g.lineWidth = 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    g.fillStyle = 'rgba(150,190,255,0.45)';
+    g.fillRect(r.x, head.y + head.h - 1, r.w, 1);
+    text(dc, head, title, SST, 12, live ? '#ffffff' : '#c6d6ff', { w: 400, x: head.x + 8 * dc.z });
+  },
   background(dc) {
-    backdrop(dc, 'ps4', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#1b86e0');
-      sky.addColorStop(0.55, '#0e6cc4');
-      sky.addColorStop(1, '#0a4e98');
+    backdrop(dc, 'ps4-royal', (g, W, H) => {
+      const sky = g.createLinearGradient(0, 0, W, H);
+      sky.addColorStop(0, '#0c4ad8');
+      sky.addColorStop(0.5, '#0638c4');
+      sky.addColorStop(1, '#041f8c');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      // soft bands of light drifting across, then specks of dust
-      for (let k = 0; k < 5; k++) {
-        const y0 = H * (0.35 + k * 0.08);
-        const band = g.createLinearGradient(0, y0 - H * 0.08, 0, y0 + H * 0.08);
-        band.addColorStop(0, 'rgba(255,255,255,0)');
-        band.addColorStop(0.5, `rgba(255,255,255,${0.05 + 0.02 * k})`);
-        band.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = band;
-        g.beginPath();
-        g.moveTo(0, y0);
-        for (let x = 0; x <= W; x += W / 30) g.lineTo(x, y0 + Math.sin((x / W) * Math.PI * 2 + k) * H * 0.05);
-        g.lineTo(W, y0 + H * 0.1);
-        g.lineTo(0, y0 + H * 0.1);
-        g.closePath();
-        g.fill();
-      }
-      for (let k = 0; k < 90; k++) {
-        g.fillStyle = `rgba(255,255,255,${0.15 + 0.35 * hash(k * 3 + 1)})`;
-        const s = 1 + 1.5 * hash(k * 7 + 2);
-        g.fillRect(W * hash(k * 11 + 5), H * hash(k * 17 + 3), s, s);
+      // broad soft streaks of light sweeping down from the top, each a
+      // stack of wide faint strokes so its edges fall off softly
+      g.lineCap = 'round';
+      const streaks = [
+        [0.36, -0.05, 0.22, 0.4, 0.02, 0.75],
+        [0.3, -0.05, 0.12, 0.3, -0.1, 0.62],
+        [0.95, 0.05, 0.6, 0.35, 0.1, 0.4],
+      ];
+      for (const [x0, y0, cx, cy, x1, y1] of streaks) {
+        for (const [w, a] of [[0.09, 0.035], [0.05, 0.04], [0.02, 0.05]]) {
+          g.strokeStyle = `rgba(90,160,255,${a})`;
+          g.lineWidth = W * w;
+          g.beginPath();
+          g.moveTo(W * x0, H * y0);
+          g.quadraticCurveTo(W * cx, H * cy, W * x1, H * y1);
+          g.stroke();
+        }
       }
     });
   },
@@ -1438,6 +1458,9 @@ export const ps4Theme: Theme = {
       if (kind === 'node') {
         g.fillStyle = ps4P.card;
         g.fillRect(r.x, r.y, r.w, r.h);
+        g.strokeStyle = active ? '#ffffff' : 'rgba(150,190,255,0.45)';
+        g.lineWidth = active ? Math.max(2, 3 * dc.z) : 1;
+        g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
         return;
       }
       g.lineWidth = 1;
