@@ -935,34 +935,55 @@ function ps3Xmb(dc: Dc): void {
   }
   g.restore();
 }
-// jelly: a rounded blob, pale cyan, lit from above, with a soft rim and a shadow
-// the jelly's colours follow the theme colour (set with the sky, in ps3Fills)
+// the colours of the glossy things (data tiles, icons) follow the theme
+// colour (set with the sky, in ps3Fills)
 const ps3Jel = { hi: [170, 232, 250], lo: [55, 135, 195], shade: [0, 24, 70], icon: ['#d2f1fb', '#63b4d8'] };
-function jelly(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rad: number, glow = false): void {
+// The XMB's item tile (as behind a package's icon): dark glass in the theme
+// colour, corners well rounded but not a pill, a thin light rim, a gloss
+// over the top half that ends in a soft curve, and light pooling at the bottom.
+function ps3Tile(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lit: boolean): void {
+  const rad = Math.min(h * 0.38, w / 2);
+  const c = (v: number[], a: number) => `rgba(${v.map(Math.round).join(',')},${a})`;
+  const dark = toward(ps3Jel.lo as Rgb, 0, 0.55);
+  const mid = toward(ps3Jel.lo as Rgb, 0, 0.2);
   g.save();
   rrect(g, x, y, w, h, rad);
-  g.shadowColor = `rgba(${ps3Jel.shade.join(',')},0.45)`;
-  g.shadowBlur = Math.min(8, h * 0.4);
-  g.shadowOffsetY = Math.min(2, h * 0.08);
+  g.shadowColor = c(ps3Jel.shade, 0.5);
+  g.shadowBlur = Math.min(6, h * 0.3);
+  g.shadowOffsetY = 1;
   const body = g.createLinearGradient(0, y, 0, y + h);
-  body.addColorStop(0, `rgba(${ps3Jel.hi.map(Math.round).join(',')},${glow ? 0.95 : 0.85})`);
-  body.addColorStop(1, `rgba(${ps3Jel.lo.map(Math.round).join(',')},${glow ? 0.95 : 0.85})`);
+  body.addColorStop(0, c(dark, 0.82));
+  body.addColorStop(1, c(mid, 0.88));
   g.fillStyle = body;
   g.fill();
   g.shadowColor = 'transparent';
   g.clip();
-  // the inner rim: brighter near the edge, like light caught in gel
-  g.strokeStyle = 'rgba(225,248,255,0.7)';
-  g.lineWidth = Math.max(1, h * 0.12);
-  rrect(g, x, y, w, h, rad);
-  g.stroke();
-  // the gloss on top
-  const gl = g.createLinearGradient(0, y, 0, y + h * 0.55);
-  gl.addColorStop(0, 'rgba(255,255,255,0.55)');
-  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  // light pooling along the bottom
+  const pool = g.createLinearGradient(0, y + h * 0.55, 0, y + h);
+  pool.addColorStop(0, 'rgba(255,255,255,0)');
+  pool.addColorStop(1, 'rgba(255,255,255,0.16)');
+  g.fillStyle = pool;
+  g.fillRect(x, y + h * 0.55, w, h * 0.45);
+  // the gloss: the top half, its lower edge a shallow curve
+  const gy = y + h * 0.5;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.lineTo(x + w, y);
+  g.lineTo(x + w, gy - h * 0.12);
+  g.quadraticCurveTo(x + w / 2, gy + h * 0.08, x, gy - h * 0.12);
+  g.closePath();
+  const gl = g.createLinearGradient(0, y, 0, gy);
+  gl.addColorStop(0, 'rgba(255,255,255,0.32)');
+  gl.addColorStop(1, 'rgba(255,255,255,0.05)');
   g.fillStyle = gl;
-  rrect(g, x + h * 0.12, y + h * 0.06, w - h * 0.24, h * 0.5, Math.max(0, rad - h * 0.1));
   g.fill();
+  g.restore();
+  // the rim: a thin light edge, brighter when lit
+  g.save();
+  g.lineWidth = 1;
+  rrect(g, x + 0.5, y + 0.5, w - 1, h - 1, Math.max(0, rad - 0.5));
+  g.strokeStyle = `rgba(255,255,255,${lit ? 0.75 : 0.45})`;
+  g.stroke();
   g.restore();
 }
 // an icon as jelly: the flat icon, thickened, filled pale cyan, glossed
@@ -1110,8 +1131,8 @@ export const ps3Theme: Theme = {
   card(dc, r, o) {
     const g = dc.g;
     if (o.kind === 'plate') {
-      // values in flight and counts: jelly beads
-      jelly(g, r.x, r.y, r.w, r.h, r.h / 2, !!o.glow);
+      // values in flight and counts: the XMB's item tile
+      ps3Tile(g, r.x, r.y, r.w, r.h, !!o.glow);
       return;
     }
     const rad = Math.max(1, 3 * dc.z);

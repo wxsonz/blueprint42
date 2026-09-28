@@ -1202,3 +1202,8 @@ questions. Newest last.
   main.ts paints its background on one fixed canvas behind every panel
   (`#page-bg`) and the grid clears its canvas instead of painting a floor,
   so the wave runs behind the editor and the bars too.
+- Sixth pass: data (values in flight, counts, the duel's value box) takes
+  the shape of an XMB item tile, the glass behind a package's icon: dark
+  glass in the theme colour, corners well rounded but not a pill, a thin
+  light rim, a gloss over the top half ending in a shallow curve, light
+  pooling at the bottom. It replaces the pale jelly bead there.
