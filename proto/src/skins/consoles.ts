@@ -1032,6 +1032,7 @@ function jellyIcon(g: CanvasRenderingContext2D, s: number, draw: (h: CanvasRende
 // cross-fades from whatever is showing, over 2.5 s.
 export const PS3_TINTS = [
   { id: 'blue', name: 'XMB blue', colour: '#1d64a0' },
+  { id: 'black', name: 'Black', colour: '#1c1c20' },
   { id: 'silver', name: 'Silver', colour: '#b8bcc4' },
   { id: 'gold', name: 'Gold', colour: '#c9a634' },
   { id: 'lime', name: 'Lime', colour: '#69a83a' },

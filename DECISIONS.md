@@ -1207,3 +1207,5 @@ questions. Newest last.
   glass in the theme colour, corners well rounded but not a pill, a thin
   light rim, a gloss over the top half ending in a shallow curve, light
   pooling at the bottom. It replaces the pale jelly bead there.
+- The PS3's colours include black (#1c1c20: charcoal at the top to black),
+  listed after the XMB blue.
