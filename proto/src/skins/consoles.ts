@@ -1396,7 +1396,7 @@ const ps4P: Palette = {
 // sliding a little along its arc; its twist is a steady turn plus gentle
 // waves travelling along it, the spin speeding and slowing, the turn rate
 // capped so it never bunches into clumps. It sweeps across in about
-// 12 s, spinning as it goes, fading in and out. Stateless in time.
+// 16 s, spinning as it goes, fading in and out. Stateless in time.
 // Where the PS4's band lies, as seen in its welcome screen (frames of the
 // author's video): enter, middle and leave points, as fractions of the view.
 const PS4_PLACES: number[][] = [
@@ -1416,7 +1416,7 @@ function ps4Prism(dc: Dc): void {
   const W = dc.vw;
   const H = dc.vh;
   const t = ps2Still || !dc.time ? 40 : dc.time;
-  const P = 12;
+  const P = 16;
   const n = Math.floor(t / P);
   const p = t / P - n;
   const hh = (k: number) => hash(n * 97 + k * 13 + 5);
@@ -1451,9 +1451,9 @@ function ps4Prism(dc: Dc): void {
   const thAt = (s: number) => a0 + sweep * (-EXT + (1 + 2 * EXT) * s) + slide;
   // flared at head and tail (each by its own amount), pinched in the body,
   // its thickness easing a little along the length as it goes
-  const rmin = H * (0.035 + 0.02 * hh(6));
-  const rHead = H * (0.12 + 0.1 * hh(9));
-  const rTail = H * (0.12 + 0.1 * hh(10));
+  const rmin = H * (0.018 + 0.012 * hh(6));
+  const rHead = H * (0.05 + 0.05 * hh(9));
+  const rTail = H * (0.05 + 0.05 * hh(10));
   const bulge = 0.08 + 0.12 * hh(23);
   // the twist: a steady turn along the length plus a gentle wave of extra
   // turn running along it, the spin speeding and slowing. Capped: the turn

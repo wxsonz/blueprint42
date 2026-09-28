@@ -1369,3 +1369,10 @@ questions. Newest last.
   browser with the rest of its state, and sent to the trace server (which
   already took both). A `main(int ac, char **av)` reading `av[1]` could
   not be given an argument before, so it died on a NULL `av[1]`.
+- The PS4 band was too wide and stuttered. Its thickness is about halved
+  (the flared ends 5–10% of the view's height, the body 2–3%), a pass takes
+  16 s instead of 12, and while the page is idle a full-bleed background
+  keeps repainting at 30 fps (the grid still rests at 15): at 15 fps the
+  band's sweep, a few hundred pixels a second, jumped ~20 px a frame. The
+  band itself costs ~0.2 ms a frame, so the jumps, not the drawing, were
+  the lag.

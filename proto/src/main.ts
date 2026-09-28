@@ -2848,6 +2848,7 @@ let lastStage = '';
 // second instead of 60, so an idle page doesn't keep the CPU busy.
 let lastInputAt = 0;
 let lastDrawAt = 0;
+let lastPageAt = 0;
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown', 'input']) window.addEventListener(ev, () => (lastInputAt = performance.now()), { capture: true, passive: true });
 
 // Adaptive sharpness: while things move, watch the frame rate; if frames
@@ -2887,6 +2888,9 @@ function adaptQuality(now: number): void {
 
 function frame(now: number): void {
   if (!S.playing && now - lastInputAt > 400 && view.settled() && !S.skin.busy?.() && now - lastDrawAt < 66) {
+    // idle: the grid rests at 15 fps, but a page-wide background that moves
+    // (PS3's wave, PS4's band) keeps 30 so its motion doesn't stutter
+    if (S.skin.fullBleed && now - lastPageAt >= 33) (lastPageAt = now), paintPage(now);
     lastT = now;
     requestAnimationFrame(frame);
     return;
@@ -2969,6 +2973,7 @@ function frame(now: number): void {
   }
   S.violations = violations();
   paintPage(now);
+  lastPageAt = now;
   view.draw(S, S.skin, now);
   renderStageCard();
   renderPlaybar();
