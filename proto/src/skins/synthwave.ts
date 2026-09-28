@@ -35,10 +35,12 @@ export const synthwaveTheme: Theme = {
       g.fillStyle = 'rgba(20,6,38,0.35)';
       g.fill();
     }
-    // neon edge: a soft glow, then the tube
-    g.shadowColor = o.glow ?? o.stroke;
-    g.shadowBlur = (o.glow ? 20 : 8) * dc.z;
+    // neon edge: a wide faint halo (cheap, unlike a blur), then the tube
     g.strokeStyle = o.glow ?? o.stroke;
+    g.globalAlpha *= o.glow ? 0.28 : 0.14;
+    g.lineWidth = o.lw + Math.max(3, (o.glow ? 9 : 5) * dc.z);
+    g.stroke();
+    g.globalAlpha /= o.glow ? 0.28 : 0.14;
     g.lineWidth = o.glow ? o.lw + 0.8 : o.lw;
     g.stroke();
     g.restore();
@@ -102,8 +104,9 @@ export const synthwaveTheme: Theme = {
     g.lineCap = 'round';
     g.lineJoin = 'round';
     const col = o.live ? PINK : o.hovered || o.selected ? CYAN : 'rgba(45,226,230,0.45)';
-    g.shadowColor = col;
-    g.shadowBlur = (o.live ? 14 : 6) * dc.z;
+    g.globalAlpha = o.live ? 0.3 : 0.15;
+    strokeLine(g, pts, Math.max(4, (o.live ? 10 : 6) * dc.z), col);
+    g.globalAlpha = 1;
     strokeLine(g, pts, Math.max(1.2, 2 * dc.z), col);
     if (o.live) strokeLine(g, pts, Math.max(1.5, 2.6 * dc.z), '#fff', [Math.max(2, 3 * dc.z), Math.max(8, 16 * dc.z)], -dc.time * 60 * dc.z * o.dir);
     const w = new Walk(pts);

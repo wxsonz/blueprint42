@@ -2253,39 +2253,63 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 }
 
+// The timeline under the playbar: its bars are drawn once per trace, skin and
+// size (bright and dim copies); each frame only lays the bright part over the
+// dim one up to the playhead.
+let tlCache: { key: string; bright: HTMLCanvasElement; dim: HTMLCanvasElement; head: string } | null = null;
+let tlSize = { w: 0, h: 0, at: 0 };
 function drawTimeline(): void {
-  const r = timeline.getBoundingClientRect();
+  const now = performance.now();
+  if (now - tlSize.at > 500 || !tlSize.w) {
+    // the strip's size only changes on resize: don't ask layout every frame
+    const r = timeline.getBoundingClientRect();
+    tlSize = { w: r.width, h: r.height, at: now };
+  }
   const dpr = window.devicePixelRatio || 1;
-  if (timeline.width !== Math.round(r.width * dpr) || timeline.height !== Math.round(r.height * dpr)) {
-    timeline.width = Math.round(r.width * dpr);
-    timeline.height = Math.round(r.height * dpr);
+  const W = tlSize.w;
+  const H = tlSize.h;
+  if (timeline.width !== Math.round(W * dpr) || timeline.height !== Math.round(H * dpr)) {
+    timeline.width = Math.round(W * dpr);
+    timeline.height = Math.round(H * dpr);
   }
   const g = timeline.getContext('2d')!;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const W = r.width;
-  const H = r.height;
-  g.clearRect(0, 0, W, H);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, timeline.width, timeline.height);
   const t = S.trace;
   if (!t || !t.evs.length) return;
   const n = t.evs.length;
-  const maxD = Math.max(1, ...t.snaps.map((s) => s.stack.length));
-  const colW = W / n;
-  const col = {
-    call: cssVar('--tl-call'), ret: cssVar('--tl-ret'), ptr: cssVar('--tl-ptr'),
-    write: cssVar('--tl-write'), eval: cssVar('--tl-eval'), error: cssVar('--tl-err'),
-  };
-  for (let i = 0; i < n; i++) {
-    const e = t.evs[i];
-    const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
-    const h = 3 + (d / maxD) * (H - 8);
-    g.globalAlpha = i < S.pos ? 1 : 0.3;
-    g.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : col[e.k];
-    g.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
+  const key = `${traceRevision}|${S.skin.id}|${timeline.width}x${timeline.height}`;
+  if (tlCache?.key !== key) {
+    const make = (alpha: number) => {
+      const c = document.createElement('canvas');
+      c.width = timeline.width;
+      c.height = timeline.height;
+      const cg = c.getContext('2d')!;
+      cg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const maxD = Math.max(1, ...t.snaps.map((s) => s.stack.length));
+      const colW = W / n;
+      const col = {
+        call: cssVar('--tl-call'), ret: cssVar('--tl-ret'), ptr: cssVar('--tl-ptr'),
+        write: cssVar('--tl-write'), eval: cssVar('--tl-eval'), error: cssVar('--tl-err'),
+      };
+      cg.globalAlpha = alpha;
+      for (let i = 0; i < n; i++) {
+        const e = t.evs[i];
+        const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
+        const h = 3 + (d / maxD) * (H - 8);
+        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : col[e.k];
+        cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
+      }
+      return c;
+    };
+    tlCache = { key, bright: make(1), dim: make(0.3), head: cssVar('--tl-head') };
   }
-  g.globalAlpha = 1;
-  const x = Math.round((S.pos / n) * W);
-  g.fillStyle = cssVar('--tl-head');
-  g.fillRect(x - 1, 0, 2, H);
+  const x = Math.round((S.pos / n) * W * dpr);
+  g.drawImage(tlCache.dim, 0, 0);
+  if (x > 0) g.drawImage(tlCache.bright, 0, 0, x, timeline.height, 0, 0, x, timeline.height);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = tlCache.head;
+  g.fillRect(x / dpr - 1, 0, 2, H);
   g.fillStyle = '#ef5b50';
   for (const v of violations()) {
     const vx = (v.at / n) * W;
@@ -2331,7 +2355,55 @@ function renderStageCard(): void {
 let lastT = performance.now();
 let lastFollowEv = -1;
 let lastStage = '';
+// Paused and still (no input, the camera at rest): redraw about 15 times a
+// second instead of 60, so an idle page doesn't keep the CPU busy.
+let lastInputAt = 0;
+let lastDrawAt = 0;
+for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown', 'input']) window.addEventListener(ev, () => (lastInputAt = performance.now()), { capture: true, passive: true });
+
+// Adaptive sharpness: while things move, watch the frame rate; if frames
+// take too long for a second, paint fewer canvas pixels (one step at a time,
+// down to 0.75×); when there's room again, step back up.
+const SCALES = [2, 1.5, 1.25, 1, 0.75];
+let qSince = 0;
+let qSlow = 0;
+let qFast = 0;
+let qLast = 0;
+let qTold = false;
+function adaptQuality(now: number): void {
+  const moving = S.playing || !view.settled() || now - lastInputAt < 400;
+  const dt = now - qLast;
+  qLast = now;
+  if (!moving || dt > 250) return; // idle or a hiccup (tab switch): no signal
+  if (dt > 28) qSlow++;
+  else if (dt < 18) qFast++;
+  if (now - qSince < 1000) return;
+  const screen = window.devicePixelRatio || 1;
+  const cur = view.pixelScale;
+  const frames = qSlow + qFast;
+  if (frames > 10 && qSlow / frames > 0.6) {
+    const next = SCALES.find((s) => s < cur - 0.01);
+    if (next !== undefined) {
+      view.scale = next;
+      view.resize();
+      if (!qTold) (qTold = true), toast(`drawing at ${next}× sharpness to keep it smooth`);
+    }
+  } else if (frames > 30 && qFast / frames > 0.95 && cur < screen) {
+    const up = [...SCALES].reverse().find((s) => s > cur + 0.01 && s <= screen);
+    if (up !== undefined) (view.scale = up), view.resize();
+  }
+  qSince = now;
+  qSlow = qFast = 0;
+}
+
 function frame(now: number): void {
+  if (!S.playing && now - lastInputAt > 400 && view.settled() && now - lastDrawAt < 66) {
+    lastT = now;
+    requestAnimationFrame(frame);
+    return;
+  }
+  lastDrawAt = now;
+  adaptQuality(now);
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   const t = S.trace;

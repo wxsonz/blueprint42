@@ -84,6 +84,7 @@ export const blueprintTheme: Theme = {
     v.addColorStop(1, 'rgba(0,10,30,0.35)');
     g.fillStyle = v;
     g.fillRect(0, 0, dc.vw, dc.vh);
+    if (dc.cs * 5 < 10) return; // far out: plain paper
     const x0 = Math.floor(camX), y0 = Math.floor(camY);
     const nx = dc.vw / dc.cs + 1, ny = dc.vh / dc.cs + 1;
     g.lineWidth = 1;

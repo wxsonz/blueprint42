@@ -191,6 +191,18 @@ running statement animates in place (see SPEC).
   optional `belt` / `nodeDecor` / `wallDecor`) plus a CSS file of
   variables (copy `styles/minimal.css`'s variable list).
 
+## Performance and lenses
+
+- Painting pixels is the cost (see DECISIONS). `main.ts` `adaptQuality`
+  lowers `GridView.scale` when frames run slow.
+- `GridView.onScreen` culls; `fitText` / `cutText` (skins/util.ts)
+  memoize; the timeline strip is cached (`tlCache`); `frame()` idles at
+  ~15 fps.
+- Zoom goes to 0.02. Below 8 px a cell, `drawMachine` draws only the shell.
+- Lenses: at the end of `GridView.draw`, far ends of the current call/return
+  belt, or of writes into another machine's memory, are drawn by a second
+  `GridView` (`lens = true`, `setSize`) and blitted into the corner.
+
 ## M6: live edits from any editor
 
 The page doesn't care where an edit comes from (author's call). Any editor

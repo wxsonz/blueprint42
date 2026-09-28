@@ -1,6 +1,6 @@
 import type { SpriteKind } from '../blueprint';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, SpriteInfo, StripInfo } from './types';
-import { fitText, rrect } from './util';
+import { cutText, fitText, rrect } from './util';
 
 export interface SpritePalette {
   body: string;
@@ -218,13 +218,7 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
   const z = dc.z;
   const fs = Math.max(7, 11 * z);
   const right = r.x + r.w - Math.max(3, 6 * z);
-  const cut = (s: string, max: number) => {
-    if (max <= 0) return '';
-    if (g.measureText(s).width <= max) return s;
-    let t = s;
-    while (t.length > 1 && g.measureText(t + '…').width > max) t = t.slice(0, -1);
-    return t + '…';
-  };
+  const cut = (s: string, max: number) => cutText(g, s, max);
   g.save();
   box(g, r, p.radius * z, p.body, p.edge);
   g.save();

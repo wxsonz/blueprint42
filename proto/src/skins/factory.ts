@@ -94,6 +94,7 @@ export const factoryTheme: Theme = {
     // floor plates, 4 cells square, with seams and a diamond tread
     const P = 4;
     const cs = dc.cs;
+    if (P * cs < 14) return; // far out: plain floor
     const x0 = Math.floor(camX / P) * P, y0 = Math.floor(camY / P) * P;
     for (let x = x0; x < camX + dc.vw / cs + P; x += P) {
       for (let y = y0; y < camY + dc.vh / cs + P; y += P) {

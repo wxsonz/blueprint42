@@ -31,7 +31,23 @@ export function strokeLine(g: CanvasRenderingContext2D, pts: Pt[], w: number, co
 }
 
 // Text that shrinks to fit a width (down to a floor), then ellipsises.
+// Measuring is the expensive part and the same labels come back every
+// frame, so results (and the font they settled on) are remembered.
+const fitMemo = new Map<string, { text: string; font: string }>();
 export function fitText(g: CanvasRenderingContext2D, text: string, font: (px: number) => string, px: number, maxW: number, minPx = 7): string {
+  const key = `${font(px)}|${Math.round(maxW * 2)}|${minPx}|${text}`;
+  const hit = fitMemo.get(key);
+  if (hit) {
+    g.font = hit.font;
+    return hit.text;
+  }
+  const out = fitTextSlow(g, text, font, px, maxW, minPx);
+  if (fitMemo.size > 6000) fitMemo.clear();
+  fitMemo.set(key, { text: out, font: g.font });
+  return out;
+}
+
+function fitTextSlow(g: CanvasRenderingContext2D, text: string, font: (px: number) => string, px: number, maxW: number, minPx: number): string {
   let size = px;
   g.font = font(size);
   while (g.measureText(text).width > maxW && size > minPx) {
@@ -145,4 +161,21 @@ export function brackets(g: CanvasRenderingContext2D, r: Rect, out: number, len:
   g.moveTo(x1, y1 - len); g.lineTo(x1, y1); g.lineTo(x1 - len, y1);
   g.moveTo(x0 + len, y1); g.lineTo(x0, y1); g.lineTo(x0, y1 - len);
   g.stroke();
+}
+
+// Text cut to a width at the current font (never shrunk), remembered.
+const cutMemo = new Map<string, string>();
+export function cutText(g: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (maxW <= 0) return '';
+  const key = `${g.font}|${Math.round(maxW)}|${text}`;
+  const hit = cutMemo.get(key);
+  if (hit !== undefined) return hit;
+  let t = text;
+  if (g.measureText(t).width > maxW) {
+    while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+    t += '…';
+  }
+  if (cutMemo.size > 6000) cutMemo.clear();
+  cutMemo.set(key, t);
+  return t;
 }

@@ -3,7 +3,7 @@
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf, frameRows, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatDuration, beatNow, computeText, readsOf, READ_END, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, shut, slotsOf } from './machine';
+import { geomOf, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
 import type { Model } from './parse';
@@ -714,21 +714,39 @@ export class GridView {
   private target = { x: -2, y: -3, zoom: 1 };
   private last = performance.now();
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(private canvas: HTMLCanvasElement, private lens = false) {
     this.g = canvas.getContext('2d')!;
+  }
+
+  // An off-screen view (a lens) has no layout box: its size is set here.
+  setSize(w: number, h: number, dpr: number): void {
+    this.w = w;
+    this.h = h;
+    this.dpr = dpr;
+    if (this.canvas.width !== Math.round(w * dpr)) this.canvas.width = Math.round(w * dpr);
+    if (this.canvas.height !== Math.round(h * dpr)) this.canvas.height = Math.round(h * dpr);
   }
 
   get cs(): number {
     return CELL_PX * this.cam.zoom;
   }
 
+  // Canvas pixels per CSS pixel, at most the screen's: lowered when the
+  // browser can't paint fast enough (painting is most of the cost).
+  scale = 0;
+
   resize(): void {
     const r = this.canvas.getBoundingClientRect();
-    this.dpr = window.devicePixelRatio || 1;
+    const screen = window.devicePixelRatio || 1;
+    this.dpr = this.scale > 0 ? Math.min(screen, this.scale) : screen;
     this.w = r.width;
     this.h = r.height;
     this.canvas.width = Math.round(r.width * this.dpr);
     this.canvas.height = Math.round(r.height * this.dpr);
+  }
+
+  get pixelScale(): number {
+    return this.dpr;
   }
 
   toWorld(px: number, py: number): Pt {
@@ -744,7 +762,7 @@ export class GridView {
 
   zoomAt(px: number, py: number, f: number): void {
     const [wx, wy] = this.toWorld(px, py);
-    const z = Math.max(0.3, Math.min(2.5, this.cam.zoom * f));
+    const z = Math.max(0.02, Math.min(2.5, this.cam.zoom * f));
     this.cam.zoom = this.target.zoom = z;
     this.cam.x = this.target.x = wx - px / (CELL_PX * z);
     this.cam.y = this.target.y = wy - py / (CELL_PX * z);
@@ -810,7 +828,7 @@ export class GridView {
     const top = 64;
     const bottom = 64;
     const zy = (this.h - top - bottom) / ((y1 - y0 + pad * 2) * CELL_PX);
-    this.target.zoom = Math.max(0.3, Math.min(1.5, zx, zy));
+    this.target.zoom = Math.max(0.02, Math.min(1.5, zx, zy));
     const cs = CELL_PX * this.target.zoom;
     this.target.x = (x0 + x1) / 2 - this.w / (2 * cs);
     this.target.y = (y0 + y1) / 2 - (top + (this.h - top - bottom) / 2) / cs;
@@ -828,6 +846,17 @@ export class GridView {
   }
   private rectW(x: number, y: number, w: number, h: number): Rect {
     return { x: this.sx(x), y: this.sy(y), w: w * this.cs, h: h * this.cs };
+  }
+
+  // The camera has arrived where it was going.
+  settled(): boolean {
+    return Math.abs(this.cam.x - this.target.x) < 0.01 && Math.abs(this.cam.y - this.target.y) < 0.01 && Math.abs(this.cam.zoom - this.target.zoom) < 0.001;
+  }
+
+  // Whether a world rect shows at all (with a margin for labels and glows).
+  private onScreen(x: number, y: number, w: number, h: number, margin = 60): boolean {
+    const r = this.rectW(x, y, w, h);
+    return r.x + r.w > -margin && r.y + r.h > -margin && r.x < this.w + margin && r.y < this.h + margin;
   }
 
   draw(s: ViewState, skin: Skin, now: number): void {
@@ -906,6 +935,7 @@ export class GridView {
     // ---- module walls (M5): an expanded file, under everything else ----
     const liveFiles = new Set(st.map((f) => s.layout.nodes.get(`func:${f.fn}`)?.file));
     for (const w of scene.walls) {
+      if (!this.onScreen(w.rect.x, w.rect.y, w.rect.w, w.rect.h)) continue;
       const m = s.layout.modules.get(w.file);
       g.save();
       skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), {
@@ -926,6 +956,10 @@ export class GridView {
 
     // ---- belts: drawn quiet → live → focused, with gaps cut at crossings ----
     const visible = scene.belts.filter((b) => {
+      // off screen: nothing to draw
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const [x, y] of b.pts) (x0 = Math.min(x0, x)), (y0 = Math.min(y0, y)), (x1 = Math.max(x1, x)), (y1 = Math.max(y1, y));
+      if (!this.onScreen(x0, y0, x1 - x0, y1 - y0)) return false;
       if (!b.chain) return true;
       const target = scene.hosts.get(b.toHost)!;
       return target.copy === 2 || liveHosts.has(b.toHost);
@@ -1027,7 +1061,7 @@ export class GridView {
 
     // ---- collapsed modules (M5): one block per file, doors listed ----
     for (const h of scene.hosts.values()) {
-      if (!h.module) continue;
+      if (!h.module || !this.onScreen(h.x, h.y, h.w, h.h)) continue;
       const inside = framesOnHost.get(h.key) ?? [];
       const liveFns = new Set(inside.map((f) => f.fn));
       const fns = s.layout.nodesOf(h.module).map((n) => n.fn);
@@ -1103,6 +1137,7 @@ export class GridView {
 
     const now_ = trace && fr ? beatNow(trace, s.model!, s.pos) : null;
     for (const h of hostsToDraw) {
+      if (!this.onScreen(h.x, h.y, h.w, h.h)) continue;
       const node = s.layout.nodes.get(`func:${h.fn}`);
       const fn = s.model?.byName.get(h.fn);
       if (!node || !fn) continue;
@@ -1311,6 +1346,76 @@ export class GridView {
       const b = scene.belts.find((x) => x.key === sel.key);
       if (b) skin.beltHandle(dc, this.sp(beltHandle(b)));
     }
+
+    // ---- lenses: the far end of what's happening, when it's off screen ----
+    if (!this.lens && trace && fr) {
+      const far: { at: Pt; title: string }[] = [];
+      const off = (p: Pt) => { const [x, y] = this.sp(p); return x < 0 || y < 0 || x > this.w || y > this.h; };
+      if (ev && (ev.k === 'call' || ev.k === 'ret') && animKey) {
+        const belt = scene.belts.find((b) => b.key === animKey);
+        if (belt) {
+          // look inside: at the calling statement, and just past the callee's entry door
+          const [a0, b0] = [belt.pts[0], belt.pts[belt.pts.length - 1]];
+          const a: Pt = [a0[0] - 7, a0[1]];
+          const b: Pt = [b0[0] + 4.5, b0[1] + 1.5];
+          const caller = belt.from || 'the process';
+          if (ev.k === 'call') {
+            if (off(a)) far.push({ at: a, title: `${caller} calls` });
+            if (off(b)) far.push({ at: b, title: `→ ${ev.fn}` });
+          } else {
+            if (off(b)) far.push({ at: b, title: `${ev.fn} returns` });
+            if (off(a)) far.push({ at: a, title: `→ back to ${caller}` });
+          }
+        }
+      }
+      // a statement writing into memory another machine owns
+      if (now_ && now_.phase === 'write') {
+        const b = now_.beat;
+        const hosts = frameHosts(trace.snaps[Math.min(b.after, trace.snaps.length - 1)], scene);
+        for (let i = b.from; i <= b.to && far.length < 2; i++) {
+          const e = trace.evs[i];
+          if (e.k !== 'write') continue;
+          const info = trace.cells.get(e.cell);
+          if (!info || info.frame === b.frame || info.frame === -2) continue;
+          const owner = info.frame === -1 ? info.owner : trace.snaps[i + 1]?.stack.find((f) => f.id === info.frame)?.fn;
+          const hk = info.frame === -1 ? owner : hosts.get(info.frame);
+          const h = hk ? scene.hosts.get(hk) : undefined;
+          const fn = owner ? s.model?.byName.get(owner) : undefined;
+          if (!h || !fn || fn.broken) continue;
+          const idx = slotsOf(fn).findIndex((sl) => sl.key === `${info.frame === -1 ? 's' : 'c'}:${info.name}`);
+          const at: Pt = shut.has(fn.name) || idx < 0 ? [h.x + h.w / 2, h.y + h.h / 2] : [h.x + geomOf(fn).store.x + geomOf(fn).store.w * 0.6, h.y + slotY(geomOf(fn), idx)];
+          if (off(at) && !far.some((f) => f.title.includes(info.name))) far.push({ at, title: `→ ${fn.cname} · ${info.name} changes` });
+        }
+      }
+      this.drawLenses(s, skin, now, dc, far.slice(0, 2));
+    }
+  }
+
+  private lensViews: GridView[] = [];
+  // Small live views of far-away places, in the pane's bottom-right corner.
+  private drawLenses(s: ViewState, skin: Skin, now: number, dc: Dc, far: { at: Pt; title: string }[]): void {
+    const W = Math.min(320, this.w * 0.3);
+    const H = W * 0.62;
+    const head = 22;
+    far.forEach((f, k) => {
+      let v = this.lensViews[k];
+      if (!v) this.lensViews[k] = v = new GridView(document.createElement('canvas'), true);
+      v.setSize(W, H, this.dpr);
+      const zoom = 0.7;
+      v.cam.zoom = v.target.zoom = zoom;
+      v.cam.x = v.target.x = f.at[0] - W / (2 * CELL_PX * zoom);
+      v.cam.y = v.target.y = f.at[1] - H / (2 * CELL_PX * zoom);
+      v.draw(s, skin, now);
+      const x = this.w - (W + 14) * (k + 1);
+      const y = this.h - H - head - 96;
+      const g = this.g;
+      g.save();
+      g.fillStyle = skin.casing;
+      g.fillRect(x, y, W, H + head);
+      g.drawImage(v.canvas, x, y + head, W, H);
+      skin.wall(dc, { x, y, w: W, h: H + head }, { name: f.title, fns: 0, note: '', live: true, pinned: false, selected: false, hovered: false, head: { x, y, w: W, h: head } });
+      g.restore();
+    });
   }
 
   // A machine is its inside: storage (variables) on the left, stations
@@ -1328,6 +1433,11 @@ export class GridView {
     const cs = this.cs;
     const trace = s.trace;
     const R = this.rectW(h.x, h.y, h.w, h.h);
+    // very far out: just the shell, lit if it's working
+    if (cs < 8) {
+      skin.wall(dc, R, { name: '', fns: 0, note: '', live: state === 'running', pinned: false, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: 0 } });
+      return;
+    }
     const closed = shut.has(fn.name);
     const geo = fn.broken ? null : geomOf(fn);
     const shown = frame ?? returned;
