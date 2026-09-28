@@ -1227,3 +1227,8 @@ questions. Newest last.
   and closes the same way in reverse (the far drops first). Pure CSS: each
   drop's place from the right (`--i`, the current one 0) orders it and
   staggers its fade; `--n` sizes the strip.
+- A full-bleed background (`#page-bg`) is sized by the window
+  (`innerWidth`/`innerHeight` × the view's pixel scale), not by its CSS
+  box: the app zoom is CSS `zoom` on the page, and zoomed out to 67% the
+  canvas had grown to 2239×1343 (2.2× the pixels, frames dropping to 33 ms).
+  It is now the window's size at any app zoom, and the wave looks the same.

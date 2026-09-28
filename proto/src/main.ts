@@ -2783,9 +2783,11 @@ function paintPage(now: number): void {
   const on = !!S.skin.fullBleed;
   if (pageBg.hidden === on) pageBg.hidden = !on;
   if (!on) return;
+  // sized by the window, not in CSS pixels: the app's zoom (CSS zoom on the
+  // page) would otherwise grow it, painting far more pixels when zoomed out
   const dpr = view.pixelScale;
-  const w = pageBg.clientWidth;
-  const h = pageBg.clientHeight;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   const W = Math.round(w * dpr);
   const H = Math.round(h * dpr);
   if (pageBg.width !== W || pageBg.height !== H) (pageBg.width = W), (pageBg.height = H);
