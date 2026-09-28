@@ -1254,3 +1254,10 @@ questions. Newest last.
   as its content cards are. Values in flight are its input field: dark
   navy with a white edge. Focus is a crisp white border; the header and
   the play bar are set off by pale hairlines.
+- The PS4's streaks became a Möbius strip: the real surface (a band that
+  turns half over going round), tilted and in perspective, bigger than the
+  view so only its sweep shows, shaded only in darker and lighter blues by
+  how each part faces the light (|facing|, since the strip has one side),
+  with a pale rim along its single edge. Painted once per size into the
+  backdrop, at the screen's sharpness. Static until the author settles how
+  it should move.

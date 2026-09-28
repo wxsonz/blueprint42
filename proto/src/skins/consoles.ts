@@ -1384,6 +1384,90 @@ const ps4P: Palette = {
   fg: '#ffffff', dim: '#c6d6ff', faint: '#8aa6e8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
+// The background's Möbius strip: the real surface (a band that turns half
+// over as it goes round), tilted, in perspective, far bigger than the
+// screen so only its sweep shows. Quads are painted far to near, each an
+// opaque shade of the blue between darker and lighter by how it faces the
+// light (the strip has one side, so it's |facing|), on a canvas of its own
+// that is then laid over the sky see-through; a pale rim runs along its
+// edge. Static for now: it is drawn once per size, into the backdrop.
+function ps4Mobius(g: CanvasRenderingContext2D, W: number, H: number): void {
+  const k = g.getTransform().a || 1; // at the screen's sharpness
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * k);
+  c.height = Math.round(H * k);
+  const m = c.getContext('2d')!;
+  m.scale(k, k);
+  const R = 1;
+  const HW = 0.5; // the band's half-width, in R
+  const NU = 220;
+  const NV = 10;
+  // the view: tilted back, turned, off to one side
+  const ax = 0.95, ay = 0.55, az = -0.35;
+  const rot = ([x, y, z]: number[]) => {
+    let y1 = y * Math.cos(ax) - z * Math.sin(ax);
+    let z1 = y * Math.sin(ax) + z * Math.cos(ax);
+    const x2 = x * Math.cos(ay) + z1 * Math.sin(ay);
+    z1 = -x * Math.sin(ay) + z1 * Math.cos(ay);
+    const x3 = x2 * Math.cos(az) - y1 * Math.sin(az);
+    y1 = x2 * Math.sin(az) + y1 * Math.cos(az);
+    return [x3, y1, z1];
+  };
+  const S = Math.max(W, H) * 0.5;
+  const cx = W * 0.58;
+  const cy = H * 0.6;
+  const F = 4.5;
+  const at = (u: number, v: number) => {
+    const p = rot([(R + v * Math.cos(u / 2)) * Math.cos(u), (R + v * Math.cos(u / 2)) * Math.sin(u), v * Math.sin(u / 2)]);
+    const f = F / (F + p[2]);
+    return { x: cx + p[0] * S * f, y: cy + p[1] * S * f, z: p[2], p };
+  };
+  const quads: { pts: { x: number; y: number }[]; z: number; b: number }[] = [];
+  const L = [-0.35, -0.6, 0.72];
+  for (let i = 0; i < NU; i++) {
+    const u0 = (i / NU) * Math.PI * 2;
+    const u1 = ((i + 1) / NU) * Math.PI * 2;
+    for (let j = 0; j < NV; j++) {
+      const v0 = -HW + (2 * HW * j) / NV;
+      const v1 = -HW + (2 * HW * (j + 1)) / NV;
+      const a = at(u0, v0), b = at(u1, v0), cc = at(u1, v1), d = at(u0, v1);
+      const e1 = [b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]];
+      const e2 = [d.p[0] - a.p[0], d.p[1] - a.p[1], d.p[2] - a.p[2]];
+      const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+      const face = Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl);
+      quads.push({ pts: [a, b, cc, d], z: (a.z + b.z + cc.z + d.z) / 4, b: face });
+    }
+  }
+  quads.sort((p, q) => q.z - p.z);
+  const dark = [2, 16, 100];
+  const lite = [90, 150, 255];
+  for (const q of quads) {
+    const f = q.b ** 1.2;
+    const col = dark.map((d, i) => Math.round(d + (lite[i] - d) * f)).join(',');
+    m.fillStyle = m.strokeStyle = `rgb(${col})`;
+    m.lineWidth = 1;
+    m.beginPath();
+    q.pts.forEach((p, i) => (i ? m.lineTo(p.x, p.y) : m.moveTo(p.x, p.y)));
+    m.closePath();
+    m.fill();
+    m.stroke();
+  }
+  // the rim: a pale line along the edge (one edge: it's a Möbius strip)
+  m.strokeStyle = 'rgba(150,195,255,0.5)';
+  m.lineWidth = 1;
+  m.beginPath();
+  for (let i = 0; i <= NU * 2; i++) {
+    const p = at((i / NU) * Math.PI * 2, HW);
+    if (i) m.lineTo(p.x, p.y);
+    else m.moveTo(p.x, p.y);
+  }
+  m.stroke();
+  g.save();
+  g.globalAlpha = 0.7;
+  g.drawImage(c, 0, 0, W, H);
+  g.restore();
+}
 export const ps4Theme: Theme = {
   id: 'ps4', name: 'PlayStation 4', blurb: 'the system screens: royal blue, lighter cards with pale edges, a white border on focus',
   p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 0, spotlight: 'rgba(0,10,60,0.5)',
@@ -1428,24 +1512,8 @@ export const ps4Theme: Theme = {
       sky.addColorStop(1, '#041f8c');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      // broad soft streaks of light sweeping down from the top, each a
-      // stack of wide faint strokes so its edges fall off softly
-      g.lineCap = 'round';
-      const streaks = [
-        [0.36, -0.05, 0.22, 0.4, 0.02, 0.75],
-        [0.3, -0.05, 0.12, 0.3, -0.1, 0.62],
-        [0.95, 0.05, 0.6, 0.35, 0.1, 0.4],
-      ];
-      for (const [x0, y0, cx, cy, x1, y1] of streaks) {
-        for (const [w, a] of [[0.09, 0.035], [0.05, 0.04], [0.02, 0.05]]) {
-          g.strokeStyle = `rgba(90,160,255,${a})`;
-          g.lineWidth = W * w;
-          g.beginPath();
-          g.moveTo(W * x0, H * y0);
-          g.quadraticCurveTo(W * cx, H * cy, W * x1, H * y1);
-          g.stroke();
-        }
-      }
+      // a Möbius strip, huge and tilted, in shades of the blue only
+      ps4Mobius(g, W, H);
     });
   },
   window: {
