@@ -562,32 +562,88 @@ export function backdrop(dc: Dc, id: string, paint: (g: CanvasRenderingContext2D
   lastBackdrop = c;
 }
 
+// A window's drop shadow from a pre-rendered nine-slice texture, as desktop
+// themes ship it: blurred once, its inside cut away (so it never darkens
+// glass), corners drawn as they are and edges stretched: eight image draws,
+// no blur per frame. rad and spread are px at zoom 1.
+const shadowTex = new Map<string, HTMLCanvasElement>();
+export function softShadow(dc: Dc, r: Rect, rad: number, spread: number, color: string, dy = 0): void {
+  const Q = 2; // texture pixels per px at zoom 1
+  const key = `${rad}|${spread}|${color}`;
+  let c = shadowTex.get(key);
+  const K = rad + spread; // corner slice, px at zoom 1
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = c.height = (2 * K + 2) * Q;
+    const cg = c.getContext('2d')!;
+    const off = 10000;
+    cg.shadowColor = color;
+    cg.shadowBlur = spread * Q;
+    cg.shadowOffsetX = off;
+    rrect(cg, spread * Q - off, spread * Q, (2 * rad + 2) * Q, (2 * rad + 2) * Q, rad * Q);
+    cg.fillStyle = '#000';
+    cg.fill();
+    cg.shadowColor = 'transparent';
+    cg.globalCompositeOperation = 'destination-out';
+    rrect(cg, spread * Q, spread * Q, (2 * rad + 2) * Q, (2 * rad + 2) * Q, rad * Q);
+    cg.fill();
+    shadowTex.set(key, c);
+  }
+  const g = dc.g;
+  const z = dc.z;
+  const k = K * z; // corner, on screen
+  const X = r.x - spread * z;
+  const Y = r.y - spread * z + dy;
+  const W = r.w + 2 * spread * z;
+  const H = r.h + 2 * spread * z;
+  if (W < 2 * k || H < 2 * k) return;
+  const s = K * Q; // corner, in the texture
+  const m = 2 * Q; // the middle strip, stretched
+  g.drawImage(c, 0, 0, s, s, X, Y, k, k);
+  g.drawImage(c, s + m, 0, s, s, X + W - k, Y, k, k);
+  g.drawImage(c, 0, s + m, s, s, X, Y + H - k, k, k);
+  g.drawImage(c, s + m, s + m, s, s, X + W - k, Y + H - k, k, k);
+  g.drawImage(c, s, 0, m, s, X + k, Y, W - 2 * k, k);
+  g.drawImage(c, s, s + m, m, s, X + k, Y + H - k, W - 2 * k, k);
+  g.drawImage(c, 0, s, s, m, X, Y + k, k, H - 2 * k);
+  g.drawImage(c, s + m, s, s, m, X + W - k, Y + k, k, H - 2 * k);
+}
+
 // Glass: the wallpaper seen through a window, blurred (Aero) and, with
 // lens > 1, magnified about the window's centre (Liquid Glass bends what's
 // behind it). The wallpaper is fixed to the screen, so what lies behind a
 // window is the same pixels of the cached backdrop; its blurred copy is made
 // once per size, and each window is one clipped image draw.
 let lastBackdrop: HTMLCanvasElement | null = null;
-const blurredOf = new WeakMap<HTMLCanvasElement, Map<number, HTMLCanvasElement>>();
+const blurredOf = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
 // hole: a rect inside r that something opaque will cover anyway (a window's
 // client area); the glass skips it, which saves most of the pixels.
-export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, number, number], blur: number, lens = 1, hole?: Rect): boolean {
+// bake: paint laid on the blurred copy once (a tint, streaks fixed to the
+// screen, as Aero's reflection texture is), so each window is one draw.
+export function glassBehind(dc: Dc, r: Rect, rad: number | [number, number, number, number], blur: number, lens = 1, hole?: Rect, bake?: { key: string; paint: (g: CanvasRenderingContext2D, W: number, H: number) => void }): boolean {
   const src = lastBackdrop;
   if (!src) return false;
   const g = dc.g;
   const t = g.getTransform();
-  let byBlur = blurredOf.get(src);
-  if (!byBlur) blurredOf.set(src, (byBlur = new Map()));
-  let b = byBlur.get(blur);
+  let byKey = blurredOf.get(src);
+  if (!byKey) blurredOf.set(src, (byKey = new Map()));
+  const key = `${blur}|${bake?.key ?? ''}`;
+  let b = byKey.get(key);
   if (!b) {
+    const dpr = t.a || 1;
     b = document.createElement('canvas');
     b.width = src.width;
     b.height = src.height;
     const bg = b.getContext('2d')!;
     bg.drawImage(src, 0, 0); // under the blur, so the edges don't fade to nothing
-    bg.filter = `blur(${Math.round(blur * (t.a || 1))}px)`;
+    bg.filter = `blur(${Math.round(blur * dpr)}px)`;
     bg.drawImage(src, 0, 0);
-    byBlur.set(blur, b);
+    bg.filter = 'none';
+    if (bake) {
+      bg.scale(dpr, dpr);
+      bake.paint(bg, src.width / dpr, src.height / dpr);
+    }
+    byKey.set(key, b);
   }
   g.save();
   rrect(g, r.x, r.y, r.w, r.h, rad);

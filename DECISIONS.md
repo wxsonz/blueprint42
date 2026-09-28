@@ -826,3 +826,18 @@ questions. Newest last.
     - the DOM panes follow: the wave palette and 22 px corners.
     
     `liquidGlass` is gone.
+- **Decision (author: pre-rendered textures for Aero's glass and shadow,
+  as Windows does?):** Yes, as the real thing does.
+  - `glassBehind` takes a `bake`: paint laid once on the cached blurred
+    wallpaper copy. Windows 7 bakes its Sky tint and the reflection
+    streaks into it. Like DWM's reflection texture, the streaks are fixed
+    to the screen, so windows slide under them. Each window's glass is
+    one image draw; only the window-relative top shine is still painted
+    per window.
+  - `kit.ts` `softShadow` draws a drop shadow from a pre-rendered
+    nine-slice texture. It's blurred once per (radius, spread, colour),
+    its inside is cut away so it never darkens glass, and it's drawn as 8
+    image draws per window.
+  - Measured A/B against the strokes and per-window fills: 9.0 against
+    9.7 ms a frame, within noise, so it's no slower. The shadow is now
+    real and soft instead of a 4 px line, at the same cost.

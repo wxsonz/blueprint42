@@ -1,9 +1,9 @@
 // "Windows 7" — Aero: glass frames over the Harmony wallpaper, dark title
 // text with a soft white glow, glossy caption buttons with the wide red
 // close, the green shine-sweep progress bar.
-import { backdrop, glassBehind, makeSkin, plainCard, type Theme } from './kit';
+import { backdrop, glassBehind, makeSkin, plainCard, softShadow, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { fitText, rrect } from './util';
+import { fitText, hash, rrect } from './util';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px "Segoe UI", "Open Sans", "DejaVu Sans", sans-serif`;
 
@@ -38,6 +38,34 @@ function glassButton(dc: Dc, r: Rect, kind: 'min' | 'max' | 'close', active: boo
   else g.rect(c.x - d, c.y - d * 0.8, d * 2, d * 1.6);
   g.stroke();
 }
+
+// Aero's glass texture: the Sky tint and the reflection streaks, which (as in
+// the real DWM) are fixed to the screen, so windows slide under them. Baked
+// once into the blurred wallpaper copy; each window is then one image draw.
+function aeroBake(active: boolean) {
+  return {
+    key: active ? 'aero-active' : 'aero-inactive',
+    paint(g: CanvasRenderingContext2D, W: number, H: number) {
+      g.fillStyle = active ? 'rgba(53,133,212,0.52)' : 'rgba(150,176,208,0.5)';
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.13)';
+      const lean = H * 0.8;
+      g.beginPath();
+      for (let x = -40, k = 0; x < W + lean; k++) {
+        const w = 8 + 34 * hash(k * 7 + 1);
+        g.moveTo(x, 0);
+        g.lineTo(x + w, 0);
+        g.lineTo(x + w - lean, H);
+        g.lineTo(x - lean, H);
+        g.closePath();
+        x += w + 30 + 170 * hash(k * 13 + 5);
+      }
+      g.fill();
+    },
+  };
+}
+const AERO_ACTIVE = aeroBake(true);
+const AERO_INACTIVE = aeroBake(false);
 
 export const sevenTheme: Theme = {
   id: 'seven',
@@ -100,11 +128,8 @@ export const sevenTheme: Theme = {
       const b = Math.max(2, 9 * dc.z);
       const rad = Math.max(2, 8 * dc.z);
       const th = 24 * dc.z;
-      // the big soft shadow, from strokes (no blur: it's per frame)
-      rrect(g, r.x - 1, r.y + 2, r.w + 2, r.h, rad + 2);
-      g.strokeStyle = 'rgba(0,10,30,0.28)';
-      g.lineWidth = Math.max(2, 4 * dc.z);
-      g.stroke();
+      // the big soft shadow, from a pre-rendered nine-slice texture
+      softShadow(dc, r, 8, 16, 'rgba(0,10,30,0.6)', 3 * dc.z);
       // the glass is only the ring around the client area (which covers the
       // rest anyway): the wallpaper, blurred, through the Sky tint
       const hole = { x: r.x + b, y: r.y + b + th, w: r.w - 2 * b, h: Math.max(0, r.h - 2 * b - th) };
@@ -112,10 +137,9 @@ export const sevenTheme: Theme = {
         rrect(g, r.x, r.y, r.w, r.h, rad);
         g.rect(hole.x, hole.y, hole.w, hole.h);
       };
-      glassBehind(dc, r, rad, 9, 1, hole);
+      // the tint and the streaks are baked into the glass texture once
+      glassBehind(dc, r, rad, 9, 1, hole, active ? AERO_ACTIVE : AERO_INACTIVE);
       ring();
-      g.fillStyle = active ? 'rgba(53,133,212,0.52)' : 'rgba(150,176,208,0.5)';
-      g.fill('evenodd');
       const hi = g.createLinearGradient(0, r.y, 0, r.y + b + th);
       hi.addColorStop(0, `rgba(255,255,255,${active ? 0.62 : 0.5})`);
       hi.addColorStop(0.45, 'rgba(255,255,255,0.2)');
@@ -123,22 +147,6 @@ export const sevenTheme: Theme = {
       hi.addColorStop(1, 'rgba(255,255,255,0.12)');
       g.fillStyle = hi;
       g.fill('evenodd');
-      // the diagonal light streaks across the glass, as one path
-      g.save();
-      g.clip('evenodd');
-      g.fillStyle = active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.14)';
-      const lean = Math.min(r.h, 180 * dc.z) * 0.8;
-      g.beginPath();
-      for (const [u, w] of [[0.12, 30], [0.19, 10], [0.5, 40], [0.59, 14], [0.84, 22]]) {
-        const x = r.x + r.w * u;
-        g.moveTo(x, r.y);
-        g.lineTo(x + w * dc.z, r.y);
-        g.lineTo(x + w * dc.z - lean, r.y + lean * 1.25);
-        g.lineTo(x - lean, r.y + lean * 1.25);
-        g.closePath();
-      }
-      g.fill();
-      g.restore();
       // edges: dark outside, bright hairline inside, then a soft inner glow
       rrect(g, r.x, r.y, r.w, r.h, rad);
       g.strokeStyle = 'rgba(0,10,30,0.8)';
