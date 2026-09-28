@@ -466,7 +466,6 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
   const dpr = g.getTransform().a;
   g.save();
   g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = 'high';
   // the fog: two layers drifting against each other, breathing a little
   ps2Fogs ??= [ps2FogTex(1), ps2FogTex(9)];
   layer(0.03, 0.12, W * 0.1);
@@ -840,6 +839,7 @@ const ps3Dust = Array.from({ length: 170 }, (_, i) => {
 });
 let ps3Spark: HTMLCanvasElement | null = null;
 let ps3Rib: HTMLCanvasElement | null = null;
+let ps3RibSoft: HTMLCanvasElement | null = null;
 let ps3RibKey = '';
 let ps3RibT = 0;
 // the ribbon's shape at u (0..1 across the page) and time t, as fractions of
@@ -858,8 +858,10 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
   g.save();
   // the ribbon: N lines across a bundle whose width swings through zero, so
   // it twists; neighbouring lines are joined by faint sheets. It is soft, so
-  // it's drawn at half the size and scaled up.
-  const RS = 0.5;
+  // it's drawn at under a third of the size, softened with a slight blur
+  // (cheap at that size, and it hides the stair-steps when scaled up or
+  // when the window is resized), then scaled up.
+  const RS = 0.3;
   const rw = Math.ceil(W * RS);
   const rh = Math.ceil(H * RS);
   ps3Rib ??= document.createElement('canvas');
@@ -921,9 +923,16 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
       rows[i].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
       rg.stroke();
     }
+    ps3RibSoft ??= document.createElement('canvas');
+    if (ps3RibSoft.width !== rw || ps3RibSoft.height !== rh) (ps3RibSoft.width = rw), (ps3RibSoft.height = rh);
+    const sg = ps3RibSoft.getContext('2d')!;
+    sg.clearRect(0, 0, rw, rh);
+    sg.filter = 'blur(0.8px)';
+    sg.drawImage(ps3Rib, 0, 0);
+    sg.filter = 'none';
   }
   g.imageSmoothingEnabled = true;
-  g.drawImage(ps3Rib, 0, 0, rw, rh, 0, 0, W, H);
+  g.drawImage(ps3RibSoft ?? ps3Rib, 0, 0, rw, rh, 0, 0, W, H);
   // the sparkles: drifting right, bobbing, twinkling
   if (!ps3Spark) {
     ps3Spark = document.createElement('canvas');

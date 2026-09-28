@@ -1232,3 +1232,8 @@ questions. Newest last.
   box: the app zoom is CSS `zoom` on the page, and zoomed out to 67% the
   canvas had grown to 2239×1343 (2.2× the pixels, frames dropping to 33 ms).
   It is now the window's size at any app zoom, and the wave looks the same.
+- The PS3 ribbon is painted at 0.3× (was 0.5×) and softened with a 0.8 px
+  blur on that small copy before it is scaled up: no stair-steps when the
+  window is resized, and softer, like the console's. The blur is cheap at
+  that size; high-quality smoothing on the upscale was tried and tripled
+  the cost, so the upscale is the default bilinear.
