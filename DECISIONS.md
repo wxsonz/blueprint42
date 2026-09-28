@@ -1364,3 +1364,8 @@ questions. Newest last.
   real runs. The invariant test caught a real transient in the first draft:
   resetting `len` before `pos` left `pos > len` for one statement; `pos` is
   reset first now.
+- A single file gets run settings too, not only a project: the `args` and
+  `-D` fields under stdin are always shown, kept per example in this
+  browser with the rest of its state, and sent to the trace server (which
+  already took both). A `main(int ac, char **av)` reading `av[1]` could
+  not be given an argument before, so it died on a NULL `av[1]`.

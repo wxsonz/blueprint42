@@ -90,6 +90,8 @@ const S: ViewState & {
   cursor: { line: number; col: number };
   engine: 'auto' | 'interp' | 'gdb';
   stdin: string;
+  args: string[]; // a single file's command-line arguments (a project keeps its own in run.json)
+  defines: string[]; // …and its -D flags
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
   sprites: Sprite[];
   project: Project | null; // M5: an open folder (or a bundled sample project)
@@ -113,6 +115,8 @@ const S: ViewState & {
   cursor: { line: 0, col: 0 },
   engine: (['auto', 'interp', 'gdb'].includes(store.get('engine') ?? '') ? store.get('engine') : 'auto') as 'auto' | 'interp' | 'gdb',
   stdin: '',
+  args: [],
+  defines: [],
   gdb: { status: 'idle' },
   sprites: [],
   project: null,
@@ -289,7 +293,7 @@ function startGdb(src: string, model: Model, fresh: boolean): void {
               return fn && sp.binding ? { ...sp, binding: { ...sp.binding, fn: fn.cname, file: fn.file } } : sp;
             }),
           }
-          : { src, files: S.sample.files, defines: S.sample.defines, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
+          : { src, files: S.sample.files, defines: S.defines, args: S.args, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
         ac.signal,
       );
     } catch {
@@ -339,6 +343,8 @@ function renderEngines(): void {
 interface Saved {
   src: string;
   stdin?: string;
+  args?: string[];
+  defines?: string[];
   places: [string, number, number, boolean][];
   waypoints: [string, number, number][];
   sprites?: Sprite[];
@@ -363,6 +369,8 @@ function saveSoon(): void {
   const saved: Saved = {
     src: editor.state.doc.toString(),
     stdin: S.stdin,
+    args: S.args,
+    defines: S.defines,
     places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
     waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
     sprites: structuredClone(S.sprites),
@@ -518,7 +526,10 @@ function loadSample(key: string | undefined, pristine = false): void {
   S.sprites = saved?.sprites ? parseSavedSprites(saved.sprites) : [];
   const src = saved?.src ?? s.src;
   S.stdin = saved?.stdin ?? s.stdin ?? '';
+  S.args = saved?.args ?? [];
+  S.defines = saved?.defines ?? s.defines ?? [];
   $<HTMLTextAreaElement>('stdin').value = S.stdin;
+  renderRunFields();
   $('file-name').textContent = s.file;
   renderSampleTabs();
   loadingSample = true;
@@ -970,13 +981,24 @@ function renderRunFields(): void {
   const p = S.project;
   const stdin = $<HTMLTextAreaElement>('stdin');
   if (document.activeElement !== stdin) stdin.value = p ? p.run.stdin : S.stdin;
-  $('run-row').hidden = !p;
-  $('stdin-info').textContent = p ? `run settings, saved as ${RUN_JSON}` : 'fed to the program when it runs under gdb';
-  if (!p) return;
+  // a single file gets the same run settings (kept in this browser), not only a project
+  $('run-row').hidden = false;
+  $('stdin-info').textContent = p ? `run settings, saved as ${RUN_JSON}` : 'stdin, arguments and -D flags for the run under gdb';
   const args = $<HTMLInputElement>('run-args');
   const defs = $<HTMLInputElement>('run-defs');
-  if (document.activeElement !== args) args.value = joinArgs(p.run.args);
-  if (document.activeElement !== defs) defs.value = p.run.defines.join(' ');
+  if (document.activeElement !== args) args.value = joinArgs(p ? p.run.args : S.args);
+  if (document.activeElement !== defs) defs.value = (p ? p.run.defines : S.defines).join(' ');
+}
+
+// A single file's run settings changed: keep them, and run it again under gdb.
+function sampleRunChanged(set: () => void): void {
+  set();
+  saveSoon();
+  if (S.model && engineFor(S.model) === 'gdb') {
+    cancelGdb();
+    startGdb(editor.state.doc.toString(), S.model, false);
+    renderAlerts();
+  }
 }
 
 function runChanged(): void {
@@ -2986,16 +3008,17 @@ async function boot(): Promise<void> {
   $('btn-files').addEventListener('click', toggleExplorer);
   $('btn-save').addEventListener('click', openSaveDialog);
   $<HTMLInputElement>('run-args').addEventListener('change', (e) => {
-    if (!S.project) return;
-    S.project.run.args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
+    const args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
+    if (!S.project) return sampleRunChanged(() => (S.args = args));
+    S.project.run.args = args;
     runChanged();
   });
   $<HTMLInputElement>('run-defs').addEventListener('change', (e) => {
-    if (!S.project) return;
     const input = e.target as HTMLInputElement;
     const defs = input.value.split(/[\s,]+/).map((d) => d.replace(/^-D/, '')).filter(Boolean);
     const bad = defs.find((d) => !/^[A-Za-z_]\w*(=[\w.+-]*)?$/.test(d));
     if (bad) return toast(`-D ${bad}: use NAME or NAME=value`);
+    if (!S.project) return sampleRunChanged(() => (S.defines = defs.slice(0, 32)));
     S.project.run.defines = defs.slice(0, 32);
     runChanged();
   });
@@ -3019,13 +3042,7 @@ async function boot(): Promise<void> {
       S.project.run.stdin = value;
       return runChanged();
     }
-    S.stdin = value;
-    saveSoon();
-    if (S.model && engineFor(S.model) === 'gdb') {
-      cancelGdb();
-      startGdb(editor.state.doc.toString(), S.model, false);
-      renderAlerts();
-    }
+    sampleRunChanged(() => (S.stdin = value));
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
   $('btn-tidy').addEventListener('click', tidy);
