@@ -1131,3 +1131,9 @@ questions. Newest last.
   - PS2 belts (`Theme.belt`): a grey hairline. A live belt is a dim
     blue line carrying progress-style lights (one per ~360 px, 150 px
     tails) in the data's direction.
+- The PS2 duel takes the window's look instead of the shared one: a ridged
+  title in small Orbitron with the one green power light (it flashes when a
+  new exchange comes up), square hairline cards with ridged role strips, and
+  the travel track as a hairline that the data rides as a trail light (blue,
+  teal for returns) with a plain chip under its head. The track gets its
+  progress as `--p`, which other skins ignore.

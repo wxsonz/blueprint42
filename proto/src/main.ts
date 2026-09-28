@@ -2578,6 +2578,7 @@ function renderDuel(now: number): void {
     // it may have started fading out: the same event is back, so keep it up
     if (el.classList.contains('out') || el.hidden) (el.classList.remove('out'), (el.hidden = false));
     chip.style.left = `${Math.max(4, Math.min(96, d.p * 100))}%`;
+    chip.parentElement!.style.setProperty('--p', `${d.p}`);
     return;
   }
   duelShown = { key: d.key, since: now };
@@ -2635,7 +2636,7 @@ function renderDuel(now: number): void {
     say = `<b>${esc(name(writer))}</b> changes <b>${esc(name(owner))}</b>'s ${esc(info?.name ?? '')}: <span class="old">${esc(oldCell ? fmtVal(oldCell.val) : '?')}</span> ➜ <b class="v">${esc(fmtVal(e.val))}</b>`;
   } else return;
   el.className = d.kind;
-  el.innerHTML = `<div class="d-say"><span class="t">${say}</span></div>${left}<div class="d-mid"><div class="d-verb">${verb}</div><div class="d-track"><span class="chip" style="left:${Math.max(4, d.p * 100)}%">${esc(clipFeed(what, 36))}</span></div>${what.length > 36 ? `<div class="d-what" title="${esc(what)}">${esc(what)}</div>` : ''}</div>${right}`;
+  el.innerHTML = `<div class="d-say"><span class="t">${say}</span></div>${left}<div class="d-mid"><div class="d-verb">${verb}</div><div class="d-track" style="--p:${d.p}"><span class="chip" style="left:${Math.max(4, d.p * 100)}%">${esc(clipFeed(what, 36))}</span></div>${what.length > 36 ? `<div class="d-what" title="${esc(what)}">${esc(what)}</div>` : ''}</div>${right}`;
   el.hidden = false;
 }
 
