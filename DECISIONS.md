@@ -974,3 +974,10 @@ questions. Newest last.
     and red while playing (`button.playing`, set by main).
   - **Logo and grille:** the logo carries the four PS1 colours, and the
     console's vent grille is the playbar's texture.
+- **Decision (author: the dither is too much):** No more full-screen
+  overlay; it grained the text too. The dither applies only where the
+  PS1 would show it: shaded plastic and gradients (the top bar, the
+  playbar's grille, the domed buttons), as a gentle Bayer layer blended
+  into each element's own gradient (`background-blend-mode: overlay`),
+  plus the BIOS tiles, which are dithered once when cached. Text,
+  editor and flat panels stay clean.
