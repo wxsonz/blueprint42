@@ -1,9 +1,9 @@
 // Console skins: PlayStation 1–5, Wii, GameCube and Switch. Each is a theme for the kit (`makeSkin`): a
 // wallpaper drawn once per size, window chrome in the console's own style,
 // and a palette. Geometry is the engine's; only the look changes.
-import { backdrop, makeSkin, plainCard, softShadow, type Palette, type Theme } from './kit';
+import { backdrop, countBadge, makeSkin, plainCard, softShadow, type Palette, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { fitText, hash, rrect } from './util';
+import { arrowHead, fitText, hash, rrect, strokeLine, Walk } from './util';
 
 const F = (family: string) => (px: number, w = 400) => `${w} ${px}px ${family}`;
 const RUBIK = F('Rubik, "Open Sans", sans-serif');
@@ -298,7 +298,7 @@ export const ps1Theme: Theme = {
 // single blue lines bending at right angles "as if prisms were refracting a
 // laser"; a blue gradient stand; and the boot towers.
 // what's active is silver, as on the console's face; Sony keeps its blue
-// for the logo (here: the eject light and the boot screen's fog and lights)
+// for the logo (here: the lights: the boot screen's, data in flight, the progress trail)
 const PS2_SILVER = '#d6d6dc';
 const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
@@ -312,6 +312,10 @@ const ps2P: Palette = {
 let ps2GrainTile: HTMLCanvasElement | null = null;
 // when each window's lights came on (keyed by name), for the flash
 const ps2Lit = new Map<string, number>();
+// the kind of window whose frame was drawn last (its title bar comes next)
+let ps2Kind: 'machine' | 'module' | 'node' | undefined;
+// the progress trail's sweep, 0..1, shared with the power light
+const ps2Phase = (t: number) => (t / 1.6) % 1;
 function ps2Grain(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, a = 1): void {
   if (!ps2GrainTile) {
     const c = document.createElement('canvas');
@@ -586,6 +590,75 @@ export const ps2Theme: Theme = {
     g.lineWidth = 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
+  // belts: a hairline; a live one carries lights running along it like the
+  // progress light (a hot core fading back over a soft glow), one every
+  // 360 px or so, in the direction the data goes
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, Math.max(5, 8 * z), 'rgba(255,255,255,0.06)');
+    const base = o.live ? 'rgba(63,107,255,0.4)' : o.hovered || o.selected ? ps2P.dim : ps2P.faint;
+    strokeLine(g, pts, Math.max(1, 1.4 * z), base);
+    const w = new Walk(pts);
+    const end = w.at(w.length);
+    arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 7 * z), o.live ? '#6a8cff' : base);
+    if (o.live && w.length > 4) {
+      const gap = Math.max(120, 360 * z);
+      const tail = Math.min(w.length * 0.6, Math.max(40, 150 * z));
+      const run = (dc.time * 260 * z) % gap;
+      const N = 16;
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      for (let head = run; head < w.length + tail; head += gap) {
+        let prev: { x: number; y: number } | null = null;
+        for (let k = 0; k <= N; k++) {
+          const d = head - tail + (tail * k) / N;
+          if (d < 0 || d > w.length) { prev = null; continue; }
+          const q = w.at(o.dir < 0 ? w.length - d : d);
+          if (prev) {
+            const f = (k / N) ** 1.6;
+            g.beginPath();
+            g.moveTo(prev.x, prev.y);
+            g.lineTo(q.x, q.y);
+            g.strokeStyle = 'rgba(47,107,255,1)';
+            g.globalAlpha = f * 0.3;
+            g.lineWidth = Math.max(3, 5 * z);
+            g.stroke();
+            g.strokeStyle = '#d4ddff';
+            g.globalAlpha = f;
+            g.lineWidth = Math.max(1, 1.2 * z);
+            g.stroke();
+          }
+          prev = q;
+        }
+        if (head <= w.length) {
+          const q = w.at(o.dir < 0 ? w.length - head : head);
+          const d = Math.max(10, 16 * z);
+          g.globalAlpha = 1;
+          g.drawImage(ps2Sprite('#4f78ff'), q.x - d / 2, q.y - d / 2, d, d);
+        }
+      }
+      g.restore();
+    }
+    countBadge(dc, pts, o, t);
+  },
+  // storage and stations: the window, pared down. Graphite with the grain,
+  // a hairline edge, a short ridged head with a small grey title
+  panel(dc, r, head, title, live) {
+    const g = dc.g;
+    g.fillStyle = 'rgba(11,11,14,0.92)';
+    g.fillRect(r.x, r.y, r.w, r.h);
+    ps2Grain(g, r.x, r.y, r.w, r.h);
+    ridges(g, r.x, r.y, r.w, head.h, Math.max(3, 6 * dc.z));
+    g.strokeStyle = 'rgba(255,255,255,0.07)';
+    g.lineWidth = 1;
+    g.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
+    g.fillStyle = 'rgba(255,255,255,0.06)';
+    g.fillRect(r.x, r.y + head.h, r.w, 1);
+    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#7c7c85', { w: 500, x: r.x + 8 * dc.z });
+  },
   // data in flight leaves the boot lights' trail: a hairline fading toward
   // the tail over a faint glow, a glowing head under the data
   trail(dc, pts, kind) {
@@ -632,6 +705,7 @@ export const ps2Theme: Theme = {
     // a black slab: stacked ridges along the head, thin lines turning at the corners
     frame(dc, r, active, face, kind) {
       const g = dc.g;
+      ps2Kind = kind;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
       // smoked, not solid: the dancing lights glow through between the panels
       g.fillStyle = 'rgba(8,9,12,0.82)';
@@ -643,7 +717,7 @@ export const ps2Theme: Theme = {
       g.strokeStyle = 'rgba(255,255,255,0.06)';
       g.lineWidth = 1;
       g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      // focus isn't an outline: the power and eject lights say it (titleBar)
+      // focus isn't an outline: the power light says it (titleBar)
       // a machine is the console standing up: the raised side block down its
       // right edge, with two columns of short vertical slits
       if (kind === 'machine' && r.h > 60 * dc.z) {
@@ -672,9 +746,10 @@ export const ps2Theme: Theme = {
     },
     titleBar(dc, r, title, active, buttons) {
       text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#f0f0f3' : '#7c7c85', { w: 500, x: r.x + 10 * dc.z });
-      // the front bay's two lights. Idle: power on standby (dim red), eject
-      // dark. Active: power green, eject blue, and both flash quickly when
-      // the window becomes active, to catch the eye.
+      // one light, the power light. Idle: standby (dim red). Active: green,
+      // flashing quickly when the window becomes active; on a function box
+      // it also flares each time the progress trail reaches the right end,
+      // as if the light ran into it.
       if (buttons && r.w > 110 * dc.z) {
         const g = dc.g;
         const z = dc.z;
@@ -683,47 +758,54 @@ export const ps2Theme: Theme = {
         if (!active) ps2Lit.delete(key);
         const since = dc.time - (ps2Lit.get(key) ?? -9);
         const on = active && (since > 0.72 || Math.floor(since * 11) % 2 === 0);
+        const ph = ps2Phase(dc.time);
+        const flare = on && ps2Kind === 'node' ? (ph < 0.18 ? 1 - ph / 0.18 : 0) : 0;
         const y = r.y + r.h / 2;
         const s = Math.max(2, 3 * z);
-        const ex = r.x + r.w - 12 * z;
-        const px = ex - 15 * z;
-        const glow = (col: string, x: number) => {
-          const d = s * 7;
+        const px = r.x + r.w - 12 * z;
+        g.fillStyle = on ? (flare > 0.3 ? '#b8ffc0' : '#2ee048') : active ? '#0f3a17' : '#5a1a1c';
+        g.fillRect(px - s, y - s, s * 2, s * 2);
+        if (on) {
+          const d = s * (6 + 6 * flare);
           g.save();
           g.globalCompositeOperation = 'lighter';
-          g.globalAlpha = 0.8;
-          g.drawImage(ps2Sprite(col), x - d / 2, y - d / 2, d, d);
+          g.globalAlpha = 0.55 + 0.45 * flare;
+          g.drawImage(ps2Sprite('#1ed03a'), px - d / 2, y - d / 2, d, d);
           g.restore();
-        };
-        g.fillStyle = on ? '#3df08a' : active ? '#123a22' : '#5a1a1c';
-        g.fillRect(px - s, y - s, s * 2, s * 2);
-        if (on) glow('#3df08a', px);
-        g.fillStyle = on ? '#6a9cff' : '#1a1f33';
-        g.beginPath();
-        g.moveTo(ex - s, y + s * 0.2);
-        g.lineTo(ex + s, y + s * 0.2);
-        g.lineTo(ex, y - s);
-        g.closePath();
-        g.fill();
-        g.fillRect(ex - s, y + s * 0.55, s * 2, Math.max(1, s * 0.4));
-        if (on) glow('#2f6bff', ex);
+        }
       }
     },
-    // one thin silver line, turning up at its end
+    // a light running along a hairline, trailing like the boot lights; when
+    // it reaches the right end the power light flares (titleBar)
     progress(dc, r, fill, anim) {
       const g = dc.g;
-      const y = r.y + r.h / 2;
-      g.fillStyle = 'rgba(255,255,255,0.12)';
-      g.fillRect(r.x, y, r.w, 1);
-      const x = anim ? r.x + r.w * ((dc.time * 0.45) % 1) : r.x + r.w * fill;
+      const y = Math.round(r.y + r.h / 2) + 0.5;
+      g.fillStyle = 'rgba(255,255,255,0.08)';
+      g.fillRect(r.x, y - 0.5, r.w, 1);
+      const f = anim ? ps2Phase(dc.time) : fill;
+      const x = r.x + r.w * f;
       if (x <= r.x + 1) return;
-      g.strokeStyle = PS2_SILVER;
-      g.lineWidth = Math.max(1, 1.5 * dc.z);
-      g.beginPath();
-      g.moveTo(r.x, y);
-      g.lineTo(x, y);
-      g.lineTo(x, y - r.h / 2);
-      g.stroke();
+      const tail = Math.max(r.x, x - r.w * 0.5);
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.lineCap = 'round';
+      const glow = g.createLinearGradient(tail, 0, x, 0);
+      glow.addColorStop(0, 'rgba(47,107,255,0)');
+      glow.addColorStop(1, anim ? 'rgba(47,107,255,0.35)' : 'rgba(47,107,255,0.15)');
+      g.strokeStyle = glow;
+      g.lineWidth = Math.max(3, 5 * dc.z);
+      g.beginPath(); g.moveTo(tail, y); g.lineTo(x, y); g.stroke();
+      const core = g.createLinearGradient(tail, 0, x, 0);
+      core.addColorStop(0, 'rgba(212,221,255,0)');
+      core.addColorStop(1, anim ? 'rgba(212,221,255,1)' : 'rgba(212,221,255,0.45)');
+      g.strokeStyle = core;
+      g.lineWidth = Math.max(1, 1.2 * dc.z);
+      g.beginPath(); g.moveTo(tail, y); g.lineTo(x, y); g.stroke();
+      if (anim) {
+        const d = Math.max(10, 16 * dc.z);
+        g.drawImage(ps2Sprite('#4f78ff'), x - d / 2, y - d / 2, d, d);
+      }
+      g.restore();
     },
   },
 };

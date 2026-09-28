@@ -39,19 +39,19 @@ html[data-skin='ps2'] {
   --head-fg: #8e8e97;
   --head-fg-active: #f0f0f3;
   --head-font: 600 12.5px 'Exo 2', 'Open Sans', sans-serif;
-  --panel-bg: #0c0c0f;
+  --panel-bg: #0b0b0e;
   --panel-fg: #e4e4e8;
   --panel-dim: #8e8e97;
-  --panel-border: 1px solid #2a2a31;
+  --panel-border: 1px solid rgba(255,255,255,0.08);
   --panel-radius: 6px;
   --panel-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.7);
-  --ptitle-bg: linear-gradient(#1c1c21, #0e0e11);
-  --ptitle-fg: #f0f0f3;
+  --ptitle-bg: repeating-linear-gradient(#141418 0 3px, #0b0b0d 3px 6px);
+  --ptitle-fg: #e4e4e8;
   --ptitle-border: none;
   --ptitle-pad: 8px 12px;
   --field-bg: #070709;
   --field-fg: #e4e4e8;
-  --field-border: 1px solid #26262c;
+  --field-border: 1px solid rgba(255,255,255,0.07);
   --field-radius: 4px;
   --rule: 1px solid #1c1c21;
   --pb-bg: linear-gradient(#131316, #060607);
@@ -133,3 +133,7 @@ html[data-skin='ps2'] #status { background-image: url("data:image/svg+xml,%3Csvg
 html[data-skin='ps2'] #duel::before, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }
 html[data-skin='ps2'] .pb-buttons button.primary { position: relative; }
 html[data-skin='ps2'] .pb-buttons button.primary.playing::after { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; background: #6a9cff; box-shadow: 0 0 4px 1px rgba(47,107,255,0.9), 0 0 12px 3px rgba(47,107,255,0.45); }
+/* the duel, return card and inspector: the window, pared down (ridged
+   title, hairlines, no glow) */
+html[data-skin='ps2'] #duel .d-say { border-bottom: 1px solid rgba(255,255,255,0.06); }
+html[data-skin='ps2'] #duel, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { box-shadow: 0 10px 30px rgba(0,0,0,0.7); }

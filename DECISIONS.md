@@ -1112,3 +1112,22 @@ questions. Newest last.
   edges):** The canvas grain is dark pits only (no light specks, which
   read as dust). The right-angle corner lines are gone from machine
   windows and from the page's panes; windows keep a faint hairline.
+- **Decision (author: storage, stations and the duel should follow the
+  window, but more minimal; the progress bar as a trail light that lights
+  the title light at the end, one light, true green; then the same light
+  on the belts):**
+  - The PS2 `panel` hook: graphite with the grain, a hairline edge, a
+    short ridged head, and a small grey Orbitron title. The duel, return
+    card and inspector get a ridged title and hairline borders through
+    their CSS variables.
+  - Progress is a light running along a hairline: a hot core fading
+    back over a blue glow, with a glowing head, sweeping every 1.6 s.
+  - The title bar has one light, the power light, in true green
+    (`#2ee048`). Idle is dim red standby; it flashes on activation. On
+    a function box it flares each time the progress light reaches the
+    right end. It knows it's in a function box because the kit draws a
+    window's frame (which records its kind) right before its title bar.
+    The eject light is gone.
+  - PS2 belts (`Theme.belt`): a grey hairline. A live belt is a dim
+    blue line carrying progress-style lights (one per ~360 px, 150 px
+    tails) in the data's direction.
