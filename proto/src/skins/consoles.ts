@@ -375,7 +375,7 @@ function ps2FogTex(seed: number): HTMLCanvasElement {
 let ps2Fogs: HTMLCanvasElement[] | null = null;
 const ps2Cubes = Array.from({ length: 6 }, (_, i) => ({
   x: [-0.34, 0.36, -0.1, 0.18, -0.42, 0.44][i], y: [-0.28, -0.3, -0.05, 0.2, 0.3, 0.26][i],
-  s: 0.06 + 0.06 * hash(i * 5 + 1), rx: 0.05 + 0.08 * hash(i * 7 + 2), ry: 0.04 + 0.07 * hash(i * 11 + 3), p: Math.PI * 2 * hash(i * 13 + 4),
+  s: 0.06 + 0.06 * hash(i * 5 + 1), depth: 0.1 + 0.12 * hash(i * 23 + 6), rx: 0.05 + 0.08 * hash(i * 7 + 2), ry: 0.04 + 0.07 * hash(i * 11 + 3), p: Math.PI * 2 * hash(i * 13 + 4),
 }));
 const CUBE_V = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
 const CUBE_F = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4]];
@@ -403,16 +403,32 @@ function ps2Sprite(col: string): HTMLCanvasElement {
   }
   return c;
 }
-function ps2Boot(dc: Dc): void {
+// Parallax: each layer follows the camera by a fraction of the grid's own
+// motion (fog least, then the lights, the cubes most, each at its own
+// depth), and zooms by a small power of the grid's zoom. Cubes wrap around;
+// the fog and lights ease to a stop so they never leave the screen.
+function ps2Boot(dc: Dc, camX: number, camY: number): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 40 : dc.time;
   const W = dc.vw;
   const H = dc.vh;
+  const panX = camX * dc.cs;
+  const panY = camY * dc.cs;
+  const soft = (v: number, lim: number) => lim * Math.tanh(v / lim);
+  const layer = (k: number, zf: number, lim: number) => {
+    const sc = dc.z ** zf;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.translate(W / 2 - soft(panX * k, lim), H / 2 - soft(panY * k, lim));
+    g.scale(sc, sc);
+    g.translate(-W / 2, -H / 2);
+  };
+  const dpr = g.getTransform().a;
   g.save();
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = 'high';
   // the fog: two layers drifting against each other, breathing a little
   ps2Fogs ??= [ps2FogTex(1), ps2FogTex(9)];
+  layer(0.03, 0.12, W * 0.1);
   for (let i = 0; i < 2; i++) {
     const dir = i ? -1 : 1;
     const ox = Math.sin(t * 0.045 + i * 2) * W * 0.04 * dir;
@@ -423,8 +439,11 @@ function ps2Boot(dc: Dc): void {
   g.globalAlpha = 1;
   // the glass cubes, sharp: faces sorted back to front; the far ones barely
   // there, the near ones tinted by where they point and crossed by a
-  // reflection band that slides as the cube turns; bright edges in front
-  const u = Math.min(W, H);
+  // reflection band that slides as the cube turns; no outlines
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const sc = dc.z ** 0.35;
+  const wrap = (v: number, lo: number, span: number) => lo + ((((v - lo) % span) + span) % span);
+  const u = Math.min(W, H) * sc;
   const LX = -0.45, LY = -0.6, LZ = 0.66; // the light: above, left, in front
   g.lineJoin = 'round';
   for (const C of ps2Cubes) {
@@ -435,9 +454,11 @@ function ps2Boot(dc: Dc): void {
       const z1 = y * Math.sin(ax) + z * Math.cos(ax);
       return [x * Math.cos(ay) + z1 * Math.sin(ay), y1, -x * Math.sin(ay) + z1 * Math.cos(ay)];
     });
+    const cx = W / 2 + (wrap(W / 2 + C.x * W - panX * C.depth, -W * 0.2, W * 1.4) - W / 2) * sc;
+    const cy = H / 2 + (wrap(H * 0.47 + C.y * H - panY * C.depth, -H * 0.25, H * 1.5) - H / 2) * sc;
     const pts = v3.map(([x, y, z]) => {
       const k = 3 / (4 - z * 0.6);
-      return [W / 2 + C.x * W + x * C.s * u * k, H * 0.47 + C.y * H + y * C.s * u * k];
+      return [cx + x * C.s * u * k, cy + y * C.s * u * k];
     });
     const faces = CUBE_F.map((f) => {
       // a cube face's centre is its outward normal
@@ -452,11 +473,8 @@ function ps2Boot(dc: Dc): void {
       };
       path();
       if (n[2] <= 0) {
-        g.fillStyle = 'rgba(3,5,16,0.18)';
+        g.fillStyle = 'rgba(3,5,16,0.12)';
         g.fill();
-        g.strokeStyle = 'rgba(140,160,230,0.1)';
-        g.lineWidth = 1;
-        g.stroke();
         continue;
       }
       const lit = Math.max(0, n[0] * LX + n[1] * LY + n[2] * LZ);
@@ -465,8 +483,8 @@ function ps2Boot(dc: Dc): void {
       const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
       // dark glass, lighter where it faces the light
       const body = g.createLinearGradient(x0, y0, x1, y1);
-      body.addColorStop(0, `rgba(${70 + 90 * lit | 0},${90 + 90 * lit | 0},${190 + 50 * lit | 0},${0.1 + 0.16 * lit})`);
-      body.addColorStop(1, 'rgba(4,6,22,0.34)');
+      body.addColorStop(0, `rgba(${60 + 70 * lit | 0},${80 + 70 * lit | 0},${170 + 50 * lit | 0},${0.05 + 0.09 * lit})`);
+      body.addColorStop(1, 'rgba(4,6,22,0.24)');
       g.fillStyle = body;
       g.fill();
       // the reflection: a soft band with a sharp core, placed by the face's angle
@@ -475,7 +493,7 @@ function ps2Boot(dc: Dc): void {
       g.clip();
       const at = Math.min(0.92, Math.max(0.08, 0.5 + n[0] * 0.7 - n[1] * 0.5));
       const band = g.createLinearGradient(x0, y0, x1, y1);
-      const a = 0.08 + 0.3 * lit * n[2];
+      const a = 0.04 + 0.16 * lit * n[2];
       band.addColorStop(Math.max(0, at - 0.22), 'rgba(200,220,255,0)');
       band.addColorStop(Math.max(0, at - 0.03), `rgba(200,220,255,${a * 0.5})`);
       band.addColorStop(at, `rgba(235,242,255,${a})`);
@@ -484,13 +502,10 @@ function ps2Boot(dc: Dc): void {
       g.fillStyle = band;
       g.fillRect(x0, y0, x1 - x0, y1 - y0);
       g.restore();
-      path();
-      g.strokeStyle = `rgba(190,210,255,${0.22 + 0.4 * lit})`;
-      g.lineWidth = 1;
-      g.stroke();
     }
   }
   // the lights: a glowing head, a hairline trail
+  layer(0.07, 0.25, W * 0.2);
   g.globalCompositeOperation = 'lighter';
   g.lineCap = 'round';
   const at = (L: (typeof ps2Lights)[number], tt: number) => {
@@ -536,12 +551,12 @@ export const ps2Theme: Theme = {
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
   // the boot screen: black space, the fog, the cubes and the lights
-  background(dc) {
+  background(dc, camX, camY) {
     backdrop(dc, 'ps2-space', (g, W, H) => {
       g.fillStyle = '#000003';
       g.fillRect(0, 0, W, H);
     });
-    ps2Boot(dc);
+    ps2Boot(dc, camX, camY);
   },
   window: {
     border: 2, corner: 0, titleH: 26, face: 'rgba(4,5,9,0.25)', workspace: 'rgba(47,140,255,0.03)',

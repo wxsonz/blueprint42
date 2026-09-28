@@ -1021,8 +1021,13 @@ questions. Newest last.
     reflection). Faces are sorted back to front. Far faces are barely
     there; near faces get a dark glass gradient lit by where they point
     and a reflection band (soft, with a sharp core) whose place follows
-    the face's angle, so it slides as the cube turns. Edges are bright in
-    front and faint behind.
+    the face's angle, so it slides as the cube turns. No outlines, and
+    kept dim (author: edges and brightness were too much).
+  - Parallax (author): each layer follows the grid's pan by a fraction
+    (fog 3%, lights 7%, cubes 10–22% each by depth) and zooms by a small
+    power of the grid's zoom (fog z^0.12, lights z^0.25, cubes z^0.35).
+    Cubes wrap around as you pan; the fog and lights ease to a stop
+    (tanh) so they never leave the screen.
   - Four coloured lights (red, green, violet, blue) sweeping through in
     3D, each with a glowing head and a hairline trail drawn at full
     resolution.
