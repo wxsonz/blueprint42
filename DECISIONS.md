@@ -1300,3 +1300,11 @@ questions. Newest last.
   headless against ~4.7).
 - The PS4 is full-bleed too: its sky and ribbons are the whole page's
   background, one canvas behind every panel, the grid clear over it.
+- The crescents were faces of one twisted triangular prism (the author's
+  finding): the background is now that prism, one at a time, thin at head
+  and tail and thick in the body, sweeping across on a slow arc in about
+  12 s, spinning as it goes and fading in and out. Only faces turned to the
+  viewer are drawn, each a flat opaque shade of the sky just behind it (the
+  sky's gradient is worked out per quad), with the ridge between two
+  visible faces as the bright line. No offscreen canvas, blur or soft-light
+  blend any more: ~0.7 ms a frame headless against ~2.7 for the ribbons.

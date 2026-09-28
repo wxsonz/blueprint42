@@ -1384,101 +1384,120 @@ const ps4P: Palette = {
   fg: '#ffffff', dim: '#c6d6ff', faint: '#8aa6e8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
-// The background, after the PS4's welcome screen (studied frame by frame):
-// crescent ribbons, thin at both ends and thickest in the middle, each a
-// slice of a circle about the screen's size. A ribbon is three strands that
-// slide against each other and now and then cross: a wide soft lighter
-// sheet, a thin bright edge, a darker band alongside. One sweeps across in
-// a slow arc (its circle turning), entering and leaving by the edges, its
-// thickness breathing, fading in and out; a second one is half a pass
-// behind, so they overlap as one leaves. Only lighter and darker sky: the
-// strands are grey laid over the sky in soft light. Stateless in time;
-// painted at half size, the soft strands blurred, at most 24 times a second.
-let ps4Rib: HTMLCanvasElement | null = null;
-let ps4RibSoft: HTMLCanvasElement | null = null;
-let ps4RibKey = '';
-let ps4RibT = -1;
-function ps4Ribbons(dc: Dc): void {
+// The background, after the PS4's welcome screen: one long twisted
+// triangular prism at a time, thin at its head and tail and thick in the
+// body, following a slow arc across the view. Seen from the side its faces
+// read as crescents: the ones turned to the viewer are drawn, each a flat
+// shade of the sky just behind it (lighter or darker by how it faces the
+// light), and the ridge between two visible faces is the bright line. It
+// sweeps across in about 12 s, entering and leaving by the edges, spinning
+// as it goes, fading in and out. The sky colour is worked out per quad, so
+// the shape is drawn opaque straight onto the page: no offscreen canvas, no
+// blur, no blending. Stateless in time.
+const PS4_SKY: [number, number, number, number][] = [
+  [0, 10, 95, 174], [0.35, 7, 70, 196], [0.55, 5, 56, 188], [0.82, 3, 26, 120], [1, 1, 10, 46],
+];
+function ps4SkyAt(x: number, y: number, W: number, H: number): [number, number, number] {
+  const gx = W * 0.12;
+  const u = Math.max(0, Math.min(1, (x * gx + y * H) / (gx * gx + H * H)));
+  let k = 1;
+  while (k < PS4_SKY.length - 1 && PS4_SKY[k][0] < u) k++;
+  const [u0, ...c0] = PS4_SKY[k - 1];
+  const [u1, ...c1] = PS4_SKY[k];
+  const f = (u - u0) / (u1 - u0 || 1);
+  const c = c0.map((v, i) => v + (c1[i] - v) * f);
+  // the soft glow in the middle
+  const R = Math.max(W, H) * 0.5;
+  const a = 0.28 * Math.max(0, 1 - Math.hypot(x - W * 0.5, y - H * 0.4) / R);
+  return [c[0] * (1 - a) + 20 * a, c[1] * (1 - a) + 80 * a, c[2] * (1 - a) + 235 * a];
+}
+function ps4Prism(dc: Dc): void {
   const g = dc.g;
   const W = dc.vw;
   const H = dc.vh;
   const t = ps2Still || !dc.time ? 40 : dc.time;
-  const RS = 0.5;
-  const w = Math.ceil(W * RS);
-  const h = Math.ceil(H * RS);
-  const key = `${w}x${h}`;
-  if (key !== ps4RibKey || Math.abs(t - ps4RibT) >= 1 / 24) {
-    ps4RibKey = key;
-    ps4RibT = t;
-    ps4Rib ??= document.createElement('canvas');
-    ps4RibSoft ??= document.createElement('canvas');
-    for (const c of [ps4Rib, ps4RibSoft]) if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
-    const m = ps4Rib.getContext('2d')!;
-    const sg = ps4RibSoft.getContext('2d')!;
-    m.clearRect(0, 0, w, h);
-    sg.clearRect(0, 0, w, h);
-    const P = 9; // seconds a pass takes
-    const N = 64;
-    const edges: (() => void)[] = [];
-    for (let r = 0; r < 2; r++) {
-      const tt = t + r * P * 0.5;
-      const n = Math.floor(tt / P) * 2 + r;
-      const p = tt / P - Math.floor(tt / P);
-      const hh = (k: number) => hash(n * 97 + k * 13 + 5);
-      const fade = Math.sin(Math.PI * p) ** 0.8;
-      // the circle: its centre off beyond one side, the arc crossing the view
-      const diag = Math.hypot(w, h);
-      const phi = hh(1) * Math.PI * 2;
-      const D = diag * (0.75 + 0.35 * hh(2));
-      const R = D * (0.78 + 0.22 * hh(3));
-      const cx = w / 2 + Math.cos(phi) * D;
-      const cy = h / 2 + Math.sin(phi) * D;
-      const way = hh(4) < 0.5 ? -1 : 1;
-      const span = 0.9 + 0.5 * hh(5);
-      const mid = phi + Math.PI + way * (-0.75 + 1.5 * p);
-      const thick = h * (0.07 + 0.06 * hh(6)) * (0.75 + 0.25 * Math.sin(tt * 0.5 + n)) * (0.6 + 0.4 * fade);
-      // a strand: its offset from the circle and width, both along s (0..1)
-      const strand = (off: (s: number) => number, wid: number, fill: string) => {
-        const outer: number[][] = [];
-        const inner: number[][] = [];
-        for (let i = 0; i <= N; i++) {
-          const s = i / N;
-          const ang = mid - span / 2 + span * s;
-          const taper = Math.sin(Math.PI * s) ** 0.9;
-          const o = off(s) * thick * taper;
-          const half = (wid * thick * taper) / 2;
-          outer.push([cx + Math.cos(ang) * (R + o + half), cy + Math.sin(ang) * (R + o + half)]);
-          inner.push([cx + Math.cos(ang) * (R + o - half), cy + Math.sin(ang) * (R + o - half)]);
-        }
-        return () => {
-          m.beginPath();
-          outer.forEach(([x, y], i) => (i ? m.lineTo(x, y) : m.moveTo(x, y)));
-          for (let i = inner.length - 1; i >= 0; i--) m.lineTo(inner[i][0], inner[i][1]);
-          m.closePath();
-          m.fillStyle = fill;
-          m.fill();
-        };
-      };
-      // the strands slide: their offsets wave along the arc and in time, so
-      // now and then one crosses another
-      const ph = tt * 0.35 + hh(7) * 6.28;
-      strand((s) => 0.15 * Math.sin(ph + s * 2.2), 1, `rgba(205,205,205,${0.65 * fade})`)();
-      strand((s) => -0.75 + 0.6 * Math.sin(ph * 0.8 + 1.7 + s * 3), 0.55, `rgba(35,35,35,${0.5 * fade})`)();
-      const edge = strand((s) => 0.5 + 0.55 * Math.sin(ph * 1.2 + 3.1 + s * 2.6), 0.07, `rgba(255,255,255,${0.85 * fade})`);
-      edges.push(edge);
+  const P = 12;
+  const n = Math.floor(t / P);
+  const p = t / P - n;
+  const hh = (k: number) => hash(n * 97 + k * 13 + 5);
+  const fade = Math.sin(Math.PI * p) ** 0.7;
+  // the arc: a slice of a circle centred off beyond one side of the view
+  const diag = Math.hypot(W, H);
+  const phi = hh(1) * Math.PI * 2;
+  const D = diag * (0.7 + 0.3 * hh(2));
+  const R = D * (0.8 + 0.2 * hh(3));
+  const ox = W / 2 + Math.cos(phi) * D;
+  const oy = H / 2 + Math.sin(phi) * D;
+  const way = hh(4) < 0.5 ? -1 : 1;
+  const span = 1.1 + 0.4 * hh(5);
+  const mid = phi + Math.PI + way * (-0.8 + 1.6 * p);
+  const rmax = H * (0.1 + 0.05 * hh(6));
+  const spin = t * 0.5 * (hh(7) < 0.5 ? -1 : 1);
+  const twist = (1.2 + 1.2 * hh(8)) * Math.PI;
+  const N = 96;
+  const L = [-0.35, -0.6, 0.72];
+  // the three edges of the prism along its length, in screen x, y and depth
+  const ring: { x: number; y: number }[][] = [];
+  const ang: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const s = i / N;
+    const th = mid - span / 2 + span * s;
+    const cx = ox + Math.cos(th) * R, cy = oy + Math.sin(th) * R;
+    const nx = -Math.cos(th), ny = -Math.sin(th); // toward the circle's centre
+    const r = rmax * Math.sin(Math.PI * s) ** 0.85;
+    const tw = spin + twist * s;
+    ang.push(tw);
+    const tri: { x: number; y: number }[] = [];
+    for (let k = 0; k < 3; k++) {
+      const a = tw + (k * 2 * Math.PI) / 3;
+      // across (in the screen plane) and out (toward the viewer): only the
+      // across part shows; the out part decides which faces we see
+      tri.push({ x: cx + nx * r * Math.cos(a), y: cy + ny * r * Math.cos(a) });
     }
-    // the soft strands blurred; the bright edges drawn sharp over them
-    sg.filter = 'blur(1.4px)';
-    sg.drawImage(ps4Rib, 0, 0);
-    sg.filter = 'none';
-    m.clearRect(0, 0, w, h);
-    for (const e of edges) e();
-    sg.drawImage(ps4Rib, 0, 0);
+    ring.push(tri);
   }
   g.save();
-  g.globalCompositeOperation = 'soft-light';
-  g.imageSmoothingEnabled = true;
-  g.drawImage(ps4RibSoft!, 0, 0, w, h, 0, 0, W, H);
+  g.lineWidth = 1;
+  g.lineJoin = 'round';
+  const ridges: [number, number, number][] = [];
+  for (let i = 0; i < N; i++) {
+    const s = (i + 0.5) / N;
+    const th = mid - span / 2 + span * s;
+    const nx = -Math.cos(th), ny = -Math.sin(th);
+    const tw = (ang[i] + ang[i + 1]) / 2;
+    const vis: boolean[] = [];
+    for (let k = 0; k < 3; k++) {
+      // a face's outward normal lies midway between its two edges
+      const a = tw + ((k + 0.5) * 2 * Math.PI) / 3;
+      const out = Math.sin(a); // toward the viewer
+      vis.push(out > 0);
+      if (out <= 0) continue;
+      const nrm = [nx * Math.cos(a), ny * Math.cos(a), out];
+      const b = nrm[0] * L[0] + nrm[1] * L[1] + nrm[2] * L[2];
+      const q = [ring[i][k], ring[i + 1][k], ring[i + 1][(k + 1) % 3], ring[i][(k + 1) % 3]];
+      const sky = ps4SkyAt((q[0].x + q[2].x) / 2, (q[0].y + q[2].y) / 2, W, H);
+      const f = Math.max(-1, Math.min(1, (b - 0.35) * 1.6)) * fade;
+      const col = f >= 0 ? sky.map((v) => v + (255 - v) * 0.18 * f) : sky.map((v) => v * (1 + 0.38 * f));
+      g.fillStyle = g.strokeStyle = `rgb(${col.map(Math.round).join(',')})`;
+      g.beginPath();
+      g.moveTo(q[0].x, q[0].y);
+      for (let j = 1; j < 4; j++) g.lineTo(q[j].x, q[j].y);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+    // the ridge between two visible faces: the bright line
+    for (let k = 0; k < 3; k++) if (vis[k] && vis[(k + 2) % 3]) ridges.push([i, k, Math.sin(Math.PI * s)]);
+  }
+  g.lineCap = 'round';
+  g.lineWidth = Math.max(1, H / 700);
+  for (const [i, k, w] of ridges) {
+    g.strokeStyle = `rgba(255,255,255,${0.4 * fade * w})`;
+    g.beginPath();
+    g.moveTo(ring[i][k].x, ring[i][k].y);
+    g.lineTo(ring[i + 1][k].x, ring[i + 1][k].y);
+    g.stroke();
+  }
   g.restore();
 }
 // A belt as the PS4's progress bar: a flat track; live, a white fill runs
@@ -1636,8 +1655,8 @@ export const ps4Theme: Theme = {
       g.fillStyle = glow;
       g.fillRect(0, 0, W, H);
     });
-    // crescent ribbons sweeping through, in shades of the sky only
-    ps4Ribbons(dc);
+    // one twisted prism sweeping through, in shades of the sky only
+    ps4Prism(dc);
   },
   window: {
     border: 0, corner: 0, titleH: 28, face: 'rgba(3,30,76,0.8)', workspace: 'rgba(255,255,255,0.05)',
