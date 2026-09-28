@@ -660,3 +660,28 @@ questions. Newest last.
   big line each, or "nothing it can reach changed"), ④ left as they were.
   While that card is up, the duel stays hidden.
 
+- **Decision (author: the statement-style return card was harder to
+  read):** Back to a side-by-side comparison, but the changes can't be
+  missed: a table of everything the function could reach, with columns
+  *before (when called)* and *after (now, at return)*. A changed row gets
+  an accent band, the old value struck out, `➜ new` in bold and a
+  CHANGED tag. Rows that stayed the same are quiet and say "same". A
+  pointer argument says "same address · what it points at is below", and
+  a value argument says "a copy: the caller's own is untouched". "Gives
+  back" sits on top and a count sits at the foot. (Bug found on the way:
+  `#duel` had `display: grid` and no `[hidden]` rule, so hiding it did
+  nothing and it could sit behind the card.)
+- **Decision (author: Barebone dark too dark; Minimal wants light):**
+  Barebone dark is charcoal now (`#161616` floor, `#222`/`#2b2b2b`
+  cards, softer greys for text) instead of near black. Minimal becomes
+  `minimalOf(dark)`, with a light twin `minimal-light` (paper `#f5f6f8`,
+  white cards, the same blue accent darkened for contrast) and
+  `styles/minimal-light.css`.
+- **Decision (author: icons in the skin list):** The `<select>` is now a
+  button plus a popover grid. Each skin shows a 72×44 preview that the
+  skin itself draws (its `background` and one `node` on a small canvas,
+  cached as a data URL), so a preview can't drift from the real look.
+  Also shown: the name, a ☀☾ mark if it has both modes, and its blurb.
+  Only base skins are listed; the ☀/☾ button still picks the mode, and
+  picking a skin keeps the stored mode. It closes on Escape or a click
+  outside.

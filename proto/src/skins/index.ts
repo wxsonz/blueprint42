@@ -1,7 +1,7 @@
 import { amp } from './amp';
 import { aqua } from './aqua';
 import { classic } from './classic';
-import { minimal } from './minimal';
+import { minimal, minimalLight } from './minimal';
 import { blueprint } from './blueprint';
 import { factory } from './factory';
 import { gameboy } from './gameboy';
@@ -15,7 +15,7 @@ import type { Skin } from './types';
 
 // A skin with a variantOf is the other mode (light/dark) of that skin: the
 // picker lists only bases, and the ☀/☾ button flips between the two.
-export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave];
+export const SKINS: Skin[] = [amp, classic, xp, seven, metro, metroLight, system7, platinum, aqua, leopard, yosemite, bigsur, bigsurDark, tahoe, tahoeDark, minimal, minimalLight, bareboneDark, bareboneLight, blueprint, factory, gameboy, synthwave];
 
 // The other mode of a skin, if it has one.
 export function otherMode(skin: Skin): Skin | undefined {
@@ -34,6 +34,7 @@ export const SKIN_FONTS: Record<string, string[]> = {
   synthwave: ['500 12px Orbitron', '700 12px Orbitron', '12px "Share Tech Mono"'],
   xp: [],
   barebone: [],
+  'minimal-light': ['500 12px Inter', '600 12px Inter', '500 12px "JetBrains Mono"', '600 12px "JetBrains Mono"'],
   'barebone-light': [],
   'metro-light': ['300 12px "Open Sans"', '600 12px "Open Sans"'],
   'bigsur-dark': ['500 12px Inter', '700 12px Inter'],

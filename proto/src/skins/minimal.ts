@@ -4,20 +4,34 @@ import { arrowHead, baseName, beltMid, brackets, dirName, fitText, rrect, stroke
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
-const ACCENT = '#8ab4ff';
-const PTR = '#ff8a7a';
-const RET = '#7ee0a1';
-const WAIT = '#e0b35a';
-const ERR = '#ff6b6b';
-const FG = '#ededed';
-const DIM = '#8b909a';
-const FAINT = '#555861';
-const CARD = '#1c1d21';
-const LINE = '#2e3036';
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
 const MONO = (px: number, w = 500) => `${w} ${px}px "JetBrains Mono", "DejaVu Sans Mono", monospace`;
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
-const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: '#111317', cell: '#303e54', text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
+
+// The colours, dark (the original) and light.
+function minimalOf(dark: boolean): Skin {
+  const C = dark ? {
+    bg: '#131416', hover: '#44474f', beltHover: '#6a6e78', frame: '#17181b', beltIdle: '#3a3d44', dot: 'rgba(255,255,255,0.07)', wallFill: 'rgba(255,255,255,0.025)',
+    procLive: '#3d4048', wallEdge: '#34373e', frameLive: '#33363d', cell: '#303e54', chestNull: '#2a2c31', frameStack: '#26282d', frameDim: '#25272c', plate: '#23252a',
+    proc: '#18191c', track: '#111317', param: '#c9b8ff', spot: 'rgba(8,9,11,0.7)', pulse: 'rgba(255,138,122,', acc: 'rgba(138,180,255,',
+    accent: '#8ab4ff', ptr: '#ff8a7a', ret: '#7ee0a1', wait: '#e0b35a', err: '#ff6b6b', fg: '#ededed', dim: '#8b909a', faint: '#555861', card: '#1c1d21', line: '#2e3036',
+  } : {
+    bg: '#f5f6f8', hover: '#b9bdc6', beltHover: '#8a8f99', frame: '#ffffff', beltIdle: '#c9cdd4', dot: 'rgba(0,0,0,0.09)', wallFill: 'rgba(0,0,0,0.02)',
+    procLive: '#b9bdc6', wallEdge: '#cfd3da', frameLive: '#d0d4db', cell: '#dce8fb', chestNull: '#dfe2e7', frameStack: '#e3e6ea', frameDim: '#e6e8ec', plate: '#ffffff',
+    proc: '#ffffff', track: '#eef0f3', param: '#6e4fd6', spot: 'rgba(245,246,248,0.75)', pulse: 'rgba(217,83,63,', acc: 'rgba(47,111,224,',
+    accent: '#2f6fe0', ptr: '#d9533f', ret: '#1f9d57', wait: '#b7860b', err: '#d93636', fg: '#1d2025', dim: '#5d636e', faint: '#9a9fa8', card: '#ffffff', line: '#dadde3',
+  };
+  const ACCENT = C.accent;
+  const PTR = C.ptr;
+  const RET = C.ret;
+  const WAIT = C.wait;
+  const ERR = C.err;
+  const FG = C.fg;
+  const DIM = C.dim;
+  const FAINT = C.faint;
+  const CARD = C.card;
+  const LINE = C.line;
+  const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
   rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
@@ -30,17 +44,17 @@ function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, s
 
 function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: boolean): void {
   rrect(g, r.x - 4, r.y - 4, r.w + 8, r.h + 8, rad + 4);
-  g.strokeStyle = strong ? ACCENT : 'rgba(138,180,255,0.35)';
+  g.strokeStyle = strong ? ACCENT : `${C.acc}0.35)`;
   g.lineWidth = strong ? 2 : 1;
   g.stroke();
 }
 
-export const minimal: Skin = {
-  id: 'minimal',
+  return {
+  id: dark ? 'minimal' : 'minimal-light',
   name: 'Minimal',
-  blurb: 'quiet cards and hairlines',
-  casing: '#131416',
-  spotlight: 'rgba(8,9,11,0.7)',
+  blurb: dark ? 'quiet cards and hairlines' : 'quiet cards and hairlines, on white',
+  casing: C.bg,
+  spotlight: C.spot,
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
   crate(dc, x, y, c) { drawCrate(dc, x, y, c, spritePalette); },
@@ -48,10 +62,10 @@ export const minimal: Skin = {
 
   background(dc, camX, camY) {
     const g = dc.g;
-    g.fillStyle = '#131416';
+    g.fillStyle = C.bg;
     g.fillRect(0, 0, dc.vw, dc.vh);
     if (dc.cs < 14) return;
-    g.fillStyle = 'rgba(255,255,255,0.07)';
+    g.fillStyle = C.dot;
     for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
       for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
         g.beginPath();
@@ -65,8 +79,8 @@ export const minimal: Skin = {
     const g = dc.g;
     g.lineCap = 'round';
     g.lineJoin = 'round';
-    if (o.selected) strokeLine(g, pts, px(dc, 8, 5), 'rgba(138,180,255,0.18)');
-    const col = o.live ? ACCENT : o.hovered || o.selected ? '#6a6e78' : '#3a3d44';
+    if (o.selected) strokeLine(g, pts, px(dc, 8, 5), `${C.acc}0.18)`);
+    const col = o.live ? ACCENT : o.hovered || o.selected ? C.beltHover : C.beltIdle;
     strokeLine(g, pts, px(dc, 1.6, 1.2), col);
     if (o.live) strokeLine(g, pts, px(dc, 2.2, 1.6), ACCENT, [px(dc, 3), px(dc, 9)], -dc.time * 40 * dc.z * o.dir);
     const walk = new Walk(pts);
@@ -79,7 +93,7 @@ export const minimal: Skin = {
       const t = `${o.count}`;
       const w = Math.max(g.measureText(t).width + px(dc, 10), fs + px(dc, 6));
       const h = fs + px(dc, 6);
-      card(g, { x: mx - w / 2, y: my - h / 2, w, h }, h / 2, '#131416', col);
+      card(g, { x: mx - w / 2, y: my - h / 2, w, h }, h / 2, C.bg, col);
       g.fillStyle = o.live ? ACCENT : DIM;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
@@ -90,10 +104,10 @@ export const minimal: Skin = {
   module(dc, r, m) {
     const g = dc.g;
     const rad = px(dc, 6, 3);
-    const border = m.state === 'running' ? ACCENT : m.state === 'error' ? ERR : m.hovered ? '#44474f' : LINE;
+    const border = m.state === 'running' ? ACCENT : m.state === 'error' ? ERR : m.hovered ? C.hover : LINE;
     if (m.state === 'running' || m.state === 'error') {
       g.save();
-      g.shadowColor = m.state === 'error' ? 'rgba(255,107,107,0.4)' : 'rgba(138,180,255,0.35)';
+      g.shadowColor = m.state === 'error' ? 'rgba(255,107,107,0.4)' : `${C.acc}0.35)`;
       g.shadowBlur = 18 * dc.z;
       card(g, r, rad, CARD, border, 1.5);
       g.restore();
@@ -156,9 +170,9 @@ export const minimal: Skin = {
     const g = dc.g;
     const rad = px(dc, 10, 4);
     rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
-    g.fillStyle = 'rgba(255,255,255,0.025)';
+    g.fillStyle = C.wallFill;
     g.fill();
-    g.strokeStyle = w.live ? 'rgba(138,180,255,0.55)' : '#34373e';
+    g.strokeStyle = w.live ? `${C.acc}0.55)` : C.wallEdge;
     g.lineWidth = 1;
     g.setLineDash([px(dc, 5, 3), px(dc, 4, 2)]);
     g.stroke();
@@ -183,7 +197,7 @@ export const minimal: Skin = {
     g.save();
     g.globalAlpha = Math.min(1, a * 1.2);
     // a wide faint halo, then the corners (a blur here is too costly to paint)
-    g.strokeStyle = 'rgba(138,180,255,0.25)';
+    g.strokeStyle = `${C.acc}0.25)`;
     g.lineWidth = Math.max(6, 9 * dc.z);
     brackets(g, r, o, Math.max(8, 14 * dc.z));
     g.strokeStyle = ACCENT;
@@ -199,7 +213,7 @@ export const minimal: Skin = {
   door(dc, [x, y], vertical, live) {
     const g = dc.g;
     const L = px(dc, 12, 7);
-    g.strokeStyle = live ? ACCENT : '#6a6e78';
+    g.strokeStyle = live ? ACCENT : C.beltHover;
     g.lineWidth = px(dc, 3, 2);
     g.lineCap = 'round';
     g.beginPath();
@@ -211,10 +225,10 @@ export const minimal: Skin = {
   node(dc, r, n) {
     const g = dc.g;
     const rad = px(dc, 6, 3);
-    const border = n.state === 'running' ? ACCENT : n.state === 'error' ? ERR : n.hovered ? '#44474f' : LINE;
+    const border = n.state === 'running' ? ACCENT : n.state === 'error' ? ERR : n.hovered ? C.hover : LINE;
     if (n.state === 'running' || n.state === 'error') {
       g.save();
-      g.shadowColor = n.state === 'error' ? 'rgba(255,107,107,0.4)' : 'rgba(138,180,255,0.35)';
+      g.shadowColor = n.state === 'error' ? 'rgba(255,107,107,0.4)' : `${C.acc}0.35)`;
       g.shadowBlur = 18 * dc.z;
       card(g, r, rad, CARD, border, 1.5);
       g.restore();
@@ -248,7 +262,7 @@ export const minimal: Skin = {
       g.fillText(`×${n.frames}`, r.x + r.w - pad, r.y + pad + px(dc, 1));
     }
     if (n.editing) {
-      g.fillStyle = 'rgba(138,180,255,0.7)';
+      g.fillStyle = `${C.acc}0.7)`;
       g.fillRect(r.x + 1, r.y + rad, px(dc, 2.5, 2), r.h - rad * 2);
     }
     g.globalAlpha = 1;
@@ -267,9 +281,9 @@ export const minimal: Skin = {
     const rad = px(dc, 5, 2);
     for (let k = Math.min(f.stacked, 3); k > 0; k--) {
       const o = px(dc, 4) * k;
-      card(g, { x: r.x + o, y: r.y + o, w: r.w, h: r.h }, rad, '#17181b', '#26282d');
+      card(g, { x: r.x + o, y: r.y + o, w: r.w, h: r.h }, rad, C.frame, C.frameStack);
     }
-    card(g, r, rad, '#17181b', f.mode === 'live' ? '#33363d' : '#25272c');
+    card(g, r, rad, C.frame, f.mode === 'live' ? C.frameLive : C.frameDim);
     const alpha = f.mode === 'live' ? 1 : f.mode === 'returned' ? 0.6 : 0.35;
     g.globalAlpha = alpha;
     g.font = UI(px(dc, 9.5, 7), 600);
@@ -289,7 +303,7 @@ export const minimal: Skin = {
         }
       }
       g.font = MONO(px(dc, 11.5, 7));
-      g.fillStyle = row.depth ? FAINT : row.param ? '#c9b8ff' : DIM;
+      g.fillStyle = row.depth ? FAINT : row.param ? C.param : DIM;
       g.textAlign = 'left';
       g.fillText(fitText(g, row.name, MONO, px(dc, 11.5, 7), r.w * 0.5 - pad, 6), r.x + pad, rr.y + rr.h / 2 + 1);
       const v = row.value || '—';
@@ -305,7 +319,7 @@ export const minimal: Skin = {
   chest(dc, r, c) {
     const g = dc.g;
     const rad = px(dc, 4, 2);
-    card(g, r, rad, CARD, c.flash > 0 ? ACCENT : c.recent ? ACCENT : c.value === null ? '#2a2c31' : '#44474f');
+    card(g, r, rad, CARD, c.flash > 0 ? ACCENT : c.recent ? ACCENT : c.value === null ? C.chestNull : C.hover);
     if (c.flash > 0) {
       rrect(g, r.x, r.y, r.w, r.h, rad);
       g.fillStyle = `rgba(138,180,255,${0.3 * c.flash})`;
@@ -325,7 +339,7 @@ export const minimal: Skin = {
   proc(dc, r, p) {
     const g = dc.g;
     const rad = px(dc, 6, 3);
-    card(g, r, rad, '#18191c', p.state === 'running' ? '#3d4048' : LINE);
+    card(g, r, rad, C.proc, p.state === 'running' ? C.procLive : LINE);
     const pad = px(dc, 12);
     g.font = MONO(px(dc, 12, 7));
     g.textAlign = 'left';
@@ -365,7 +379,7 @@ export const minimal: Skin = {
     const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8));
     const col = kind === 'ptr' ? PTR : kind === 'ret' ? RET : kind === 'void' ? FAINT : ACCENT;
     rrect(g, x - w / 2, y - h / 2, w, h, h / 2);
-    g.fillStyle = '#23252a';
+    g.fillStyle = C.plate;
     g.fill();
     g.strokeStyle = col;
     g.lineWidth = 1.2;
@@ -398,8 +412,8 @@ export const minimal: Skin = {
     const g = dc.g;
     const r = px(dc, 9, 5);
     const grad = g.createRadialGradient(x, y, 0, x, y, r * 2);
-    grad.addColorStop(0, 'rgba(255,138,122,0.9)');
-    grad.addColorStop(1, 'rgba(255,138,122,0)');
+    grad.addColorStop(0, `${C.pulse}0.9)`);
+    grad.addColorStop(1, `${C.pulse}0)`);
     g.fillStyle = grad;
     g.beginPath(); g.arc(x, y, r * 2, 0, Math.PI * 2); g.fill();
   },
@@ -407,7 +421,7 @@ export const minimal: Skin = {
   ghost(dc, r, label) {
     const g = dc.g;
     rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, px(dc, 6, 3));
-    g.strokeStyle = '#3a3d44';
+    g.strokeStyle = C.beltIdle;
     g.setLineDash([4, 4]);
     g.lineWidth = 1;
     g.stroke();
@@ -421,7 +435,7 @@ export const minimal: Skin = {
 
   beltHandle(dc, [x, y]) {
     const g = dc.g;
-    g.fillStyle = '#131416';
+    g.fillStyle = C.bg;
     g.beginPath(); g.arc(x, y, px(dc, 7, 5), 0, Math.PI * 2); g.fill();
     g.strokeStyle = ACCENT;
     g.lineWidth = 2;
@@ -441,7 +455,7 @@ export const minimal: Skin = {
         arrowHead(g, 21 * u, 12 * u, 1, 0, 5 * u, ACCENT);
         return;
       case 'frame':
-        card(g, { x: 4 * u, y: 4 * u, w: 16 * u, h: 16 * u }, 2 * u, '#17181b', '#44474f');
+        card(g, { x: 4 * u, y: 4 * u, w: 16 * u, h: 16 * u }, 2 * u, C.frame, C.hover);
         g.fillStyle = DIM; g.fillRect(7 * u, 9 * u, 5 * u, 1.5 * u); g.fillRect(7 * u, 14 * u, 5 * u, 1.5 * u);
         g.fillStyle = FG; g.fillRect(14 * u, 9 * u, 3 * u, 1.5 * u); g.fillRect(14 * u, 14 * u, 3 * u, 1.5 * u);
         return;
@@ -450,10 +464,14 @@ export const minimal: Skin = {
         g.beginPath(); g.moveTo(4 * u, 7 * u); g.bezierCurveTo(8 * u, 21 * u, 16 * u, 21 * u, 20 * u, 8 * u); g.stroke();
         return;
       case 'chest':
-        card(g, { x: 6 * u, y: 6 * u, w: 12 * u, h: 12 * u }, 2 * u, CARD, '#6a6e78');
+        card(g, { x: 6 * u, y: 6 * u, w: 12 * u, h: 12 * u }, 2 * u, CARD, C.beltHover);
         return;
       default:
-        genericIcon(g, kind, s, DIM, '#131416');
+        genericIcon(g, kind, s, DIM, C.bg);
     }
   },
 };
+}
+
+export const minimal = { ...minimalOf(true), mode: 'dark' as const };
+export const minimalLight = { ...minimalOf(false), variantOf: 'minimal', mode: 'light' as const };

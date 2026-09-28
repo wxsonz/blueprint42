@@ -11,21 +11,21 @@ const MONO = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px ui-monosp
 
 function barebone(dark: boolean): Theme {
   const c = dark
-    ? { bg: '#000000', wall: '#080808', panel: '#0c0c0c', card: '#141414', live: '#4da3ff', belt: '#3a3a3a', beltOn: '#bdbdbd' }
+    ? { bg: '#161616', wall: '#1d1d1d', panel: '#222222', card: '#2b2b2b', live: '#5aaaff', belt: '#4a4a4a', beltOn: '#c8c8c8' }
     : { bg: '#ffffff', wall: '#f7f7f7', panel: '#f2f2f2', card: '#ebebeb', live: '#0a66d8', belt: '#c4c4c4', beltOn: '#555555' };
   return {
     id: dark ? 'barebone' : 'barebone-light',
     name: 'Barebone',
     blurb: dark ? 'black and white, colour only where it matters; the fastest to draw' : 'white paper, black ink, colour only where it matters',
     radius: 0,
-    spotlight: dark ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.78)',
+    spotlight: dark ? 'rgba(10,10,10,0.72)' : 'rgba(255,255,255,0.78)',
     ui: UI,
     mono: MONO,
     p: dark ? {
       // line = card: edges that don't show
       bg: c.bg, card: c.card, panel: c.panel, line: c.card,
-      fg: '#ffffff', dim: '#a8a8a8', faint: '#5c5c5c', accent: c.live, ptr: '#ffb454', ret: '#6ee7a0', wait: '#bdbdbd', err: '#ff5c5c',
-      param: '#ffffff', cell: '#262626', track: c.panel,
+      fg: '#f2f2f2', dim: '#b0b0b0', faint: '#767676', accent: c.live, ptr: '#ffb454', ret: '#6ee7a0', wait: '#c8c8c8', err: '#ff6b6b',
+      param: '#f2f2f2', cell: '#3a3a3a', track: c.panel,
     } : {
       bg: c.bg, card: c.card, panel: c.panel, line: c.card,
       fg: '#000000', dim: '#555555', faint: '#9a9a9a', accent: c.live, ptr: '#b85c00', ret: '#0f7a42', wait: '#555555', err: '#d12a2a',
@@ -39,7 +39,7 @@ function barebone(dark: boolean): Theme {
       const fill = o.kind === 'wall' ? c.wall : o.kind === 'frame' || o.kind === 'plate' ? c.panel : c.card;
       if (o.fill !== 'transparent' || o.kind === 'wall') ((g.fillStyle = fill), g.fillRect(x, y, w, h));
       // meaning only: a thin mark on the left in the colour that matters
-      const quiet = dark ? '#5c5c5c' : '#9a9a9a';
+      const quiet = dark ? '#767676' : '#9a9a9a';
       if (o.kind === 'plate' && o.stroke !== quiet) ((g.fillStyle = o.stroke), g.fillRect(x, y, 2, h));
       else if (o.glow) ((g.fillStyle = o.glow), g.fillRect(x, y, 2, h));
     },

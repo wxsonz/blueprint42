@@ -420,27 +420,49 @@ kbd {
 #stage-card .sc-title { padding: var(--ptitle-pad, 6px 10px); background: var(--ptitle-bg); color: var(--ptitle-fg); border-bottom: var(--ptitle-border, none); font: var(--ptitle-font, 600 13px var(--font-ui)); }
 #stage-card .sc-title .fn { font-family: var(--font-mono); }
 #stage-card .sc-title .k { opacity: 0.75; font-weight: 400; }
-#stage-card .sc-body { padding: 8px 14px 12px; display: flex; flex-direction: column; gap: 10px; }
-#stage-card .sc-h { font: 700 11px var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--panel-dim); margin-bottom: 3px; }
-#stage-card .sc-line { font: 13px/1.5 var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
-#stage-card .sc-line.big { font-size: 16px; }
-#stage-card .ty { color: var(--panel-dim); }
+#stage-card .sc-gives { padding: 10px 14px 6px; font: 17px var(--font-mono); }
+#stage-card .sc-gives .lbl { font: 700 11px var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--panel-dim); margin-right: 8px; }
+#stage-card .ty { color: var(--panel-dim); font-weight: 400; }
 #stage-card .none { color: var(--panel-dim); font-style: italic; }
 #stage-card b.ret { color: var(--ok, var(--accent)); }
-#stage-card .sc-chg { display: grid; grid-template-columns: minmax(90px, auto) auto auto 1fr; gap: 10px; align-items: baseline; font: 15px/1.6 var(--font-mono); }
-#stage-card .sc-chg .nm { color: var(--panel-fg); font-weight: 700; }
-#stage-card .sc-chg .was { color: var(--panel-dim); text-decoration: line-through; }
-#stage-card .sc-chg .to { color: var(--run, var(--accent)); }
-#stage-card .sc-chg .now { color: var(--run, var(--accent)); font-weight: 800; }
-#stage-card .sc-sec.quiet { opacity: 0.7; }
-#stage-card .sc-sec.quiet .sc-line { font-size: 12px; white-space: normal; }
+#stage-card table { border-collapse: separate; border-spacing: 0 3px; width: 100%; padding: 0 10px; font: 13.5px/1.5 var(--font-mono); }
+#stage-card th { text-align: left; padding: 6px 8px 0; font: 700 11px var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--panel-dim); }
+#stage-card th span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+#stage-card td { padding: 4px 8px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+#stage-card tr.f td.n { padding-left: 22px; }
+/* changed: a lit band, the old value struck, the new one bold */
+#stage-card tr.chg td { background: color-mix(in srgb, var(--run, var(--accent)) 18%, transparent); }
+#stage-card tr.chg td:first-child { box-shadow: inset 3px 0 0 var(--run, var(--accent)); border-radius: 4px 0 0 4px; }
+#stage-card tr.chg td:last-child { border-radius: 0 4px 4px 0; }
+#stage-card tr.chg td.n { font-weight: 700; color: var(--panel-fg); }
+#stage-card tr.chg td.b { text-decoration: line-through; color: var(--panel-dim); }
+#stage-card tr.chg td.a b { color: var(--run, var(--accent)); font-size: 1.1em; }
+#stage-card tr.chg .arrow { color: var(--run, var(--accent)); margin-right: 8px; }
+#stage-card tr.chg .tag { margin-left: 10px; font: 700 10px var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; padding: 1px 6px; border-radius: 8px; background: var(--run, var(--accent)); color: var(--panel-bg); }
+/* unchanged, or passed by value: quiet */
+#stage-card tr.same td, #stage-card tr.val td { color: var(--panel-dim); opacity: 0.75; }
+#stage-card .note { font: italic 12px var(--font-ui); }
+#stage-card .sc-foot { padding: 4px 14px 10px; font: 12px var(--font-ui); color: var(--panel-dim); }
 
-/* the skin picker */
+/* the skin picker: a button, and a grid of previews */
 .skin-pick {
   font: inherit; color: var(--btn-fg); background: var(--btn-bg); border: var(--btn-border); border-radius: var(--btn-radius, 4px);
-  padding: 3px 8px; cursor: pointer;
+  padding: 2px 8px 2px 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
 }
-.skin-pick option { color: #111; background: #fff; }
+.skin-pick img { width: 36px; height: 22px; border-radius: 3px; display: block; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
+.skin-pick .caret { opacity: 0.7; font-size: 0.8em; }
+.skin-list { position: fixed; right: 12px; top: 44px; z-index: 60; width: min(760px, 94vw); max-height: 72vh; overflow: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; padding: 10px;
+  background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
+.skin-list[hidden] { display: none; }
+.skin-list .sk { display: grid; grid-template-columns: 72px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
+  padding: 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.skin-list .sk:hover { background: var(--menu-hover-bg); color: var(--menu-hover-fg); }
+.skin-list .sk.on { border-color: var(--accent); }
+.skin-list .sk img { grid-row: 1 / span 2; width: 72px; height: 44px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
+.skin-list .sk .nm { font-weight: 700; font-size: 12.5px; }
+.skin-list .sk .md { font-weight: 400; opacity: 0.75; margin-left: 4px; font-size: 11px; }
+.skin-list .sk .bl { font-size: 11px; opacity: 0.75; line-height: 1.3; }
 
 /* ---------- the kill feed: who sent what to whom ---------- */
 #feed { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; max-width: min(46%, 460px); pointer-events: none; }
@@ -461,6 +483,7 @@ kbd {
 @keyframes kf-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; } }
 
 /* ---------- the duel: who sends what to whom, spelled out ---------- */
+#duel[hidden] { display: none; }
 #duel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 10px 14px;
   width: min(94%, 980px); padding: 12px; background: rgba(0, 0, 0, 0.86); border-radius: 10px; box-shadow: 0 0 0 2px #000, 0 12px 40px rgba(0, 0, 0, 0.55); pointer-events: none; transition: opacity 0.25s; }
 #duel.out { opacity: 0; }

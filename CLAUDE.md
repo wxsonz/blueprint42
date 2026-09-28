@@ -65,7 +65,10 @@ fractional playback position; all drawing is delegated to the active skin) →
 editor via CSS variables on `html[data-skin]`. Eighteen skins: amp, classic,
 aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in
 `skins/macos.ts` (system7, platinum, leopard, yosemite, bigsur, tahoe), barebone (the
-fastest to paint), blueprint, factory, gameboy, synthwave (specs for `skins/kit.ts` `makeSkin`, the quickest way
+fastest to paint), blueprint, factory, gameboy, synthwave. Skins with both
+modes (metro, bigsur, tahoe, minimal, barebone) have a second skin with
+`variantOf`/`mode`; the picker lists base skins with a canvas-drawn preview
+and ☀/☾ swaps modes (specs for `skins/kit.ts` `makeSkin`, the quickest way
 to add a theme; `Theme.window` gives desktop-style window chrome). `editor.ts` is CodeMirror
 with vim in a toggleable compartment.
 

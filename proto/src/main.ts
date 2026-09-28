@@ -26,6 +26,7 @@ import './styles/amp.css';
 import './styles/classic.css';
 import './styles/aqua.css';
 import './styles/minimal.css';
+import './styles/minimal-light.css';
 import './styles/barebone.css';
 import './styles/barebone-light.css';
 import './styles/metro-light.css';
@@ -1697,19 +1698,58 @@ async function applySkin(skin: Skin): Promise<void> {
   lastPbKey = '';
 }
 
-// One entry per skin; skins that come in light and dark get a ☀/☾ button,
-// and the chosen mode carries over to the next skin that has both.
+// A little live preview of a skin: its floor with its machine on it, drawn
+// by the skin itself, once.
+const skinPreviews = new Map<string, string>();
+function skinPreview(sk: Skin): string {
+  const hit = skinPreviews.get(sk.id);
+  if (hit) return hit;
+  const W = 72, H = 44, dpr = 2;
+  const c = document.createElement('canvas');
+  c.width = W * dpr;
+  c.height = H * dpr;
+  const g = c.getContext('2d')!;
+  g.scale(dpr, dpr);
+  const z = 0.42;
+  try {
+    sk.background({ g, z, cs: 40 * z, time: 0, vw: W, vh: H }, 0, 0);
+    sk.node({ g, z, cs: 40 * z, time: 0, vw: W, vh: H }, { x: 9, y: 6, w: 54, h: 32 }, {
+      name: 'main', state: 'running', waitingOn: null, frames: 1, stale: false, pinned: false, isStatic: false, params: 0,
+      selected: false, hovered: false, editing: false, hasFrame: false, copy: 1, inPorts: [], outPorts: [],
+    });
+  } catch {
+    /* a preview is a nicety */
+  }
+  const url = c.toDataURL();
+  skinPreviews.set(sk.id, url);
+  return url;
+}
+
+// The skin picker: a button showing the current one; a grid of every skin,
+// each with its preview, name and a line about it. Skins that come in light
+// and dark get a ☀/☾ button, and the chosen mode carries over.
 function renderSkinPicker(): void {
-  const box = $<HTMLSelectElement>('skins');
+  const box = $<HTMLButtonElement>('skins');
+  const list = $('skin-list');
   const base = S.skin.variantOf ?? S.skin.id;
-  box.innerHTML = SKINS.filter((s) => !s.variantOf).map((s) => `<option value="${s.id}"${s.id === base ? ' selected' : ''} title="${esc(s.blurb)}">${esc(s.name)}</option>`).join('');
+  box.innerHTML = `<img src="${skinPreview(S.skin)}" alt=""><span>${esc(S.skin.name)}</span><span class="caret">▾</span>`;
   box.title = S.skin.blurb;
-  box.onchange = () => {
-    let next = SKINS.find((s) => s.id === box.value)!;
+  const pick = (id: string) => {
+    let next = SKINS.find((s) => s.id === id)!;
     const other = otherMode(next);
     const want = store.get('mode');
     if (other && want && next.mode !== want) next = other;
+    list.hidden = true;
     void applySkin(next);
+  };
+  box.onclick = () => {
+    if (!list.hidden) return void (list.hidden = true);
+    list.innerHTML = SKINS.filter((s) => !s.variantOf).map((s) => {
+      const both = !!otherMode(s);
+      return `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt=""><span class="nm">${esc(s.name)}${both ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
+    }).join('');
+    list.querySelectorAll<HTMLButtonElement>('.sk').forEach((b) => b.addEventListener('click', () => pick(b.dataset.id!)));
+    list.hidden = false;
   };
   const btn = $<HTMLButtonElement>('skin-mode');
   const other = otherMode(S.skin);
@@ -2600,22 +2640,26 @@ function renderStageCard(): void {
     return { ...r, full: r.depth ? `${parent}->${r.name}` : r.name };
   });
   const typeOf = (n: string) => fn?.params.find((p) => p.name === n)?.type;
-  const called = rows.filter((r) => !r.depth).map((r) => `<span class="ty">${esc(typeOf(r.name) ?? '')}</span> ${esc(r.name)} = <b>${esc(r.in)}</b>`).join(', ') || '<span class="none">no arguments</span>';
-  const changed = rows.filter((r) => r.changed);
-  const kept = rows.filter((r) => r.out !== undefined && !r.changed);
   const ret = c.ret[0];
   const gives = !ret || fn?.ret === 'void' ? '<span class="none">nothing (void)</span>'
-    : c.ret.length > 1 ? `<span class="ty">${esc(fn?.ret ?? '')}</span> <b>{${c.ret.slice(1).map((r) => `${esc(r.name)}: ${esc(r.out ?? r.in)}`).join(', ')}}</b>`
+    : c.ret.length > 1 ? `<span class="ty">${esc(fn?.ret ?? '')}</span> <b class="ret">{${c.ret.slice(1).map((r) => `${esc(r.name)}: ${esc(r.out ?? r.in)}`).join(', ')}}</b>`
     : `<span class="ty">${esc(fn?.ret ?? '')}</span> <b class="ret">${esc(ret.out ?? ret.in)}</b>`;
-  stageCard.innerHTML = `<div class="sc-title"><span class="fn">${esc(name(c.fn))}</span> <span class="k">returns to</span> <span class="fn">${esc(name(c.caller))}</span></div>
-    <div class="sc-body">
-      <div class="sc-sec"><div class="sc-h">① it was called with</div><div class="sc-line">${called}</div></div>
-      <div class="sc-sec"><div class="sc-h">② it gives back</div><div class="sc-line big">${gives}</div></div>
-      <div class="sc-sec"><div class="sc-h">③ it changed, through its pointers</div>${changed.length
-        ? changed.map((r) => `<div class="sc-chg"><span class="nm">${esc(r.full)}</span><span class="was">${esc(r.in)}</span><span class="to">➜</span><span class="now">${esc(r.out ?? '')}</span></div>`).join('')
-        : '<div class="sc-line none">nothing it can reach changed</div>'}</div>
-      ${kept.length ? `<div class="sc-sec quiet"><div class="sc-h">④ left as they were</div><div class="sc-line">${kept.map((r) => `${esc(r.full)} = ${esc(r.out ?? '')}`).join(' · ')}</div></div>` : ''}
-    </div>`;
+  const nChanged = rows.filter((r) => r.changed).length;
+  // before | after, side by side; what changed is lit, what didn't is quiet
+  const tr = (r: (typeof rows)[number]) => {
+    const kind = r.changed ? 'chg' : r.out === undefined ? 'val' : 'same';
+    const nm = `${r.depth ? '' : `<span class="ty">${esc(typeOf(r.name) ?? '')}</span> `}${esc(r.full)}`;
+    const after = r.changed ? `<span class="arrow">➜</span><b>${esc(r.out ?? '')}</b><span class="tag">changed</span>`
+      : r.out === undefined ? `<span class="note">${(typeOf(r.name) ?? '').includes('*') ? 'same address · what it points at is below' : 'a copy: the caller\'s own is untouched'}</span>`
+      : `<span class="note">same</span>`;
+    return `<tr class="${kind}${r.depth ? ' f' : ''}"><td class="n">${nm}</td><td class="b">${esc(r.in)}</td><td class="a">${after}</td></tr>`;
+  };
+  stageCard.innerHTML = `<div class="sc-title"><span class="fn">${esc(name(c.fn))}</span> <span class="k">is done and returns to</span> <span class="fn">${esc(name(c.caller))}</span></div>
+    <div class="sc-gives"><span class="lbl">gives back</span> ${gives}</div>
+    <table><thead><tr><th></th><th>before <span>(when called)</span></th><th>after <span>(now, at return)</span></th></tr></thead><tbody>
+    ${rows.map(tr).join('') || '<tr><td class="n none" colspan="3">no arguments</td></tr>'}
+    </tbody></table>
+    <div class="sc-foot">${nChanged ? `${nChanged} value${nChanged === 1 ? '' : 's'} changed through its pointers` : 'nothing it could reach changed'}</div>`;
   stageCard.hidden = false;
 }
 
@@ -2829,6 +2873,11 @@ async function boot(): Promise<void> {
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
   $('btn-tidy').addEventListener('click', tidy);
+  document.addEventListener('pointerdown', (e) => {
+    const list = $('skin-list');
+    if (!list.hidden && !(e.target as HTMLElement).closest('#skin-list, #skins')) list.hidden = true;
+  });
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && ($('skin-list').hidden = true));
   $('feed').addEventListener('click', (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.kf');
     if (row) seek(Number(row.dataset.i));
