@@ -1212,3 +1212,8 @@ questions. Newest last.
 - The wave's light was a fixed pale blue; it is now the theme colour mixed
   78% toward white (following a fade as it happens), and the sparkles are
   plain white.
+- The light looping around a frame is gone: the outline is lit by the wave
+  instead, brighter where the ribbon passes near or behind it (from the
+  wave's own shape, `ps3Wave`, shared with the ribbon, mapped from the grid
+  canvas to the page). Each edge is one stroke with a gradient sampled
+  along it.

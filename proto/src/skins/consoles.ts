@@ -842,6 +842,14 @@ let ps3Spark: HTMLCanvasElement | null = null;
 let ps3Rib: HTMLCanvasElement | null = null;
 let ps3RibKey = '';
 let ps3RibT = 0;
+// the ribbon's shape at u (0..1 across the page) and time t, as fractions of
+// the page's height: its middle, and its half-width (negative where twisted)
+function ps3Wave(u: number, t: number): { yc: number; a: number } {
+  return {
+    yc: 0.56 + 0.06 * Math.sin(6.28 * 0.55 * u + 0.9 + 0.11 * t) + 0.025 * Math.sin(6.28 * 1.3 * u + 2 - 0.19 * t),
+    a: 0.02 + 0.08 * Math.sin(6.28 * 0.62 * u + 1 + 0.14 * t),
+  };
+}
 function ps3Xmb(dc: Dc, tint: Rgb): void {
   const g = dc.g;
   const t = ps2Still || !dc.time ? 30 : dc.time;
@@ -873,8 +881,9 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
       const o = -1 + (2 * i) / (N - 1);
       rows.push(xs.map((x) => {
         const u = x / rw;
-        const yc = rh * (0.56 + 0.06 * Math.sin(6.28 * 0.55 * u + 0.9 + 0.11 * t) + 0.025 * Math.sin(6.28 * 1.3 * u + 2 - 0.19 * t));
-        const a = rh * (0.02 + 0.08 * Math.sin(6.28 * 0.62 * u + 1 + 0.14 * t));
+        const wv = ps3Wave(u, t);
+        const yc = rh * wv.yc;
+        const a = rh * wv.a;
         const w = rh * 0.01 * Math.sin(6.28 * 1.7 * u + i * 0.6 + 0.33 * t);
         return yc + o * a + w;
       }));
@@ -1231,7 +1240,7 @@ export const ps3Theme: Theme = {
     frame(dc, r, active, _face, kind) {
       const g = dc.g;
       if (kind !== 'node') {
-        ps3Loop(dc, r, active);
+        ps3Edge(dc, r, active);
         return;
       }
       rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 3 * dc.z));
@@ -1242,7 +1251,7 @@ export const ps3Theme: Theme = {
     titleBar(dc, r, title, active) {
       text(dc, r, title, RODIN_R, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.75)', { w: 400, x: r.x + 10 * dc.z });
       // the line under the title is part of the frame's faint shape; the
-      // bright one runs around the frame (ps3Loop)
+      // frame lights up where the wave passes (ps3Edge)
       ps3Rule(dc.g, r.x, r.y + r.h - 1, r.w, active ? 0.3 : 0.16, false);
     },
     // the install bar: a see-through capsule, a glossy fill; running, a soft
@@ -1287,42 +1296,54 @@ export const ps3Theme: Theme = {
     },
   },
 };
-// A file's or machine's frame: its outline, barely there, and a light that
-// runs slowly around it, a fading tail behind it (one lap in about 14 s at
-// zoom 1; brighter on the active window). Each window starts somewhere else.
-function ps3Loop(dc: Dc, r: Rect, active: boolean): void {
+// A file's or machine's frame: its outline, barely there, lit by the wave:
+// brighter where the ribbon passes near or behind it. The wave is drawn on
+// the page, so the grid canvas's place on the page (read once a frame) maps
+// the frame into the wave's coordinates. Each edge is one stroke with a
+// gradient sampled along it.
+const ps3Off = { t: NaN, x: 0, y: 0 };
+function ps3Edge(dc: Dc, r: Rect, active: boolean): void {
   const g = dc.g;
-  g.save();
-  g.lineWidth = 1;
-  g.strokeStyle = `rgba(255,255,255,${active ? 0.12 : 0.07})`;
-  g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-  const w = new Walk([[r.x + 0.5, r.y + 0.5], [r.x + r.w - 0.5, r.y + 0.5], [r.x + r.w - 0.5, r.y + r.h - 0.5], [r.x + 0.5, r.y + r.h - 0.5], [r.x + 0.5, r.y + 0.5]]);
-  const L = w.length;
-  if (L < 8) return void g.restore();
-  const time = ps2Still ? 20 : dc.time || 0;
-  const seed = hash(Math.round((r.w + 3 * r.h) / dc.z));
-  const head = (seed * L + time * 60 * dc.z) % L;
-  const tail = Math.min(L * 0.35, Math.max(60, r.w * 0.7));
-  const N = 28;
-  const a = active ? 0.95 : 0.5;
-  g.lineCap = 'round';
-  let prev = w.at((head - tail + L) % L);
-  for (let k = 1; k <= N; k++) {
-    const q = w.at((head - tail + (tail * k) / N + L) % L);
-    const f = (k / N) ** 1.8;
-    // across a corner the two samples sit on different sides: step through it
+  const t = ps2Still ? 30 : dc.time || 0;
+  if (ps3Off.t !== t) {
+    const b = g.canvas.getBoundingClientRect();
+    Object.assign(ps3Off, { t, x: b.left, y: b.top });
+  }
+  const W = window.innerWidth || dc.vw;
+  const H = window.innerHeight || dc.vh;
+  const lit = (x: number, y: number) => {
+    const wv = ps3Wave((x + ps3Off.x) / W, t);
+    const d = Math.abs(y + ps3Off.y - wv.yc * H) - Math.abs(wv.a) * H;
+    const near = Math.max(0, 1 - Math.max(0, d) / (0.16 * H));
+    return near * near;
+  };
+  const base = active ? 0.1 : 0.06;
+  const edge = (x0: number, y0: number, x1: number, y1: number) => {
+    const grad = g.createLinearGradient(x0, y0, x1, y1);
+    const glow = g.createLinearGradient(x0, y0, x1, y1);
+    const n = 10;
+    for (let k = 0; k <= n; k++) {
+      const f = lit(x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n);
+      grad.addColorStop(k / n, `rgba(255,255,255,${base + 0.7 * f})`);
+      glow.addColorStop(k / n, `rgba(255,255,255,${0.12 * f})`);
+    }
     g.beginPath();
-    g.moveTo(prev.x, prev.y);
-    if (Math.abs(prev.x - q.x) > 0.5 && Math.abs(prev.y - q.y) > 0.5) g.lineTo(prev.dx ? q.x : prev.x, prev.dx ? prev.y : q.y);
-    g.lineTo(q.x, q.y);
-    g.strokeStyle = `rgba(255,255,255,${f * a * 0.18})`;
-    g.lineWidth = Math.max(2.5, 4 * dc.z);
+    g.moveTo(x0, y0);
+    g.lineTo(x1, y1);
+    g.strokeStyle = glow;
+    g.lineWidth = Math.max(3, 4 * dc.z);
     g.stroke();
-    g.strokeStyle = `rgba(255,255,255,${f * a})`;
+    g.strokeStyle = grad;
     g.lineWidth = 1;
     g.stroke();
-    prev = q;
-  }
+  };
+  g.save();
+  g.lineCap = 'square';
+  const x0 = r.x + 0.5, y0 = r.y + 0.5, x1 = r.x + r.w - 0.5, y1 = r.y + r.h - 0.5;
+  edge(x0, y0, x1, y0);
+  edge(x1, y0, x1, y1);
+  edge(x0, y1, x1, y1);
+  edge(x0, y0, x0, y1);
   g.restore();
 }
 // a white rule that fades out at both ends; lit, a faint band around it
