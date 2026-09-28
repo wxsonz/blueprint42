@@ -1017,8 +1017,12 @@ questions. Newest last.
   background is that boot screen, animated:
   - Black space with a blue fog in the middle: two tiny value-noise
     textures (96×60) scaled up and drifting against each other.
-  - Six dark glass cubes tumbling, drawn at an eighth of the resolution
-    so they come out soft.
+  - Six glass cubes tumbling, sharp (author: not low-res, and fake the
+    reflection). Faces are sorted back to front. Far faces are barely
+    there; near faces get a dark glass gradient lit by where they point
+    and a reflection band (soft, with a sharp core) whose place follows
+    the face's angle, so it slides as the cube turns. Edges are bright in
+    front and faint behind.
   - Four coloured lights (red, green, violet, blue) sweeping through in
     3D, each with a glowing head and a hairline trail drawn at full
     resolution.
