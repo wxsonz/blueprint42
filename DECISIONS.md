@@ -1383,3 +1383,7 @@ questions. Newest last.
   base's mark). Remove an id when its polish pass is done.
 - Leopard and the "Just for fun" skins (Amp, Blueprint, Factory,
   Synthwave) are marked in progress too.
+- The stdin / args / -D labels used the pane title bar's text colours
+  (`--head-fg`), pale in skins whose title bars are dark (Seven, XP…), but
+  they sit on the pane's body: they use `--fg` / `--fg-dim` now. Checked in
+  all 33 skins (contrast 3.3:1 at the lowest, Game Boy's hint line).
