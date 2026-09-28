@@ -13,7 +13,7 @@ html[data-skin='seven'] {
   --run: #2f9e44;
   --wait: #c77c02;
   /* Aero glass: a streak, a shine on the top half, a blue tint; the wallpaper shows through */
-  --aero: linear-gradient(112deg, transparent 0 16%, rgba(255,255,255,0.16) 16% 19%, transparent 19% 21%, rgba(255,255,255,0.1) 21% 22%, transparent 22% 55%, rgba(255,255,255,0.13) 55% 60%, transparent 60%), linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0.14) 48%, rgba(255,255,255,0.04) 52%, rgba(255,255,255,0.1)), rgba(96,150,215,0.42);
+  --aero: linear-gradient(61deg, transparent 0 14%, rgba(255,255,255,0.14) 17%, rgba(255,255,255,0.16) 20%, transparent 24% 46%, rgba(255,255,255,0.1) 49%, transparent 52% 60%, rgba(255,255,255,0.15) 64%, rgba(255,255,255,0.13) 69%, transparent 73%), linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0.14) 48%, rgba(255,255,255,0.04) 52%, rgba(255,255,255,0.1)), rgba(53,133,212,0.45);
   --bar-bg: var(--aero);
   --bar-fg: #000000;
   --bar-border: 1px solid #4a6c94;

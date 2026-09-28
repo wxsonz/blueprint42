@@ -841,3 +841,13 @@ questions. Newest last.
   - Measured A/B against the strokes and per-window fills: 9.0 against
     9.7 ms a frame, within noise, so it's no slower. The shadow is now
     real and soft instead of a 4 px line, at the same cost.
+- **Decision (author, with a Windows 7 screenshot: the reflection runs
+  the other way, and softly):**
+  - The baked streaks now run from top-left down to bottom-right (about
+    0.55 across per 1 down), wider and blurred when baked, so the soft
+    edges cost nothing per frame.
+  - The CSS glass on the top bar and playbar uses the same angle (61deg)
+    with soft stops.
+  - The caption glow is a pre-blurred white pill stretched behind the
+    title, as Aero's is, instead of a hard white text outline. It's one
+    image draw.

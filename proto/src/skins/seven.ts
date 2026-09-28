@@ -48,21 +48,40 @@ function aeroBake(active: boolean) {
     paint(g: CanvasRenderingContext2D, W: number, H: number) {
       g.fillStyle = active ? 'rgba(53,133,212,0.52)' : 'rgba(150,176,208,0.5)';
       g.fillRect(0, 0, W, H);
-      g.fillStyle = active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.13)';
-      const lean = H * 0.8;
+      // the streaks run from top-left down to bottom-right (about 0.55
+      // across per 1 down), soft-edged: blurred here, once, not per frame
+      g.save();
+      g.filter = `blur(${Math.round(7 * (g.getTransform().a || 1))}px)`;
+      g.fillStyle = active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.15)';
+      const lean = H * 0.55;
       g.beginPath();
-      for (let x = -40, k = 0; x < W + lean; k++) {
-        const w = 8 + 34 * hash(k * 7 + 1);
+      for (let x = -lean - 40, k = 0; x < W + 40; k++) {
+        const w = 14 + 46 * hash(k * 7 + 1);
         g.moveTo(x, 0);
         g.lineTo(x + w, 0);
-        g.lineTo(x + w - lean, H);
-        g.lineTo(x - lean, H);
+        g.lineTo(x + w + lean, H);
+        g.lineTo(x + lean, H);
         g.closePath();
-        x += w + 30 + 170 * hash(k * 13 + 5);
+        x += w + 36 + 150 * hash(k * 13 + 5);
       }
       g.fill();
+      g.restore();
     },
   };
+}
+// the caption glow texture: a white pill, blurred once
+let glowTex: HTMLCanvasElement | null = null;
+function captionGlow(): HTMLCanvasElement {
+  if (glowTex) return glowTex;
+  const c = document.createElement('canvas');
+  c.width = 160;
+  c.height = 48;
+  const cg = c.getContext('2d')!;
+  cg.filter = 'blur(7px)';
+  rrect(cg, 18, 14, 124, 20, 10);
+  cg.fillStyle = 'rgba(255,255,255,0.95)';
+  cg.fill();
+  return (glowTex = c);
 }
 const AERO_ACTIVE = aeroBake(true);
 const AERO_INACTIVE = aeroBake(false);
@@ -190,12 +209,10 @@ export const sevenTheme: Theme = {
       g.textAlign = 'left';
       g.textBaseline = 'middle';
       // dark text on a soft white glow, as Aero draws captions over glass
-      g.save();
-      g.strokeStyle = 'rgba(255,255,255,0.8)';
-      g.lineWidth = Math.max(2, 5 * dc.z);
-      g.lineJoin = 'round';
-      g.strokeText(t, r.x + 4 * dc.z, r.y + r.h / 2);
-      g.restore();
+      // Aero's caption glow is a soft white cloud behind the text (a
+      // stretched bitmap in the theme): a pre-blurred pill, stretched
+      const tw = g.measureText(t).width;
+      g.drawImage(captionGlow(), r.x + 4 * dc.z - 10 * dc.z, r.y + r.h * 0.02, tw + 20 * dc.z, r.h * 0.96);
       g.fillStyle = active ? '#000000' : '#3a3f46';
       g.fillText(t, r.x + 4 * dc.z, r.y + r.h / 2);
     },
