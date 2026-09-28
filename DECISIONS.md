@@ -1261,3 +1261,11 @@ questions. Newest last.
   with a pale rim along its single edge. Painted once per size into the
   backdrop, at the screen's sharpness. Static until the author settles how
   it should move.
+- The Möbius strip moves: it keeps turning (tilt and heading drift) and
+  spinning (the band rolls along itself, so the twist travels), and frames
+  itself on every repaint to the rule of thirds: scaled to bleed past the
+  top and bottom, centred on the left third line, drifting slowly between
+  the upper and lower thirds, the right two thirds left open (as the PS4
+  wallpaper leaves room for its logo). Stateless in time; painted at half
+  size with a 1.4 px blur (which also hides the shading steps between its
+  quads) at most 24 times a second, over the cached sky.

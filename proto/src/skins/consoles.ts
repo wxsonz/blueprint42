@@ -1385,87 +1385,120 @@ const ps4P: Palette = {
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
 // The background's Möbius strip: the real surface (a band that turns half
-// over as it goes round), tilted, in perspective, far bigger than the
-// screen so only its sweep shows. Quads are painted far to near, each an
-// opaque shade of the blue between darker and lighter by how it faces the
-// light (the strip has one side, so it's |facing|), on a canvas of its own
-// that is then laid over the sky see-through; a pale rim runs along its
-// edge. Static for now: it is drawn once per size, into the backdrop.
-function ps4Mobius(g: CanvasRenderingContext2D, W: number, H: number): void {
-  const k = g.getTransform().a || 1; // at the screen's sharpness
-  const c = document.createElement('canvas');
-  c.width = Math.round(W * k);
-  c.height = Math.round(H * k);
-  const m = c.getContext('2d')!;
-  m.scale(k, k);
-  const R = 1;
-  const HW = 0.5; // the band's half-width, in R
-  const NU = 220;
-  const NV = 10;
-  // the view: tilted back, turned, off to one side
-  const ax = 0.95, ay = 0.55, az = -0.35;
-  const rot = ([x, y, z]: number[]) => {
-    let y1 = y * Math.cos(ax) - z * Math.sin(ax);
-    let z1 = y * Math.sin(ax) + z * Math.cos(ax);
-    const x2 = x * Math.cos(ay) + z1 * Math.sin(ay);
-    z1 = -x * Math.sin(ay) + z1 * Math.cos(ay);
-    const x3 = x2 * Math.cos(az) - y1 * Math.sin(az);
-    y1 = x2 * Math.sin(az) + y1 * Math.cos(az);
-    return [x3, y1, z1];
-  };
-  const S = Math.max(W, H) * 0.5;
-  const cx = W * 0.58;
-  const cy = H * 0.6;
-  const F = 4.5;
-  const at = (u: number, v: number) => {
-    const p = rot([(R + v * Math.cos(u / 2)) * Math.cos(u), (R + v * Math.cos(u / 2)) * Math.sin(u), v * Math.sin(u / 2)]);
-    const f = F / (F + p[2]);
-    return { x: cx + p[0] * S * f, y: cy + p[1] * S * f, z: p[2], p };
-  };
-  const quads: { pts: { x: number; y: number }[]; z: number; b: number }[] = [];
-  const L = [-0.35, -0.6, 0.72];
-  for (let i = 0; i < NU; i++) {
-    const u0 = (i / NU) * Math.PI * 2;
-    const u1 = ((i + 1) / NU) * Math.PI * 2;
-    for (let j = 0; j < NV; j++) {
-      const v0 = -HW + (2 * HW * j) / NV;
-      const v1 = -HW + (2 * HW * (j + 1)) / NV;
-      const a = at(u0, v0), b = at(u1, v0), cc = at(u1, v1), d = at(u0, v1);
-      const e1 = [b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]];
-      const e2 = [d.p[0] - a.p[0], d.p[1] - a.p[1], d.p[2] - a.p[2]];
-      const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-      const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-      const face = Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl);
-      quads.push({ pts: [a, b, cc, d], z: (a.z + b.z + cc.z + d.z) / 4, b: face });
+// over as it goes round), in perspective, shaded only in darker and lighter
+// blues by how each part faces the light (|facing|: it has one side), with
+// a pale rim along its single edge. It moves: it keeps turning (its tilt
+// and heading drift) and spinning (the band rolls along itself, so the twist
+// travels), and it frames itself each time to the rule of thirds: scaled so
+// it bleeds past the top and bottom, centred on the left third line and
+// drifting slowly between the upper and lower thirds, leaving the right two
+// thirds open. Stateless in time. It's soft, so it's painted at half size,
+// blurred a touch, at most 24 times a second, and laid over the sky.
+let ps4Mob: HTMLCanvasElement | null = null;
+let ps4MobSoft: HTMLCanvasElement | null = null;
+let ps4MobKey = '';
+let ps4MobT = -1;
+function ps4Mobius(dc: Dc): void {
+  const g = dc.g;
+  const W = dc.vw;
+  const H = dc.vh;
+  const t = ps2Still || !dc.time ? 40 : dc.time;
+  const RS = 0.5;
+  const w = Math.ceil(W * RS);
+  const h = Math.ceil(H * RS);
+  const key = `${w}x${h}`;
+  if (key !== ps4MobKey || Math.abs(t - ps4MobT) >= 1 / 24) {
+    ps4MobKey = key;
+    ps4MobT = t;
+    ps4Mob ??= document.createElement('canvas');
+    ps4MobSoft ??= document.createElement('canvas');
+    for (const c of [ps4Mob, ps4MobSoft]) if (c.width !== w || c.height !== h) (c.width = w), (c.height = h);
+    const m = ps4Mob.getContext('2d')!;
+    m.clearRect(0, 0, w, h);
+    const HW = 0.5; // the band's half-width, the loop's radius being 1
+    const NU = 120;
+    const NV = 7;
+    const spin = t * 0.045;
+    const ax = 0.95 + 0.25 * Math.sin(t * 0.031);
+    const ay = 0.55 + 0.35 * Math.sin(t * 0.023 + 1);
+    const az = -0.35 + t * 0.012;
+    const [cxa, sxa, cya, sya, cza, sza] = [Math.cos(ax), Math.sin(ax), Math.cos(ay), Math.sin(ay), Math.cos(az), Math.sin(az)];
+    const F = 4.5;
+    // the surface in view space, projected at unit scale about the origin
+    const at = (u: number, v: number) => {
+      const r = 1 + v * Math.cos(u / 2);
+      const x = r * Math.cos(u + spin), y = r * Math.sin(u + spin), z = v * Math.sin(u / 2);
+      let y1 = y * cxa - z * sxa;
+      let z1 = y * sxa + z * cxa;
+      const x2 = x * cya + z1 * sya;
+      z1 = -x * sya + z1 * cya;
+      const x3 = x2 * cza - y1 * sza;
+      y1 = x2 * sza + y1 * cza;
+      const f = F / (F + z1);
+      return { x: x3 * f, y: y1 * f, z: z1, p: [x3, y1, z1] };
+    };
+    const grid: ReturnType<typeof at>[][] = [];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i <= NU; i++) {
+      const row: ReturnType<typeof at>[] = [];
+      for (let j = 0; j <= NV; j++) {
+        const q = at((i / NU) * Math.PI * 2, -HW + (2 * HW * j) / NV);
+        row.push(q);
+        x0 = Math.min(x0, q.x), x1 = Math.max(x1, q.x), y0 = Math.min(y0, q.y), y1 = Math.max(y1, q.y);
+      }
+      grid.push(row);
     }
-  }
-  quads.sort((p, q) => q.z - p.z);
-  const dark = [2, 16, 100];
-  const lite = [90, 150, 255];
-  for (const q of quads) {
-    const f = q.b ** 1.2;
-    const col = dark.map((d, i) => Math.round(d + (lite[i] - d) * f)).join(',');
-    m.fillStyle = m.strokeStyle = `rgb(${col})`;
+    // framing: bleed past the top and bottom, on the left third line
+    const S = Math.min((1.25 * h) / (y1 - y0), (1.1 * w) / (x1 - x0));
+    const ox = w / 3 - ((x0 + x1) / 2) * S;
+    const oy = h * (0.5 + (1 / 6) * Math.sin(t * 0.018)) - ((y0 + y1) / 2) * S;
+    const X = (q: { x: number }) => ox + q.x * S;
+    const Y = (q: { y: number }) => oy + q.y * S;
+    const L = [-0.35, -0.6, 0.72];
+    const quads: { q: ReturnType<typeof at>[]; z: number; b: number }[] = [];
+    for (let i = 0; i < NU; i++)
+      for (let j = 0; j < NV; j++) {
+        const a = grid[i][j], b = grid[i + 1][j], c = grid[i + 1][j + 1], d = grid[i][j + 1];
+        const e1 = [b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]];
+        const e2 = [d.p[0] - a.p[0], d.p[1] - a.p[1], d.p[2] - a.p[2]];
+        const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+        quads.push({ q: [a, b, c, d], z: (a.z + b.z + c.z + d.z) / 4, b: Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl) });
+      }
+    quads.sort((p, q) => q.z - p.z);
+    const dark = [2, 16, 100];
+    const lite = [90, 150, 255];
     m.lineWidth = 1;
+    for (const { q, b } of quads) {
+      const f = b ** 1.2;
+      m.fillStyle = m.strokeStyle = `rgb(${dark.map((d, i) => Math.round(d + (lite[i] - d) * f)).join(',')})`;
+      m.beginPath();
+      m.moveTo(X(q[0]), Y(q[0]));
+      for (let k = 1; k < 4; k++) m.lineTo(X(q[k]), Y(q[k]));
+      m.closePath();
+      m.fill();
+      m.stroke();
+    }
+    // the rim along its one edge: twice round
+    m.strokeStyle = 'rgba(160,200,255,0.55)';
+    m.lineWidth = 0.75;
     m.beginPath();
-    q.pts.forEach((p, i) => (i ? m.lineTo(p.x, p.y) : m.moveTo(p.x, p.y)));
-    m.closePath();
-    m.fill();
+    for (let i = 0; i <= NU * 2; i++) {
+      const q = at((i / NU) * Math.PI * 2, HW);
+      if (i) m.lineTo(X(q), Y(q));
+      else m.moveTo(X(q), Y(q));
+    }
     m.stroke();
+    const sg = ps4MobSoft.getContext('2d')!;
+    sg.clearRect(0, 0, w, h);
+    sg.filter = 'blur(1.4px)';
+    sg.drawImage(ps4Mob, 0, 0);
+    sg.filter = 'none';
   }
-  // the rim: a pale line along the edge (one edge: it's a Möbius strip)
-  m.strokeStyle = 'rgba(150,195,255,0.5)';
-  m.lineWidth = 1;
-  m.beginPath();
-  for (let i = 0; i <= NU * 2; i++) {
-    const p = at((i / NU) * Math.PI * 2, HW);
-    if (i) m.lineTo(p.x, p.y);
-    else m.moveTo(p.x, p.y);
-  }
-  m.stroke();
   g.save();
   g.globalAlpha = 0.7;
-  g.drawImage(c, 0, 0, W, H);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(ps4MobSoft!, 0, 0, w, h, 0, 0, W, H);
   g.restore();
 }
 export const ps4Theme: Theme = {
@@ -1512,9 +1545,9 @@ export const ps4Theme: Theme = {
       sky.addColorStop(1, '#041f8c');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      // a Möbius strip, huge and tilted, in shades of the blue only
-      ps4Mobius(g, W, H);
     });
+    // a Möbius strip, in shades of the blue only, turning and spinning
+    ps4Mobius(dc);
   },
   window: {
     border: 0, corner: 0, titleH: 28, face: 'rgba(3,30,76,0.8)', workspace: 'rgba(255,255,255,0.05)',
