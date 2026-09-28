@@ -2054,6 +2054,7 @@ export const ps3 = makeSkin(ps3Theme);
   ps3.busy = () => ps3Now().busy;
 }
 export const ps4 = makeSkin(ps4Theme);
+ps4.fullBleed = true; // the sky and its ribbons behind the whole page, as the PS3's
 export const ps5 = makeSkin(ps5Theme);
 export const wii = { ...makeSkin(wiiTheme), mode: 'light' as const };
 export const wiiDark = { ...makeSkin(wiiOf(true)), variantOf: 'wii', mode: 'dark' as const };

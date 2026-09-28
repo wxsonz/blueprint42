@@ -1298,3 +1298,5 @@ questions. Newest last.
   lighter and darker sky); half size, soft strands blurred, bright edges
   sharp, at most 24 times a second. Cheaper than the Möbius (~2.7 ms
   headless against ~4.7).
+- The PS4 is full-bleed too: its sky and ribbons are the whole page's
+  background, one canvas behind every panel, the grid clear over it.
