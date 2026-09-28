@@ -1281,3 +1281,9 @@ questions. Newest last.
   keeping with the skin's plainness. Stateless: symbols spawn at a fill's
   head on a fixed tick (some ticks skipped, so they come in bursts), so each
   one's place and age follow from the time.
+- The PS4's sky follows its welcome screen instead of the flat royal blue:
+  azure (#0a5fae) at the top, bright royal blue through the middle, sinking
+  to near-black navy (#010a2e) at the bottom, a soft glow in the middle. The
+  Möbius strip is now grey laid over it in soft-light, so it is literally
+  lighter and darker sky; the grid's pane is see-through so the sky shows
+  untinted.

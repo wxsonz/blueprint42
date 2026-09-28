@@ -3,7 +3,7 @@ html[data-skin='ps4'] {
   --font-ui: 'Source Sans 3', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 14px;
-  --bg: #0638c4;
+  --bg: #0538bc;
   --fg: #ffffff;
   --fg-dim: #c6d6ff;
   --accent: #5fb1ff;
@@ -115,8 +115,8 @@ html[data-skin='ps4'] {
    pale hairline under the header and over the button guide, content on
    lighter see-through blue with thin pale edges, focus a white border */
 html[data-skin='ps4'] body { background:
-  linear-gradient(115deg, transparent 22%, rgba(90,160,255,0.12) 27%, transparent 34%),
-  linear-gradient(135deg, #0c4ad8, #0638c4 50%, #041f8c); }
+  radial-gradient(ellipse 50% 45% at 50% 40%, rgba(20,80,235,0.28), transparent 70%),
+  linear-gradient(174deg, #0a5fae, #0746c4 35%, #0538bc 55%, #031a78 82%, #010a2e); }
 html[data-skin='ps4'] #app, html[data-skin='ps4'] #panes, html[data-skin='ps4'] #top, html[data-skin='ps4'] #playbar, html[data-skin='ps4'] #status { background: transparent; border: none; box-shadow: none; }
 html[data-skin='ps4'] #top { border-bottom: 1px solid rgba(130,175,255,0.6); }
 html[data-skin='ps4'] #playbar { border-top: 1px solid rgba(130,175,255,0.6); }
@@ -159,3 +159,5 @@ html[data-skin='ps4'] #feed .kf .data { grid-column: 2 / -1; grid-row: 2; font: 
 html[data-skin='ps4'] #feed .kf .data b { color: #c4c4ca; font-weight: 400; }
 /* the value in flight: the input field, as on the grid */
 html[data-skin='ps4'] #duel .chip { background: #03052a; color: #ffffff; border-radius: 0; box-shadow: inset 0 0 0 1px #dfe8ff; font-weight: 400; }
+/* the grid shows the sky as it is: no tint over it */
+html[data-skin='ps4'] #grid-pane, html[data-skin='ps4'] #grid-wrap { background: transparent; }

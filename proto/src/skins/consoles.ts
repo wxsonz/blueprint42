@@ -1380,7 +1380,7 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
 // lighter see-through blue cards with thin pale edges; fields dark navy
 // with a white edge; focus a crisp white border; SST at light weights.
 const ps4P: Palette = {
-  bg: '#0638c4', card: 'rgba(80,140,255,0.24)', panel: 'rgba(80,140,255,0.18)', line: 'rgba(150,190,255,0.5)',
+  bg: '#0538bc', card: 'rgba(80,140,255,0.24)', panel: 'rgba(80,140,255,0.18)', line: 'rgba(150,190,255,0.5)',
   fg: '#ffffff', dim: '#c6d6ff', faint: '#8aa6e8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
   param: '#cfe0ff', cell: 'rgba(255,255,255,0.12)', track: 'rgba(0,12,70,0.35)',
 };
@@ -1466,8 +1466,9 @@ function ps4Mobius(dc: Dc): void {
         quads.push({ q: [a, b, c, d], z: (a.z + b.z + c.z + d.z) / 4, b: Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl) });
       }
     quads.sort((p, q) => q.z - p.z);
-    const dark = [2, 16, 100];
-    const lite = [90, 150, 255];
+    // grey, laid over the sky in soft light: only darker and lighter sky
+    const dark = [70, 70, 70];
+    const lite = [215, 215, 215];
     m.lineWidth = 1;
     for (const { q, b } of quads) {
       const f = b ** 1.2;
@@ -1480,7 +1481,7 @@ function ps4Mobius(dc: Dc): void {
       m.stroke();
     }
     // the rim along its one edge: twice round
-    m.strokeStyle = 'rgba(160,200,255,0.55)';
+    m.strokeStyle = 'rgba(255,255,255,0.8)';
     m.lineWidth = 0.75;
     m.beginPath();
     for (let i = 0; i <= NU * 2; i++) {
@@ -1496,7 +1497,7 @@ function ps4Mobius(dc: Dc): void {
     sg.filter = 'none';
   }
   g.save();
-  g.globalAlpha = 0.7;
+  g.globalCompositeOperation = 'soft-light';
   g.imageSmoothingEnabled = true;
   g.drawImage(ps4MobSoft!, 0, 0, w, h, 0, 0, W, H);
   g.restore();
@@ -1639,12 +1640,21 @@ export const ps4Theme: Theme = {
     text(dc, head, title, SST, 12, live ? '#ffffff' : '#c6d6ff', { w: 400, x: head.x + 8 * dc.z });
   },
   background(dc) {
-    backdrop(dc, 'ps4-royal', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, W, H);
-      sky.addColorStop(0, '#0c4ad8');
-      sky.addColorStop(0.5, '#0638c4');
-      sky.addColorStop(1, '#041f8c');
+    backdrop(dc, 'ps4-welcome', (g, W, H) => {
+      // the welcome screen: azure at the top, bright royal blue through the
+      // middle, sinking to near-black navy at the bottom
+      const sky = g.createLinearGradient(0, 0, W * 0.12, H);
+      sky.addColorStop(0, '#0a5fae');
+      sky.addColorStop(0.35, '#0746c4');
+      sky.addColorStop(0.55, '#0538bc');
+      sky.addColorStop(0.82, '#031a78');
+      sky.addColorStop(1, '#010a2e');
       g.fillStyle = sky;
+      g.fillRect(0, 0, W, H);
+      const glow = g.createRadialGradient(W * 0.5, H * 0.4, 0, W * 0.5, H * 0.4, Math.max(W, H) * 0.5);
+      glow.addColorStop(0, 'rgba(20,80,235,0.28)');
+      glow.addColorStop(1, 'rgba(20,80,235,0)');
+      g.fillStyle = glow;
       g.fillRect(0, 0, W, H);
     });
     // a Möbius strip, in shades of the blue only, turning and spinning
