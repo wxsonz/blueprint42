@@ -787,3 +787,13 @@ questions. Newest last.
     opens scrolled to the current skin's group.
   - `test/skins.test.ts` checks that every base skin is in exactly one
     group and that no light/dark twin is listed.
+- **Decision (author: the Game Boy skin list is far bigger than
+  others'):**
+  - The picker read in the active skin's UI font, and Press Start 2P is
+    about twice as wide as a normal font. It now uses `--label-font` /
+    `--label-scale`, as the overlays do: Amp and Game Boy get VT323,
+    the rest keep their UI font.
+  - Line height divides out the label scale, since VT323's glyphs are
+    short.
+  - The open list's height went from 1577 to 1232 px in Game Boy and Amp,
+    against about 1090 px in the other skins.
