@@ -981,3 +981,5 @@ questions. Newest last.
   into each element's own gradient (`background-blend-mode: overlay`),
   plus the BIOS tiles, which are dithered once when cached. Text,
   editor and flat panels stay clean.
+- **Decision (author: the play light is backwards):** It shows the
+  state, not the icon: red while paused, green while playing.
