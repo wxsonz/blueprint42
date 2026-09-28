@@ -84,17 +84,27 @@ export const xpTheme: Theme = {
     border: 4,
     corner: 8,
     squareBottom: true,
+    flushTitle: true,
     titleH: 24,
     face: FACE,
     workspace: '#7a9bd9',
+    // the title bar is the top of the frame; the same blue runs down both
+    // sides and along the bottom, lighter inside, darker at the outer edge
     frame(dc, r, active, client) {
       const g = dc.g;
       const b = Math.max(1, 4 * dc.z);
+      const th = 24 * dc.z;
       rrect(g, r.x, r.y, r.w, r.h, [Math.max(2, 8 * dc.z), Math.max(2, 8 * dc.z), 0, 0]);
-      g.fillStyle = active ? '#0831d9' : '#7a96df';
+      g.fillStyle = active ? '#0843d5' : '#7b97e0';
       g.fill();
+      g.strokeStyle = active ? '#00138c' : '#6a7fc8';
+      g.lineWidth = 1;
+      g.stroke();
+      // a lighter inner line where the frame meets the client
+      g.fillStyle = active ? '#166aee' : '#94acea';
+      g.fillRect(r.x + b - 1, r.y + th, r.w - 2 * b + 2, r.h - th - b + 1);
       g.fillStyle = client;
-      g.fillRect(r.x + b, r.y + b, r.w - 2 * b, r.h - 2 * b);
+      g.fillRect(r.x + b, r.y + th, r.w - 2 * b, Math.max(0, r.h - th - b));
     },
     titleBar(dc, r, title, active, buttons) {
       const g = dc.g;

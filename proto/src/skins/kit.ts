@@ -53,6 +53,7 @@ export interface WindowStyle {
   border: number; // frame thickness, px at zoom 1
   corner: number; // window corner radius, px at zoom 1
   squareBottom?: boolean; // rounded only at the top (XP)
+  flushTitle?: boolean; // the title bar is the top edge itself (XP): the frame runs down the sides and along the bottom
   titleH: number; // title bar height, px at zoom 1
   face: string; // a machine's client area
   workspace: string; // a file's client area (behind its machines)
@@ -173,7 +174,7 @@ export function makeSkin(t: Theme): Skin {
         if (w.head.h <= 0) return;
         const th = Math.max(8, Math.min(w.head.h - b, W.titleH * dc.z));
         const note = w.note ? ` - ${w.note[0].toUpperCase()}${w.note.slice(1)}` : '';
-        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, `${w.name}${note}${w.pinned ? ' (pinned)' : ''}`, active, true);
+        W.titleBar(dc, titleRect(r, b, th, W), `${w.name}${note}${w.pinned ? ' (pinned)' : ''}`, active, true);
         return;
       }
       t.card(dc, r, { fill: 'transparent', stroke: w.live ? p.accent : p.line, lw: 1.2, glow: w.live ? p.accent : null, kind: 'wall' });
@@ -199,7 +200,9 @@ export function makeSkin(t: Theme): Skin {
         const b = Math.max(1, W.border * dc.z);
         const c = W.corner * dc.z;
         g.save();
-        rrect(g, r.x + b, r.y + b, r.w - 2 * b, Math.min(r.h - 2 * b, W.titleH * dc.z), [Math.max(0, c - b), Math.max(0, c - b), 0, 0]);
+        const tr = titleRect(r, b, Math.min(r.h - 2 * b, W.titleH * dc.z), W);
+        const tc = W.flushTitle ? c : Math.max(0, c - b);
+        rrect(g, tr.x, tr.y, tr.w, tr.h, [tc, tc, 0, 0]);
         g.fillStyle = p.accent;
         g.globalAlpha = 0.35 * a;
         g.fill();
@@ -247,7 +250,7 @@ export function makeSkin(t: Theme): Skin {
         const b = Math.max(1, W.border * dc.z);
         W.frame(dc, r, active, W.face);
         const th = Math.max(8, W.titleH * dc.z);
-        W.titleBar(dc, { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th }, n.stale ? `${n.name} (Not Responding)` : n.name, active, true);
+        W.titleBar(dc, titleRect(r, b, th, W), n.stale ? `${n.name} (Not Responding)` : n.name, active, true);
         const pad = px(dc, 8, 3);
         let cy = r.y + b + th + px(dc, 7);
         const status = n.stale ? 'Not responding' : n.state === 'running' ? 'Running…' : n.state === 'waiting' ? `Waiting for ${n.waitingOn ?? '…'}` : n.state === 'error' ? 'Stopped working' : 'Ready';
@@ -483,6 +486,11 @@ export function makeSkin(t: Theme): Skin {
     },
   };
   return skin;
+}
+
+// Where a window's title bar goes: inside the frame, or (XP) as the frame's top edge.
+function titleRect(r: Rect, b: number, th: number, W: WindowStyle): Rect {
+  return W.flushTitle ? { x: r.x, y: r.y, w: r.w, h: th } : { x: r.x + b, y: r.y + b, w: r.w - 2 * b, h: th };
 }
 
 // How many calls a trunk carries, on its middle leg.
