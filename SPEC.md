@@ -48,8 +48,9 @@ These decide arguments. If a feature conflicts with one of them, the principle w
 | linked list | **train** of linked cars | libft bonus, push_swap if list-based |
 | stack (push_swap A/B) | **vertical stack** strip | |
 
-Later (not in first milestones): pipes/processes (pipex, minitalk), threads
-and mutexes (Codexion: shared chests with a lock).
+Later (not in first milestones): threads and mutexes (Codexion: shared
+chests with a lock). The current Common Core (see `DECISIONS.md`,
+2026-09-28) has no pipex or minitalk.
 
 The words above (machine, belt, chest…) are the metaphor, not a look. How
 each is drawn is up to the active **skin** (see `DECISIONS.md`).
@@ -246,11 +247,14 @@ saving puts the page back to what's on disk.
 ### Later / parking lot
 - Shareable static exports (blueprint plus recorded timeline) for campus and
   peer evaluations. No server needed to view them.
-- pipex/minitalk (processes and pipes), Codexion (threads, shared chests with
-  locks).
+- The rest of the C in the current Common Core: ft_printf (variadic
+  arguments), push_swap (stacks A/B), and Codexion (POSIX threads and
+  mutexes: shared chests with locks).
 - Side-by-side comparison of two implementations of the same project (e.g.
   GNL v1 vs v3) sharing one input.
-- Python Common Core modules.
+- Python: most of the Common Core after rank 01 is Python (Modules 00–10,
+  A-Maze-ing, Fly-in, Call Me Maybe, Pac-Man, RAG, Agent Smith). That
+  needs a Python engine (parser and tracer) next to the C one.
 
 ## 5. Out of scope (for now)
 
