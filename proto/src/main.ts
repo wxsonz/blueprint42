@@ -1734,7 +1734,13 @@ function renderTints(): void {
       void getComputedStyle(document.documentElement).getPropertyValue('--xmb-mid'); // settle before transitions return
       root.removeProperty('transition');
     }
-    box.querySelectorAll<HTMLElement>('button').forEach((b) => b.setAttribute('aria-checked', `${b.dataset.id === id}`));
+    // each drop's place from the right: the current one first, then the rest in order
+    let k = 1;
+    box.querySelectorAll<HTMLElement>('button').forEach((b) => {
+      const on = b.dataset.id === id;
+      b.setAttribute('aria-checked', `${on}`);
+      b.style.setProperty('--i', `${on ? 0 : k++}`);
+    });
   };
   box.innerHTML = `<span class="row">${sk.tints.map((t) => `<button role="radio" data-id="${esc(t.id)}" title="${esc(t.name)}" style="--c:${esc(t.colour)}"></button>`).join('')}</span>`;
   box.onclick = (e) => {
@@ -1744,6 +1750,7 @@ function renderTints(): void {
     set(b.dataset.id!, false);
     renderDock(); // its icons take the new colour
   };
+  box.style.setProperty('--n', `${sk.tints.length}`);
   box.hidden = false;
   set(cur, true);
 }

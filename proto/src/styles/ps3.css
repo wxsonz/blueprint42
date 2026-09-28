@@ -195,15 +195,23 @@ html[data-skin='ps3'] .tints button { width: 14px; height: 14px; border-radius: 
   background: radial-gradient(ellipse 70% 45% at 50% 25%, rgba(255,255,255,0.7), rgba(255,255,255,0) 70%), var(--c);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), 0 1px 3px rgba(0,20,60,0.5); }
 html[data-skin='ps3'] .tints button:hover { transform: scale(1.2); }
-/* folded to the current colour; the rest slide out while pointed at */
-html[data-skin='ps3'] .tints { gap: 0; position: relative; width: 19px; height: 20px; }
+/* folded to the current colour. Pointed at, the strip widens (linearly,
+   0.3 s) and each drop fades in as the edge passes its place; leaving, the
+   far ones fade first as the strip closes over them. --i is a drop's place
+   from the right (the current one is 0), --n how many there are. */
+html[data-skin='ps3'] .tints { --d: 0.3s; position: relative; width: 19px; height: 20px; }
 html[data-skin='ps3'] .tints:hover, html[data-skin='ps3'] .tints:focus-within { z-index: 30; }
-html[data-skin='ps3'] .tints::before { content: ''; position: absolute; inset: -4px -4px; border-radius: 12px; transition: background 0.2s; pointer-events: none; }
-html[data-skin='ps3'] .tints button { margin: 0 2.5px; transition: width 0.25s ease-out, margin 0.25s ease-out, opacity 0.2s, transform 0.15s; }
-html[data-skin='ps3'] .tints:not(:hover):not(:focus-within) button:not([aria-checked='true']) { width: 0; margin: 0; opacity: 0; }
-/* open, it lies over the clock, on a frosted strip */
-html[data-skin='ps3'] .tints > .row { position: absolute; right: 0; top: 0; height: 20px; display: flex; align-items: center; flex-direction: row-reverse; padding: 0 2px; border-radius: 10px; transition: background 0.2s, box-shadow 0.2s; }
-html[data-skin='ps3'] .tints:hover > .row, html[data-skin='ps3'] .tints:focus-within > .row { background: color-mix(in srgb, var(--xmb-deep) 80%, transparent); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+html[data-skin='ps3'] .tints > .row { position: absolute; right: -2px; top: 0; height: 20px; width: 23px; padding: 0 2px; box-sizing: border-box; overflow: hidden;
+  display: flex; align-items: center; flex-direction: row-reverse; border-radius: 10px; background: transparent; box-shadow: none;
+  transition: width var(--d) linear, background 0.15s var(--d), box-shadow 0.15s var(--d); }
+html[data-skin='ps3'] .tints:hover > .row, html[data-skin='ps3'] .tints:focus-within > .row { width: calc(var(--n) * 19px + 4px);
+  background: color-mix(in srgb, var(--xmb-deep) 80%, transparent); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
+  transition: width var(--d) linear, background 0.12s, box-shadow 0.12s; }
+html[data-skin='ps3'] .tints button { flex: none; margin: 0 2.5px; order: var(--i); opacity: 0;
+  transition: opacity 0.12s calc((var(--n) - var(--i) - 1) * var(--d) / var(--n)), transform 0.15s; }
+html[data-skin='ps3'] .tints:hover button, html[data-skin='ps3'] .tints:focus-within button { opacity: 1;
+  transition: opacity 0.12s calc((var(--i) - 0.5) * var(--d) / var(--n)), transform 0.15s; }
+html[data-skin='ps3'] .tints button[aria-checked='true'] { opacity: 1; }
 html[data-skin='ps3'] .tints button[aria-checked='true'] { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6), 0 0 0 2px #ffffff, 0 0 8px rgba(255,255,255,0.7); }
 /* the grid is the page: its pane is see-through, the XMB behind all of it */
 html[data-skin='ps3'] #grid-pane, html[data-skin='ps3'] #grid-wrap { background: transparent; }
