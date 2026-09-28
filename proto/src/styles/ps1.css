@@ -111,3 +111,8 @@ html[data-skin='ps1'] {
   --syn-punct: #9aa3b4;
 }
 html[data-skin='ps1'] #playbar .lcd, html[data-skin='ps1'] #top .btn { box-shadow: inset 1px 1px 0 rgba(255,255,255,0.5); }
+
+/* the BIOS menu's sphere behind the chrome too */
+html[data-skin='ps1'] body { background: radial-gradient(circle at 44% 40%, #b9a8ff 0, #6a54d6 12%, #2a2390 30%, #120f45 42%, transparent 43%), radial-gradient(circle at 50% 50%, rgba(90,70,200,0.25), transparent 65%), #05050b; }
+html[data-skin='ps1'] #app, html[data-skin='ps1'] #panes { background: transparent; }
+html[data-skin='ps1'] .pane { box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }

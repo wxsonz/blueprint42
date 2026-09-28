@@ -896,3 +896,21 @@ questions. Newest last.
       corners; the white focus ring standing off the card;
     - the chrome: "Games · Media"-style text tabs (light, the active one
       bold) and the clock top-right.
+- **Console skins, part 2:**
+  - **PS3:** the XMB. Its backdrop colour follows the date, walking from
+    this month's colour toward next month's, as the console's shader does
+    (faquino/PlayStation-3-XMB's reverse-engineering notes: September is
+    magenta, October amber). The clock sets `--xmb` so the canvas and the
+    chrome agree. Items have no window chrome: soft dark panels, white
+    rounded Rodin-style type (M PLUS Rounded 1c), the soft white
+    highlight band on the active one, the date and time top-right.
+  - **PS1:** the BIOS menu's big glowing purple-blue sphere (Drew1440's
+    BIOS walkthrough) replaces the scattered △○✕□. They stay on the
+    windows' buttons.
+  - **PS2:** the chrome sits on the boot towers' blue haze, and the
+    selection glows cyan.
+  - **GameCube:** the IPL is black with a violet haze and one large
+    translucent cube; the panes are glassy purple with lavender edges.
+  - **N64, SNES and GBA** had no system UI to reference, so they stay
+    hardware-inspired: plastics, button colours, the screen bezel, the
+    N64 logo colours.

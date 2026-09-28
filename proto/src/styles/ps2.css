@@ -110,3 +110,9 @@ html[data-skin='ps2'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* the browser: black with the blue haze of the boot towers; selections glow */
+html[data-skin='ps2'] body { background: radial-gradient(ellipse 90% 45% at 50% 64%, rgba(60,130,255,0.28), transparent 70%), linear-gradient(#000105, #061536 64%, #010308); }
+html[data-skin='ps2'] #app, html[data-skin='ps2'] #panes, html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar, html[data-skin='ps2'] #status { background: transparent; }
+html[data-skin='ps2'] .pane { background: rgba(6,13,30,0.86); box-shadow: 0 0 0 1px rgba(79,179,255,0.25), 0 0 24px rgba(40,110,255,0.12); }
+html[data-skin='ps2'] .seg button[aria-pressed='true'] { text-shadow: 0 0 8px #4fb3ff; box-shadow: inset 0 -2px 0 #4fb3ff; }

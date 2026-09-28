@@ -1,8 +1,8 @@
 /* PlayStation 3 — generated from a short spec (see DECISIONS.md); edit freely. */
 html[data-skin='ps3'] {
-  --font-ui: 'Open Sans', 'DejaVu Sans', sans-serif;
+  --font-ui: 'M PLUS Rounded 1c', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
-  --ui-size: 13px;
+  --ui-size: 13.5px;
   --bg: #061a4f;
   --fg: #ffffff;
   --fg-dim: #b8c6e6;
@@ -12,34 +12,34 @@ html[data-skin='ps3'] {
   --warn: #ffd76b;
   --run: #8ff0a4;
   --wait: #ffd76b;
-  --bar-bg: linear-gradient(90deg, #0e3aa0, #082a78 60%, #041a52);
+  --bar-bg: transparent;
   --bar-fg: #ffffff;
   --bar-border: none;
-  --brand-font: 300 17px 'Open Sans', 'DejaVu Sans', sans-serif;
+  --brand-font: 400 16px 'M PLUS Rounded 1c', sans-serif;
   --logo: #ffffff;
   --btn-bg: transparent;
-  --btn-bg-hover: rgba(255,255,255,0.12);
+  --btn-bg-hover: rgba(255,255,255,0.14);
   --btn-fg: #ffffff;
-  --btn-border: 1px solid rgba(255,255,255,0.35);
+  --btn-border: 1px solid transparent;
   --btn-radius: 3px;
-  --btn-bg-on: rgba(255,255,255,0.9);
-  --btn-fg-on: #082a78;
+  --btn-bg-on: rgba(255,255,255,0.18);
+  --btn-fg-on: #ffffff;
   --btn-shadow-on: none;
   --primary-bg: #8fd3ff;
   --primary-fg: #082a78;
   --sw-off: #777777;
   --sw-on: #8fd3ff;
   --sw-knob: #ffffff;
-  --panes-bg: linear-gradient(135deg, #0e3aa0, #041a52);
-  --pane-bg: rgba(2,10,34,0.88);
-  --pane-border: rgba(255,255,255,0.22);
-  --pane-radius: 4px;
+  --panes-bg: transparent;
+  --pane-bg: rgba(0,0,0,0.3);
+  --pane-border: transparent;
+  --pane-radius: 6px;
   --head-h: 34px;
-  --head-bg: linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0));
+  --head-bg: transparent;
   --head-fg: #b8c6e6;
   --head-fg-active: #ffffff;
-  --head-font: 300 14px 'Open Sans', 'DejaVu Sans', sans-serif;
-  --panel-bg: rgba(4,14,44,0.96);
+  --head-font: 400 14px 'M PLUS Rounded 1c', sans-serif;
+  --panel-bg: rgba(0,0,0,0.72);
   --panel-fg: #ffffff;
   --panel-dim: #b8c6e6;
   --panel-border: 1px solid rgba(255,255,255,0.35);
@@ -54,7 +54,7 @@ html[data-skin='ps3'] {
   --field-border: 1px solid rgba(255,255,255,0.25);
   --field-radius: 4px;
   --rule: 1px solid rgba(255,255,255,0.12);
-  --pb-bg: rgba(2,10,34,0.9);
+  --pb-bg: transparent;
   --pb-border: 1px solid rgba(255,255,255,0.18);
   --lcd-bg: transparent;
   --lcd-fg: #ffffff;
@@ -64,7 +64,7 @@ html[data-skin='ps3'] {
   --lcd-fn: #8fd3ff;
   --lcd-ptr: #ffb86b;
   --lcd-ret: #8ff0a4;
-  --tl-bg: rgba(0,0,0,0.35);
+  --tl-bg: rgba(0,0,0,0.25);
   --tl-border: none;
   --tl-call: #8fd3ff;
   --tl-ret: #8ff0a4;
@@ -73,7 +73,7 @@ html[data-skin='ps3'] {
   --tl-eval: #333333;
   --tl-err: #ff7a7a;
   --tl-head: #ffffff;
-  --st-bg: #020a22;
+  --st-bg: rgba(0,0,0,0.3);
   --st-fg: #b8c6e6;
   --st-border: none;
   --st-font: 12px 'Open Sans', 'DejaVu Sans', sans-serif;
@@ -84,7 +84,7 @@ html[data-skin='ps3'] {
   --menu-hover-bg: #8fd3ff;
   --menu-hover-fg: #082a78;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: #030c2a;
+  --ed-bg: rgba(0,0,0,0.42);
   --ed-fg: #ffffff;
   --ed-font: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
@@ -110,3 +110,17 @@ html[data-skin='ps3'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* the XMB: the date's colour (--xmb, set by the clock, walking toward next month's) with the wave over it;
+   the chrome is white text on nothing, the active item glows */
+html[data-skin='ps3'] body { background:
+  repeating-linear-gradient(170deg, transparent 0 7px, rgba(255,255,255,0.05) 7px 8px) 0 55% / 100% 22% no-repeat,
+  radial-gradient(ellipse 90% 18% at 50% 58%, rgba(255,255,255,0.14), transparent 70%),
+  linear-gradient(color-mix(in srgb, var(--xmb, #2f7fd0) 72%, white), var(--xmb, #2f7fd0) 45%, color-mix(in srgb, var(--xmb, #2f7fd0) 38%, black)); }
+html[data-skin='ps3'] #app, html[data-skin='ps3'] #panes, html[data-skin='ps3'] #top, html[data-skin='ps3'] #playbar, html[data-skin='ps3'] #status { background: transparent; border: none; box-shadow: none; }
+html[data-skin='ps3'] .btn, html[data-skin='ps3'] .seg button { color: rgba(255,255,255,0.8); }
+html[data-skin='ps3'] .seg button[aria-pressed='true'] { color: #ffffff; background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.06)); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
+html[data-skin='ps3'] #top .sysclock { display: inline-flex; align-items: baseline; gap: 0; font: 300 15px 'M PLUS Rounded 1c', sans-serif; color: #ffffff; text-shadow: 0 0 6px rgba(0,0,0,0.3); }
+html[data-skin='ps3'] #top .sysclock i { font-size: 1em; margin-left: 0.25em; }
+html[data-skin='ps3'] .pane.focused { box-shadow: 0 0 0 1px rgba(255,255,255,0.55), 0 0 18px rgba(255,255,255,0.25); }
+html[data-skin='ps3'] #top .sysclock s { order: -1; margin-right: 10px; }

@@ -9,13 +9,13 @@ import { fitText, hash, rrect } from './util';
 const F = (family: string) => (px: number, w = 400) => `${w} ${px}px ${family}`;
 const RUBIK = F('Rubik, "Open Sans", sans-serif');
 const EXO = F('"Exo 2", "Open Sans", sans-serif');
-const OPEN = F('"Open Sans", "DejaVu Sans", sans-serif');
 const NUNITO = F('Nunito, "Open Sans", sans-serif');
 const JOST = F('Jost, "Open Sans", sans-serif');
 const CHAKRA = F('"Chakra Petch", "Open Sans", sans-serif');
 const PIXEL = F('"Pixelify Sans", "Open Sans", sans-serif');
 const RODIN = F('"M PLUS 1p", "Open Sans", sans-serif'); // the Wii's FOT-Rodin
 const SST = F('"Source Sans 3", "Open Sans", sans-serif'); // PlayStation's SST
+const RODIN_R = F('"M PLUS Rounded 1c", "Open Sans", sans-serif'); // the PS3's SCE Rodin
 const MONO = (family: string) => (px: number, w = 400) => `${w >= 600 ? 700 : 400} ${px}px ${family}, "DejaVu Sans Mono", monospace`;
 
 const nameHash = (s: string) => hash(s.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 9973);
@@ -138,26 +138,32 @@ const ps1P: Palette = {
   param: '#2f6fd6', cell: '#d2dcf0', track: '#ffffff',
 };
 export const ps1Theme: Theme = {
-  id: 'ps1', name: 'PlayStation', blurb: 'grey plastic, the black boot screen, △○✕□',
+  id: 'ps1', name: 'PlayStation', blurb: 'the BIOS menu: the purple sphere, grey memory-card panels, △○✕□',
   p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,8,0.62)',
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),
   background(dc) {
+    // the BIOS menu: a big glowing purple-blue sphere behind everything, on near-black
     backdrop(dc, 'ps1', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#050509');
-      sky.addColorStop(1, '#131a3c');
-      g.fillStyle = sky;
+      g.fillStyle = '#05050b';
       g.fillRect(0, 0, W, H);
-      const kinds = Object.keys(PS_SYM) as (keyof typeof PS_SYM)[];
-      g.lineWidth = 3;
-      for (let k = 0; k < 16; k++) {
-        const kind = kinds[k % 4];
-        g.strokeStyle = PS_SYM[kind];
-        g.globalAlpha = 0.07 + (k % 3) * 0.03;
-        psSymbol(g, kind, W * hash(k * 7 + 1), H * hash(k * 13 + 5), 26 + 70 * hash(k * 3 + 2));
-      }
-      g.globalAlpha = 1;
+      const cx = W * 0.5;
+      const cy = H * 0.52;
+      const R = Math.min(W, H) * 0.46;
+      const halo = g.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 1.5);
+      halo.addColorStop(0, 'rgba(90,70,200,0.25)');
+      halo.addColorStop(1, 'rgba(90,70,200,0)');
+      g.fillStyle = halo;
+      g.fillRect(0, 0, W, H);
+      const ball = g.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R);
+      ball.addColorStop(0, '#b9a8ff');
+      ball.addColorStop(0.25, '#6a54d6');
+      ball.addColorStop(0.7, '#2a2390');
+      ball.addColorStop(1, '#120f45');
+      g.fillStyle = ball;
+      g.beginPath();
+      g.arc(cx, cy, R, 0, Math.PI * 2);
+      g.fill();
     });
   },
   window: {
@@ -278,38 +284,72 @@ export const ps2Theme: Theme = {
   },
 };
 
+// PS3, the XrossMediaBar: the backdrop's colour follows the month (walking
+// from one month's colour to the next, as the console does), a ribbon of
+// thin light waves across it, items with no window chrome at all: white
+// rounded Rodin type on soft dark panels, the selected one on a soft white
+// highlight band.
+export const XMB_MONTHS = ['#b8bcc4', '#c9a634', '#69a83a', '#e083b0', '#2f9e4e', '#8a5cc2', '#23a4a8', '#2f7fd0', '#b0409f', '#e39a22', '#8a5a34', '#c22e2e'];
+function mix(hex: string, to: number, f: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number) => Math.round(v + (to - v) * f);
+  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+export function xmbColour(d = new Date()): { top: string; mid: string; bot: string } {
+  const m = d.getMonth();
+  const days = new Date(d.getFullYear(), m + 1, 0).getDate();
+  const f = (d.getDate() - 1) / days; // part of the way to next month's colour
+  const a = parseInt(XMB_MONTHS[m].slice(1), 16);
+  const b = parseInt(XMB_MONTHS[(m + 1) % 12].slice(1), 16);
+  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - f) + ((b >> sh) & 255) * f);
+  const hex = `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+  return { top: mix(hex, 255, 0.28), mid: hex, bot: mix(hex, 0, 0.62) };
+}
 const ps3P: Palette = {
-  bg: '#061a4f', card: 'rgba(12,22,50,0.92)', panel: 'rgba(6,14,36,0.9)', line: 'rgba(255,255,255,0.3)',
-  fg: '#ffffff', dim: '#b8c6e6', faint: '#7488b4', accent: '#8fd3ff', ptr: '#ffb86b', ret: '#8ff0a4', wait: '#ffd76b', err: '#ff7a7a',
-  param: '#bfe3ff', cell: 'rgba(143,211,255,0.2)', track: 'rgba(0,0,0,0.35)',
+  bg: '#2f7fd0', card: 'rgba(0,0,0,0.3)', panel: 'rgba(0,0,0,0.42)', line: 'rgba(255,255,255,0.22)',
+  fg: '#ffffff', dim: 'rgba(255,255,255,0.72)', faint: 'rgba(255,255,255,0.45)', accent: '#ffffff', ptr: '#ffe08a', ret: '#b8ffb0', wait: '#ffe08a', err: '#ff9a9a',
+  param: '#e6f2ff', cell: 'rgba(255,255,255,0.16)', track: 'rgba(0,0,0,0.3)',
 };
 export const ps3Theme: Theme = {
-  id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB: a flowing wave over blue, thin white type',
-  p: ps3P, ui: OPEN, mono: MONO('"JetBrains Mono"'), radius: 4, spotlight: 'rgba(0,6,24,0.55)',
-  pulseColor: 'rgba(255,255,255,0.9)',
-  card: cardOf(4, 'rgba(255,255,255,0.85)'),
-  // the wave: bundles of thin light curves drifting across a blue gradient
+  id: 'ps3', name: 'PlayStation 3', blurb: "the XMB: this month's colour, the wave, white type on nothing",
+  p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 6, spotlight: 'rgba(0,0,0,0.45)',
+  pulseColor: 'rgba(255,255,255,0.95)',
+  card(dc, r, o) {
+    const g = dc.g;
+    rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 6 * dc.z));
+    if (o.fill !== 'transparent') {
+      g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.12)' : o.kind === 'frame' || o.kind === 'plate' ? ps3P.panel : ps3P.card;
+      g.fill();
+    }
+    if (o.glow) {
+      g.strokeStyle = 'rgba(255,255,255,0.85)';
+      g.lineWidth = Math.max(1.5, 2 * dc.z);
+      g.stroke();
+    }
+  },
   background(dc) {
-    backdrop(dc, 'ps3', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, W * 0.3, H);
-      sky.addColorStop(0, '#0e3aa0');
-      sky.addColorStop(0.55, '#082a78');
-      sky.addColorStop(1, '#020c2c');
+    const c = xmbColour();
+    backdrop(dc, `ps3-${c.mid}`, (g, W, H) => {
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, c.top);
+      sky.addColorStop(0.45, c.mid);
+      sky.addColorStop(1, c.bot);
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      const band = g.createLinearGradient(0, H * 0.35, 0, H * 0.75);
+      // the ribbon: a bundle of thin light waves, brighter where they gather
+      const band = g.createLinearGradient(0, H * 0.4, 0, H * 0.72);
       band.addColorStop(0, 'rgba(255,255,255,0)');
-      band.addColorStop(0.5, 'rgba(160,210,255,0.12)');
+      band.addColorStop(0.5, 'rgba(255,255,255,0.1)');
       band.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = band;
-      g.fillRect(0, H * 0.35, W, H * 0.4);
-      for (let k = 0; k < 22; k++) {
-        g.strokeStyle = `rgba(255,255,255,${0.05 + 0.18 * hash(k * 7 + 3)})`;
-        g.lineWidth = 0.6 + 1.6 * hash(k * 11 + 1);
+      g.fillRect(0, H * 0.4, W, H * 0.32);
+      for (let k = 0; k < 26; k++) {
+        g.strokeStyle = `rgba(255,255,255,${0.05 + 0.2 * hash(k * 7 + 3)})`;
+        g.lineWidth = 0.6 + 1.4 * hash(k * 11 + 1);
         g.beginPath();
-        for (let x = -10; x <= W + 10; x += 12) {
+        for (let x = -10; x <= W + 10; x += 10) {
           const u = x / W;
-          const y = H * 0.55 + Math.sin(u * Math.PI * 2 * 0.9 + k * 0.18) * H * (0.07 + k * 0.004) + Math.sin(u * Math.PI * 5 + k * 0.4) * H * 0.02;
+          const y = H * 0.56 + Math.sin(u * Math.PI * 2 * 0.85 + k * 0.16) * H * (0.06 + k * 0.0035) + Math.sin(u * Math.PI * 4.5 + k * 0.35) * H * 0.018;
           if (x < 0) g.moveTo(x, y);
           else g.lineTo(x, y);
         }
@@ -318,34 +358,29 @@ export const ps3Theme: Theme = {
     });
   },
   window: {
-    border: 1, corner: 4, titleH: 26, face: 'rgba(4,12,34,0.86)', workspace: 'rgba(255,255,255,0.04)',
+    border: 0, corner: 6, titleH: 28, face: 'rgba(0,0,0,0.32)', workspace: 'rgba(0,0,0,0.08)',
     frame(dc, r, active, face) {
       const g = dc.g;
-      const rad = Math.max(1, 4 * dc.z);
-      rrect(g, r.x, r.y, r.w, r.h, rad);
-      g.fillStyle = 'rgba(0,0,0,0.5)';
+      rrect(g, r.x, r.y, r.w, r.h, Math.max(2, 6 * dc.z));
+      g.fillStyle = face;
       g.fill();
-      g.strokeStyle = active ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.18)';
-      g.lineWidth = 1;
-      g.stroke();
-      client(dc, r, 1, 26 * dc.z, face, Math.max(1, 3 * dc.z));
     },
     titleBar(dc, r, title, active) {
       const g = dc.g;
       if (active) {
-        // the XMB's highlight band behind the selected item
+        // the XMB's highlight: a soft white band behind the selected item
         const hl = g.createLinearGradient(r.x, 0, r.x + r.w, 0);
-        hl.addColorStop(0, 'rgba(255,255,255,0)');
-        hl.addColorStop(0.3, 'rgba(255,255,255,0.22)');
+        hl.addColorStop(0, 'rgba(255,255,255,0.32)');
+        hl.addColorStop(0.55, 'rgba(255,255,255,0.12)');
         hl.addColorStop(1, 'rgba(255,255,255,0)');
         g.fillStyle = hl;
-        g.fillRect(r.x, r.y + r.h * 0.15, r.w, r.h * 0.7);
+        g.fillRect(r.x, r.y + r.h * 0.12, r.w, r.h * 0.76);
       }
-      text(dc, r, title, OPEN, 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.6)', { w: 300, halo: active ? 'rgba(160,210,255,0.35)' : undefined });
+      text(dc, r, title, RODIN_R, active ? 15 : 13.5, active ? '#ffffff' : 'rgba(255,255,255,0.72)', { w: 400, x: r.x + 10 * dc.z, halo: active ? 'rgba(255,255,255,0.22)' : undefined });
     },
     progress(dc, r, fill, anim) {
       const g = dc.g;
-      g.fillStyle = 'rgba(255,255,255,0.25)';
+      g.fillStyle = 'rgba(255,255,255,0.28)';
       g.fillRect(r.x, r.y + r.h / 2 - 0.5, r.w, 1);
       const x = anim ? r.x + r.w * ((dc.time * 0.4) % 1) : r.x + r.w * fill;
       g.fillStyle = '#ffffff';
@@ -655,35 +690,38 @@ const gcP: Palette = {
   param: '#c9bfff', cell: '#3a2d8f', track: '#140b40',
 };
 export const gamecubeTheme: Theme = {
-  id: 'gamecube', name: 'GameCube', blurb: 'indigo, glassy cubes, lilac light',
+  id: 'gamecube', name: 'GameCube', blurb: 'the IPL menu: black, the violet cube, glassy purple panels',
   p: gcP, ui: JOST, mono: MONO('"JetBrains Mono"'), radius: 8, spotlight: 'rgba(8,2,30,0.58)',
   pulseColor: 'rgba(163,147,255,0.9)',
   card: cardOf(8, '#a393ff'),
   background(dc) {
+    // the IPL menu: black, a violet haze, the translucent cube floating in it
     backdrop(dc, 'gamecube', (g, W, H) => {
-      const sky = g.createRadialGradient(W * 0.5, H * 0.4, 0, W * 0.5, H * 0.4, Math.max(W, H) * 0.8);
-      sky.addColorStop(0, '#4a37b0');
-      sky.addColorStop(1, '#0e0636');
-      g.fillStyle = sky;
+      g.fillStyle = '#030208';
       g.fillRect(0, 0, W, H);
-      // faint isometric cubes, three shades of lilac
-      for (let k = 0; k < 14; k++) {
-        const x = W * hash(k * 13 + 4);
-        const y = H * hash(k * 31 + 8);
-        const s = 18 + 50 * hash(k * 7 + 2);
-        const a = 0.05 + 0.05 * hash(k);
-        const face = (pts: number[][], alpha: number) => {
-          g.beginPath();
-          g.moveTo(pts[0][0], pts[0][1]);
-          for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
-          g.closePath();
-          g.fillStyle = `rgba(200,190,255,${alpha})`;
-          g.fill();
-        };
-        face([[x, y - s], [x + s, y - s / 2], [x, y], [x - s, y - s / 2]], a * 1.6);
-        face([[x - s, y - s / 2], [x, y], [x, y + s], [x - s, y + s / 2]], a);
-        face([[x + s, y - s / 2], [x, y], [x, y + s], [x + s, y + s / 2]], a * 0.6);
-      }
+      const haze = g.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.6);
+      haze.addColorStop(0, 'rgba(92,64,200,0.45)');
+      haze.addColorStop(0.5, 'rgba(50,30,120,0.18)');
+      haze.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = haze;
+      g.fillRect(0, 0, W, H);
+      const x = W * 0.5;
+      const y = H * 0.5;
+      const s = Math.min(W, H) * 0.3;
+      const face = (pts: number[][], fill: string) => {
+        g.beginPath();
+        g.moveTo(pts[0][0], pts[0][1]);
+        for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
+        g.closePath();
+        g.fillStyle = fill;
+        g.fill();
+        g.strokeStyle = 'rgba(190,170,255,0.25)';
+        g.lineWidth = 1.5;
+        g.stroke();
+      };
+      face([[x, y - s], [x + s, y - s / 2], [x, y], [x - s, y - s / 2]], 'rgba(170,150,255,0.14)');
+      face([[x - s, y - s / 2], [x, y], [x, y + s], [x - s, y + s / 2]], 'rgba(120,90,230,0.1)');
+      face([[x + s, y - s / 2], [x, y], [x, y + s], [x + s, y + s / 2]], 'rgba(80,50,190,0.08)');
     });
   },
   window: {
