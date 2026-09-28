@@ -49,6 +49,7 @@ export interface Theme {
   // (body and titled head); without it, the kit's plain card and caption
   panel?(dc: Dc, r: Rect, head: Rect, title: string, live: boolean): void;
   trail?(dc: Dc, pts: Pt[], kind: 'arg' | 'ret'): void; // Skin.trail
+  flow?: string; // data in motion (live belts, argument plates) when it isn't the accent
   // desktop themes: machines and files are windows
   window?: WindowStyle;
 }
@@ -115,10 +116,11 @@ export function makeSkin(t: Theme): Skin {
       const g = dc.g;
       g.lineCap = t.pixel ? 'square' : 'round';
       g.lineJoin = t.pixel ? 'miter' : 'round';
-      const col = o.live ? p.accent : o.hovered || o.selected ? p.dim : p.faint;
+      const flow = t.flow ?? p.accent;
+      const col = o.live ? flow : o.hovered || o.selected ? p.dim : p.faint;
       if (o.selected) strokeLine(g, pts, px(dc, 8, 5), p.faint);
       strokeLine(g, pts, px(dc, 2, 1.4), col);
-      if (o.live) strokeLine(g, pts, px(dc, 2.6, 1.8), p.accent, [px(dc, 4), px(dc, 9)], -dc.time * 40 * dc.z * o.dir);
+      if (o.live) strokeLine(g, pts, px(dc, 2.6, 1.8), flow, [px(dc, 4), px(dc, 9)], -dc.time * 40 * dc.z * o.dir);
       const w = new Walk(pts);
       const end = w.at(w.length);
       arrowHead(g, end.x, end.y, end.dx, end.dy, px(dc, 7, 5), col);
@@ -402,7 +404,7 @@ export function makeSkin(t: Theme): Skin {
       g.font = t.mono(fs, 700);
       const h = fs + px(dc, 8, 4);
       const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8));
-      const col = kind === 'ptr' ? p.ptr : kind === 'ret' ? p.ret : kind === 'void' ? p.faint : p.accent;
+      const col = kind === 'ptr' ? p.ptr : kind === 'ret' ? p.ret : kind === 'void' ? p.faint : t.flow ?? p.accent;
       t.card(dc, snapR({ x: x - w / 2, y: y - h / 2, w, h }), { fill: p.panel, stroke: col, lw: 1.3, glow: kind === 'void' ? null : col, kind: 'plate' });
       g.fillStyle = kind === 'void' ? p.dim : p.fg;
       g.textAlign = 'center';

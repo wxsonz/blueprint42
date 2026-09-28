@@ -1087,3 +1087,19 @@ questions. Newest last.
     windows and cards, anchored to each surface so it moves with it;
   - in the chrome, a faint SVG `feTurbulence` layer on the bars, pane
     heads, buttons, status line, duel, return card and inspector.
+- **Decision (author: grain too fine and brightens everything; focus
+  should be the lights flashing, not an outline; bring back a blue
+  light; data logistics can be blue; no glowing borders):**
+  - Grain: coarse 2 px specks, mostly dark pits (canvas tile, and a
+    black-only SVG noise in the chrome), so it textures without
+    lightening.
+  - Focus: windows lose the bright corner outline. The front-bay lights
+    carry it. Idle is a dim red standby light. On becoming active, power
+    (green) and eject (blue, glowing) flash quickly for about 0.7 s, then
+    stay lit.
+  - The play button carries a small blue light while playing.
+  - New kit option `Theme.flow`: the colour of data in motion (live
+    belts, their arrows, argument plates), falling back to the accent.
+    The PS2 sets it, its pulses and its argument trails to its blue.
+  - PS2 cards draw no glowing borders: a hairline, and plates keep their
+    colour.
