@@ -1237,3 +1237,12 @@ questions. Newest last.
   window is resized, and softer, like the console's. The blur is cheap at
   that size; high-quality smoothing on the upscale was tried and tripled
   the cost, so the upscale is the default bilinear.
+
+## 2026-10-02: PS4 takes the PS3's window frame
+
+- Files and machines have no pane: a faint outline (brighter when active)
+  and the title over a thin white rule; their storage, stations and
+  function box sit on the background, the function box alone a panel. The
+  PS4 keeps its own touch: on the active window the rule is the console's
+  light bar, glowing blue. The translucent title strip, drop shadow and
+  thick white focus border are gone.

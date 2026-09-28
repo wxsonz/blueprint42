@@ -1430,32 +1430,35 @@ export const ps4Theme: Theme = {
   },
   window: {
     border: 0, corner: 0, titleH: 28, face: 'rgba(3,30,76,0.8)', workspace: 'rgba(255,255,255,0.05)',
-    frame(dc, r, active, face) {
+    // as the PS3's: files and machines have no pane, only a faint outline,
+    // so their storage, stations and function box sit on the background;
+    // the function box alone is a panel
+    frame(dc, r, active, _face, kind) {
       const g = dc.g;
-      softShadow(dc, r, 1, 10, 'rgba(0,15,50,0.45)', 3 * dc.z);
-      g.fillStyle = face;
-      g.fillRect(r.x, r.y, r.w, r.h);
-      // the title strip: translucent white, as under a focused tile
-      g.fillStyle = active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)';
-      g.fillRect(r.x, r.y, r.w, 28 * dc.z);
-      // the console's light bar, under the title strip: blue while it works
+      if (kind === 'node') {
+        g.fillStyle = ps4P.card;
+        g.fillRect(r.x, r.y, r.w, r.h);
+        return;
+      }
+      g.lineWidth = 1;
+      g.strokeStyle = `rgba(255,255,255,${active ? 0.3 : 0.1})`;
+      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    },
+    // the title over a thin white rule; on the active window the rule is
+    // the console's light bar, glowing blue
+    titleBar(dc, r, title, active) {
+      const g = dc.g;
+      text(dc, r, title, SST, 14, active ? '#ffffff' : '#cfe0f5', { w: active ? 400 : 300, x: r.x + 10 * dc.z });
+      const y = r.y + r.h - 1;
       if (active) {
         g.fillStyle = 'rgba(95,177,255,0.35)';
-        g.fillRect(r.x, r.y + 28 * dc.z - 2 * dc.z, r.w, 4 * dc.z);
+        g.fillRect(r.x, y - 1.5 * dc.z, r.w, 4 * dc.z);
         g.fillStyle = '#8fd0ff';
-        g.fillRect(r.x, r.y + 28 * dc.z - 0.75 * dc.z, r.w, Math.max(1, 1.5 * dc.z));
+        g.fillRect(r.x, y, r.w, Math.max(1, 1.5 * dc.z));
+      } else {
+        g.fillStyle = 'rgba(255,255,255,0.3)';
+        g.fillRect(r.x, y, r.w, 1);
       }
-      if (active) {
-        g.strokeStyle = 'rgba(255,255,255,0.25)';
-        g.lineWidth = Math.max(3, 8 * dc.z);
-        g.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
-        g.strokeStyle = '#ffffff';
-        g.lineWidth = Math.max(2, 3 * dc.z);
-        g.strokeRect(r.x, r.y, r.w, r.h);
-      }
-    },
-    titleBar(dc, r, title, active) {
-      text(dc, r, title, SST, 14, active ? '#ffffff' : '#cfe0f5', { w: active ? 400 : 300, x: r.x + 10 * dc.z });
     },
     progress(dc, r, fill, anim) {
       const g = dc.g;
