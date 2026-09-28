@@ -1,6 +1,6 @@
 /* Wii — generated from a short spec (see DECISIONS.md); edit freely. */
 html[data-skin='wii'] {
-  --font-ui: Nunito, 'Open Sans', sans-serif;
+  --font-ui: 'M PLUS 1p', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 13px;
   --bg: #eef1f4;
@@ -33,7 +33,7 @@ html[data-skin='wii'] {
   --panes-bg: #eef1f4;
   --pane-bg: #ffffff;
   --pane-border: #c9ced6;
-  --pane-radius: 18px;
+  --pane-radius: 16px;
   --head-h: 34px;
   --head-bg: linear-gradient(#ffffff, #eef1f5);
   --head-fg: #6f7682;
@@ -43,7 +43,7 @@ html[data-skin='wii'] {
   --panel-fg: #3c424c;
   --panel-dim: #6f7682;
   --panel-border: 2px solid #34bee8;
-  --panel-radius: 16px;
+  --panel-radius: 14px;
   --panel-shadow: 0 8px 24px rgba(0,0,0,0.18);
   --ptitle-bg: linear-gradient(#ffffff, #e2e7ee);
   --ptitle-fg: #3c424c;
@@ -110,3 +110,21 @@ html[data-skin='wii'] {
   --syn-op: #0969da;
   --syn-punct: #6e7781;
 }
+
+/* the Wii Menu: a lined light-blue desktop, channels as glossy bezels, and the
+   curved white bar along the bottom with the big grey clock in its hump */
+html[data-skin='wii'] body { background: repeating-linear-gradient(rgba(188,215,226,0.5) 0 1px, transparent 1px 5px), linear-gradient(#eef7fa, #dcecf3 50%, #c9e2ec); }
+html[data-skin='wii'] #app, html[data-skin='wii'] #panes, html[data-skin='wii'] #top { background: transparent; border: none; box-shadow: none; }
+html[data-skin='wii'] #panes { --pane-gap: 12px; --panes-pad: 6px 12px 10px; }
+html[data-skin='wii'] .pane { background: linear-gradient(#ffffff, #ffffff 60%, #f2f5f7); border: 1px solid #ccd5da; border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 3px 9px rgba(55,95,125,0.18); padding: 0 5px 5px; }
+html[data-skin='wii'] .pane.focused { box-shadow: 0 0 0 2px #8ad3ef, 0 8px 18px rgba(30,90,130,0.28); }
+html[data-skin='wii'] .pane-head { background: transparent; border: none; justify-content: center; }
+html[data-skin='wii'] .pane-body, html[data-skin='wii'] #editor { border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(30,60,80,0.1), inset 0 2px 6px rgba(0,0,0,0.1); overflow: hidden; }
+html[data-skin='wii'] #playbar { position: relative; overflow: visible; background: linear-gradient(#fbfdff, #e6eef2); border-top: 1px solid #ccd5da; box-shadow: 0 -1px 5px rgba(80,130,160,0.12); }
+html[data-skin='wii'] #playbar .sysclock { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 18px; margin: -24px 14px 0; color: #8a969c; font: 300 30px 'M PLUS 1p', sans-serif; line-height: 1; z-index: 1; }
+html[data-skin='wii'] #playbar .sysclock::before { content: ''; position: absolute; z-index: -1; left: -14px; right: -14px; top: -6px; bottom: -9px; border-radius: 50% 50% 0 0 / 34px 34px 0 0; background: linear-gradient(#fbfdff, #e6eef2); border-top: 1px solid #ccd5da; box-shadow: 0 -2px 6px rgba(80,130,160,0.12); }
+html[data-skin='wii'] #playbar .sysclock i { font-size: 13px; align-self: flex-end; margin: -30px -18px 0 0; }
+html[data-skin='wii'] #playbar .sysclock s { font-size: 12px; font-weight: 500; margin-top: 2px; }
+html[data-skin='wii'] .pb-buttons button { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(#ffffff, #ffffff 60%, #f2f5f7); border: 2px solid #ccd5da; box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 4px rgba(70,100,120,0.18); color: #8a969c; }
+html[data-skin='wii'] .pb-buttons button:hover { border-color: #35b4e5; box-shadow: 0 0 0 2px rgba(53,180,229,0.35), 0 2px 6px rgba(30,90,130,0.25); color: #189fd6; }
+html[data-skin='wii'] .pb-buttons button.primary { color: #35b4e5; }

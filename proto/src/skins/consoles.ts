@@ -2,7 +2,7 @@
 // and Game Boy Advance. Each is a theme for the kit (`makeSkin`): a
 // wallpaper drawn once per size, window chrome in the console's own style,
 // and a palette. Geometry is the engine's; only the look changes.
-import { backdrop, makeSkin, plainCard, type Palette, type Theme } from './kit';
+import { backdrop, makeSkin, plainCard, softShadow, type Palette, type Theme } from './kit';
 import type { Dc, Rect } from './types';
 import { fitText, hash, rrect } from './util';
 
@@ -14,6 +14,8 @@ const NUNITO = F('Nunito, "Open Sans", sans-serif');
 const JOST = F('Jost, "Open Sans", sans-serif');
 const CHAKRA = F('"Chakra Petch", "Open Sans", sans-serif');
 const PIXEL = F('"Pixelify Sans", "Open Sans", sans-serif');
+const RODIN = F('"M PLUS 1p", "Open Sans", sans-serif'); // the Wii's FOT-Rodin
+const SST = F('"Source Sans 3", "Open Sans", sans-serif'); // PlayStation's SST
 const MONO = (family: string) => (px: number, w = 400) => `${w >= 600 ? 700 : 400} ${px}px ${family}, "DejaVu Sans Mono", monospace`;
 
 const nameHash = (s: string) => hash(s.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 9973);
@@ -355,190 +357,292 @@ export const ps3Theme: Theme = {
   },
 };
 
+// PS4, after a recreation's measured CSS (d4v1-sudo/Ps4-UI): the bright
+// #0e6cc4 blue of the default theme with soft light waves and dust, square
+// content tiles, the focused one in a 3px white border, titles on a
+// translucent white strip (rgba(255,255,255,.2)), SST at light weights.
 const ps4P: Palette = {
-  bg: '#0b2466', card: '#123580', panel: '#0d2a6a', line: '#3d6fd0',
-  fg: '#ffffff', dim: '#b5c9f2', faint: '#6f8ccc', accent: '#5fb1ff', ptr: '#ffb454', ret: '#6ee7a8', wait: '#ffd166', err: '#ff6b6b',
-  param: '#a9d4ff', cell: '#1c4aa6', track: '#08194a',
+  bg: '#0e6cc4', card: 'rgba(4,34,84,0.55)', panel: 'rgba(3,28,70,0.72)', line: 'rgba(255,255,255,0.28)',
+  fg: '#ffffff', dim: '#cfe0f5', faint: '#8fb0d8', accent: '#ffffff', ptr: '#ffd27a', ret: '#8ef0b8', wait: '#ffd166', err: '#ff8080',
+  param: '#bfe0ff', cell: 'rgba(255,255,255,0.18)', track: 'rgba(0,20,60,0.45)',
 };
 export const ps4Theme: Theme = {
-  id: 'ps4', name: 'PlayStation 4', blurb: 'the dynamic menu: blue light, soft bokeh, flat tiles',
-  p: ps4P, ui: RUBIK, mono: MONO('"JetBrains Mono"'), radius: 2, spotlight: 'rgba(0,8,32,0.55)',
+  id: 'ps4', name: 'PlayStation 4', blurb: 'the home screen: bright blue, square tiles, a white frame on focus',
+  p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 1, spotlight: 'rgba(0,20,60,0.5)',
   pulseColor: 'rgba(255,255,255,0.9)',
-  card: cardOf(2, '#ffffff'),
+  card(dc, r, o) {
+    const g = dc.g;
+    if (o.fill !== 'transparent') {
+      g.fillStyle = o.kind === 'wall' ? 'rgba(255,255,255,0.05)' : o.kind === 'frame' || o.kind === 'plate' ? ps4P.panel : ps4P.card;
+      g.fillRect(r.x, r.y, r.w, r.h);
+    }
+    g.strokeStyle = o.glow ? '#ffffff' : 'rgba(255,255,255,0.22)';
+    g.lineWidth = o.glow ? Math.max(2, 3 * dc.z) : 1;
+    g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  },
   background(dc) {
     backdrop(dc, 'ps4', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, W, H);
-      sky.addColorStop(0, '#0a1c55');
-      sky.addColorStop(0.5, '#1447a8');
-      sky.addColorStop(1, '#081a4d');
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, '#1b86e0');
+      sky.addColorStop(0.55, '#0e6cc4');
+      sky.addColorStop(1, '#0a4e98');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      for (let k = 0; k < 34; k++) {
-        const x = W * hash(k * 19 + 2);
-        const y = H * hash(k * 23 + 9);
-        const rr = 12 + 60 * hash(k * 5 + 4);
-        const b = g.createRadialGradient(x, y, 0, x, y, rr);
-        b.addColorStop(0, `rgba(190,220,255,${0.05 + 0.08 * hash(k)})`);
-        b.addColorStop(1, 'rgba(190,220,255,0)');
-        g.fillStyle = b;
-        g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+      // soft bands of light drifting across, then specks of dust
+      for (let k = 0; k < 5; k++) {
+        const y0 = H * (0.35 + k * 0.08);
+        const band = g.createLinearGradient(0, y0 - H * 0.08, 0, y0 + H * 0.08);
+        band.addColorStop(0, 'rgba(255,255,255,0)');
+        band.addColorStop(0.5, `rgba(255,255,255,${0.05 + 0.02 * k})`);
+        band.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = band;
+        g.beginPath();
+        g.moveTo(0, y0);
+        for (let x = 0; x <= W; x += W / 30) g.lineTo(x, y0 + Math.sin((x / W) * Math.PI * 2 + k) * H * 0.05);
+        g.lineTo(W, y0 + H * 0.1);
+        g.lineTo(0, y0 + H * 0.1);
+        g.closePath();
+        g.fill();
       }
-      const streak = g.createLinearGradient(0, H * 0.2, W, H * 0.8);
-      streak.addColorStop(0.35, 'rgba(255,255,255,0)');
-      streak.addColorStop(0.5, 'rgba(255,255,255,0.07)');
-      streak.addColorStop(0.65, 'rgba(255,255,255,0)');
-      g.fillStyle = streak;
-      g.fillRect(0, 0, W, H);
+      for (let k = 0; k < 90; k++) {
+        g.fillStyle = `rgba(255,255,255,${0.15 + 0.35 * hash(k * 3 + 1)})`;
+        const s = 1 + 1.5 * hash(k * 7 + 2);
+        g.fillRect(W * hash(k * 11 + 5), H * hash(k * 17 + 3), s, s);
+      }
     });
   },
   window: {
-    border: 2, corner: 1, titleH: 26, face: '#0c2a6b', workspace: 'rgba(255,255,255,0.04)',
+    border: 0, corner: 0, titleH: 28, face: 'rgba(3,30,76,0.8)', workspace: 'rgba(255,255,255,0.05)',
     frame(dc, r, active, face) {
       const g = dc.g;
-      g.fillStyle = active ? '#1a4fb4' : '#123a8a';
+      softShadow(dc, r, 1, 10, 'rgba(0,15,50,0.45)', 3 * dc.z);
+      g.fillStyle = face;
       g.fillRect(r.x, r.y, r.w, r.h);
-      client(dc, r, Math.max(1, 2 * dc.z), 26 * dc.z, face);
+      // the title strip: translucent white, as under a focused tile
+      g.fillStyle = active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)';
+      g.fillRect(r.x, r.y, r.w, 28 * dc.z);
       if (active) {
-        // the focused tile: a white frame with a soft halo
-        g.strokeStyle = 'rgba(255,255,255,0.3)';
-        g.lineWidth = Math.max(3, 7 * dc.z);
-        g.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+        g.strokeStyle = 'rgba(255,255,255,0.25)';
+        g.lineWidth = Math.max(3, 8 * dc.z);
+        g.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
         g.strokeStyle = '#ffffff';
-        g.lineWidth = Math.max(1.5, 2.5 * dc.z);
+        g.lineWidth = Math.max(2, 3 * dc.z);
         g.strokeRect(r.x, r.y, r.w, r.h);
       }
     },
     titleBar(dc, r, title, active) {
-      text(dc, r, title, RUBIK, 13, active ? '#ffffff' : '#b5c9f2', { w: 300 });
+      text(dc, r, title, SST, 14, active ? '#ffffff' : '#cfe0f5', { w: active ? 400 : 300, x: r.x + 10 * dc.z });
     },
     progress(dc, r, fill, anim) {
-      bar(dc, r, fill, anim, '#08194a', '#5fb1ff', false);
+      const g = dc.g;
+      const h = Math.max(2, Math.min(r.h, 5 * dc.z));
+      const y = r.y + (r.h - h) / 2;
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.fillRect(r.x, y, r.w, h);
+      const x = anim ? r.x + r.w * (((dc.time * 0.5) % 1.3) - 0.3) : r.x;
+      const w = anim ? r.w * 0.3 : r.w * fill;
+      const a = Math.max(r.x, x);
+      const e = Math.min(r.x + r.w, x + w);
+      if (e > a) (g.fillStyle = '#ffffff'), g.fillRect(a, y, e - a, h);
     },
   },
 };
 
+// PS5, after its home screen (and khaledOghli/PS5_Online's measurements):
+// near-black under the selected game's art, blurred and darkened; cards with
+// 17px corners on rgba(0,0,0,.65); the focus is a white ring standing a few
+// pixels off the card; SST, light for the rest, medium for the focused.
 const ps5P: Palette = {
-  bg: '#0e0f13', card: '#24262f', panel: '#1b1d24', line: '#3a3d49',
-  fg: '#f5f6f8', dim: '#a4a8b4', faint: '#666b78', accent: '#3d8bff', ptr: '#c79bff', ret: '#4fd18b', wait: '#ffbf47', err: '#ff5c5c',
-  param: '#8fb9ff', cell: '#1f3a66', track: '#101116',
+  bg: '#0b0c10', card: 'rgba(28,29,36,0.82)', panel: 'rgba(20,21,27,0.9)', line: 'rgba(255,255,255,0.12)',
+  fg: '#f5f6f8', dim: '#a9adb8', faint: '#6b707c', accent: '#ffffff', ptr: '#c79bff', ret: '#4fd18b', wait: '#ffbf47', err: '#ff5c5c',
+  param: '#9cc2ff', cell: 'rgba(0,112,209,0.3)', track: 'rgba(255,255,255,0.06)',
 };
 export const ps5Theme: Theme = {
-  id: 'ps5', name: 'PlayStation 5', blurb: 'near-black, rounded cards, the white focus ring',
-  p: ps5P, ui: RUBIK, mono: MONO('"JetBrains Mono"'), radius: 10, spotlight: 'rgba(0,0,0,0.6)',
-  pulseColor: 'rgba(61,139,255,0.9)',
-  card: cardOf(10, '#ffffff'),
+  id: 'ps5', name: 'PlayStation 5', blurb: 'the home screen: game art behind, dark cards, the white focus ring',
+  p: ps5P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 12, spotlight: 'rgba(0,0,0,0.6)',
+  pulseColor: 'rgba(255,255,255,0.9)',
+  card(dc, r, o) {
+    const g = dc.g;
+    const rad = Math.max(2, (o.kind === 'wall' ? 17 : 12) * dc.z);
+    rrect(g, r.x, r.y, r.w, r.h, rad);
+    if (o.fill !== 'transparent') {
+      g.fillStyle = o.kind === 'wall' ? 'rgba(255,255,255,0.03)' : o.kind === 'frame' || o.kind === 'plate' ? ps5P.panel : ps5P.card;
+      g.fill();
+    }
+    if (o.glow) {
+      const k = Math.max(2, 3 * dc.z);
+      rrect(g, r.x - k, r.y - k, r.w + 2 * k, r.h + 2 * k, rad + k);
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = Math.max(1.5, 2 * dc.z);
+    } else {
+      g.strokeStyle = ps5P.line;
+      g.lineWidth = 1;
+    }
+    g.stroke();
+  },
+  // a game's key art, blurred and darkened toward the bottom
   background(dc) {
     backdrop(dc, 'ps5', (g, W, H) => {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#15171e');
-      sky.addColorStop(1, '#08090c');
-      g.fillStyle = sky;
+      g.fillStyle = '#0b0c10';
       g.fillRect(0, 0, W, H);
-      const glow = g.createRadialGradient(W * 0.8, H * 0.1, 0, W * 0.8, H * 0.1, W * 0.7);
-      glow.addColorStop(0, 'rgba(0,112,209,0.22)');
-      glow.addColorStop(1, 'rgba(0,112,209,0)');
-      g.fillStyle = glow;
+      const blob = (x: number, y: number, rr: number, c: string) => {
+        const b = g.createRadialGradient(W * x, H * y, 0, W * x, H * y, Math.max(W, H) * rr);
+        b.addColorStop(0, c);
+        b.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = b;
+        g.fillRect(0, 0, W, H);
+      };
+      blob(0.72, 0.18, 0.55, 'rgba(46,92,150,0.75)');
+      blob(0.35, 0.05, 0.45, 'rgba(150,70,60,0.45)');
+      blob(0.9, 0.55, 0.4, 'rgba(210,140,70,0.28)');
+      const shade = g.createLinearGradient(0, 0, 0, H);
+      shade.addColorStop(0, 'rgba(11,12,16,0.1)');
+      shade.addColorStop(0.55, 'rgba(11,12,16,0.55)');
+      shade.addColorStop(1, 'rgba(11,12,16,0.95)');
+      g.fillStyle = shade;
       g.fillRect(0, 0, W, H);
-      g.strokeStyle = 'rgba(255,255,255,0.035)';
-      g.lineWidth = 1;
-      for (let k = 0; k < 7; k++) {
-        g.beginPath();
-        g.moveTo(W * (0.2 + k * 0.12), 0);
-        g.lineTo(W * (0.2 + k * 0.12) - H * 0.6, H);
-        g.stroke();
-      }
     });
   },
   window: {
-    border: 0, corner: 12, titleH: 30, face: '#1b1d24', workspace: 'rgba(255,255,255,0.03)',
+    border: 0, corner: 17, titleH: 32, face: 'rgba(22,23,29,0.84)', workspace: 'rgba(255,255,255,0.03)',
     frame(dc, r, active, face) {
       const g = dc.g;
-      const rad = Math.max(3, 12 * dc.z);
+      const rad = Math.max(3, 17 * dc.z);
+      softShadow(dc, r, 17, 12, 'rgba(0,0,0,0.6)', 4 * dc.z);
       rrect(g, r.x, r.y, r.w, r.h, rad);
       g.fillStyle = face;
       g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.04)';
-      g.fillRect(r.x + rad, r.y, r.w - 2 * rad, 30 * dc.z);
       if (active) {
-        const k = Math.max(2, 4 * dc.z);
+        const k = Math.max(3, 5 * dc.z);
         rrect(g, r.x - k, r.y - k, r.w + 2 * k, r.h + 2 * k, rad + k);
         g.strokeStyle = '#ffffff';
-        g.lineWidth = Math.max(1.5, 2.5 * dc.z);
+        g.lineWidth = Math.max(2, 3 * dc.z);
         g.stroke();
       }
     },
     titleBar(dc, r, title, active) {
-      text(dc, r, title, RUBIK, 13.5, active ? '#ffffff' : '#a4a8b4', { w: 500, x: r.x + 14 * dc.z });
+      text(dc, r, title, SST, 14.5, active ? '#ffffff' : '#a9adb8', { w: active ? 600 : 300, x: r.x + 16 * dc.z });
     },
     progress(dc, r, fill, anim) {
-      bar(dc, r, fill, anim, '#2a2c35', '#3d8bff');
+      bar(dc, r, fill, anim, 'rgba(255,255,255,0.16)', '#ffffff');
     },
   },
 };
 
 // ---------------- Nintendo ----------------
 
+// The Wii Menu, after a recreation's measured tokens (zuvv/WiiMenu): a light
+// blue desktop of fine lines, channels as glossy white 4:3 bezels (14px
+// corners, #ccd5da edge) around a recessed "screen", grey #55636b labels,
+// the Wii blue #35b4e5 ring on the one you point at.
 function wiiOf(dark: boolean): Theme {
-  const WII = '#34bee8';
+  const WII = '#35b4e5';
   const p: Palette = dark ? {
-    bg: '#17191d', card: '#2a2d33', panel: '#23262b', line: '#454a52',
-    fg: '#eef1f4', dim: '#a7adb6', faint: '#6c727c', accent: WII, ptr: '#ff9f43', ret: '#5fd18b', wait: '#ffc94d', err: '#ff6464',
-    param: '#7fd6f2', cell: '#1d3f4d', track: '#1b1d21',
+    bg: '#1a2024', card: '#2b3238', panel: '#252b30', line: '#46515a',
+    fg: '#e8eef1', dim: '#a3b0b8', faint: '#6d7a83', accent: WII, ptr: '#ff9f43', ret: '#6bbf3a', wait: '#ffc94d', err: '#ff6464',
+    param: '#7fd6f2', cell: '#1d3f4d', track: '#1f2529',
   } : {
-    bg: '#eef1f4', card: '#ffffff', panel: '#f7f8fa', line: '#c9ced6',
-    fg: '#3c424c', dim: '#6f7682', faint: '#a3a9b3', accent: '#1aa3d4', ptr: '#e0782b', ret: '#2c9e5c', wait: '#d69a00', err: '#e04848',
-    param: '#1a8fbd', cell: '#d6f0fa', track: '#ffffff',
+    bg: '#dcecf3', card: '#ffffff', panel: '#f6f8f9', line: '#ccd5da',
+    fg: '#3f4a51', dim: '#6b7980', faint: '#8a969c', accent: '#189fd6', ptr: '#e0782b', ret: '#4f9e22', wait: '#d69a00', err: '#e04848',
+    param: '#0b6a9c', cell: '#d8f0fa', track: '#eef1f3',
   };
+  const bezelTop = dark ? '#3a434a' : '#ffffff';
+  const bezelBot = dark ? '#2c3439' : '#f2f5f7';
+  const edge = dark ? '#4c5861' : '#ccd5da';
   return {
-    id: dark ? 'wii-dark' : 'wii', name: 'Wii', blurb: dark ? 'the Wii Menu after dark' : 'white channels, fine lines, a soft blue glow',
-    p, ui: NUNITO, mono: MONO('"JetBrains Mono"'), radius: 12, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(210,218,228,0.6)',
-    pulseColor: 'rgba(52,190,232,0.9)',
-    card: cardOf(12, WII),
+    id: dark ? 'wii-dark' : 'wii', name: 'Wii', blurb: dark ? 'the Wii Menu after dark' : 'the Wii Menu: glossy channels on fine blue lines',
+    p, ui: RODIN, mono: MONO('"JetBrains Mono"'), radius: 10, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(200,222,232,0.6)',
+    pulseColor: 'rgba(53,180,229,0.9)',
+    card(dc, r, o) {
+      const g = dc.g;
+      const rad = Math.max(2, 9 * dc.z);
+      rrect(g, r.x, r.y, r.w, r.h, rad);
+      if (o.fill !== 'transparent') {
+        const gl = g.createLinearGradient(0, r.y, 0, r.y + r.h);
+        gl.addColorStop(0, bezelTop);
+        gl.addColorStop(1, bezelBot);
+        g.fillStyle = o.kind === 'wall' ? (dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.35)') : gl;
+        g.fill();
+      }
+      g.strokeStyle = o.glow ? WII : edge;
+      g.lineWidth = o.glow ? Math.max(1.5, 2 * dc.z) : 1;
+      g.stroke();
+    },
     background(dc) {
       backdrop(dc, dark ? 'wii-dark' : 'wii', (g, W, H) => {
-        g.fillStyle = p.bg;
+        const bg = g.createLinearGradient(0, 0, 0, H);
+        if (dark) (bg.addColorStop(0, '#20282d'), bg.addColorStop(1, '#141a1e'));
+        else (bg.addColorStop(0, '#eef7fa'), bg.addColorStop(0.5, '#dcecf3'), bg.addColorStop(1, '#c9e2ec'));
+        g.fillStyle = bg;
         g.fillRect(0, 0, W, H);
-        g.fillStyle = dark ? 'rgba(255,255,255,0.028)' : 'rgba(0,0,0,0.035)';
-        for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 1);
-        const foot = g.createLinearGradient(0, H * 0.75, 0, H);
-        foot.addColorStop(0, 'rgba(52,190,232,0)');
-        foot.addColorStop(1, dark ? 'rgba(52,190,232,0.12)' : 'rgba(52,190,232,0.16)');
-        g.fillStyle = foot;
-        g.fillRect(0, H * 0.75, W, H * 0.25);
+        // the fine horizontal lines of the Wii desktop
+        g.fillStyle = dark ? 'rgba(120,170,190,0.07)' : 'rgba(188,215,226,0.45)';
+        for (let y = 0; y < H; y += 5) g.fillRect(0, y, W, 1);
       });
     },
     window: {
-      border: 4, corner: 18, titleH: 30, face: p.card, workspace: dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.5)',
+      border: 5, corner: 14, titleH: 26, face: dark ? '#20262b' : '#fbfcfd', workspace: dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.4)',
       frame(dc, r, active, face) {
         const g = dc.g;
-        const rad = Math.max(4, 18 * dc.z);
+        const rad = Math.max(3, 14 * dc.z);
+        softShadow(dc, r, 14, 9, dark ? 'rgba(0,0,0,0.55)' : 'rgba(55,95,125,0.35)', 3 * dc.z);
+        // the glossy bezel
+        rrect(g, r.x, r.y, r.w, r.h, rad);
+        const gl = g.createLinearGradient(0, r.y, 0, r.y + r.h);
+        gl.addColorStop(0, bezelTop);
+        gl.addColorStop(0.6, dark ? '#343c42' : '#ffffff');
+        gl.addColorStop(1, bezelBot);
+        g.fillStyle = gl;
+        g.fill();
+        g.strokeStyle = edge;
+        g.lineWidth = 1;
+        g.stroke();
+        // the recessed "screen" set into it
+        const b = Math.max(2, 5 * dc.z);
+        const th = 26 * dc.z;
+        const sc = { x: r.x + b, y: r.y + th, w: r.w - 2 * b, h: Math.max(0, r.h - th - b) };
+        rrect(g, sc.x, sc.y, sc.w, sc.h, Math.max(2, 9 * dc.z));
+        g.fillStyle = face;
+        g.fill();
+        g.strokeStyle = dark ? 'rgba(0,0,0,0.35)' : 'rgba(30,60,80,0.12)';
+        g.stroke();
+        const inset = g.createLinearGradient(0, sc.y, 0, sc.y + Math.min(sc.h, 10 * dc.z));
+        inset.addColorStop(0, dark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.07)');
+        inset.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = inset;
+        g.fill();
         if (active) {
-          rrect(g, r.x - 3, r.y - 3, r.w + 6, r.h + 6, rad + 3);
-          g.strokeStyle = 'rgba(52,190,232,0.35)';
-          g.lineWidth = Math.max(3, 6 * dc.z);
+          // pointed at: the Wii-blue ring, lifted
+          rrect(g, r.x - 2, r.y - 2, r.w + 4, r.h + 4, rad + 2);
+          g.strokeStyle = dark ? WII : '#8ad3ef';
+          g.lineWidth = Math.max(2, 2.5 * dc.z);
           g.stroke();
         }
-        rrect(g, r.x, r.y, r.w, r.h, rad);
-        g.fillStyle = dark ? '#30343b' : '#f6f7f9';
-        g.fill();
-        g.strokeStyle = active ? WII : p.line;
-        g.lineWidth = Math.max(1.5, (active ? 3 : 2) * dc.z);
-        g.stroke();
-        client(dc, r, Math.max(2, 4 * dc.z), 30 * dc.z, face, Math.max(3, 12 * dc.z));
       },
       titleBar(dc, r, title, active) {
-        const g = dc.g;
-        const pill = { x: r.x + 8 * dc.z, y: r.y + 5 * dc.z, w: r.w - 16 * dc.z, h: r.h - 8 * dc.z };
-        const shine = g.createLinearGradient(0, pill.y, 0, pill.y + pill.h);
-        shine.addColorStop(0, dark ? '#454a53' : '#ffffff');
-        shine.addColorStop(1, dark ? '#353940' : '#e2e7ee');
-        rrect(g, pill.x, pill.y, pill.w, pill.h, pill.h / 2);
-        g.fillStyle = shine;
-        g.fill();
-        text(dc, pill, title, NUNITO, 12.5, active ? (dark ? '#ffffff' : '#3c424c') : p.dim, { w: 700, align: 'center' });
+        // the channel's label: grey, centred
+        text(dc, r, title, RODIN, 12.5, active ? (dark ? '#ffffff' : '#3f4a51') : dark ? '#a3b0b8' : '#55636b', { w: 700, align: 'center' });
       },
       progress(dc, r, fill, anim) {
-        bar(dc, r, fill, anim, dark ? '#1b1d21' : '#e2e7ee', WII);
+        const g = dc.g;
+        rrect(g, r.x, r.y, r.w, r.h, r.h / 2);
+        g.fillStyle = dark ? '#1b2125' : '#e3e9ed';
+        g.fill();
+        g.strokeStyle = dark ? '#3a444b' : '#ccd4d9';
+        g.lineWidth = 1;
+        g.stroke();
+        const x = anim ? r.x + r.w * (((dc.time * 0.45) % 1.3) - 0.3) : r.x;
+        const w = anim ? r.w * 0.3 : r.w * fill;
+        const a = Math.max(r.x, x);
+        const e = Math.min(r.x + r.w, x + w);
+        if (e - a < 2) return;
+        rrect(g, a, r.y + 1, e - a, r.h - 2, (r.h - 2) / 2);
+        const blue = g.createLinearGradient(0, r.y, 0, r.y + r.h);
+        blue.addColorStop(0, '#4fd0ff');
+        blue.addColorStop(0.5, WII);
+        blue.addColorStop(1, '#189fd6');
+        g.fillStyle = blue;
+        g.fill();
       },
     },
   };
@@ -681,75 +785,68 @@ export const n64Theme: Theme = {
   },
 };
 
+// The Switch HOME Menu: Basic White (#ebebeb) or Basic Black (#2d2d2d),
+// plain square-ish tiles, and the selection: an outline 5px thick, 5px out
+// from the tile, pulsing between hsl(200 100% 50%) and hsl(200 100% 80%)
+// (from Adam Argyle's measured recreation); the selected title in cyan.
 function switchOf(dark: boolean): Theme {
-  const CYAN = '#00c3e3';
   const p: Palette = dark ? {
-    bg: '#2d2d2d', card: '#3a3a3a', panel: '#333333', line: '#555555',
-    fg: '#ffffff', dim: '#b4b4b4', faint: '#7a7a7a', accent: CYAN, ptr: '#ff3c28', ret: '#4cd964', wait: '#ffcc00', err: '#ff3c28',
+    bg: '#2d2d2d', card: '#3a3a3a', panel: '#333333', line: '#4f4f4f',
+    fg: '#ffffff', dim: '#b4b4b4', faint: '#7a7a7a', accent: '#00c3e3', ptr: '#ff3c28', ret: '#4cd964', wait: '#ffcc00', err: '#ff3c28',
     param: '#7fe3f3', cell: '#1f4a54', track: '#262626',
   } : {
-    bg: '#ebebeb', card: '#ffffff', panel: '#f6f6f6', line: '#cdcdcd',
+    bg: '#ebebeb', card: '#ffffff', panel: '#f6f6f6', line: '#d6d6d6',
     fg: '#2d2d2d', dim: '#6b6b6b', faint: '#a0a0a0', accent: '#0ab0cf', ptr: '#e6321f', ret: '#1e9e45', wait: '#c98f00', err: '#e6321f',
     param: '#0a93ae', cell: '#d4f3f9', track: '#ffffff',
   };
+  const pulse = (dc: Dc) => `hsl(200 100% ${65 + 15 * Math.sin(dc.time * 3.2)}%)`;
   return {
-    id: dark ? 'switch-dark' : 'switch', name: 'Switch', blurb: dark ? 'Basic Black: dark tiles, neon red and blue' : 'Basic White: rounded tiles, the pulsing cyan focus',
-    p, ui: NUNITO, mono: MONO('"JetBrains Mono"'), radius: 8, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(200,200,200,0.6)',
-    pulseColor: 'rgba(0,195,227,0.9)',
-    card: cardOf(8, CYAN),
+    id: dark ? 'switch-dark' : 'switch', name: 'Switch', blurb: dark ? 'Basic Black: plain tiles, the pulsing blue outline' : 'Basic White: plain tiles, the pulsing blue outline',
+    p, ui: NUNITO, mono: MONO('"JetBrains Mono"'), radius: 4, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(200,200,200,0.6)',
+    pulseColor: 'rgba(0,160,255,0.9)',
+    card(dc, r, o) {
+      const g = dc.g;
+      rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 4 * dc.z));
+      if (o.fill !== 'transparent') {
+        g.fillStyle = o.kind === 'wall' ? (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)') : p.card;
+        g.fill();
+      }
+      g.strokeStyle = o.glow ? pulse(dc) : p.line;
+      g.lineWidth = o.glow ? Math.max(2, 3 * dc.z) : 1;
+      g.stroke();
+    },
     background(dc) {
       backdrop(dc, dark ? 'switch-dark' : 'switch', (g, W, H) => {
         g.fillStyle = p.bg;
         g.fillRect(0, 0, W, H);
-        // a hint of the Joy-Con: neon red down the left edge, neon blue down the right
-        const l = g.createLinearGradient(0, 0, W * 0.12, 0);
-        l.addColorStop(0, 'rgba(255,60,40,0.14)');
-        l.addColorStop(1, 'rgba(255,60,40,0)');
-        g.fillStyle = l;
-        g.fillRect(0, 0, W * 0.12, H);
-        const r = g.createLinearGradient(W, 0, W * 0.88, 0);
-        r.addColorStop(0, 'rgba(10,185,230,0.14)');
-        r.addColorStop(1, 'rgba(10,185,230,0)');
-        g.fillStyle = r;
-        g.fillRect(W * 0.88, 0, W * 0.12, H);
       });
     },
     window: {
-      border: 0, corner: 10, titleH: 30, face: p.card, workspace: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)',
+      border: 0, corner: 4, titleH: 30, face: p.card, workspace: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)',
       frame(dc, r, active, face) {
         const g = dc.g;
-        const rad = Math.max(3, 10 * dc.z);
-        rrect(g, r.x, r.y + 2, r.w, r.h, rad);
-        g.fillStyle = dark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)';
-        g.fill();
+        const rad = Math.max(1, 4 * dc.z);
+        softShadow(dc, r, 4, 6, dark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.16)', 1.5 * dc.z);
         rrect(g, r.x, r.y, r.w, r.h, rad);
         g.fillStyle = face;
         g.fill();
-        g.fillStyle = dark ? '#444444' : '#f4f4f4';
-        rrect(g, r.x, r.y, r.w, 30 * dc.z, [rad, rad, 0, 0]);
-        g.fill();
+        g.fillStyle = dark ? '#414141' : '#f4f4f4';
+        g.fillRect(r.x, r.y + 30 * dc.z - 1, r.w, 1);
         if (active) {
-          // the focus outline breathes, cyan into blue
-          const k = Math.max(2, 4 * dc.z);
-          const a = 0.65 + 0.35 * Math.sin(dc.time * 4);
-          rrect(g, r.x - k, r.y - k, r.w + 2 * k, r.h + 2 * k, rad + k);
-          g.strokeStyle = `rgba(0,195,227,${a})`;
-          g.lineWidth = Math.max(2, 3.5 * dc.z);
+          // 5px out, 5px thick, breathing between two blues
+          const k = 5 * dc.z;
+          rrect(g, r.x - k - k / 2, r.y - k - k / 2, r.w + 3 * k, r.h + 3 * k, rad + k * 1.5);
+          g.strokeStyle = pulse(dc);
+          g.lineWidth = Math.max(2, k);
           g.stroke();
         }
       },
       titleBar(dc, r, title, active) {
-        const g = dc.g;
-        // the two Joy-Con, as a red and a blue dot
-        const d = Math.max(2, 3.5 * dc.z);
-        g.fillStyle = active ? '#ff3c28' : p.faint;
-        g.beginPath(); g.arc(r.x + 12 * dc.z, r.y + r.h / 2, d, 0, Math.PI * 2); g.fill();
-        g.fillStyle = active ? '#0ab9e6' : p.faint;
-        g.beginPath(); g.arc(r.x + 21 * dc.z, r.y + r.h / 2, d, 0, Math.PI * 2); g.fill();
-        text(dc, r, title, NUNITO, 13, active ? p.fg : p.dim, { w: 700, x: r.x + 31 * dc.z });
+        // the selected title reads in the Switch's cyan-blue
+        text(dc, r, title, NUNITO, 13.5, active ? (dark ? '#00c3e3' : '#0a9fcf') : p.dim, { w: 700, x: r.x + 12 * dc.z });
       },
       progress(dc, r, fill, anim) {
-        bar(dc, r, fill, anim, dark ? '#262626' : '#e2e2e2', CYAN);
+        bar(dc, r, fill, anim, dark ? '#262626' : '#e2e2e2', dark ? '#00c3e3' : '#0ab0cf');
       },
     },
   };

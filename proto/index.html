@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cousine:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen&family=VT323&family=Architects+Daughter&family=Share+Tech+Mono&family=Rajdhani:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=Press+Start+2P&family=Orbitron:wght@500;700&family=Open+Sans:wght@300;400;600;700&family=Pixelify+Sans:wght@400;700&family=Rubik:wght@300;400;500;700&family=Exo+2:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Jost:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cousine:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen&family=VT323&family=Architects+Daughter&family=Share+Tech+Mono&family=Rajdhani:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=Press+Start+2P&family=Orbitron:wght@500;700&family=Open+Sans:wght@300;400;600;700&family=Pixelify+Sans:wght@400;700&family=Rubik:wght@300;400;500;700&family=Exo+2:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Jost:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=M+PLUS+1p:wght@400;500;700&family=M+PLUS+Rounded+1c:wght@300;400;700&family=Source+Sans+3:wght@300;400;600&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -23,6 +23,7 @@
         <div id="project-chip" class="seg" hidden></div>
         <nav id="samples" class="seg" aria-label="Samples"></nav>
         <span class="grow"></span>
+        <span class="sysclock" aria-hidden="true"></span>
         <span class="lbl">Skin</span>
         <button id="skins" class="skin-pick" aria-haspopup="listbox" aria-label="Skin"></button>
         <div id="skin-list" class="skin-list" role="listbox" hidden></div>
@@ -101,6 +102,7 @@
           <div id="pb-step">—</div>
           <div id="pb-event">&nbsp;</div>
         </div>
+        <span class="sysclock" aria-hidden="true"></span>
         <canvas id="timeline" title="Scrub"></canvas>
         <div id="anim-mode" class="seg" aria-label="Animation">
           <button data-mode="fast" title="Fast: every step plays once; the camera only pans">Fast</button>

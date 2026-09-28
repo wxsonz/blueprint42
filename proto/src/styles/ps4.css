@@ -1,9 +1,9 @@
 /* PlayStation 4 — generated from a short spec (see DECISIONS.md); edit freely. */
 html[data-skin='ps4'] {
-  --font-ui: Rubik, 'Open Sans', sans-serif;
+  --font-ui: 'Source Sans 3', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
-  --ui-size: 13px;
-  --bg: #0b2466;
+  --ui-size: 14px;
+  --bg: #0e6cc4;
   --fg: #ffffff;
   --fg-dim: #b5c9f2;
   --accent: #5fb1ff;
@@ -15,13 +15,13 @@ html[data-skin='ps4'] {
   --bar-bg: linear-gradient(90deg, #0a1c55, #1447a8);
   --bar-fg: #ffffff;
   --bar-border: none;
-  --brand-font: 300 17px Rubik, 'Open Sans', sans-serif;
+  --brand-font: 300 18px 'Source Sans 3', sans-serif;
   --logo: #ffffff;
-  --btn-bg: rgba(255,255,255,0.08);
-  --btn-bg-hover: rgba(255,255,255,0.18);
+  --btn-bg: rgba(255,255,255,0.1);
+  --btn-bg-hover: rgba(255,255,255,0.22);
   --btn-fg: #ffffff;
   --btn-border: 2px solid transparent;
-  --btn-radius: 2px;
+  --btn-radius: 0px;
   --btn-bg-on: #ffffff;
   --btn-fg-on: #0b2466;
   --btn-shadow-on: none;
@@ -31,21 +31,21 @@ html[data-skin='ps4'] {
   --sw-on: #5fb1ff;
   --sw-knob: #ffffff;
   --panes-bg: linear-gradient(135deg, #0a1c55, #1447a8 60%, #081a4d);
-  --pane-bg: #0c2a6b;
-  --pane-border: #1a4fb4;
-  --pane-radius: 2px;
+  --pane-bg: rgba(3,30,76,0.72);
+  --pane-border: rgba(255,255,255,0.18);
+  --pane-radius: 0px;
   --head-h: 34px;
-  --head-bg: #123a8a;
+  --head-bg: rgba(255,255,255,0.12);
   --head-fg: #b5c9f2;
   --head-fg-active: #ffffff;
-  --head-font: 300 14px Rubik, 'Open Sans', sans-serif;
-  --panel-bg: #0d2a6a;
+  --head-font: 300 15px 'Source Sans 3', sans-serif;
+  --panel-bg: rgba(4,36,90,0.96);
   --panel-fg: #ffffff;
   --panel-dim: #b5c9f2;
   --panel-border: 2px solid #ffffff;
-  --panel-radius: 2px;
+  --panel-radius: 0px;
   --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
-  --ptitle-bg: #1a4fb4;
+  --ptitle-bg: rgba(255,255,255,0.2);
   --ptitle-fg: #ffffff;
   --ptitle-border: none;
   --ptitle-pad: 8px 12px;
@@ -54,7 +54,7 @@ html[data-skin='ps4'] {
   --field-border: 1px solid #2d5fc4;
   --field-radius: 4px;
   --rule: 1px solid #1a3f8f;
-  --pb-bg: #0a1f55;
+  --pb-bg: rgba(0,20,60,0.45);
   --pb-border: none;
   --lcd-bg: transparent;
   --lcd-fg: #ffffff;
@@ -64,7 +64,7 @@ html[data-skin='ps4'] {
   --lcd-fn: #5fb1ff;
   --lcd-ptr: #ffb454;
   --lcd-ret: #6ee7a8;
-  --tl-bg: #08194a;
+  --tl-bg: rgba(0,20,60,0.45);
   --tl-border: none;
   --tl-call: #5fb1ff;
   --tl-ret: #6ee7a8;
@@ -73,7 +73,7 @@ html[data-skin='ps4'] {
   --tl-eval: #333333;
   --tl-err: #ff6b6b;
   --tl-head: #ffffff;
-  --st-bg: #081a4d;
+  --st-bg: rgba(0,20,60,0.55);
   --st-fg: #b5c9f2;
   --st-border: none;
   --st-font: 12px Rubik, 'Open Sans', sans-serif;
@@ -84,7 +84,7 @@ html[data-skin='ps4'] {
   --menu-hover-bg: #5fb1ff;
   --menu-hover-fg: #0b2466;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: #091f55;
+  --ed-bg: #082a5e;
   --ed-fg: #ffffff;
   --ed-font: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
@@ -110,3 +110,9 @@ html[data-skin='ps4'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* PS4: the home screen's blue with light over it; the chrome floats on it */
+html[data-skin='ps4'] body { background: radial-gradient(ellipse 80% 40% at 50% 55%, rgba(255,255,255,0.12), transparent 70%), linear-gradient(#1b86e0, #0e6cc4 55%, #0a4e98); }
+html[data-skin='ps4'] #app, html[data-skin='ps4'] #panes, html[data-skin='ps4'] #top { background: transparent; border: none; }
+html[data-skin='ps4'] .pane.focused { box-shadow: 0 0 0 3px #ffffff, 0 0 14px rgba(255,255,255,0.35); }
+html[data-skin='ps4'] .seg button[aria-pressed='true'], html[data-skin='ps4'] .seg button.on { box-shadow: inset 0 0 0 2px #ffffff; }

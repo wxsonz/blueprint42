@@ -33,7 +33,7 @@ html[data-skin='switch-dark'] {
   --panes-bg: #2d2d2d;
   --pane-bg: #3a3a3a;
   --pane-border: #4a4a4a;
-  --pane-radius: 10px;
+  --pane-radius: 4px;
   --head-h: 34px;
   --head-bg: #444444;
   --head-fg: #b4b4b4;
@@ -43,7 +43,7 @@ html[data-skin='switch-dark'] {
   --panel-fg: #ffffff;
   --panel-dim: #b4b4b4;
   --panel-border: 3px solid #00c3e3;
-  --panel-radius: 10px;
+  --panel-radius: 4px;
   --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
   --ptitle-bg: #444444;
   --ptitle-fg: #ffffff;
@@ -110,3 +110,23 @@ html[data-skin='switch-dark'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* the Switch HOME Menu: user icon top-left, time and battery top-right,
+   round white icon buttons with coloured glyphs, hint-bar rules */
+html[data-skin='switch-dark'] #top { border-bottom: none; }
+html[data-skin='switch-dark'] .brand .logo { width: 30px; height: 30px; border-radius: 50%; background: #e60012; -webkit-mask: none; mask: none; box-shadow: inset 0 0 0 3px #464646, 0 0 0 2px #4f4f4f; }
+html[data-skin='switch-dark'] #top .sysclock { display: inline-flex; align-items: center; gap: 8px; font: 600 17px Nunito, sans-serif; color: var(--fg); }
+html[data-skin='switch-dark'] #top .sysclock s { display: none; }
+html[data-skin='switch-dark'] #top .sysclock::after { content: ''; width: 22px; height: 11px; border: 2px solid currentColor; border-radius: 3px; background: linear-gradient(90deg, currentColor 0 70%, transparent 70%) 1px 1px / calc(100% - 2px) calc(100% - 2px) no-repeat; box-shadow: 3px 0 0 -1px currentColor; }
+html[data-skin='switch-dark'] .pane { box-shadow: 0 1px 3px rgba(0,0,0,0.4); border-color: transparent; }
+html[data-skin='switch-dark'] .pane.focused { box-shadow: 0 0 0 4px var(--bg), 0 0 0 8px hsl(200 100% 60%); }
+html[data-skin='switch-dark'] #playbar { border-top: 1px solid #4f4f4f; background: var(--bg); }
+html[data-skin='switch-dark'] .pb-buttons { gap: 14px; }
+html[data-skin='switch-dark'] .pb-buttons button { width: 40px; height: 40px; border-radius: 50%; background: #464646; border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+html[data-skin='switch-dark'] .pb-buttons button[data-act='start'] { color: #909090; }
+html[data-skin='switch-dark'] .pb-buttons button[data-act='back'] { color: #0ab9e6; }
+html[data-skin='switch-dark'] .pb-buttons button[data-act='play'] { color: #e60012; }
+html[data-skin='switch-dark'] .pb-buttons button[data-act='step'] { color: #f28200; }
+html[data-skin='switch-dark'] .pb-buttons button[data-act='end'] { color: #909090; }
+html[data-skin='switch-dark'] .pb-buttons button:hover { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px hsl(200 100% 60%); }
+html[data-skin='switch-dark'] #status { border-top: 1px solid #4f4f4f; background: var(--bg); color: var(--fg); }

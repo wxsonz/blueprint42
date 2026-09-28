@@ -1,8 +1,8 @@
 /* PlayStation 5 — generated from a short spec (see DECISIONS.md); edit freely. */
 html[data-skin='ps5'] {
-  --font-ui: Rubik, 'Open Sans', sans-serif;
+  --font-ui: 'Source Sans 3', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
-  --ui-size: 13px;
+  --ui-size: 14px;
   --bg: #0e0f13;
   --fg: #f5f6f8;
   --fg-dim: #a4a8b4;
@@ -15,10 +15,10 @@ html[data-skin='ps5'] {
   --bar-bg: #0e0f13;
   --bar-fg: #f5f6f8;
   --bar-border: none;
-  --brand-font: 500 16px Rubik, 'Open Sans', sans-serif;
+  --brand-font: 300 18px 'Source Sans 3', sans-serif;
   --logo: #ffffff;
-  --btn-bg: #24262f;
-  --btn-bg-hover: #30333e;
+  --btn-bg: rgba(255,255,255,0.1);
+  --btn-bg-hover: rgba(255,255,255,0.18);
   --btn-fg: #f5f6f8;
   --btn-border: 1px solid transparent;
   --btn-radius: 999px;
@@ -31,19 +31,19 @@ html[data-skin='ps5'] {
   --sw-on: #3d8bff;
   --sw-knob: #ffffff;
   --panes-bg: #0e0f13;
-  --pane-bg: #15171e;
-  --pane-border: #262833;
-  --pane-radius: 12px;
+  --pane-bg: rgba(22,23,29,0.84);
+  --pane-border: rgba(255,255,255,0.08);
+  --pane-radius: 17px;
   --head-h: 34px;
-  --head-bg: #15171e;
+  --head-bg: transparent;
   --head-fg: #a4a8b4;
   --head-fg-active: #ffffff;
-  --head-font: 600 12.5px Rubik, 'Open Sans', sans-serif;
-  --panel-bg: #1b1d24;
+  --head-font: 300 15px 'Source Sans 3', sans-serif;
+  --panel-bg: rgba(24,25,31,0.97);
   --panel-fg: #f5f6f8;
   --panel-dim: #a4a8b4;
   --panel-border: 2px solid #ffffff;
-  --panel-radius: 12px;
+  --panel-radius: 17px;
   --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
   --ptitle-bg: #1b1d24;
   --ptitle-fg: #ffffff;
@@ -84,7 +84,7 @@ html[data-skin='ps5'] {
   --menu-hover-bg: #3d8bff;
   --menu-hover-fg: #0e0f13;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: #111217;
+  --ed-bg: rgba(14,15,19,0.6);
   --ed-fg: #f5f6f8;
   --ed-font: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
@@ -110,3 +110,16 @@ html[data-skin='ps5'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* PS5: the selected game's art behind everything, dark glass over it, text
+   tabs like "Games  Media" (light, the active one bold), the clock top-right,
+   and the white ring standing off whatever has focus */
+html[data-skin='ps5'] body { background: linear-gradient(rgba(11,12,16,0.1), rgba(11,12,16,0.6) 55%, rgba(11,12,16,0.96)), radial-gradient(circle at 72% 18%, rgba(46,92,150,0.75), transparent 55%), radial-gradient(circle at 35% 5%, rgba(150,70,60,0.45), transparent 45%), radial-gradient(circle at 90% 55%, rgba(210,140,70,0.28), transparent 40%), #0b0c10; }
+html[data-skin='ps5'] #app, html[data-skin='ps5'] #panes, html[data-skin='ps5'] #top, html[data-skin='ps5'] #playbar, html[data-skin='ps5'] #status { background: transparent; border: none; }
+html[data-skin='ps5'] #samples button, html[data-skin='ps5'] #project-chip button { background: transparent; border: none; box-shadow: none; font-weight: 300; font-size: 16px; color: #d6d8de; padding: 3px 10px; }
+html[data-skin='ps5'] #samples button[aria-pressed='true'], html[data-skin='ps5'] #samples button.on { font-weight: 600; color: #ffffff; background: transparent; }
+html[data-skin='ps5'] #top .sysclock { display: inline; font: 300 18px 'Source Sans 3', sans-serif; color: #ffffff; }
+html[data-skin='ps5'] #top .sysclock s { display: none; }
+html[data-skin='ps5'] .pane { backdrop-filter: none; }
+html[data-skin='ps5'] .pane.focused { box-shadow: 0 0 0 4px #0b0c10, 0 0 0 7px #ffffff; }
+html[data-skin='ps5'] .pb-buttons button { border-radius: 50%; }

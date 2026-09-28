@@ -1,6 +1,6 @@
 /* Wii, dark — generated from a short spec (see DECISIONS.md); edit freely. */
 html[data-skin='wii-dark'] {
-  --font-ui: Nunito, 'Open Sans', sans-serif;
+  --font-ui: 'M PLUS 1p', 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 13px;
   --bg: #17191d;
@@ -33,7 +33,7 @@ html[data-skin='wii-dark'] {
   --panes-bg: #17191d;
   --pane-bg: #23262b;
   --pane-border: #3a3e45;
-  --pane-radius: 18px;
+  --pane-radius: 16px;
   --head-h: 34px;
   --head-bg: linear-gradient(#30343b, #282b31);
   --head-fg: #a7adb6;
@@ -43,7 +43,7 @@ html[data-skin='wii-dark'] {
   --panel-fg: #eef1f4;
   --panel-dim: #a7adb6;
   --panel-border: 2px solid #34bee8;
-  --panel-radius: 16px;
+  --panel-radius: 14px;
   --panel-shadow: 0 10px 30px rgba(0,0,0,0.45);
   --ptitle-bg: linear-gradient(#3a3e45, #2c2f35);
   --ptitle-fg: #eef1f4;
@@ -110,3 +110,21 @@ html[data-skin='wii-dark'] {
   --syn-op: #c9d1e0;
   --syn-punct: #9aa3b4;
 }
+
+/* the Wii Menu: a lined light-blue desktop, channels as glossy bezels, and the
+   curved white bar along the bottom with the big grey clock in its hump */
+html[data-skin='wii-dark'] body { background: repeating-linear-gradient(rgba(120,170,190,0.07) 0 1px, transparent 1px 5px), linear-gradient(#20282d, #1a2024 50%, #141a1e); }
+html[data-skin='wii-dark'] #app, html[data-skin='wii-dark'] #panes, html[data-skin='wii-dark'] #top { background: transparent; border: none; box-shadow: none; }
+html[data-skin='wii-dark'] #panes { --pane-gap: 12px; --panes-pad: 6px 12px 10px; }
+html[data-skin='wii-dark'] .pane { background: linear-gradient(#3a434a, #343c42 60%, #2c3439); border: 1px solid #4c5861; border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 3px 9px rgba(55,95,125,0.4); padding: 0 5px 5px; }
+html[data-skin='wii-dark'] .pane.focused { box-shadow: 0 0 0 2px #8ad3ef, 0 8px 18px rgba(30,90,130,0.28); }
+html[data-skin='wii-dark'] .pane-head { background: transparent; border: none; justify-content: center; }
+html[data-skin='wii-dark'] .pane-body, html[data-skin='wii-dark'] #editor { border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(30,60,80,0.1), inset 0 2px 6px rgba(0,0,0,0.1); overflow: hidden; }
+html[data-skin='wii-dark'] #playbar { position: relative; overflow: visible; background: linear-gradient(#2e363c, #252c31); border-top: 1px solid #4c5861; box-shadow: 0 -1px 5px rgba(80,130,160,0.12); }
+html[data-skin='wii-dark'] #playbar .sysclock { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 18px; margin: -24px 14px 0; color: #9fb0b9; font: 300 30px 'M PLUS 1p', sans-serif; line-height: 1; z-index: 1; }
+html[data-skin='wii-dark'] #playbar .sysclock::before { content: ''; position: absolute; z-index: -1; left: -14px; right: -14px; top: -6px; bottom: -9px; border-radius: 50% 50% 0 0 / 34px 34px 0 0; background: linear-gradient(#2e363c, #252c31); border-top: 1px solid #4c5861; box-shadow: 0 -2px 6px rgba(80,130,160,0.12); }
+html[data-skin='wii-dark'] #playbar .sysclock i { font-size: 13px; align-self: flex-end; margin: -30px -18px 0 0; }
+html[data-skin='wii-dark'] #playbar .sysclock s { font-size: 12px; font-weight: 500; margin-top: 2px; }
+html[data-skin='wii-dark'] .pb-buttons button { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(#3a434a, #343c42 60%, #2c3439); border: 2px solid #4c5861; box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 4px rgba(70,100,120,0.18); color: #9fb0b9; }
+html[data-skin='wii-dark'] .pb-buttons button:hover { border-color: #35b4e5; box-shadow: 0 0 0 2px rgba(53,180,229,0.35), 0 2px 6px rgba(30,90,130,0.25); color: #189fd6; }
+html[data-skin='wii-dark'] .pb-buttons button.primary { color: #35b4e5; }

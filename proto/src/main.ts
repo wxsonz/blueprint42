@@ -2694,6 +2694,20 @@ function renderStageCard(): void {
   stageCard.hidden = false;
 }
 
+// ---------------- system clock ----------------
+// For skins that show one (Wii, Switch, PlayStation): time, am/pm, date.
+function tickClock(): void {
+  const d = new Date();
+  const parts = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).split(' ');
+  const date = d.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' });
+  const html = `<b>${esc(parts[0])}</b>${parts[1] ? `<i>${esc(parts[1])}</i>` : ''}<s>${esc(date)}</s>`;
+  document.querySelectorAll<HTMLElement>('.sysclock').forEach((el) => {
+    if (el.innerHTML !== html) el.innerHTML = html;
+  });
+}
+tickClock();
+setInterval(tickClock, 15000);
+
 // ---------------- app zoom ----------------
 // Ctrl+wheel and Ctrl+= / − / 0 zoom the whole app, like the browser's own
 // zoom, but here the level is known and shown. CSS zoom on <html>; the

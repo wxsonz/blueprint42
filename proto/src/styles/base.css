@@ -457,6 +457,11 @@ kbd {
 #stage-card .note { font: italic calc(12px * var(--label-scale, 1)) var(--label-font, var(--font-ui)); }
 #stage-card .sc-foot { padding: 4px 14px 10px; font: calc(12px * var(--label-scale, 1)) var(--label-font, var(--font-ui)); color: var(--panel-dim); }
 
+/* a system clock some skins show (the consoles' home screens have one) */
+.sysclock { display: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sysclock i { font-style: normal; font-size: 0.6em; margin-left: 0.2em; }
+.sysclock s { text-decoration: none; }
+
 /* the skin picker: a button, and a grid of previews */
 .ui-zoom { display: inline-flex; gap: 2px; align-items: center; }
 #ui-zoom-read { min-width: 48px; font-variant-numeric: tabular-nums; }

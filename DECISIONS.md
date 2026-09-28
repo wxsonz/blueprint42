@@ -867,3 +867,32 @@ questions. Newest last.
     them). Spaces inside a line stay unmarked.
   - The colours come from `--ed-ws` and `--bad`, so each skin can tune
     them.
+- **Decision (author: the console skins should follow their real UIs, not
+  just recolour):** Researched each console's interface and rebuilt the
+  skins on it: the canvas chrome, and the app chrome through a shared
+  `.sysclock` (a clock some consoles show; hidden unless a skin shows
+  it). New fonts: M PLUS 1p (Rodin-like, the Wii), M PLUS Rounded 1c (the
+  PS3 later) and Source Sans 3 (SST-like, PS4 and PS5).
+  - **Wii**, from zuvv/WiiMenu's measured tokens:
+    - the canvas: a light-blue lined desktop (`#eef7fa → #c9e2ec`);
+      channels as glossy white bezels (14 px corners, `#ccd5da` edge)
+      around a recessed screen; grey `#55636b` labels, centred; the Wii
+      blue `#35b4e5` ring on the active one;
+    - the chrome: the curved white bottom bar with a big grey clock in
+      its hump, and round glossy buttons.
+  - **Switch**, from Adam Argyle's recreation:
+    - the canvas: Basic White (`#ebebeb`) or Basic Black (`#2d2d2d`);
+      plain tiles; the selection is an outline 5 px thick and 5 px out,
+      pulsing between `hsl(200 100% 50%)` and `hsl(200 100% 80%)`; the
+      selected title in cyan;
+    - the chrome: the user circle, time and battery top-right, round
+      white icon buttons with coloured glyphs, and hint-bar rules.
+  - **PS4**, from d4v1-sudo/Ps4-UI:
+    - the canvas: `#0e6cc4` blue with light bands and dust; square tiles;
+      a translucent white title strip (`rgba(255,255,255,.2)`); a 3 px
+      white frame on focus; SST at light weights.
+  - **PS5**, from khaledOghli/PS5_Online:
+    - the canvas: dark over blurred, darkened game art; cards with 17 px
+      corners; the white focus ring standing off the card;
+    - the chrome: "Games · Media"-style text tabs (light, the active one
+      bold) and the clock top-right.
