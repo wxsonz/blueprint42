@@ -641,4 +641,12 @@ questions. Newest last.
   variant is its own skin (`variantOf`, `mode`) built from the same theme
   builder, with its own stylesheet. Skins whose originals had one look
   (XP, 7, System 7, OS 9, Aqua, Leopard, Yosemite, Game Boy…) stay single.
+- **Decision (author: Factory title bars unreadable, fps drops on Focus
+  zoom):** Factory's title sits on dark steel under a thin hazard band
+  (the stripes used to run under the text). Its floor was ~10 of 14 ms a
+  frame while zooming (thousands of tread marks, then a screen-sized
+  scaled pattern). It's now plain geometry: plate rectangles, one seam
+  path and corner rivets, and it costs ~1 ms. Running machines and lamps
+  glow with halos, not blur. Measured while zooming, paint forced: 13.9 →
+  4.9 ms.
 

@@ -59,8 +59,13 @@ export const factoryTheme: Theme = {
     const g = dc.g;
     g.save();
     if (o.glow && o.kind !== 'wall') {
-      g.shadowColor = o.glow;
-      g.shadowBlur = 14 * dc.z;
+      // a halo (a blur costs too much to paint)
+      rrect(g, r.x - 3, r.y - 3, r.w + 6, r.h + 6, Math.max(2, 4 * dc.z));
+      g.strokeStyle = o.glow;
+      g.globalAlpha *= 0.3;
+      g.lineWidth = Math.max(3, 5 * dc.z);
+      g.stroke();
+      g.globalAlpha /= 0.3;
     }
     rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 2 * dc.z));
     if (o.kind === 'wall') {
@@ -87,33 +92,30 @@ export const factoryTheme: Theme = {
     g.restore();
   },
 
+  // Floor plates, 4 cells square: two alternating shades, the seams as one
+  // path, a rivet at each corner. Plain rectangles: a screen-sized pattern
+  // fill (or thousands of tread marks) cost most of a frame.
   background(dc, camX, camY) {
     const g = dc.g;
     g.fillStyle = '#1c1e20';
     g.fillRect(0, 0, dc.vw, dc.vh);
-    // floor plates, 4 cells square, with seams and a diamond tread
     const P = 4;
     const cs = dc.cs;
     if (P * cs < 14) return; // far out: plain floor
     const x0 = Math.floor(camX / P) * P, y0 = Math.floor(camY / P) * P;
-    for (let x = x0; x < camX + dc.vw / cs + P; x += P) {
-      for (let y = y0; y < camY + dc.vh / cs + P; y += P) {
-        const sx = (x - camX) * cs, sy = (y - camY) * cs, s = P * cs;
-        g.fillStyle = ((x + y) / P) % 2 === 0 ? '#1f2124' : '#1d1f22';
-        g.fillRect(sx, sy, s, s);
-        g.strokeStyle = '#141516';
-        g.lineWidth = Math.max(1, 2 * dc.z);
-        g.strokeRect(sx + 0.5, sy + 0.5, s, s);
-        if (cs < 16) continue;
-        g.fillStyle = 'rgba(255,255,255,0.025)';
-        const step = cs * 0.5;
-        for (let a = sx + step / 2; a < sx + s; a += step) {
-          for (let b = sy + step / 2; b < sy + s; b += step) {
-            g.beginPath(); g.moveTo(a - 4 * dc.z, b); g.lineTo(a, b - 2 * dc.z); g.lineTo(a + 4 * dc.z, b); g.lineTo(a, b + 2 * dc.z); g.closePath(); g.fill();
-          }
-        }
-      }
-    }
+    const x1 = camX + dc.vw / cs + P, y1 = camY + dc.vh / cs + P;
+    g.fillStyle = '#1f2124';
+    for (let x = x0; x < x1; x += P) for (let y = y0; y < y1; y += P) if (((x + y) / P) % 2 === 0) g.fillRect((x - camX) * cs, (y - camY) * cs, P * cs, P * cs);
+    g.strokeStyle = '#141516';
+    g.lineWidth = Math.max(1, 2 * dc.z);
+    g.beginPath();
+    for (let x = x0; x < x1; x += P) (g.moveTo(Math.round((x - camX) * cs) + 0.5, 0), g.lineTo(Math.round((x - camX) * cs) + 0.5, dc.vh));
+    for (let y = y0; y < y1; y += P) (g.moveTo(0, Math.round((y - camY) * cs) + 0.5), g.lineTo(dc.vw, Math.round((y - camY) * cs) + 0.5));
+    g.stroke();
+    if (cs < 20) return;
+    g.fillStyle = '#3a3e43';
+    const rv = Math.max(2, 3 * dc.z);
+    for (let x = x0; x < x1; x += P) for (let y = y0; y < y1; y += P) g.fillRect((x - camX) * cs + rv, (y - camY) * cs + rv, rv, rv);
   },
 
   // A conveyor: a dark band with rails, chevrons riding it.
@@ -153,7 +155,13 @@ export const factoryTheme: Theme = {
     const on = n.state === 'running' ? Math.floor(dc.time * 3) % 2 === 0 : n.state !== 'idle';
     const col = n.state === 'error' ? '#ff5252' : n.state === 'waiting' ? '#ffd54f' : n.state === 'running' ? AMBER : '#3b3f44';
     g.save();
-    if (on) (g.shadowColor = col), (g.shadowBlur = 16 * dc.z);
+    if (on) {
+      // the lamp's glow: a faint larger disc, not a blur
+      g.fillStyle = col;
+      g.globalAlpha = 0.25;
+      g.beginPath(); g.arc(x, y, rad * 2.2, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1;
+    }
     g.fillStyle = on ? col : '#2a2d31';
     g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
     g.restore();
@@ -163,7 +171,11 @@ export const factoryTheme: Theme = {
   },
 
   wallDecor(dc, r, head, live) {
-    hazard(dc, { x: head.x + 2, y: head.y + 2, w: head.w - 4, h: Math.max(3, head.h * 0.28) });
+    // dark steel under the title (so it reads), hazard stripes as a thin band on top
+    const g0 = dc.g;
+    g0.fillStyle = '#26292d';
+    g0.fillRect(head.x + 2, head.y + 2, head.w - 4, head.h - 2);
+    hazard(dc, { x: head.x + 2, y: head.y + 2, w: head.w - 4, h: Math.max(2, Math.min(5 * dc.z, head.h * 0.16)) });
     if (live) {
       const g = dc.g;
       g.fillStyle = 'rgba(255,176,0,0.05)';
