@@ -29,6 +29,13 @@
   1.4 ms); the GPU scene costs about 0.2–0.4 ms of CPU a frame. Checked:
   the WGSL compiles and draws the same picture as the WebGL2 path, through
   wgpu-native on the RTX 4060 (headless Chromium here has no WebGPU device).
+- **Glass cubes (author: the real PS2's are glass).** The GPU scene draws
+  them as glass, not the canvas's tinted faces: the fog seen through them
+  bent by the faces the ray enters and leaves by, absorbed by the thickness
+  crossed (bluer, dimmer), Fresnel reflection of a dim blue room with a
+  light strip, the light's highlight, bright edges with a soft glow and the
+  far edges faint through the glass, and a soft antialiased silhouette.
+  Simple mode and the canvas fallback keep the old look.
 - **Beside the button (author):** what draws the background (`WebGPU`,
   `WebGL2`, `canvas`, `still`, `off`) and a live readout, `fps · ms`: the
   background's frames a second and the CPU time of one frame (the GPU's own

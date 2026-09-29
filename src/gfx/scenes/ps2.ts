@@ -143,14 +143,8 @@ fn fogD(uv: vec2f, seed: f32) -> f32 {
   return max(0.0, n - 0.3) * 2.2 * pow(mask, 1.2);
 }
 fn over(d: vec4f, s: vec4f) -> vec4f { return s + d * (1.0 - s.a); }
-fn band(g: f32, at: f32) -> f32 {
-  if (g < at - 0.22 || g > at + 0.15) { return 0.0; }
-  if (g < at - 0.03) { return 0.5 * (g - (at - 0.22)) / 0.19; }
-  if (g < at) { return mix(0.5, 1.0, (g - (at - 0.03)) / 0.03); }
-  if (g < at + 0.05) { return mix(1.0, 0.25, (g - at) / 0.05); }
-  return mix(0.25, 0.0, (g - (at + 0.05)) / 0.1);
-}
-fn scene(p: vec2f) -> vec4f {
+// the fog alone: what the glass bends
+fn fogAt(p: vec2f) -> vec3f {
   var c = vec4f(0.0, 0.0, 3.0 / 255.0, 1.0);
   for (var i = 0; i < 2; i++) {
     let r = U.v[${V_FOG} + i];
@@ -162,7 +156,24 @@ fn scene(p: vec2f) -> vec4f {
       c = over(c, vec4f(col * a, a));
     }
   }
-  let L = vec3f(-0.45, -0.6, 0.66);
+  return c.rgb;
+}
+// what a glass face reflects: a dark blue room with a soft light strip
+fn envAt(r: vec3f) -> vec3f {
+  let sky = mix(vec3f(0.01, 0.014, 0.05), vec3f(0.24, 0.3, 0.6), smoothstep(-0.3, 0.9, -r.y));
+  let strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
+  return sky + vec3f(0.75, 0.85, 1.0) * strip;
+}
+// near an edge of the cube: the second-largest coordinate of the hit point near 1
+fn edgeOf(h: vec3f, w: f32) -> f32 {
+  let a = abs(h);
+  let second = max(max(min(a.x, a.y), min(a.y, a.z)), min(a.x, a.z));
+  return 1.0 - smoothstep(0.0, w, 1.0 - second);
+}
+fn scene(p: vec2f) -> vec4f {
+  var c = vec3f(fogAt(p));
+  let L = normalize(vec3f(-0.45, -0.6, 0.66));
+  let H = normalize(L + vec3f(0.0, 0.0, 1.0));
   for (var i = 0; i < 6; i++) {
     let cc = U.v[${V_CUBE} + i];
     let q = (p - cc.xy) / cc.z;
@@ -181,21 +192,28 @@ fn scene(p: vec2f) -> vec4f {
     let tn = max(max(tn3.x, tn3.y), tn3.z);
     let tf = min(min(tf3.x, tf3.y), tf3.z);
     if (tn > tf) { continue; }
-    // the face it enters through and the one it leaves by, in view space
-    let ne = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x) * -sign(dl);
-    let nx = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tf == tf3.y), vec3f(1.0, 0.0, 0.0), tf == tf3.x) * sign(dl);
     let toView = mat3x3f(r0, r1, r2);
-    let nf = toView * ne;
-    let nb = toView * nx;
-    if (nb.z <= 0.0) { c = over(c, vec4f(vec3f(3.0, 5.0, 16.0) / 255.0 * 0.12, 0.12)); }
+    let nf = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x) * -sign(dl));
+    let nb = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tf == tf3.y), vec3f(1.0, 0.0, 0.0), tf == tf3.x) * sign(dl));
+    let thick = tf - tn; // the glass the ray crosses, in half-sides
+    let px = 1.0 / cc.z; // one screen pixel, in half-sides
+    // through: the fog bent by the way in and the way out, tinted by the thickness
+    let bent = fogAt(p + (nf.xy - nb.xy) * cc.z * 0.45);
+    let through = bent * exp(-thick * vec3f(0.42, 0.3, 0.12)) + vec3f(0.012, 0.018, 0.045) * thick;
+    // off it: Fresnel reflection of the room, and the light's highlight
+    let cosv = clamp(nf.z, 0.0, 1.0);
+    let F = 0.06 + 0.94 * pow(1.0 - cosv, 3.0);
+    let refl = envAt(reflect(vec3f(0.0, 0.0, -1.0), nf));
+    let spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
+    // edges: bright on the near side, faint through the glass on the far side
     let lit = max(0.0, dot(nf, L));
+    let front = (edgeOf(ol + dl * tn, px * 2.2) + 0.22 * edgeOf(ol + dl * tn, 0.3)) * (0.35 + 0.65 * lit);
+    let back = edgeOf(ol + dl * tf, px * 2.2) * 0.22;
     let g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    let a = mix(0.05 + 0.09 * lit, 0.24, g);
-    let col = mix(vec3f(60.0 + 70.0 * lit, 80.0 + 70.0 * lit, 170.0 + 50.0 * lit), vec3f(4.0, 6.0, 22.0), g) / 255.0;
-    c = over(c, vec4f(col * a, a));
-    let at = clamp(0.5 + nf.x * 0.7 - nf.y * 0.5, 0.08, 0.92);
-    let ba = (0.04 + 0.16 * lit * max(nf.z, 0.0)) * band(g, at);
-    c = over(c, vec4f(vec3f(220.0, 232.0, 255.0) / 255.0 * ba, ba));
+    let body = vec3f(0.05, 0.07, 0.17) * (0.35 + lit) * (1.1 - g) * (0.6 + 0.25 * thick);
+    let glass = mix(through + body, refl, F) + vec3f(1.0, 0.97, 0.92) * spec + vec3f(0.72, 0.84, 1.0) * (front * 0.85 + back);
+    // soft silhouette: coverage from how much glass the ray crossed
+    c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (var i = 0; i < 4; i++) {
     let h = U.v[${V_HEAD} + i];
@@ -206,10 +224,10 @@ fn scene(p: vec2f) -> vec4f {
       if (r < 0.12) { s = vec4f(mix(vec3f(1.0), col, r / 0.12), 1.0); }
       else if (r < 0.35) { s = vec4f(col, mix(1.0, 0.4, (r - 0.12) / 0.23)); }
       else { s = vec4f(col, mix(0.4, 0.0, (r - 0.35) / 0.65)); }
-      c = vec4f(c.rgb + s.rgb * s.a, c.a);
+      c = c + s.rgb * s.a;
     }
   }
-  return c;
+  return vec4f(c, 1.0);
 }
 `;
 
@@ -238,15 +256,8 @@ float fogD(vec2 uv, float seed) {
   return max(0.0, n - 0.3) * 2.2 * pow(mask, 1.2);
 }
 vec4 over(vec4 d, vec4 s) { return s + d * (1.0 - s.a); }
-float band(float g, float at) {
-  if (g < at - 0.22 || g > at + 0.15) return 0.0;
-  if (g < at - 0.03) return 0.5 * (g - (at - 0.22)) / 0.19;
-  if (g < at) return mix(0.5, 1.0, (g - (at - 0.03)) / 0.03);
-  if (g < at + 0.05) return mix(1.0, 0.25, (g - at) / 0.05);
-  return mix(0.25, 0.0, (g - (at + 0.05)) / 0.1);
-}
 vec3 axisOf(float t, vec3 t3) { return t == t3.x ? vec3(1.0, 0.0, 0.0) : t == t3.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0); }
-vec4 scene(vec2 p) {
+vec3 fogAt(vec2 p) {
   vec4 c = vec4(0.0, 0.0, 3.0 / 255.0, 1.0);
   for (int i = 0; i < 2; i++) {
     vec4 r = v[${V_FOG} + i];
@@ -258,7 +269,22 @@ vec4 scene(vec2 p) {
       c = over(c, vec4(col * a, a));
     }
   }
-  vec3 L = vec3(-0.45, -0.6, 0.66);
+  return c.rgb;
+}
+vec3 envAt(vec3 r) {
+  vec3 sky = mix(vec3(0.01, 0.014, 0.05), vec3(0.24, 0.3, 0.6), smoothstep(-0.3, 0.9, -r.y));
+  float strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
+  return sky + vec3(0.75, 0.85, 1.0) * strip;
+}
+float edgeOf(vec3 h, float w) {
+  vec3 a = abs(h);
+  float second = max(max(min(a.x, a.y), min(a.y, a.z)), min(a.x, a.z));
+  return 1.0 - smoothstep(0.0, w, 1.0 - second);
+}
+vec4 scene(vec2 p) {
+  vec3 c = fogAt(p);
+  vec3 L = normalize(vec3(-0.45, -0.6, 0.66));
+  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
   for (int i = 0; i < 6; i++) {
     vec4 cc = v[${V_CUBE} + i];
     vec2 q = (p - cc.xy) / cc.z;
@@ -280,15 +306,21 @@ vec4 scene(vec2 p) {
     mat3 toView = mat3(r0, r1, r2);
     vec3 nf = toView * (axisOf(tn, tn3) * -sign(dl));
     vec3 nb = toView * (axisOf(tf, tf3) * sign(dl));
-    if (nb.z <= 0.0) c = over(c, vec4(vec3(3.0, 5.0, 16.0) / 255.0 * 0.12, 0.12));
+    float thick = tf - tn;
+    float px = 1.0 / cc.z;
+    vec3 bent = fogAt(p + (nf.xy - nb.xy) * cc.z * 0.45);
+    vec3 through = bent * exp(-thick * vec3(0.42, 0.3, 0.12)) + vec3(0.012, 0.018, 0.045) * thick;
+    float cosv = clamp(nf.z, 0.0, 1.0);
+    float F = 0.06 + 0.94 * pow(1.0 - cosv, 3.0);
+    vec3 refl = envAt(reflect(vec3(0.0, 0.0, -1.0), nf));
+    float spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
     float lit = max(0.0, dot(nf, L));
+    float front = (edgeOf(ol + dl * tn, px * 2.2) + 0.22 * edgeOf(ol + dl * tn, 0.3)) * (0.35 + 0.65 * lit);
+    float back = edgeOf(ol + dl * tf, px * 2.2) * 0.22;
     float g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    float a = mix(0.05 + 0.09 * lit, 0.24, g);
-    vec3 col = mix(vec3(60.0 + 70.0 * lit, 80.0 + 70.0 * lit, 170.0 + 50.0 * lit), vec3(4.0, 6.0, 22.0), g) / 255.0;
-    c = over(c, vec4(col * a, a));
-    float at = clamp(0.5 + nf.x * 0.7 - nf.y * 0.5, 0.08, 0.92);
-    float ba = (0.04 + 0.16 * lit * max(nf.z, 0.0)) * band(g, at);
-    c = over(c, vec4(vec3(220.0, 232.0, 255.0) / 255.0 * ba, ba));
+    vec3 body = vec3(0.05, 0.07, 0.17) * (0.35 + lit) * (1.1 - g) * (0.6 + 0.25 * thick);
+    vec3 glass = mix(through + body, refl, F) + vec3(1.0, 0.97, 0.92) * spec + vec3(0.72, 0.84, 1.0) * (front * 0.85 + back);
+    c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (int i = 0; i < 4; i++) {
     vec4 h = v[${V_HEAD} + i];
@@ -298,10 +330,10 @@ vec4 scene(vec2 p) {
       vec4 s = r < 0.12 ? vec4(mix(vec3(1.0), col, r / 0.12), 1.0)
         : r < 0.35 ? vec4(col, mix(1.0, 0.4, (r - 0.12) / 0.23))
         : vec4(col, mix(0.4, 0.0, (r - 0.35) / 0.65));
-      c.rgb += s.rgb * s.a;
+      c += s.rgb * s.a;
     }
   }
-  return c;
+  return vec4(c, 1.0);
 }
 `;
 
