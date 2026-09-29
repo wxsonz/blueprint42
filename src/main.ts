@@ -1020,6 +1020,8 @@ let qSlow = 0;
 let qFast = 0;
 let qLast = 0;
 let qTold = false;
+let qDownAt = 0; // when sharpness last went down
+let qGood = 0; // good seconds in a row since
 function adaptQuality(now: number): void {
   const moving = S.playing || !view.settled() || now - lastInputAt < 400;
   const dt = now - qLast;
@@ -1036,12 +1038,19 @@ function adaptQuality(now: number): void {
     if (next !== undefined) {
       view.scale = next;
       view.resize();
+      qDownAt = now;
+      qGood = 0;
       if (!qTold) (qTold = true), toast(`drawing at ${next}× sharpness to keep it smooth`);
     }
   } else if (frames > 30 && qFast / frames > 0.95 && cur < screen) {
-    const up = [...SCALES].reverse().find((s) => s > cur + 0.01 && s <= screen);
-    if (up !== undefined) (view.scale = up), view.resize();
-  }
+    // back up only after a while, and several good seconds in a row: every
+    // change reallocates the canvas (a hitch), so it mustn't see-saw
+    if (++qGood >= 3 && now - qDownAt > 10000) {
+      const up = [...SCALES].reverse().find((s) => s > cur + 0.01 && s <= screen);
+      if (up !== undefined) (view.scale = up), view.resize();
+      qGood = 0;
+    }
+  } else qGood = 0;
   qSince = now;
   qSlow = qFast = 0;
 }

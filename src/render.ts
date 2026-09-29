@@ -177,8 +177,7 @@ export class GridView {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
-    this.gfx = new GfxLayer(canvas);
-    void this.gfx.init();
+    this.gfx = new GfxLayer(canvas); // started when a skin's GPU scene first needs it
   }
 
   // The skin's background, as GFX says: its GPU scene (the grid canvas is
@@ -187,6 +186,9 @@ export class GridView {
   private background(skin: Skin, dc: Dc, now: number): boolean {
     const mode = gfxMode();
     const scene = mode === 'full' ? sceneFor(skin.id) : null;
+    // no device until a GPU scene is wanted (skins without one never start it);
+    // the canvas draws the background until it's ready
+    if (scene) void this.gfx.init();
     if (scene && this.gfx.ok && this.gfx.render(scene, this.gfxView(now))) {
       dc.g.clearRect(0, 0, this.w, this.h);
       this.bgKind = 'gpu';
