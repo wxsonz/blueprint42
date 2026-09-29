@@ -7,7 +7,7 @@ import { beatNow, computeText, readsOf, READ_END, slotHistory, slotValue, writes
 import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
-import { fmtVal, type Payload, type SnapCell, type SnapFrame } from './interp';
+import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
@@ -556,6 +556,11 @@ export class GridView {
     // a Focus scene veils everything but its two ends: machines under the
     // veil draw compact (their insides would barely show, and cost the most)
     const scenePair = ev && staged(ev) && animPair ? new Set(animPair) : null;
+    // Where every machine's rows are, from geometry alone, before any is
+    // culled: a pointer into a machine off screen (or closed, or too small to
+    // show its storage) still has an end to draw its line to. Drawn machines
+    // set the same anchors again below.
+    if (trace) for (const h of hostsToDraw) this.rowAnchors(s, h, framesOnHost.get(h.key) ?? [], anchors, trace);
     for (const h of hostsToDraw) {
       if (!this.onScreen(h.x, h.y, h.w, h.h)) continue;
       const node = s.layout.nodes.get(`func:${h.fn}`);
@@ -847,6 +852,30 @@ export class GridView {
   // bottom. The statement running now animates: what it reads flies in, it
   // shows its values, what it changes flies out. Zoomed out, only the shell,
   // its motor and the line it's on.
+  // Anchors for a host's variables without drawing it: its storage rows, or
+  // its right edge when its storage isn't shown (closed, broken, zoomed out).
+  private rowAnchors(s: ViewState, h: Host, frames: SnapFrame[], anchors: Map<number, Anchor>, trace: Trace): void {
+    const fn = s.model?.byName.get(h.fn);
+    if (!fn) return;
+    const cs = this.cs;
+    const R = this.rectW(h.x, h.y, h.w, h.h);
+    const edge = { y: R.y + R.h / 2, left: R.x, right: R.x + R.w };
+    const rows = !fn.broken && !shut.has(fn.name) && cs >= 20;
+    const geo = rows ? geomOf(fn) : null;
+    const slots = geo ? slotsOf(fn) : [];
+    const at = (name: string, kind: 'cell' | 'static'): Anchor => {
+      const i = slots.findIndex((sl) => sl.kind === kind && sl.name === name);
+      if (!geo || i < 0) return edge;
+      return { y: this.sy(h.y + slotY(geo, i)), left: this.sx(h.x + geo.store.x), right: this.sx(h.x + geo.store.x + geo.store.w) };
+    };
+    for (const f of frames) for (const c of f.cells) anchors.set(c.id, at(c.name, 'cell'));
+    if (h.copy !== 1) return;
+    for (const v of fn.statics) {
+      const id = staticCellId(trace, fn.name, v.name);
+      if (id !== null) anchors.set(id, at(v.name, 'static'));
+    }
+  }
+
   private drawMachine(
     skin: Skin, dc: Dc, s: ViewState, h: Host, fn: FnInfo, stale: boolean, pinned: boolean,
     frame: SnapFrame | null, returned: SnapFrame | null, state: RunState, selected: boolean, hovered: boolean,
