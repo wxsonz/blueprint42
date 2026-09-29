@@ -71,7 +71,7 @@ Each section below is one level. The columns are:
 | A header's types | Declared in `.h` only | Nothing on the grid; struct fields appear in storage rows | — | ⬜ | A types shelf: drag a field in to add it |
 | A macro constant | Literal values only, uppercase | Nothing | — | ⬜ | Constants on the types shelf |
 
-#### Output: the printf buffer and the terminal (designed, not built)
+#### Output: the printf buffer and the terminal (tracer built; the buffer's picture is next)
 
 Author's design (2026-09-29). Above the process box (the terminal) sits a
 **printf buffer** node, `stdout`'s buffer inside libc:

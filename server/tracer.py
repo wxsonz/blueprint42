@@ -5,6 +5,8 @@
 import json
 import shutil
 import os
+import threading
+import tty
 import re
 import shlex
 import time
@@ -491,6 +493,112 @@ class Free(gdb.Breakpoint):
         return False
 
 
+# ---------------- output: printf's buffer and write ----------------
+# Where stdout goes decides glibc's buffering, so the trace runs the way the
+# author picked: into a pseudo-terminal (line-buffered: a printf's text
+# leaves at each \n) or into a file, like a pipe (fully buffered: it leaves
+# when the buffer fills, at exit, or on fflush). Every byte that really
+# leaves goes through write(2); a breakpoint there sees it, and whether the
+# user's code called write or libc was flushing printf's buffer.
+
+TERMINAL = bool(CFG.get("terminal", True))
+pty_out = {"master": None, "slave": None, "chunks": [], "thread": None}
+
+
+def open_terminal():
+    master, slave = os.openpty()
+    tty.setraw(slave)  # no \n -> \r\n: the bytes as the program wrote them
+    pty_out["master"], pty_out["slave"] = master, slave
+
+    def drain():  # keep reading, so a chatty program never blocks on a full pty
+        while True:
+            try:
+                data = os.read(master, 65536)
+            except OSError:
+                return
+            if not data:
+                return
+            pty_out["chunks"].append(data)
+
+    t = threading.Thread(target=drain, daemon=True)
+    t.start()
+    pty_out["thread"] = t
+    return os.ttyname(slave)
+
+
+def close_terminal():
+    if pty_out["slave"] is None:
+        return
+    try:
+        os.close(pty_out["slave"])
+    except OSError:
+        pass
+    if pty_out["thread"]:
+        pty_out["thread"].join(timeout=1)
+    try:
+        os.close(pty_out["master"])
+    except OSError:
+        pass
+    with open(CFG["stdout"], "wb") as fh:
+        fh.write(b"".join(pty_out["chunks"]))
+
+
+OUT_TEXT_MAX = 2048
+
+
+class Write(gdb.Breakpoint):
+    # Never stops: reads write(fd, buf, n)'s arguments on the way in.
+    def __init__(self):
+        super().__init__("write", internal=True)
+
+    def stop(self):
+        try:
+            fd = int(gdb.parse_and_eval("$rdi"))
+            if fd not in (1, 2):
+                return False
+            addr = int(gdb.parse_and_eval("$rsi"))
+            n = int(gdb.parse_and_eval("$rdx"))
+            key = ("write", fd, addr, n, int(gdb.parse_and_eval("*(unsigned long *)$sp")), step_no[0])
+        except Exception:
+            return False
+        if key in seen_hits:
+            return False
+        seen_hits.add(key)
+        caller = user_caller()
+        raw = read_bytes(addr, min(n, OUT_TEXT_MAX)) if n > 0 else b""
+        ev = {"k": "out", "fd": fd, "n": n, "text": (raw or b"").decode("utf-8", "replace"), "via": "write" if caller is not None else "printf"}
+        if caller is not None:
+            ev["line"], ev["file"] = caller_line(caller), frame_file(caller)
+        pending.append(ev)
+        return False
+
+
+# glibc's FILE, x86-64 (public ABI, stable): _IO_write_base at 32,
+# _IO_write_ptr at 40, _IO_buf_base at 56, _IO_buf_end at 64. The bytes
+# between write_base and write_ptr are printf's text still waiting.
+X86_64 = False
+last_buf = [None]
+
+
+def stdout_buffer():
+    if not X86_64:
+        return None
+    try:
+        fp = int(gdb.parse_and_eval("(unsigned long) stdout"))
+        if not fp:
+            return None
+        raw = read_bytes(fp + 32, 40)
+        if raw is None:
+            return None
+        wbase, wptr, _wend, bbase, bend = (int.from_bytes(raw[i:i + 8], "little") for i in range(0, 40, 8))
+        cap = bend - bbase if bbase and bend > bbase else 0
+        n = wptr - wbase if wbase and wptr >= wbase else 0
+        data = read_bytes(wbase, min(n, OUT_TEXT_MAX)) if n else b""
+        return {"text": (data or b"").decode("utf-8", "replace"), "n": n, "cap": cap}
+    except (gdb.error, ValueError):
+        return None
+
+
 # ---------------- the stepping loop ----------------
 
 frames = []   # [{"id", "fn", "frame"}] oldest first
@@ -696,16 +804,22 @@ def record_stop():
         "heapIds": heap_ids,
         "bound": bound_delta(bindings_now(cur)),
     })
+    buf = stdout_buffer()
+    if buf != last_buf[0]:
+        stops[-1]["stdbuf"] = buf
+        last_buf[0] = buf
     pending.clear()
 
 
 def main():
-    result = {"stops": stops, "truncated": False, "exit": None, "signal": None, "error": None}
+    global X86_64
+    result = {"stops": stops, "truncated": False, "exit": None, "signal": None, "error": None, "outMode": "terminal" if TERMINAL else "pipe"}
     try:
         gdb.execute("break main", to_string=True)
         args = " ".join(shlex.quote(a) for a in CFG.get("args", []))
         q = shlex.quote
-        gdb.execute(f"run {args} < {q(CFG['stdin'])} > {q(CFG['stdout'])} 2> {q(CFG['stderr'])}", to_string=True)
+        out = open_terminal() if TERMINAL else CFG["stdout"]
+        gdb.execute(f"run {args} < {q(CFG['stdin'])} > {q(out)} 2> {q(CFG['stderr'])}", to_string=True)
     except gdb.error as e:
         result["error"] = str(e)
         return result
@@ -722,6 +836,11 @@ def main():
     for spec in ("malloc", "calloc", "realloc"):
         Alloc(spec)
     Free()
+    try:
+        X86_64 = "x86-64" in gdb.selected_inferior().architecture().name()
+    except Exception:
+        X86_64 = False
+    Write()
     collect_statics()
 
     steps = 0
@@ -769,6 +888,12 @@ try:
     RESULT = main()
 except Exception as e:  # never leave the caller without an answer
     RESULT = {"stops": stops, "error": f"tracer: {e!r}", "truncated": True}
+try:
+    if alive():
+        gdb.execute("kill", to_string=True)
+except gdb.error:
+    pass
+close_terminal()
 with open(CFG["out"], "w") as fh:
     json.dump(RESULT, fh)
 try:

@@ -160,8 +160,12 @@ Aim: fun to look at, and every mark means exactly one thing.
    - **Output as it really happens.** A printf buffer node above the
      terminal: `printf` text waits there until a flush, `write` goes straight
      to the terminal, so mixed output shows why it came out in that order
-     (`docs/VISUALS.md`, "Output"). Needs the tracer to report the buffer and
-     the flushes, and to run as a terminal or as a pipe, and say which.
+     (`docs/VISUALS.md`, "Output"). Done: the tracer runs stdout as a
+     terminal (a pseudo-terminal, the default) or a pipe (the "stdout" toggle
+     in the run settings), reports every write(2) (the user's own, or libc
+     flushing printf's buffer) and the buffer's real contents each step; the
+     terminal box shows what has really arrived by then. Next: draw the
+     buffer node above the terminal, and the bytes flying out.
 4. **Fun without lying (S each).** Every effect is driven by a real event:
    - a leak is an item falling off the shelf at exit;
    - a segfault jams the machine at the statement that died;

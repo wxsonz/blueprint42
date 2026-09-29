@@ -228,6 +228,8 @@ export function evDuration(e: Ev): number {
       return 0.6;
     case 'free':
       return 0.55;
+    case 'out':
+      return 0.7;
   }
 }
 

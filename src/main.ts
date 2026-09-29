@@ -171,14 +171,14 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
         p
           ? {
             project: { files: files! }, defines: p.run.defines, stdin: p.run.stdin, args: p.run.args,
-            fns: [...new Set(model.fns.map((f) => f.cname))], maxSteps: 20000, maxSeconds: 8,
+            fns: [...new Set(model.fns.map((f) => f.cname))], maxSteps: 20000, maxSeconds: 8, terminal: store.get('stdout') !== 'pipe',
             // the tracer knows functions by C name and file, not by key
             bindings: S.sprites.map((sp) => {
               const fn = sp.binding?.fn ? model.byName.get(sp.binding.fn) : undefined;
               return fn && sp.binding ? { ...sp, binding: { ...sp.binding, fn: fn.cname, file: fn.file } } : sp;
             }),
           }
-          : { src, files: S.sample.files, defines: S.defines, args: S.args, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites },
+          : { src, files: S.sample.files, defines: S.defines, args: S.args, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites, terminal: store.get('stdout') !== 'pipe' },
         ac.signal,
       );
     } catch {
@@ -1074,6 +1074,21 @@ async function boot(): Promise<void> {
     const args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
     if (!S.project) return sampleRunChanged(() => (S.args = args));
     S.project.run.args = args;
+    runChanged();
+  });
+  // stdout as a terminal (line-buffered) or a pipe (fully buffered): the run
+  // really goes that way, so printf's buffer behaves as it would there
+  const ttyBtn = $('run-tty');
+  const showTty = () => {
+    const pipe = store.get('stdout') === 'pipe';
+    ttyBtn.setAttribute('aria-pressed', String(!pipe));
+    $('run-tty-label').textContent = pipe ? 'stdout: pipe' : 'stdout: terminal';
+  };
+  showTty();
+  ttyBtn.addEventListener('click', () => {
+    store.set('stdout', store.get('stdout') === 'pipe' ? 'terminal' : 'pipe');
+    showTty();
+    if (!S.project) return sampleRunChanged(() => {});
     runChanged();
   });
   $<HTMLInputElement>('run-defs').addEventListener('change', (e) => {

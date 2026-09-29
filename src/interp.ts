@@ -42,7 +42,13 @@ export interface SnapFrame {
   cells: SnapCell[];
 }
 
+// stdout at a moment (gdb engine): how many bytes of Trace.outText had
+// really left the program, and what printf's buffer held, waiting.
+export interface StdBuf { text: string; n: number; cap: number }
+export interface OutState { sent: number; buf: StdBuf | null }
+
 export interface Snap {
+  out?: OutState;
   stack: SnapFrame[];
   statics: SnapCell[]; // function-local statics and globals
   heap: SnapCell[]; // live malloc blocks (gdb engine only)
@@ -65,6 +71,9 @@ export type Ev = EvBase &
     | { k: 'step' } // a line executed (gdb engine)
     | { k: 'alloc'; cell: number; size: number }
     | { k: 'free'; cell: number }
+    // bytes that really left through write(2): the user's own write, or libc
+    // flushing printf's buffer (gdb engine)
+    | { k: 'out'; fd: number; text: string; via: 'printf' | 'write' }
   );
 
 export interface CellInfo {
@@ -82,6 +91,8 @@ export interface Trace {
   error: { msg: string; line: number; file?: string } | null;
   truncated: boolean;
   stdout?: string;
+  outText?: string; // stdout's bytes in the order they left (gdb engine)
+  outMode?: 'terminal' | 'pipe'; // what stdout was, which decides printf's buffering
   args?: string[]; // the command-line arguments it ran with (gdb engine)
   heapSlots?: Map<number, number>; // heap cell -> shelf slot, stable for the block's life
   leaks?: { cell: number; size: number; line: number | null; file?: string }[];

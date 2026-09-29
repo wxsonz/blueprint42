@@ -1,7 +1,7 @@
 // Real execution (M3): send the buffer to the trace server, then turn gdb's
 // timeline into the same Trace the renderer plays for the interpreter.
 import type { Model } from './parse';
-import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type Trace, type V } from './interp';
+import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type StdBuf, type Trace, type V } from './interp';
 import type { BoundValue, Sprite } from './blueprint';
 
 // ---------------- wire format (server/tracer.py) ----------------
@@ -34,7 +34,8 @@ type GEv =
   | { k: 'ret'; id: number; value: GVal | null }
   | { k: 'alloc'; id: number; addr: number; size: number; line: number | null; file?: string | null }
   | { k: 'free'; id: number }
-  | { k: 'badfree'; addr: number; line: number | null; file?: string | null };
+  | { k: 'badfree'; addr: number; line: number | null; file?: string | null }
+  | { k: 'out'; fd: number; n: number; text: string; via: 'printf' | 'write'; line?: number | null; file?: string | null };
 interface GStop {
   line: number | null;
   file?: string | null;
@@ -45,6 +46,7 @@ interface GStop {
   heapIds?: number[]; // live blocks (heap then only lists blocks whose bytes changed)
   bound?: Record<string, BoundValue>;
   exited?: boolean;
+  stdbuf?: StdBuf | null; // printf's buffer after this stop, when it changed
 }
 export interface GResult {
   ok: boolean;
@@ -55,6 +57,7 @@ export interface GResult {
   signal?: string | null;
   truncated?: boolean;
   stdout?: string;
+  outMode?: 'terminal' | 'pipe';
   args?: string[];
   stderr?: string;
   ms?: number;
@@ -71,6 +74,7 @@ export interface GdbRequest {
   args?: string[];
   fns: string[];
   maxSteps?: number;
+  terminal?: boolean; // stdout a terminal (default) or a pipe
   maxSeconds?: number;
   bindings?: Sprite[];
 }
@@ -210,7 +214,10 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   // What the picture shows through a cell: a string, a struct's fields.
   const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[] }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
+  let outText = '';
+  let buf: StdBuf | null = null;
   const snapshot = (): Snap => ({
+    ...(r.outMode ? { out: { sent: outText.length, buf } } : {}),
     stack: stack.map((f) => ({ id: f.id, fn: f.fn, cells: [...f.cells.values()].map(snapCell) })),
     statics: [...statics.values()].map(snapCell),
     heap: [...heapCell.values()].map(snapCell),
@@ -326,6 +333,17 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     for (const id of Object.keys(nextBound ?? {})) boundIds.add(id);
     for (const e of stop.events) {
       const top = stack[stack.length - 1] ?? null;
+      if (e.k === 'out') {
+        if (e.fd !== 1) continue;
+        outText += e.text;
+        // a flush sends everything printf's buffer held: it's empty after
+        if (e.via === 'printf') {
+          const was = buf as StdBuf | null;
+          buf = stop.stdbuf !== undefined ? stop.stdbuf : was ? { ...was, text: '', n: 0 } : null;
+        }
+        emit({ k: 'out', line: e.line ? e.line - 1 : lastLine, file: fileOf(e.line ? e.file ?? lastFile : lastFile), frame: top?.id ?? null, fd: e.fd, text: e.text, via: e.via });
+        continue;
+      }
       if (e.k === 'call') {
         const file = e.file ?? stop.frames.find((f) => f.id === e.id)?.file ?? null;
         for (const [id, scope] of Object.entries(r.bindingScopes ?? {})) if (scope.scope === 'fn' && scope.fn === e.fn && (!scope.file || scope.file === file)) {
@@ -457,6 +475,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
       emit({ k: 'write', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, cell: c, val: nv, via: w, text: `#${b.id} = ${nv.text}` });
     }
 
+    if (stop.stdbuf !== undefined) buf = stop.stdbuf;
     if (stop.line !== null && top) {
       lastLine = stop.line - 1;
       lastFile = stop.file ?? top.file;
@@ -489,6 +508,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     error,
     truncated: !!r.truncated,
     stdout: r.stdout,
+    ...(r.outMode ? { outText, outMode: r.outMode } : {}),
     args: r.args,
     heapSlots,
     leaks,

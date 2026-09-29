@@ -34,6 +34,10 @@ function describe(e: Ev, trace: Trace): string {
       return `malloc <span class="arrow">→</span> <span class="ret">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span> (${e.size} B)`;
     case 'free':
       return `free(<span class="ptr">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span>)`;
+    case 'out':
+      return e.via === 'write'
+        ? `write <span class="arrow">→</span> terminal <span class="ret">${esc(JSON.stringify(e.text))}</span>`
+        : `printf's buffer flushed <span class="arrow">→</span> terminal <span class="ret">${esc(JSON.stringify(e.text))}</span>`;
   }
 }
 
@@ -149,7 +153,7 @@ function drawTimeline(): void {
         const e = t.evs[i];
         const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
         const h = 3 + (d / maxD) * (H - 8);
-        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : col[e.k];
+        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : e.k === 'out' ? col.write : col[e.k];
         cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
       }
       return c;

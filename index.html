@@ -65,6 +65,7 @@
             <div class="run-row" id="run-row" hidden>
               <label>args <input id="run-args" spellcheck="false" autocomplete="off" placeholder="./prog arguments"></label>
               <label>-D <input id="run-defs" spellcheck="false" autocomplete="off" placeholder="BUFFER_SIZE=42"></label>
+              <button class="toggle" id="run-tty" aria-pressed="true" title="Where stdout goes decides printf's buffering: a terminal flushes at each newline, a pipe (./a.out | cat -e) only when the buffer fills or at exit"><span class="sw"></span><span id="run-tty-label">stdout: terminal</span></button>
             </div>
           </div>
         </section>

@@ -454,7 +454,9 @@ export class GridView {
       skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(trace?.stdout)), {
         state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
         exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
-        out: finished ? trace?.stdout : undefined,
+        // what has really reached the terminal by now (gdb engine); before,
+        // only the whole output once the program had finished
+        out: trace?.outText !== undefined && snap?.out ? trace.outText.slice(0, snap.out.sent) || undefined : finished ? trace?.stdout : undefined,
         args: trace?.args,
         lines: Math.max(2, procLines(trace?.stdout)),
         selected: selKey === 'p',

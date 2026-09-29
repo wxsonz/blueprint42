@@ -77,7 +77,7 @@ export interface ChestInfo {
 export interface ProcInfo {
   state: 'idle' | 'running' | 'done' | 'crashed';
   exit: string | null;
-  out?: string; // what the program printed (shown once it has finished)
+  out?: string; // what the program printed: what has really reached the terminal by now
   args?: string[]; // its command-line arguments, for the prompt line
   lines?: number; // how many lines of output the box has room for (it grows with them)
   selected: boolean;
