@@ -24,6 +24,8 @@ limits); read the part you need.
   (middle-drag pan, wheel zoom, drag to move/re-route, double-click,
   right-click menu), plus conventional player keys (Space, ←/→, Home/End).
   Don't add vim-style bindings to the canvas.
+- Skin review status is in `docs/SKINS.md`: never redesign a skin marked
+  reviewed there unless the author names it; log every skin pass there.
 - Look and feel lives in skins. New visuals go through the `Skin` interface
   (`src/skins/types.ts`) and every skin, never hard-coded colours in
   the engine.
