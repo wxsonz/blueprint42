@@ -203,6 +203,14 @@ export function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
   return model.fns.some((f) => f.externals.length) ? 'gdb' : 'interp';
 }
 
+// Compile and run again now: a new parse, and under gdb a new build and a new
+// session (the old one is dropped, even when the request looks the same).
+export function rebuild(): void {
+  closeSession();
+  analyze(currentSrc(), false);
+  toast(S.model && engineFor(S.model) === 'gdb' ? 'rebuilding and running under gdb…' : 'parsed and run again');
+}
+
 let gdbTimer = 0;
 let gdbAbort: AbortController | null = null;
 export function cancelGdb(): void {
@@ -685,7 +693,7 @@ function hideMenu(): void {
 function onKey(e: KeyboardEvent): void {
   if (e.ctrlKey && e.key === 'Enter' && overlay.hidden) {
     e.preventDefault();
-    return restart();
+    return e.shiftKey ? rebuild() : restart();
   }
   const mod = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
   const vimOwns = S.vim && editor.hasFocus;
@@ -924,7 +932,7 @@ function openHelp(): void {
         </div>
         <div><h4>Playback (canvas focused)</h4>
           ${K(['Space'], 'play / pause')}${K(['←', '→'], 'step')}${K(['Shift', '←/→'], 'previous / next call')}
-          ${K(['Home', 'End'], 'start / end')}${K(['F'], 'fit view')}${K(['M'], 'fast ⇄ focus animation')}${K(['Ctrl', 'Enter'], 'run from the start (anywhere)')}
+          ${K(['Home', 'End'], 'start / end')}${K(['F'], 'fit view')}${K(['M'], 'fast ⇄ focus animation')}${K(['Ctrl', 'Enter'], 'run from the start (anywhere)')}${K(['Ctrl', 'Shift', 'Enter'], 'compile and run again')}
           <h4>Editor</h4>
           ${K(['vim'], 'toggle in the editor header')}${K([':w'], 'save… (project) · run from the start (sample)')}
           <h4>Projects</h4>
@@ -1165,6 +1173,8 @@ async function boot(): Promise<void> {
     if (!S.project) return sampleRunChanged(() => {});
     runChanged();
   });
+  // compile and run again by hand, without waiting for an edit to do it
+  $('run-again').addEventListener('click', rebuild);
   // stdout as a terminal (line-buffered) or a pipe (fully buffered): the run
   // really goes that way, so printf's buffer behaves as it would there
   const ttyBtn = $('run-tty');
