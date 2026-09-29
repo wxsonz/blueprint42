@@ -7,6 +7,7 @@ import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp'
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
 import { convertGdb, type GResult } from './gdb';
+import { initGfxButton } from './gfx/ui';
 import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
@@ -1050,6 +1051,8 @@ function frame(now: number): void {
     // idle: the grid rests at 15 fps, but a page-wide background that moves
     // (PS3's wave, PS4's band) keeps 30 so its motion doesn't stutter
     if (S.skin.fullBleed && now - lastPageAt >= 33) (lastPageAt = now), paintPage(now, S, view);
+    // a GPU background moves on its own at 30, the grid over it untouched
+    else if (now - lastPageAt >= 33 && view.animateGfx(S.skin, now)) lastPageAt = now;
     lastT = now;
     requestAnimationFrame(frame);
     return;
@@ -1385,6 +1388,7 @@ async function boot(): Promise<void> {
   renderSampleTabs();
   renderTestsMenu();
   renderSkinPicker();
+  initGfxButton(view, () => S.skin);
   showSpeed();
   $('file-name').textContent = S.sample.file;
   await applySkin(S.skin);

@@ -200,6 +200,8 @@ kbd {
 #editor .cm-trailingSpace .cm-highlightSpace { background: radial-gradient(circle, color-mix(in srgb, var(--bad, #d33) 75%, transparent) 1px, transparent 1.5px) center / 100% 100% no-repeat; }
 #editor .cm-editor.cm-focused { outline: none; }
 #grid { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#gfx { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+#gfx[hidden] { display: none; }
 
 /* ---------- floating panels on the canvas ---------- */
 #alerts { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(60%, 520px); pointer-events: none; }
@@ -644,6 +646,9 @@ kbd {
 .example-list { position: absolute; left: 0; top: calc(100% + 6px); z-index: 60; width: min(560px, 92vw); max-height: 76vh; overflow: auto; padding: 8px;
   font-family: var(--label-font, var(--font-ui)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
 .example-list[hidden] { display: none; }
+.gfx-menu { left: auto; right: 0; width: min(330px, 92vw); }
+.gfx-menu .status { margin: 6px 8px 2px; font-size: 0.86em; color: var(--panel-dim); line-height: 1.4; }
+#gfx-btn b { font-weight: 600; }
 .example-list section + section { margin-top: 8px; border-top: var(--rule, 1px solid rgba(128,128,128,0.25)); padding-top: 6px; }
 .example-list h3 { margin: 2px 6px 4px; font: 700 calc(11px * var(--label-scale, 1)) var(--label-font, var(--font-ui)); text-transform: uppercase; letter-spacing: 0.06em; }
 .example-list h3 span { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--panel-dim); margin-top: 1px; }

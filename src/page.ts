@@ -1,6 +1,7 @@
 // The page around the panels: the system clock some skins show, the app's
 // own zoom, and the full-page background.
 import { $, esc } from './dom';
+import { gfxMode } from './gfx/gfx';
 import type { GridView } from './render';
 import type { Skin } from './skins/types';
 
@@ -58,8 +59,17 @@ export function paintPage(now: number, S: { skin: Skin }, view: GridView): void 
   const H = Math.round(h * dpr);
   if (pageBg.width !== W || pageBg.height !== H) (pageBg.width = W), (pageBg.height = H);
   const g = pageBg.getContext('2d')!;
+  // GFX: simple paints one still (once per skin and size), off a flat colour
+  const mode = gfxMode();
+  const key = `${S.skin.id}|${W}x${H}|${mode}`;
+  if (mode !== 'full' && pageKey === key) return;
+  pageKey = key;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.save();
-  S.skin.background({ g, z: 1, cs: 40, time: now / 1000, vw: w, vh: h }, 0, 0);
+  if (mode === 'off') {
+    g.fillStyle = S.skin.casing;
+    g.fillRect(0, 0, w, h);
+  } else S.skin.background({ g, z: 1, cs: 40, time: mode === 'simple' ? 0 : now / 1000, vw: w, vh: h }, 0, 0);
   g.restore();
 }
+let pageKey = '';

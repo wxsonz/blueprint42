@@ -51,3 +51,4 @@ and a line here. When a later decision replaces one, the old one's
 | [041](041-machine-pools.md) | 2026-09-29 | Accepted | a machine's storage in pools, with each row's past values |
 | [042](042-truth-under-the-hood.md) | 2026-09-29 | Accepted | the picture obeys how C really works |
 | [043](043-step-windows.md) | 2026-09-29 | Accepted | long runs in windows of steps, from savepoints |
+| [044](044-gfx-gpu-backgrounds.md) | 2026-09-29 | Accepted | GFX: backgrounds on the GPU (WebGPU, WebGL2), Full / Simple / Off |

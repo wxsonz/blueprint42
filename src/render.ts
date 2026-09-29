@@ -11,6 +11,9 @@ import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
 import { fileCap, fnCaps } from './norm';
+import { gfxMode } from './gfx/gfx';
+import { GfxLayer, type GfxView } from './gfx/layer';
+import { sceneFor } from './gfx/scenes';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
 
 export { procPlace, type Belt };
@@ -164,8 +167,60 @@ export class GridView {
   private target = { x: -2, y: -3, zoom: 1 };
   private last = performance.now();
 
+  // the GPU background (GFX: full), under this canvas
+  readonly gfx: GfxLayer;
+  private still: { key: string; c: HTMLCanvasElement } | null = null; // GFX: simple
+
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
+    this.gfx = new GfxLayer(canvas);
+    void this.gfx.init();
+  }
+
+  // The skin's background, as GFX says: its GPU scene (the grid canvas is
+  // then left clear over it), its canvas drawing, a still of it, or its
+  // flat colour. True when the GPU drew it.
+  private background(skin: Skin, dc: Dc, now: number): boolean {
+    const mode = gfxMode();
+    const scene = mode === 'full' ? sceneFor(skin.id) : null;
+    if (scene && this.gfx.ok && this.gfx.render(scene, this.gfxView(now))) {
+      dc.g.clearRect(0, 0, this.w, this.h);
+      return true;
+    }
+    this.gfx.hide();
+    const g = dc.g;
+    g.save();
+    if (mode === 'off') {
+      g.fillStyle = skin.casing;
+      g.fillRect(0, 0, this.w, this.h);
+    } else if (mode === 'simple') {
+      // one still picture per skin and size, painted once
+      const key = `${skin.id}|${this.w}x${this.h}@${this.dpr}`;
+      if (this.still?.key !== key) {
+        const c = document.createElement('canvas');
+        c.width = Math.round(this.w * this.dpr);
+        c.height = Math.round(this.h * this.dpr);
+        const cg = c.getContext('2d')!;
+        cg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        skin.background({ ...dc, g: cg, time: 0 }, 0, 0);
+        this.still = { key, c };
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.drawImage(this.still.c, 0, 0);
+    } else skin.background(dc, this.cam.x, this.cam.y);
+    g.restore();
+    return false;
+  }
+
+  private gfxView(now: number): GfxView {
+    return { w: this.w, h: this.h, dpr: this.dpr, time: now / 1000, z: this.cam.zoom, cs: this.cs, camX: this.cam.x, camY: this.cam.y };
+  }
+
+  // Idle: the grid rests, but a GPU background keeps moving on its own.
+  // False when there's none to move.
+  animateGfx(skin: Skin, now: number): boolean {
+    const scene = gfxMode() === 'full' && !skin.fullBleed ? sceneFor(skin.id) : null;
+    return !!scene && this.gfx.ok && !this.gfx.canvas.hidden && this.gfx.render(scene, this.gfxView(now));
   }
 
   get cs(): number {
@@ -313,12 +368,10 @@ export class GridView {
     const cs = this.cs;
     const z = this.cam.zoom;
     const dc: Dc = { g, z, cs, time: now / 1000, vw: this.w, vh: this.h };
-    if (skin.fullBleed) g.clearRect(0, 0, this.w, this.h); // the page behind shows through
-    else {
-      g.save();
-      skin.background(dc, this.cam.x, this.cam.y);
-      g.restore();
-    }
+    if (skin.fullBleed) {
+      g.clearRect(0, 0, this.w, this.h); // the page behind shows through
+      this.gfx.hide();
+    } else this.background(skin, dc, now);
 
     const trace = s.trace;
     const fr = trace && trace.evs.length ? frameAt(trace, s.pos) : null;
