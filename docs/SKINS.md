@@ -18,7 +18,7 @@ initiative (a sweep across skins, a "while I'm here" tweak).
 | Skin | Ids | Group | Status | Agent passes (newest last) |
 | --- | --- | --- | --- | --- |
 | PS1 | `ps1` | PlayStation | **reviewed** | |
-| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): surfaces around `#101010` instead of black, dim and faint text raised, near-white softened; the viewer's windows and panels solid, matching the editor; the viewport's space stays the deepest black; accents and the boot scene kept; GPU cubes (GFX Full) as clear glass with no edges, no highlights, nothing inside, and a cheaper frame (2026-09-29); belt as an AV cable (2026-09-30): a shaded rubber cord, a ridged collar at the source, a plug with a metal tip at the destination (the arrow); the moving lights unchanged |
+| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): surfaces around `#101010` instead of black, dim and faint text raised, near-white softened; the viewer's windows and panels solid, matching the editor; the viewport's space stays the deepest black; accents and the boot scene kept; GPU cubes (GFX Full) as clear glass with no edges, no highlights, nothing inside, and a cheaper frame (2026-09-29); belt as an AV cable (2026-09-30): a shaded rubber cord, a ridged collar at the source, a plug with a metal tip at the destination (the arrow); the moving lights unchanged; door as a bulkhead port: a vented plate with slit grille either side of a metal-lined socket the cord passes through, a blue light while running |
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |

@@ -574,4 +574,65 @@ export const ps2Theme: Theme = {
   },
 };
 
-export const ps2 = makeSkin(ps2Theme);
+// Where a belt passes through a wall: a bulkhead port, the vented plate of a
+// connector panel. Thin slits either side of a socket whose two metal bars
+// line the opening the cord goes through; a blue light on the plate while
+// data is running (dark otherwise). Drawn after the belt, so the cord shows
+// in the opening.
+function ps2Door(dc: Dc, [x, y]: [number, number], vertical: boolean, live: boolean): void {
+  const g = dc.g;
+  const wd = Math.max(2.6, 4.4 * dc.z); // the cord's thickness, as the belt draws it
+  const len = wd * 7.4; // along the wall
+  const th = wd * 2.4; // across it
+  g.save();
+  g.translate(x, y);
+  g.rotate(vertical ? Math.PI / 2 : 0);
+  // the plate in two halves, with the opening between them left open (the
+  // cord shows through it), and a lit top edge
+  const gap = wd; // half the opening: the cord's radius and a margin
+  for (const [a, b] of [[-len / 2, -gap], [gap, len / 2]]) {
+    g.fillStyle = CABLE.edge;
+    g.fillRect(a - 0.8, -th / 2 - 0.8, b - a + 1.6, th + 1.6);
+    g.fillStyle = '#1b1b1f';
+    g.fillRect(a, -th / 2, b - a, th);
+    g.fillStyle = 'rgba(255,255,255,0.07)';
+    g.fillRect(a, -th / 2, b - a, Math.max(1, wd * 0.16));
+  }
+  // the slit grille: two slits each side of the socket, each with a lit lower lip
+  const sw = Math.max(1, wd * 0.3);
+  const sh = th * 0.62;
+  for (const k of [-2.7, -1.9, 1.9, 2.7]) {
+    const sx = k * wd * 0.95 - sw / 2;
+    g.fillStyle = '#050506';
+    g.fillRect(sx, -sh / 2, sw, sh);
+    g.fillStyle = 'rgba(255,255,255,0.09)';
+    g.fillRect(sx + sw, -sh / 2 + 1, Math.max(0.6, sw * 0.35), sh);
+  }
+  // the socket: two metal bars along the opening, capped at the plate's faces
+  const metal = live ? '#8ea6ff' : '#7c7c86';
+  const bar = Math.max(1, wd * 0.34);
+  for (const sgn of [-1, 1]) {
+    g.fillStyle = metal;
+    g.fillRect(sgn * gap - (sgn > 0 ? 0 : bar), -th / 2, bar, th);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(sgn * gap - (sgn > 0 ? 0 : bar), -th / 2, bar, Math.max(1, wd * 0.16));
+  }
+  // its light
+  const lx = len / 2 - wd * 0.55;
+  const r = Math.max(1, wd * 0.28);
+  if (live) {
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = 'rgba(79,120,255,0.35)';
+    g.beginPath();
+    g.arc(lx, 0, r * 2.6, 0, Math.PI * 2);
+    g.fill();
+    g.globalCompositeOperation = 'source-over';
+  }
+  g.fillStyle = live ? '#d4ddff' : '#0a0a0c';
+  g.beginPath();
+  g.arc(lx, 0, r, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+}
+
+export const ps2 = { ...makeSkin(ps2Theme), door: ps2Door };
