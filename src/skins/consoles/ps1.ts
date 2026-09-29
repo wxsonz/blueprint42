@@ -1,5 +1,6 @@
 import { backdrop, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import { hash, rrect } from '../util';
+import { dockOf } from '../dock';
 import { cardOf, client, MONO, plastic, PS_SYM, psSymbol, RUBIK, text } from './common';
 
 // ---------------- PlayStation ----------------
@@ -45,6 +46,7 @@ const ps1P: Palette = {
 };
 export const ps1Theme: Theme = {
   id: 'ps1', name: 'PlayStation', blurb: 'the grey console, the black boot screen, the four colours and △○✕□',
+  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
   p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),
@@ -172,4 +174,4 @@ export const ps1Theme: Theme = {
   },
 };
 
-export const ps1 = { ...makeSkin(ps1Theme), mode: 'dark' as const };
+export const ps1 = { ...makeSkin(ps1Theme), dock: dockOf(ps1Theme), mode: 'dark' as const };

@@ -1,5 +1,6 @@
 import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
+import { dockOf } from '../dock';
 import { hash, strokeLine, Walk } from '../util';
 import { EXO, F, MONO, ps2Still, text } from './common';
 
@@ -328,6 +329,7 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
 
 export const ps2Theme: Theme = {
   id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith and the boot screen: blue fog, glass cubes, sharp trails of light',
+  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
   p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 0, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(63,107,255,0.9)',
   flow: '#3f6bff', // data in motion is the console's blue light
@@ -635,4 +637,4 @@ function ps2Door(dc: Dc, [x, y]: [number, number], vertical: boolean, live: bool
   g.restore();
 }
 
-export const ps2 = { ...makeSkin(ps2Theme), door: ps2Door };
+export const ps2 = { ...makeSkin(ps2Theme), dock: dockOf(ps2Theme), door: ps2Door };

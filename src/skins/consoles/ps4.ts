@@ -1,5 +1,6 @@
 import { backdrop, countBadge, makeSkin, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
+import { dockOf } from '../dock';
 import { hash, Walk } from '../util';
 import { MONO, ps2Still, SST, text } from './common';
 
@@ -257,6 +258,7 @@ function ps4Belt(dc: Dc, pts: [number, number][], o: { live: boolean; dir: numbe
 }
 export const ps4Theme: Theme = {
   id: 'ps4', name: 'PlayStation 4', blurb: 'the system screens: royal blue, lighter cards with pale edges, a white border on focus',
+  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
   p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 0, spotlight: 'rgba(0,10,60,0.5)',
   pulseColor: 'rgba(255,255,255,0.9)',
   belt(dc, pts, o, t) {
@@ -366,5 +368,5 @@ export const ps4Theme: Theme = {
   },
 };
 
-export const ps4 = makeSkin(ps4Theme);
+export const ps4 = { ...makeSkin(ps4Theme), dock: dockOf(ps4Theme) };
 ps4.fullBleed = true; // the sky and its ribbons behind the whole page, as the PS3's

@@ -3,7 +3,8 @@
 // (prototyped in Minimal and Barebone). A strip down the left edge is the
 // intake, in the state's colour; the head says IN and the state; the body
 // holds the arguments as they arrived.
-import type { Dc, DockInfo, Rect } from './types';
+import type { Theme } from './kit';
+import type { Dc, DockInfo, Rect, Skin } from './types';
 import { drawCap, drawTag, fitText, rrect } from './util';
 
 export interface DockPalette {
@@ -124,4 +125,13 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
     g.arc(r.x, py, px(dc, 3, 2), 0, Math.PI * 2);
     g.fill();
   }
+}
+
+// The dock for a kit-based skin, coloured from its palette (the PlayStations
+// use it; Barebone builds its own). `edge` false: no border, shades only.
+export function dockOf(t: Theme, o: { edge?: boolean; glow?: boolean } = {}): Skin['dock'] {
+  return (dc, r, d) => {
+    const q = t.p;
+    drawDock(dc, r, d, { body: q.card, edge: o.edge === false ? null : q.line, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.param, ptr: q.ptr, tagFill: q.cell, ui: t.ui, mono: t.mono, radius: t.radius, glow: !!o.glow });
+  };
 }

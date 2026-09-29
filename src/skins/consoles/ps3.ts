@@ -1,5 +1,6 @@
 import { backdrop, countBadge, makeSkin, type Palette, type Theme } from '../kit';
 import type { Dc, Rect } from '../types';
+import { dockOf } from '../dock';
 import { hash, rrect, strokeLine, Walk } from '../util';
 import { MONO, ps2Still, type Rgb, RODIN_R, text, toward } from './common';
 
@@ -335,6 +336,7 @@ function ps3Light(g: CanvasRenderingContext2D, pts: [number, number][], z: numbe
 }
 export const ps3Theme: Theme = {
   id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB: the wave, the sparkles, frosted panes, jelly icons; pick its colour on the top bar',
+  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
   p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 3, spotlight: 'rgba(0,16,50,0.5)',
   pulseColor: 'rgba(255,255,255,0.95)', flow: '#ffffff',
   card(dc, r, o) {
@@ -562,7 +564,7 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
   g.restore();
 }
 
-export const ps3 = makeSkin(ps3Theme);
+export const ps3 = { ...makeSkin(ps3Theme), dock: dockOf(ps3Theme, { glow: true }) };
 {
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));
