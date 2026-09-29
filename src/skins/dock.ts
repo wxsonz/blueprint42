@@ -98,8 +98,13 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
   else {
     if (d.last) note('last call', p.faint);
     const nameW = Math.min(inner * 0.45, Math.max(...d.args.map((a) => (g.font = p.mono(px(dc, 12, 6)), g.measureText(a.name).width))) + px(dc, 6));
-    for (const a of d.args) {
-      if (y + rowH > r.y + r.h - px(dc, 4)) break;
+    for (const [k, a] of d.args.entries()) {
+      // no room for the rest: say how many, never drop them silently
+      if (k < d.args.length - 1 && y + rowH * 2 > r.y + r.h - px(dc, 4)) {
+        g.globalAlpha = 1;
+        note(`+${d.args.length - k} more arguments`, p.muted);
+        break;
+      }
       g.globalAlpha = d.last ? 0.6 : 1;
       g.font = p.mono(px(dc, 12, 6));
       g.fillStyle = p.param;

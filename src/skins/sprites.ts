@@ -281,12 +281,15 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
 
   // stops, code, readouts
   const u = Math.max(2, 3.2 * z);
-  for (const s of i.stations) {
+  const dead = p.over ?? p.marker;
+  i.stations.forEach((s, k) => {
     const on = s.state !== 'idle';
+    const died = i.died?.station === k;
     const cur = s.state === 'current';
-    const fill = cur ? p.accent : on ? p.text : p.body;
+    const hi = died ? dead : p.accent;
+    const fill = cur ? hi : on ? p.text : p.body;
     g.fillStyle = fill;
-    g.strokeStyle = cur ? p.accent : on ? p.text : p.muted;
+    g.strokeStyle = cur ? hi : on ? p.text : p.muted;
     g.lineWidth = Math.max(1, 1.2 * z);
     g.beginPath();
     if (s.kind === 'if' || s.kind === 'loop') {
@@ -303,15 +306,25 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       g.strokeStyle = p.marker;
       g.stroke();
     }
+    if (died) {
+      // a cross through its stop: it never finished
+      g.strokeStyle = dead;
+      g.lineWidth = Math.max(1.5, 2 * z);
+      const c = u * 1.9;
+      g.beginPath();
+      g.moveTo(s.x - c, s.y - c); g.lineTo(s.x + c, s.y + c);
+      g.moveTo(s.x + c, s.y - c); g.lineTo(s.x - c, s.y + c);
+      g.stroke();
+    }
     g.font = p.font(fs);
-    g.fillStyle = s.hot ? p.accent : cur ? p.text : on ? p.text : p.muted;
+    g.fillStyle = died ? dead : s.hot ? p.accent : cur ? p.text : on ? p.text : p.muted;
     g.globalAlpha = (i.mode !== 'live' ? 0.75 : 1) * (on ? 1 : 0.7);
-    const badge = s.count !== null ? `×${s.count}` : '';
+    const badge = died ? `✕ ${i.died!.msg.split(':')[0] || 'died'}` : s.count !== null ? `×${s.count}` : '';
     const bw = badge ? g.measureText(badge).width + 6 * z : 0;
     g.fillText(cut(s.text, right - s.textX - bw), s.textX, s.y);
     if (badge) {
       g.textAlign = 'right';
-      g.fillStyle = s.count ? p.accent : p.muted;
+      g.fillStyle = died ? dead : s.count ? p.accent : p.muted;
       g.fillText(badge, right, s.y);
       g.textAlign = 'left';
     }
@@ -323,10 +336,10 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       g.fillText(cut(s.readout.text, right - s.textX - 4 * z), s.textX + 4 * z, ry);
     }
     g.globalAlpha = i.mode !== 'live' ? 0.75 : 1;
-  }
+  });
 
-  // the token: where the frame is now
-  if (i.token) {
+  // the token: where the frame is now (not on a statement it died in: the cross is there)
+  if (i.token && !i.died) {
     const [x, y] = i.token;
     const pulse = 0.5 + 0.5 * Math.sin(dc.time * 6);
     g.globalAlpha = 1;

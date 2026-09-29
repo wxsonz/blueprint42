@@ -73,6 +73,10 @@ export interface CapInfo {
 
 export type ValueKind = 'int' | 'ptr' | 'null' | 'undef' | 'none' | 'dangling';
 
+// A row's past values, oldest first; `older`: how many came before these
+// (not kept), so a skin can say so instead of hiding them
+export type Past = string[] & { older?: number };
+
 export interface RowInfo {
   name: string;
   value: string;
@@ -83,7 +87,7 @@ export interface RowInfo {
   rect: Rect;
   depth: number; // 1 = a struct field under the row above it
   fold: 'open' | 'closed' | null; // a struct row (its name already carries ▾/▸)
-  past?: string[]; // what it held before, oldest first (a skin shows it dimmed before the value)
+  past?: Past; // what it held before, oldest first (a skin shows it dimmed before the value)
   tag?: string; // a pointer: what its address points at; a skin that draws tags shows this in place of `value`
 }
 
@@ -207,6 +211,18 @@ export interface InteriorInfo {
   row: number; // row height, px
   head: Rect;
   cap?: CapInfo; // physical lines between the braces, of the Norm's 25
+  died?: { station: number; msg: string }; // the statement the program died in (its frame crashed there), and how
+}
+
+// printf's buffer inside libc (stdout's FILE buffer), above the process box:
+// the bytes printf has taken that haven't reached the terminal yet. Only
+// drawn when the trace really read it each step (the gdb engine).
+export interface StdBufInfo {
+  text: string; // what it holds now, waiting
+  n: number; // bytes held
+  cap: number; // its size (4096 on glibc)
+  mode: 'terminal' | 'pipe'; // where stdout goes: flushed at each newline, or only when full
+  flushed: string | null; // bytes that just left it for the terminal (this step's flush), or null
 }
 
 export interface Skin {
@@ -228,6 +244,8 @@ export interface Skin {
   // optional: a machine's IN dock, drawn in the motor's place; skins without
   // it draw their node sprite there (Minimal and Barebone prototype it)
   dock?(dc: Dc, r: Rect, d: DockInfo): void;
+  // optional: printf's buffer above the process box (Minimal and Barebone prototype it)
+  stdbuf?(dc: Dc, r: Rect, b: StdBufInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
   strip(dc: Dc, r: Rect, info: StripInfo): void;

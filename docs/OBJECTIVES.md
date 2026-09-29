@@ -28,8 +28,8 @@ Next, in this order:
    arrived), *waiting* (it called another function and is paused until that
    returns) and *crashed* (it died; it says the line and the signal).
    Prototyped in Minimal and Barebone (`Skin.dock`, `skins/dock.ts`); other
-   skins keep their motor until the design settles. Still to do: mark the
-   station that died inside the stations, not only in the dock.
+   skins keep their motor until the design settles. The station that died
+   is crossed out in the stations too (decision 046).
 2. [x] **Pointer address tag** (S). A pointer row shows a tag, not a value:
    a socket dot and what its address points at (`bufs[0]`, `heap #1`),
    in PARAMETERS, LOCALS, REACHED and the IN dock. The tag says only what
@@ -186,8 +186,9 @@ Aim: fun to look at, and every mark means exactly one thing.
      terminal (a pseudo-terminal, the default) or a pipe (the "stdout" toggle
      in the run settings), reports every write(2) (the user's own, or libc
      flushing printf's buffer) and the buffer's real contents each step; the
-     terminal box shows what has really arrived by then. Next: draw the
-     buffer node above the terminal, and the bytes flying out.
+     terminal box shows what has really arrived by then. The buffer node is
+     drawn above the terminal in Minimal and Barebone (decision 046). Next:
+     the bytes flying out on a flush.
 4. **Fun without lying (S each).** Every effect is driven by a real event:
    - a leak is an item falling off the shelf at exit;
    - a segfault jams the machine at the statement that died;

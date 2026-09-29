@@ -579,6 +579,19 @@ export class GridView {
         selected: selKey === 'p',
         hovered: hovKey === 'p',
       });
+      // printf's buffer above it: what printf holds that hasn't reached the
+      // terminal (only when the trace really read it: the gdb engine)
+      const buf = snap?.out;
+      if (skin.stdbuf && buf && trace?.outMode) {
+        const prev = fr && fr.si > 0 ? trace.snaps[fr.si - 1]?.out : undefined;
+        const n = buf.buf?.n ?? 0;
+        const was = prev?.buf?.n ?? 0;
+        const BH = 1.7;
+        skin.stdbuf(dc, this.rectW(pp.x, pp.y - BH - 0.4, MW, BH), {
+          text: buf.buf?.text ?? '', n, cap: buf.buf?.cap ?? 4096, mode: trace.outMode,
+          flushed: was > 0 && n < was && prev!.sent < buf.sent ? prev!.buf!.text : null,
+        });
+      }
       g.restore();
     }
 
@@ -1095,10 +1108,12 @@ export class GridView {
     const after = act ? trace.snaps[Math.min(act.beat.after, trace.snaps.length - 1)] : snapNow;
     const fB = act ? before.stack.find((f) => f.id === act.beat.frame) ?? shown : shown;
     const fA = act ? after.stack.find((f) => f.id === act.beat.frame) ?? fB : shown;
-    const writes = act && act.phase === 'write' ? writesOf(act.beat, fn, trace).slice(0, 10) : [];
+    const allWrites = act && act.phase === 'write' ? writesOf(act.beat, fn, trace) : [];
+    // at most 10 fly one by one; the 11th carries the count of the rest
+    const writes = allWrites.slice(0, 11);
     const chipU = (n: number, f: number) => Math.max(0, Math.min(1, (f - 0.1 * n) / 0.7));
     const arrived = new Set<string>();
-    writes.forEach((w, n) => chipU(n, act!.landed) >= 1 && arrived.add(w.key));
+    allWrites.forEach((w, n) => chipU(Math.min(n, 10), act!.landed) >= 1 && arrived.add(w.key)); // the rest land with the "+n more"
     const slots = slotsOf(fn);
     const X = this.sx(h.x + geo.store.x);
     const Y = this.sy(h.y + geo.store.y);
@@ -1238,6 +1253,11 @@ export class GridView {
       hot: act && act.beat.kind !== 'switch' && act.phase !== 'read' && compute ? { station: act.beat.station, text: compute } : null,
     });
     if (skin.capacity) info.cap = { ...fnCaps(fn).lines, unit: 'lines' };
+    // the statement it died in: its frame crashed while there
+    if (state === 'error' && frame && ist?.current != null) {
+      const e = callsOf(trace).errs.get(frame.id);
+      info.died = { station: ist.current, msg: e?.k === 'error' ? e.msg : '' };
+    }
     skin.interior({ ...dc, z: zI, cs: CELL_PX * zI }, { x: SX, y: SY, w: plan.w * zI, h: plan.h * zI }, info);
 
     // ---- in flight: reads to the station, writes back to storage ----
@@ -1249,14 +1269,19 @@ export class GridView {
       return [p, [p[0] + dx, p[1]], [q[0] - dx, q[1]], q];
     };
     if (act.phase === 'read') {
-      readsOf(act.beat, fn, trace).slice(0, 8).forEach((r, n) => {
+      // at most 8 fly one by one; the rest ride together as one "+n more"
+      // from the first of them, so none is read without a sign
+      const reads = readsOf(act.beat, fn, trace);
+      reads.slice(0, 9).forEach((r, n) => {
         const u = chipU(n, act.p / READ_END);
         if (u <= 0 || u >= 1) return;
-        const c = curve(slotAt.get(r.key) ?? [X + W, Y], at);
+        // `*p` flies from the memory at p's address (its row, wherever it is), not from p
+        const src = r.cell !== undefined ? anchors.get(r.cell) : undefined;
+        const c = curve(src ? [src.left, src.y] : slotAt.get(r.key) ?? [X + W, Y], at);
         const [x, y] = bez(c, u);
         if (skin.trail) skin.trail(dc, bezTrail(c, u), 'arg');
         skin.pulse(dc, x, y);
-        skin.plate(dc, x, y - 12 * z, r.text, 'arg');
+        skin.plate(dc, x, y - 12 * z, n === 8 && reads.length > 9 ? `+${reads.length - 8} more` : r.text, 'arg');
       });
     }
     writes.forEach((w, n) => {
@@ -1274,7 +1299,7 @@ export class GridView {
       const [x, y] = bez(c, u);
       if (skin.trail) skin.trail(dc, bezTrail(c, u), 'ret');
       skin.pulse(dc, x, y);
-      skin.plate(dc, x, y - 12 * z, w.text, 'ret');
+      skin.plate(dc, x, y - 12 * z, n === 10 && allWrites.length > 11 ? `+${allWrites.length - 10} more` : w.text, 'ret');
     });
   }
 

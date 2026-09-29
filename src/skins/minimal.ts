@@ -3,6 +3,7 @@ import type { Dc, IconKind, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
+import { drawStdBuf } from './stdbuf';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
@@ -228,6 +229,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
   },
 
   dock(dc, r, d) { drawDock(dc, r, d, dockPalette); },
+  stdbuf(dc, r, b) { drawStdBuf(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
 
   node(dc, r, n) {
     const g = dc.g;

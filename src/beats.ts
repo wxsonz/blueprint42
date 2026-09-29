@@ -7,6 +7,7 @@
 // Everything comes from the trace (principle 4): reads are the names a
 // statement uses, valued from the snapshot at its stop; writes are the
 // differences between that snapshot and the one once the statement is done.
+import type { Past } from './skins/types';
 import { interiorAt, planOf, type Leaf, type Plan, type Station } from './interior';
 import type { Ev, Snap, SnapFrame, Trace, V } from './interp';
 import { slotsOf, type Slot } from './machine';
@@ -99,7 +100,7 @@ export function ptrTag(v: V, trace: Trace, frame: SnapFrame | null): { tag?: str
 // up to snapshot `upto`, without the value it holds now. Scanned once per
 // frame and slot, extended as playback moves on.
 const histCache = new WeakMap<Trace, Map<string, { scanned: number; changes: { si: number; text: string }[] }>>();
-export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: Trace, upto: number, n = 3): string[] {
+export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: Trace, upto: number, n = 8): Past {
   if (slot.kind === 'more') return [];
   let byKey = histCache.get(trace);
   if (!byKey) histCache.set(trace, (byKey = new Map()));
@@ -115,7 +116,11 @@ export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: 
     h.scanned = si;
   }
   const seen = h.changes.filter((c) => c.si <= upto);
-  return seen.slice(Math.max(0, seen.length - 1 - n), -1).map((c) => c.text);
+  const from = Math.max(0, seen.length - 1 - n);
+  // the last n, and how many older ones there were (a skin says so)
+  const past: Past = seen.slice(from, -1).map((c) => c.text);
+  if (from > 0) past.older = from;
+  return past;
 }
 
 // The slot a read names: `x` (a local, param or static) or `a->b`.
@@ -128,7 +133,7 @@ function slotKeyOf(leaf: Leaf, slots: Slot[]): string | null {
 
 // ---------------- reads and writes of a beat ----------------
 
-export interface Read { key: string; text: string }
+export interface Read { key: string; text: string; cell?: number } // cell: `*p` read the memory at this cell (p's address), not p
 export interface Write { key: string; text: string; index?: number } // index: a byte in that slot's memory
 
 const frameIn = (snap: Snap, id: number) => snap.stack.find((f) => f.id === id) ?? null;
@@ -138,12 +143,33 @@ function leavesOfStation(st: Station): { leaves: Leaf[]; src: string } {
   return { leaves: st.reads ?? [], src: st.src ?? '' };
 }
 
+// The cell anywhere in a snapshot (a frame's, a static, a heap block) with this id.
+function cellIn(snap: Snap, id: number) {
+  for (const f of snap.stack) for (const c of f.cells) if (c.id === id) return c;
+  return snap.statics.find((c) => c.id === id) ?? snap.heap.find((c) => c.id === id) ?? null;
+}
+
+// `*p`: the value at the address p holds, and that cell's id; null when p
+// holds no address the trace has a cell for (then only p's own read is shown)
+function derefOf(leaf: Leaf, fnName: string, frame: SnapFrame | null, snap: Snap, trace: Trace): { cell: number; text: string } | null {
+  const id = frame?.cells.find((c) => c.name === leaf.path[0])?.id ?? staticCellId(trace, fnName, leaf.path[0]);
+  const p = id !== null && id !== undefined ? cellIn(snap, id) : null;
+  if (!p || p.val.k !== 'ptr' || p.val.to === null) return null;
+  const t = cellIn(snap, p.val.to);
+  return t && !t.fields ? { cell: t.id, text: valueOf(t, frame, trace, null).text } : null;
+}
+
 export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
   const slots = slotsOf(fn);
   const snap = trace.snaps[b.before];
   const frame = frameIn(snap, b.frame);
   const out: Read[] = [];
   for (const leaf of leavesOfStation(planOf(fn).stations[b.station]).leaves) {
+    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
+    if (d) {
+      if (!out.some((r) => r.cell === d.cell)) out.push({ key: `d:${leaf.path[0]}`, text: d.text, cell: d.cell });
+      continue;
+    }
     const key = slotKeyOf(leaf, slots);
     if (!key || out.some((r) => r.key === key)) continue;
     const v = slotValue(slots.find((s) => s.key === key)!, fn.name, frame, snap, trace);
@@ -161,6 +187,9 @@ export function computeText(b: Beat, fn: FnInfo, trace: Trace): string {
   let out = src;
   for (const leaf of [...leaves].sort((x, y) => y.from - x.from)) {
     if (leaf.keep) continue;
+    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
+    if (d) out = out.slice(0, leaf.from) + d.text + out.slice(leaf.to);
+    if (leaf.deref) continue; // with no cell to read, `*p` stays as written
     const key = slotKeyOf(leaf, slots);
     if (!key) continue;
     const v = slotValue(slots.find((s) => s.key === key)!, fn.name, frame, snap, trace);

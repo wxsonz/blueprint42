@@ -129,4 +129,18 @@ describe('machines are their insides', () => {
     expect(computeText(inc, fn, t)).toBe('i = 0 + 1');
     expect(writesOf(inc, fn, t)).toEqual([{ key: 'c:i', text: '1' }]);
   });
+
+  it('*p reads the memory at p\'s address (its value and its cell), and *p = … only reads p', () => {
+    const src = 'void\tbump(int *n)\n{\n\t*n = *n + 1;\n}\n\nint\tmain(void)\n{\n\tint\ta;\n\n\ta = 3;\n\tbump(&a);\n\treturn (a);\n}\n';
+    const m = parse(src);
+    const t = run(m);
+    const fn = m.byName.get('bump')!;
+    const b = timelineOf(t, m).beats.find((x) => x.fn === 'bump' && text(m, x).startsWith('*n'))!;
+    const snap = t.snaps[b.before];
+    const a = snap.stack.find((f) => f.fn === 'main')!.cells.find((c) => c.name === 'a')!;
+    const reads = readsOf(b, fn, t);
+    // the target's `n` (where to write) and the value at that address, from a's cell
+    expect(reads).toContainEqual({ key: 'd:n', text: '3', cell: a.id });
+    expect(computeText(b, fn, t)).toBe('*n = 3 + 1');
+  });
 });

@@ -17,6 +17,7 @@ export interface Leaf {
   to: number;
   path: [string] | [string, string]; // `x`, or `a->b` / `a.b`
   keep?: boolean; // read, but shown as written (`i++`, `&x`): a value there would read wrong
+  deref?: boolean; // `*p`: the read is of the memory p holds the address of, not of p
 }
 
 export interface Station {
@@ -89,6 +90,14 @@ export function leavesOf(cond: Node): Leaf[] {
       out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [n.text] });
       return;
     }
+    // `*p`: what is read is the memory at p's address (the leaf covers `*p`)
+    if (n.type === 'pointer_expression' && n.child(0)?.text === '*') {
+      const a = n.childForFieldName('argument') ?? n.namedChild(0);
+      if (a?.type === 'identifier') {
+        out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], deref: true });
+        return;
+      }
+    }
     if (n.type === 'update_expression' || (n.type === 'pointer_expression' && n.child(0)?.text === '&')) {
       const inner: Leaf[] = [];
       const arg = n.childForFieldName('argument') ?? n.namedChild(0);
@@ -132,7 +141,9 @@ function readsOf(n: Node): Leaf[] {
     const right = e.childForFieldName('right');
     const op = e.childForFieldName('operator')?.text ?? '=';
     const out = right ? shift(leavesOf(right), right, base) : [];
-    if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left), left, base));
+    // `*p = …` reads p (where to write), not *p: only `*p += …` reads what's there
+    const target = (l: Leaf): Leaf => (op === '=' && l.deref && l.from === 0 && l.to === left!.text.length ? { ...l, deref: undefined, keep: true } : l);
+    if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left).map(target), left, base));
     return out;
   }
   return shift(leavesOf(e), e, base);

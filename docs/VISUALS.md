@@ -71,7 +71,7 @@ Each section below is one level. The columns are:
 | A header's types | Declared in `.h` only | Nothing on the grid; struct fields appear in storage rows | — | ⬜ | A types shelf: drag a field in to add it |
 | A macro constant | Literal values only, uppercase | Nothing | — | ⬜ | Constants on the types shelf |
 
-#### Output: the printf buffer and the terminal (tracer built; the buffer's picture is next)
+#### Output: the printf buffer and the terminal (built; the buffer is drawn in Minimal and Barebone)
 
 Author's design (2026-09-29). Above the process box (the terminal) sits a
 **printf buffer** node, `stdout`'s buffer inside libc:
@@ -184,7 +184,7 @@ the grammar only covers what the Norm allows.
 | A read | The value flies from its row into the station | the line runs | ✅ | — |
 | The whole expression | Its text, with each name replaced by the value read (`6 == 8 → false`) | the line runs | ✅ | Typed as text in the station |
 | A call inside an expression | A belt out; the return plate comes back into the expression | the call and its return | ✅ | — |
-| A dereference `*p`, `p->f`, `a[i]` | The value read, not where it came from | — | 🟡 | — |
+| A dereference `*p`, `p->f`, `a[i]` | `*p`: the value flies from the memory at p's address (its row, wherever it's drawn) and fills the expression; `*p = …` reads only p. `p->f`: from its REACHED row | the line runs | ✅ `*p` of a plain cell and `p->f`; 🟡 `a[i]` and deeper chains show the index or pointer read | — |
 
 ### 6. Values and memory
 
@@ -237,6 +237,9 @@ Unbound ones are dimmed and never animated. ✅
 4. **Norm limits are visible as capacity.** The number of slots is the
    limit, so a full machine looks full.
 5. **Readable at the zoom it's drawn at.** Below that, draw less, not smaller.
+6. **Nothing is dropped silently.** Whatever doesn't fit is counted where it
+   would be (`+3 …`, `+n more`), and a crash marks the statement it happened
+   in (decision 046).
 
 ## To do, from this table
 
@@ -246,13 +249,12 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 2. ~~Return type~~: done, in the RETURN panel.
 3. ~~Argument vs return plates~~: done, hexagon vs notched (Minimal and Barebone).
 4. **The types shelf** (structs, typedefs, enums, macro constants).
-5. **Dereference**: where a `*p` or `p->f` value came from.
+5. ~~Dereference~~: `*p` and `p->f` read from where the memory is (decision 046); `a[i]` still to do.
 6. **Ownership** of heap blocks.
 7. **Aliasing**: pointer arrows from rows to the memory they point at.
 8. **Loop history**: past values are shown per row now; past rounds of a
    loop as a whole are not.
-9. **Output as it happens**: the printf buffer node and `write` going straight
-   to the terminal (designed above, under Project).
+9. ~~Output as it happens~~: the printf buffer node, in Minimal and Barebone (decision 046); the bytes flying out on a flush still to do.
 10. **`static` functions** marked the same way in every skin.
 
 Each one becomes a decision entry when it's built.

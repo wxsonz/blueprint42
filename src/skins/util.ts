@@ -1,4 +1,4 @@
-import type { CapInfo, Dc, PlateRole, Pt, Rect } from './types';
+import type { CapInfo, Dc, Past, PlateRole, Pt, Rect } from './types';
 
 export function rrect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | [number, number, number, number]): void {
   const [a, b, c, d] = typeof r === 'number' ? [r, r, r, r] : r;
@@ -253,15 +253,21 @@ export function cutText(g: CanvasRenderingContext2D, text: string, maxW: number)
 // A storage row's past values, right-aligned so they end just before its
 // current value (at xRight), newest nearest: "? → 4 → " then the value. Drops
 // the oldest ones that don't fit in maxW. The caller sets the colour.
-export function pastText(g: CanvasRenderingContext2D, past: string[] | undefined, maxW: number): string {
+export function pastText(g: CanvasRenderingContext2D, past: Past | undefined, maxW: number): string {
   if (!past?.length || maxW < 16) return '';
+  // older values that don't fit (or weren't kept) are counted, never
+  // silently dropped: `+3 … 4 → `
+  const older = past.older ?? 0;
   let text = '';
-  for (let k = past.length - 1; k >= 0; k--) {
+  let k = past.length - 1;
+  for (; k >= 0; k--) {
     const next = `${past[k]} → ${text}`;
-    if (g.measureText(next).width > maxW) break;
+    const lead = k > 0 || older ? `+${k + older} … ` : '';
+    if (g.measureText(lead + next).width > maxW) break;
     text = next;
   }
-  return text;
+  const hidden = k + 1 + older;
+  return hidden ? `+${hidden} … ${text}` : text;
 }
 // How a skin draws the bar of a capacity: its width and height for a text
 // size, and the drawing (centred on y). Skins without one get the plain bar.
@@ -369,7 +375,7 @@ export function drawTag(g: CanvasRenderingContext2D, text: string, xAt: number, 
   return w;
 }
 
-export function drawPast(g: CanvasRenderingContext2D, past: string[] | undefined, xRight: number, y: number, maxW: number): void {
+export function drawPast(g: CanvasRenderingContext2D, past: Past | undefined, xRight: number, y: number, maxW: number): void {
   const text = pastText(g, past, maxW);
   if (!text) return;
   g.save();

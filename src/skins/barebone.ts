@@ -6,6 +6,7 @@
 import { countBadge, makeSkin, type Theme } from './kit';
 import { arrowHead, strokeLine, Walk } from './util';
 import { drawDock } from './dock';
+import { drawStdBuf } from './stdbuf';
 import type { Skin } from './types';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
@@ -72,6 +73,9 @@ function withDock(t: Theme): Skin {
     ...makeSkin(t),
     dock(dc, r, d) {
       drawDock(dc, r, d, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.dim, ptr: q.ptr, tagFill: q.cell, ui: t.ui, mono: t.mono, radius: 0, glow: false });
+    },
+    stdbuf(dc, r, b) {
+      drawStdBuf(dc, r, b, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, flow: q.accent, wait: q.wait, err: q.err, track: q.cell, ui: t.ui, mono: t.mono, radius: 0 });
     },
   };
 }
