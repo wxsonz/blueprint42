@@ -49,6 +49,13 @@ The scrollbar and toggle pass (2026-09-29, commit e5f3ef6) touched every
 skin's CSS, the reviewed ones included. The author hasn't looked at those
 parts yet.
 
+## Prototyping new pictures
+
+A new engine picture (a part of the machine, a new kind of line) is
+prototyped in **Minimal and Barebone only** (the author's call, 2026-09-29).
+Other skins get it through the engine and their existing parts, untouched,
+until the design settles; only then does a pass give them their own look.
+
 ## Rules for any skin pass
 
 - Look lives in skins (`src/skins/*.ts`, `src/skins/consoles/*.ts`,

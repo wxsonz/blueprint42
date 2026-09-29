@@ -28,7 +28,10 @@ Next, in this order:
    arrived), *waiting* (it called another function and is paused until that
    returns) and *crashed* (it died; the station that died is marked too).
 2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
-   its line leads to what it points at in REACHED.
+   its line leads to what it points at in REACHED. Done so far: every
+   pointer always has its line (quieter outside the running frame, never
+   hidden); one whose target isn't drawn gets a stub with its arrow; a
+   `char *` gets a line to its byte strip.
 3. [ ] **Byte strips inside REACHED** (S). They're reached memory too, and
    today sit on their own below the stations. Their label says where the
    bytes live (heap, stack, static) and who allocated them.
@@ -39,7 +42,8 @@ Next, in this order:
 
 Settled today: the dock shows all four of the engine's states. The anatomy
 is an engine change, so every skin gets all of it at once, in its existing
-parts; per-skin looks come later.
+parts; per-skin looks come later. New pictures are prototyped in Minimal
+and Barebone only.
 
 Still open: are expressions typed as text inside a station (recommended),
 or built from blocks? See `docs/VISUALS.md`.

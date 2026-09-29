@@ -26,6 +26,8 @@ limits); read the part you need.
   Don't add vim-style bindings to the canvas.
 - Skin review status is in `docs/SKINS.md`: never redesign a skin marked
   reviewed there unless the author names it; log every skin pass there.
+  Prototype new pictures in Minimal and Barebone only; don't edit other
+  skins' code for them until the design settles.
 - Look and feel lives in skins. New visuals go through the `Skin` interface
   (`src/skins/types.ts`) and every skin, never hard-coded colours in
   the engine.

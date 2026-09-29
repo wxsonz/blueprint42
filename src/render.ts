@@ -125,6 +125,8 @@ class PathWalk {
 
 export class GridView {
   private g: CanvasRenderingContext2D;
+  // pointer cells whose line already goes to a byte strip in their machine
+  private stripWired = new Set<number>();
   private dpr = 1;
   w = 0;
   h = 0;
@@ -498,6 +500,7 @@ export class GridView {
 
     // ---- statics (on homes) + frames (on every drawn host) ----
     const anchors = new Map<number, Anchor>();
+    this.stripWired.clear();
     const flash = ev && ev.k === 'write' && ph!.switched ? { cell: ev.cell, a: 1 - ph!.after } : null;
     const lastEv = trace && fr && !ev && fr.i > 0 ? trace.evs[fr.i - 1] : null;
     const recent = lastEv?.k === 'write' ? lastEv.cell : null;
@@ -592,28 +595,34 @@ export class GridView {
     }
 
     // ---- pointer wires ----
-    // Few pointers: draw them all. Many: only the running frame's, the
-    // focused function's, and any wire a write is travelling right now.
+    // Every pointer gets its line, so a pointer always reads as one. The
+    // running frame's, the focused function's and one a write is travelling
+    // through are drawn fully; the rest quieter, never hidden.
     const newFrame = ev?.k === 'call' && ph!.switched ? ev.frame : null;
     const cells: SnapCell[] = [...(snap?.statics ?? []), ...st.flatMap((f) => f.cells)];
     const wired = cells.filter((c) => c.val.k === 'ptr' && c.val.to !== null && anchors.has(c.id));
     const frameOfCell = new Map<number, SnapFrame>();
     for (const f of st) for (const c of f.cells) frameOfCell.set(c.id, f);
     const topId = st[st.length - 1]?.id ?? null;
-    const showAll = wired.length <= 4;
     for (const c of wired) {
       if (c.val.k !== 'ptr' || c.val.to === null) continue;
       const a = anchors.get(c.id)!;
       const owner = frameOfCell.get(c.id);
       const travelling = ev?.k === 'write' && ev.via === c.id;
       const focused = !!focusFn && owner?.fn === focusFn;
-      if (!showAll && owner?.id !== topId && !focused && !travelling) continue;
+      if (this.stripWired.has(c.id)) continue;
       const b = anchors.get(c.val.to);
       g.save();
       if (focus) g.globalAlpha = 0.55;
+      if (owner?.id !== topId && !focused && !travelling) g.globalAlpha *= 0.4;
       if (!live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]);
       else if (!b) {
-        // points at something on screen elsewhere, e.g. inside a collapsed module
+        // points at something not drawn here (heap, a collapsed module, off
+        // screen): a short stub with its arrow, so it still reads as a pointer
+        const L = this.cs * 0.9;
+        const pts: Pt[] = [];
+        for (let i = 0; i <= 8; i++) pts.push([a.right + (L * i) / 8, a.y]);
+        skin.wire(dc, pts, true);
       } else {
         const inNew = newFrame !== null && st.find((f) => f.id === newFrame)?.cells.some((x) => x.id === c.id);
         const grow = inNew ? Math.min(1, ph!.after * 1.4) : 1;
@@ -1006,6 +1015,25 @@ export class GridView {
         selected: false, hovered: false,
       });
     });
+
+    // a pointer with bytes drawn below gets its line to them (a field in
+    // REACHED too, which the global wire pass doesn't know about)
+    for (const [key, m] of mem) {
+      const from = slotAt.get(key);
+      if (!from || !m.len) continue;
+      const to: Pt = [m.r.x + 12 * z, m.r.y];
+      const out = Math.max(cs * 0.7, 14 * z);
+      const c: [Pt, Pt, Pt, Pt] = [from, [from[0] + out, from[1]], [to[0], to[1] - out], to];
+      const pts: Pt[] = [];
+      for (let i = 0; i <= 32; i++) pts.push(bez(c, i / 32));
+      g.save();
+      if (!frame) g.globalAlpha *= 0.4;
+      skin.wire(dc, pts, true);
+      g.restore();
+      const sl = slots.find((x) => x.key === key);
+      const cell = sl?.kind === 'cell' ? frame?.cells.find((x) => x.name === sl.name) : undefined;
+      if (cell) this.stripWired.add(cell.id);
+    }
 
     // ---- stations ----
     const zI = z * geo.stations.zoom;
