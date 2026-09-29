@@ -112,3 +112,15 @@ html[data-skin='metro'] {
 }
 html[data-skin='metro'] .pane-head .title { text-transform: lowercase; }
 html[data-skin='metro'] .btn, html[data-skin='metro'] .seg button { text-transform: lowercase; }
+
+/* ---- scrollbars and toggles: Metro ---- */
+html[data-skin='metro'] { --sb-size:10px; --sb-thumb:#6e6e6e; --sb-thumb-hover:#9a9a9a; --sb-thumb-active:#c8c8c8; --sb-track:#2b2b2b; --sb-thumb-c:#6e6e6e; --sb-track-c:#2b2b2b; --sb-radius:0; }
+html[data-skin='metro-light'] { --sb-size:10px; --sb-thumb:#b4b4b4; --sb-thumb-hover:#8a8a8a; --sb-thumb-active:#5e5e5e; --sb-track:#e6e6e6; --sb-thumb-c:#b4b4b4; --sb-track-c:#e6e6e6; --sb-radius:0; }
+html[data-skin='metro'] .toggle .sw,
+html[data-skin='metro-light'] .toggle .sw { width:32px; height:14px; border-radius:0; background:transparent; border:2px solid var(--fg); box-shadow:none; }
+html[data-skin='metro'] .toggle .sw::after,
+html[data-skin='metro-light'] .toggle .sw::after { top:2px; left:2px; width:6px; height:6px; border-radius:0; background:var(--fg); transition:none; }
+html[data-skin='metro'] .toggle[aria-pressed='true'] .sw,
+html[data-skin='metro-light'] .toggle[aria-pressed='true'] .sw { background:var(--accent); border-color:var(--accent); }
+html[data-skin='metro'] .toggle[aria-pressed='true'] .sw::after,
+html[data-skin='metro-light'] .toggle[aria-pressed='true'] .sw::after { left:20px; background:#fff; }

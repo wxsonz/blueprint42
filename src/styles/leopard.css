@@ -110,3 +110,16 @@ html[data-skin='leopard'] {
   --syn-op: #1d1d1f;
   --syn-punct: #5c5c5c;
 }
+
+/* ---- scrollbars and toggles: Leopard ---- */
+html[data-skin='leopard'] { --sb-size:15px; --sb-thumb-c:#6b93c6; --sb-track-c:#e6e6e6; --sb-radius:8px; }
+html[data-skin='leopard'] ::-webkit-scrollbar-track:vertical { background:linear-gradient(90deg,#d2d2d2,#f6f6f6 45%,#fdfdfd); }
+html[data-skin='leopard'] ::-webkit-scrollbar-track:horizontal { background:linear-gradient(#d2d2d2,#f6f6f6 45%,#fdfdfd); }
+html[data-skin='leopard'] ::-webkit-scrollbar-thumb { border:1px solid #47709f; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.35); }
+html[data-skin='leopard'] ::-webkit-scrollbar-thumb:vertical { background:linear-gradient(90deg,#b9d0ea,#7ea3d0 45%,#5a86bd 55%,#8fb2dc); }
+html[data-skin='leopard'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#b9d0ea,#7ea3d0 45%,#5a86bd 55%,#8fb2dc); }
+html[data-skin='leopard'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.07); }
+html[data-skin='leopard'] .toggle .sw { width:14px; height:14px; border-radius:3px; background:linear-gradient(#fdfdfd,#d9d9d9 50%,#e9e9e9); border:1px solid #6d6d6d; box-shadow:0 1px 1px rgba(0,0,0,0.2); }
+html[data-skin='leopard'] .toggle[aria-pressed='true'] .sw { background:linear-gradient(#94b6e4,#4f81c6 50%,#3c72bd 52%,#6a9be0); border-color:#2d5a9a; }
+html[data-skin='leopard'] .toggle .sw::after { content:''; left:4px; top:0; width:3px; height:7px; border:solid #fff; border-width:0 2px 2px 0; border-radius:0; background:none; transform:rotate(45deg); opacity:0; transition:none; box-shadow:0 0 1px rgba(0,0,0,0.6); }
+html[data-skin='leopard'] .toggle[aria-pressed='true'] .sw::after { left:4px; opacity:1; }

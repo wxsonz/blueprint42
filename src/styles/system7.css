@@ -116,3 +116,12 @@ html[data-skin='system7'] {
 html[data-skin='system7'] .pane-head .info { background: #ffffff; padding: 0 5px; color: #000; }
 html[data-skin='system7'] .pane-head .title { background: #ffffff; padding: 0 6px; }
 html[data-skin='system7'] .cm-content .tok-keyword { font-weight: 700; }
+
+/* ---- scrollbars and toggles: System 7 ---- */
+html[data-skin='system7'] { --sb-size:16px; --sb-btn:16px; --sb-arrow:#000; --sb-thumb-c:#000; --sb-track-c:#888; --sb-track:conic-gradient(#000 25%,#fff 0 50%,#000 0 75%,#fff 0) 0 0/2px 2px; --sb-thumb:#fff; --sb-border:1px solid #000; --sb-radius:0; --sb-btn-bg:#fff; --sb-btn-border:1px solid #000; }
+html[data-skin='system7'] ::-webkit-scrollbar-track { border:1px solid #000; }
+html[data-skin='system7'] ::-webkit-scrollbar-thumb:hover, & ::-webkit-scrollbar-thumb:active { background:#fff; }
+html[data-skin='system7'] ::-webkit-scrollbar-corner { background:#fff; border:1px solid #000; }
+html[data-skin='system7'] .toggle .sw { width:12px; height:12px; border-radius:0; background:#fff; border:1px solid #000; box-shadow:none; }
+html[data-skin='system7'] .toggle .sw::after { content:''; left:1px; top:1px; right:1px; bottom:1px; width:auto; height:auto; border-radius:0; transition:none; opacity:0; background:linear-gradient(45deg,transparent 43%,#000 43% 57%,transparent 57%),linear-gradient(-45deg,transparent 43%,#000 43% 57%,transparent 57%); }
+html[data-skin='system7'] .toggle[aria-pressed='true'] .sw::after { left:1px; opacity:1; }

@@ -115,3 +115,13 @@ html[data-skin='blueprint'] #editor-pane .pane-body, html[data-skin='blueprint']
   background-size: 20px 20px;
 }
 html[data-skin='blueprint'] .pane-head .title { text-decoration: underline wavy rgba(255,224,102,0.6); text-underline-offset: 4px; }
+
+/* ---- scrollbars and toggles: Blueprint ---- */
+html[data-skin='blueprint'] { --sb-size:11px; --sb-thumb-c:#eef5ff; --sb-track-c:#0e3460; --sb-radius:0; }
+html[data-skin='blueprint'] ::-webkit-scrollbar-track { background:transparent; border-left:1px dashed rgba(238,245,255,0.4); }
+html[data-skin='blueprint'] ::-webkit-scrollbar-track:horizontal { border-left:0; border-top:1px dashed rgba(238,245,255,0.4); }
+html[data-skin='blueprint'] ::-webkit-scrollbar-thumb { background:repeating-linear-gradient(45deg,rgba(238,245,255,0.3) 0 2px,transparent 2px 5px); border:1px solid rgba(238,245,255,0.8); }
+html[data-skin='blueprint'] ::-webkit-scrollbar-thumb:hover { background:repeating-linear-gradient(45deg,rgba(255,224,102,0.5) 0 2px,transparent 2px 5px); border-color:#ffe066; }
+html[data-skin='blueprint'] .toggle .sw { width:12px; height:12px; border-radius:0; background:transparent; border:1px solid #eef5ff; box-shadow:none; }
+html[data-skin='blueprint'] .toggle .sw::after { content:''; left:1px; top:1px; right:1px; bottom:1px; width:auto; height:auto; border-radius:0; transition:none; opacity:0; background:linear-gradient(45deg,transparent 43%,#ffe066 43% 57%,transparent 57%),linear-gradient(-45deg,transparent 43%,#ffe066 43% 57%,transparent 57%); }
+html[data-skin='blueprint'] .toggle[aria-pressed='true'] .sw::after { left:1px; opacity:1; }

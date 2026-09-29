@@ -156,3 +156,14 @@ html[data-skin='ps2'] #duel .d-track::before { top: -3px; height: 5px; backgroun
 html[data-skin='ps2'] #duel .d-track::after { top: -1px; height: 1px; background: linear-gradient(to left, #eef2ff, var(--lt) 14px, transparent 140px); box-shadow: 1px 0 6px 1px var(--lg); }
 html[data-skin='ps2'] #duel .chip { top: 9px; border-radius: 1px; background: #0b0b0e; color: #d6d6dc; border: 1px solid #2c2c33; box-shadow: none; font-weight: 400; }
 html[data-skin='ps2'] #duel, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+
+/* ---- scrollbars and toggles: PS2 ---- */
+html[data-skin='ps2'] { --sb-size:9px; --sb-thumb-c:#8a8a98; --sb-track-c:#0a0a0c; --sb-track:#0a0a0c; --sb-radius:5px; }
+html[data-skin='ps2'] ::-webkit-scrollbar-track { border-left:1px solid #232328; }
+html[data-skin='ps2'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#e6e6ee,#8a8a98 50%,#4a4a56); border:1px solid #16161a; }
+html[data-skin='ps2'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#e6e6ee,#8a8a98 50%,#4a4a56); }
+html[data-skin='ps2'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.2) hue-rotate(200deg); }
+html[data-skin='ps2'] .toggle .sw { width:24px; height:11px; border-radius:6px; background:#0c0c10; border:1px solid #666; box-shadow:inset 0 1px 3px #000; }
+html[data-skin='ps2'] .toggle .sw::after { top:1px; left:1px; width:7px; height:7px; background:radial-gradient(circle at 35% 30%,#fff,#9a9aa8 55%,#44444e); }
+html[data-skin='ps2'] .toggle[aria-pressed='true'] .sw { border-color:#5a7cff; box-shadow:inset 0 1px 3px #000,0 0 6px rgba(90,124,255,0.6); }
+html[data-skin='ps2'] .toggle[aria-pressed='true'] .sw::after { left:14px; background:radial-gradient(circle at 35% 30%,#fff,#6a8cff 55%,#2a3cb0); box-shadow:0 0 5px #5a7cff; }

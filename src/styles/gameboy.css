@@ -122,3 +122,13 @@ html[data-skin='gameboy'] .pane-head .title::before { content: '▶ '; }
 /* body text in the panels reads in VT323; Press Start 2P stays for heads and buttons */
 html[data-skin='gameboy'] .ins-body { font: 16px VT323, monospace; }
 html[data-skin='gameboy'] .pane-head .btn { white-space: nowrap; }
+
+/* ---- scrollbars and toggles: Game Boy ---- */
+html[data-skin='gameboy'] { --sb-size:12px; --sb-btn:12px; --sb-arrow:#0f380f; --sb-thumb-c:#306230; --sb-track-c:#8bac0f; --sb-track:#8bac0f; --sb-thumb:#306230; --sb-thumb-hover:#0f380f; --sb-radius:0; --sb-border:2px solid #8bac0f; --sb-btn-bg:#8bac0f; }
+html[data-skin='gameboy'] ::-webkit-scrollbar-track { background:repeating-conic-gradient(#8bac0f 0 25%,#9bbc0f 0 50%) 0 0/4px 4px; border-left:2px solid #0f380f; }
+html[data-skin='gameboy'] ::-webkit-scrollbar-track:horizontal { border-left:0; border-top:2px solid #0f380f; }
+html[data-skin='gameboy'] ::-webkit-scrollbar-thumb { box-shadow:0 0 0 2px #0f380f; }
+html[data-skin='gameboy'] .toggle .sw { width:22px; height:12px; border-radius:0; background:#9bbc0f; border:2px solid #0f380f; box-shadow:none; }
+html[data-skin='gameboy'] .toggle .sw::after { top:2px; left:2px; width:4px; height:4px; border-radius:0; background:#0f380f; transition:none; }
+html[data-skin='gameboy'] .toggle[aria-pressed='true'] .sw { background:#0f380f; }
+html[data-skin='gameboy'] .toggle[aria-pressed='true'] .sw::after { left:12px; background:#9bbc0f; }

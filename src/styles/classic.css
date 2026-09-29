@@ -171,3 +171,11 @@ html[data-skin='classic'] .dlg { box-shadow: var(--raised), 4px 4px 0 rgba(0,0,0
 html[data-skin='classic'] .dlg-title { justify-content: space-between; }
 html[data-skin='classic'] #status .mode { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
 html[data-skin='classic'] .readout { padding: 3px 8px; }
+
+/* ---- scrollbars and toggles: Windows 95 ---- */
+html[data-skin='classic'] { --sb-size:16px; --sb-btn:16px; --sb-arrow:#000; --sb-thumb-c:#c0c0c0; --sb-track-c:#e0e0e0; --sb-track:conic-gradient(#c0c0c0 25%,#fff 0 50%,#c0c0c0 0 75%,#fff 0) 0 0/2px 2px; --sb-thumb:#c0c0c0; --sb-radius:0; --sb-shadow:inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px #808080,inset 2px 2px #dfdfdf; --sb-btn-bg:#c0c0c0; }
+html[data-skin='classic'] ::-webkit-scrollbar-button:single-button { box-shadow:inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px #808080,inset 2px 2px #dfdfdf; }
+html[data-skin='classic'] ::-webkit-scrollbar-thumb:hover { background:#c0c0c0; }
+html[data-skin='classic'] .toggle .sw { width:13px; height:13px; border-radius:0; background:#fff; border:0; box-shadow:inset 1px 1px #808080,inset -1px -1px #fff,inset 2px 2px #0a0a0a,inset -2px -2px #dfdfdf; }
+html[data-skin='classic'] .toggle .sw::after { content:''; left:3px; top:0; width:3px; height:7px; border:solid #000; border-width:0 2px 2px 0; border-radius:0; background:none; transform:rotate(45deg); opacity:0; transition:none;  }
+html[data-skin='classic'] .toggle[aria-pressed='true'] .sw::after { left:3px; opacity:1; }

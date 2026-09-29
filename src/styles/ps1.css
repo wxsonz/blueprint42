@@ -160,3 +160,13 @@ html[data-skin='ps1'] { --tl-call: #0063b3; --tl-ret: #00864a; --tl-ptr: #b0307a
 html[data-skin='ps1'] #duel .d-code .val, html[data-skin='ps1'] #duel .d-say b.v { color: #00864a; }
 html[data-skin='ps1'] #duel .d-say b.v { color: #7fe0a8; }
 html[data-skin='ps1'] #duel .d-card { box-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
+
+/* ---- scrollbars and toggles: PS1 ---- */
+html[data-skin='ps1'] { --sb-size:12px; --sb-thumb-c:#8a8b9a; --sb-track-c:#14151f; --sb-track:#14151f; --sb-radius:0; }
+html[data-skin='ps1'] ::-webkit-scrollbar-track { border-left:1px solid #3a3b48; }
+html[data-skin='ps1'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#9a9bab,#6a6b7a 60%,#5a5b6a); border:1px solid #c8c9d6; border-right-color:#2a2b34; border-bottom-color:#2a2b34; }
+html[data-skin='ps1'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#9a9bab,#6a6b7a 60%,#5a5b6a); }
+html[data-skin='ps1'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.2); }
+html[data-skin='ps1'] .toggle .sw { width:13px; height:13px; border-radius:0; background:#14151f; border:2px solid #8a8b9a; border-right-color:#3a3b48; border-bottom-color:#3a3b48; box-shadow:none; }
+html[data-skin='ps1'] .toggle .sw::after { content:''; left:0px; top:0px; right:0px; bottom:0px; width:auto; height:auto; border-radius:0; transition:none; opacity:0; background:linear-gradient(45deg,transparent 43%,#6aa8ff 43% 57%,transparent 57%),linear-gradient(-45deg,transparent 43%,#6aa8ff 43% 57%,transparent 57%); }
+html[data-skin='ps1'] .toggle[aria-pressed='true'] .sw::after { left:0px; opacity:1; }

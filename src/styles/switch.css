@@ -130,3 +130,15 @@ html[data-skin='switch'] .pb-buttons button[data-act='step'] { color: #f28200; }
 html[data-skin='switch'] .pb-buttons button[data-act='end'] { color: #909090; }
 html[data-skin='switch'] .pb-buttons button:hover { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px hsl(200 100% 60%); }
 html[data-skin='switch'] #status { border-top: 1px solid #cdcdcd; background: var(--bg); color: var(--fg); }
+
+/* ---- scrollbars and toggles: Switch ---- */
+html[data-skin='switch'] { --sb-size:12px; --sb-thumb:#a8a8a8; --sb-thumb-hover:#8a8a8a; --sb-thumb-c:#a8a8a8; --sb-track-c:transparent; --sb-radius:999px; --sb-border:3px solid transparent; --sw-off:#c4c4c4; }
+html[data-skin='switch-dark'] { --sb-size:12px; --sb-thumb:#6e6e6e; --sb-thumb-hover:#9a9a9a; --sb-thumb-c:#6e6e6e; --sb-track-c:transparent; --sb-radius:999px; --sb-border:3px solid transparent; --sw-off:#555; }
+html[data-skin='switch'] ::-webkit-scrollbar-thumb,
+html[data-skin='switch-dark'] ::-webkit-scrollbar-thumb { background-clip:padding-box; }
+html[data-skin='switch'] .toggle .sw,
+html[data-skin='switch-dark'] .toggle .sw { width:26px; height:10px; margin:0 2px; border-radius:999px; box-shadow:none; }
+html[data-skin='switch'] .toggle .sw::after,
+html[data-skin='switch-dark'] .toggle .sw::after { top:-3px; left:-3px; width:16px; height:16px; background:var(--bg); border:2px solid var(--fg-dim); box-shadow:0 1px 2px rgba(0,0,0,0.3); }
+html[data-skin='switch'] .toggle[aria-pressed='true'] .sw::after,
+html[data-skin='switch-dark'] .toggle[aria-pressed='true'] .sw::after { left:13px; border-color:var(--accent); }

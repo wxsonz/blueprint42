@@ -178,3 +178,13 @@ html[data-skin='amp'] .pb-buttons button.primary { width: 36px; }
 
 /* the timeline's dark return green is for bars; as text in the duel it needs to glow */
 html[data-skin='amp'] #duel { --tl-ret: #3cdc3c; }
+
+/* ---- scrollbars and toggles: Winamp ---- */
+html[data-skin='amp'] { --sb-size:11px; --sb-thumb-c:#5a5a68; --sb-track-c:#0b0b10; --sb-track:#0b0b10; --sb-radius:0; }
+html[data-skin='amp'] ::-webkit-scrollbar-track { border-left:1px solid #000; }
+html[data-skin='amp'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#6a6a7a,#3a3a46 50%,#2a2a34); border:1px solid #15151b; box-shadow:inset 1px 1px 0 #8a8a9a,inset -1px -1px 0 #1a1a22; }
+html[data-skin='amp'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#6a6a7a,#3a3a46 50%,#2a2a34); }
+html[data-skin='amp'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.25); }
+html[data-skin='amp'] .toggle .sw { width:16px; height:8px; border-radius:0; background:#000; border:1px solid #4a4a58; box-shadow:none; }
+html[data-skin='amp'] .toggle .sw::after { top:1px; left:1px; width:12px; height:4px; border-radius:0; background:#0a2a0a; transition:none; }
+html[data-skin='amp'] .toggle[aria-pressed='true'] .sw::after { left:1px; background:#00e000; box-shadow:0 0 4px #00e000; }

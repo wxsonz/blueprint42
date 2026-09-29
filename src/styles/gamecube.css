@@ -116,3 +116,14 @@ html[data-skin='gamecube'] body { background: radial-gradient(ellipse 70% 60% at
 html[data-skin='gamecube'] #app, html[data-skin='gamecube'] #panes, html[data-skin='gamecube'] #top, html[data-skin='gamecube'] #playbar, html[data-skin='gamecube'] #status { background: transparent; }
 html[data-skin='gamecube'] .pane { background: linear-gradient(rgba(60,44,150,0.55), rgba(24,16,70,0.85) 18%); border-color: rgba(190,170,255,0.45); box-shadow: inset 0 1px 0 rgba(220,210,255,0.35); }
 html[data-skin='gamecube'] .seg button[aria-pressed='true'] { box-shadow: 0 0 10px rgba(163,147,255,0.7); }
+
+/* ---- scrollbars and toggles: GameCube ---- */
+html[data-skin='gamecube'] { --sb-size:13px; --sb-thumb-c:#8a7be8; --sb-track-c:#120a38; --sb-track:#120a38; --sb-radius:4px; }
+html[data-skin='gamecube'] ::-webkit-scrollbar-track { border-left:1px solid #5a4bb8; }
+html[data-skin='gamecube'] ::-webkit-scrollbar-track:horizontal { border-left:0; border-top:1px solid #5a4bb8; }
+html[data-skin='gamecube'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#c4baff,#8a7be8 50%,#5a4bb8); border:1px solid #d8d0ff; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.15); }
+html[data-skin='gamecube'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#c4baff,#8a7be8 50%,#5a4bb8); }
+html[data-skin='gamecube'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.15); }
+html[data-skin='gamecube'] .toggle .sw { width:14px; height:14px; border-radius:3px; background:#120a38; border:2px solid #a393ff; box-shadow:none; }
+html[data-skin='gamecube'] .toggle .sw::after { top:2px; left:2px; width:6px; height:6px; border-radius:1px; background:linear-gradient(135deg,#e6e0ff,#a393ff); opacity:0; transition:none; }
+html[data-skin='gamecube'] .toggle[aria-pressed='true'] .sw::after { left:2px; opacity:1; }

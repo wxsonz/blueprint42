@@ -161,3 +161,10 @@ html[data-skin='ps4'] #feed .kf .data b { color: #c4c4ca; font-weight: 400; }
 html[data-skin='ps4'] #duel .chip { background: #03052a; color: #ffffff; border-radius: 0; box-shadow: inset 0 0 0 1px #dfe8ff; font-weight: 400; }
 /* the grid shows the sky as it is: no tint over it */
 html[data-skin='ps4'] #grid-pane, html[data-skin='ps4'] #grid-wrap { background: transparent; }
+
+/* ---- scrollbars and toggles: PS4 ---- */
+html[data-skin='ps4'] { --sb-size:8px; --sb-thumb:rgba(255,255,255,0.85); --sb-thumb-hover:#fff; --sb-thumb-c:#dfe8ff; --sb-track-c:transparent; --sb-track:rgba(255,255,255,0.14); --sb-radius:0; }
+html[data-skin='ps4'] .toggle .sw { width:26px; height:12px; border-radius:0; background:transparent; border:1px solid rgba(255,255,255,0.7); box-shadow:none; }
+html[data-skin='ps4'] .toggle .sw::after { top:2px; left:2px; width:6px; height:6px; border-radius:0; background:rgba(255,255,255,0.7); transition:none; }
+html[data-skin='ps4'] .toggle[aria-pressed='true'] .sw { background:#fff; border-color:#fff; }
+html[data-skin='ps4'] .toggle[aria-pressed='true'] .sw::after { left:16px; background:#0538bc; }

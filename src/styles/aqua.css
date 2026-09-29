@@ -176,3 +176,16 @@ html[data-skin='aqua'] .seg button:first-child { border-radius: 11px 0 0 11px; }
 html[data-skin='aqua'] .seg button:last-child { border-radius: 0 11px 11px 0; }
 html[data-skin='aqua'] .seg { gap: 0; }
 html[data-skin='aqua'] #toast { border-radius: 14px; background: rgba(40, 40, 40, 0.82); color: #fff; border: none; }
+
+/* ---- scrollbars and toggles: Aqua gel ---- */
+html[data-skin='aqua'] { --sb-size:15px; --sb-thumb-c:#4b82e2; --sb-track-c:#eee; --sb-radius:8px; --sb-track-radius:0; }
+html[data-skin='aqua'] ::-webkit-scrollbar-track:vertical { background:linear-gradient(90deg,#c9c9c9,#f7f7f7 40%,#fff); border-left:1px solid #aaa; }
+html[data-skin='aqua'] ::-webkit-scrollbar-track:horizontal { background:linear-gradient(#c9c9c9,#f7f7f7 40%,#fff); border-top:1px solid #aaa; }
+html[data-skin='aqua'] ::-webkit-scrollbar-thumb { border:1px solid #2c5fb3; box-shadow:inset 0 0 2px rgba(255,255,255,0.7); background-clip:border-box; }
+html[data-skin='aqua'] ::-webkit-scrollbar-thumb:vertical { background:linear-gradient(90deg,#9cc4f8,#4d8be8 40%,#2f6fdc 55%,#6ea6f2); }
+html[data-skin='aqua'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#9cc4f8,#4d8be8 40%,#2f6fdc 55%,#6ea6f2); }
+html[data-skin='aqua'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.08); }
+html[data-skin='aqua'] .toggle .sw { width:26px; height:14px; border-radius:7px; background:linear-gradient(#a8a8a8,#dcdcdc 60%,#f2f2f2); border:1px solid #6e6e6e; box-shadow:inset 0 1px 2px rgba(0,0,0,0.35); }
+html[data-skin='aqua'] .toggle .sw::after { top:1px; left:1px; width:10px; height:10px; background:radial-gradient(circle at 50% 25%,#fff,#e4e4e4 60%,#bdbdbd); box-shadow:0 1px 2px rgba(0,0,0,0.5); }
+html[data-skin='aqua'] .toggle[aria-pressed='true'] .sw { background:linear-gradient(#2f66c9,#4f8ae8 50%,#8fc0fa); border-color:#1c4a9d; }
+html[data-skin='aqua'] .toggle[aria-pressed='true'] .sw::after { left:13px; }

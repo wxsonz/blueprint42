@@ -113,3 +113,15 @@ html[data-skin='barebone'] {
 html[data-skin='barebone'] #feed .kf { animation: none; transition: none; }
 html[data-skin='barebone'] .cm-content .tok-keyword { font-weight: 600; }
 html[data-skin='barebone'] #feed .kf .ico { background: #3a3a3a !important; color: #ffffff; }
+
+/* ---- scrollbars and toggles: Barebone ---- */
+html[data-skin='barebone'] { --sb-size:10px; --sb-thumb:#444; --sb-thumb-hover:#666; --sb-thumb-c:#444; --sb-track-c:#1b1b1b; --sb-track:#1b1b1b; --sb-radius:0; }
+html[data-skin='barebone-light'] { --sb-size:10px; --sb-thumb:#c4c4c4; --sb-thumb-hover:#999; --sb-thumb-c:#c4c4c4; --sb-track-c:#f0f0f0; --sb-track:#f0f0f0; --sb-radius:0; }
+html[data-skin='barebone'] .toggle .sw,
+html[data-skin='barebone-light'] .toggle .sw { width:11px; height:11px; border-radius:0; background:transparent; border:1px solid currentColor; box-shadow:none; }
+html[data-skin='barebone'] .toggle .sw::after,
+html[data-skin='barebone-light'] .toggle .sw::after { top:2px; left:2px; width:5px; height:5px; border-radius:0; background:currentColor; opacity:0; transition:none; }
+html[data-skin='barebone'] .toggle[aria-pressed='true'] .sw,
+html[data-skin='barebone-light'] .toggle[aria-pressed='true'] .sw { background:transparent; }
+html[data-skin='barebone'] .toggle[aria-pressed='true'] .sw::after,
+html[data-skin='barebone-light'] .toggle[aria-pressed='true'] .sw::after { left:2px; opacity:1; }

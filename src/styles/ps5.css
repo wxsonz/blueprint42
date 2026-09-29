@@ -128,3 +128,11 @@ html[data-skin='ps5'] .pb-buttons button { border-radius: 50%; }
 html[data-skin='ps5'] #playbar { background: rgba(24,25,31,0.92); border-radius: 17px 17px 0 0; margin: 0 12px; box-shadow: 0 -8px 24px rgba(0,0,0,0.45); }
 html[data-skin='ps5'] .pb-buttons button { width: 38px; height: 38px; background: rgba(255,255,255,0.08); border: none; color: #ffffff; }
 html[data-skin='ps5'] .pb-buttons button:hover, html[data-skin='ps5'] .pb-buttons button.primary { background: #ffffff; color: #0b0c10; box-shadow: 0 0 0 3px #0b0c10, 0 0 0 5px rgba(255,255,255,0.8); }
+
+/* ---- scrollbars and toggles: PS5 ---- */
+html[data-skin='ps5'] { --sb-size:12px; --sb-thumb:rgba(255,255,255,0.5); --sb-thumb-hover:rgba(255,255,255,0.8); --sb-thumb-c:#8a8d96; --sb-track-c:transparent; --sb-radius:999px; --sb-border:4px solid transparent; }
+html[data-skin='ps5'] ::-webkit-scrollbar-thumb { background-clip:padding-box; }
+html[data-skin='ps5'] .toggle .sw { width:28px; height:16px; border-radius:999px; background:rgba(255,255,255,0.2); box-shadow:none; }
+html[data-skin='ps5'] .toggle .sw::after { top:2px; left:2px; width:12px; height:12px; background:#fff; }
+html[data-skin='ps5'] .toggle[aria-pressed='true'] .sw { background:#fff; }
+html[data-skin='ps5'] .toggle[aria-pressed='true'] .sw::after { left:14px; background:#0e0f13; }

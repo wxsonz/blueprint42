@@ -110,3 +110,13 @@ html[data-skin='yosemite'] {
   --syn-op: #1d1d1f;
   --syn-punct: #5c5c5c;
 }
+
+/* ---- scrollbars and toggles: Yosemite ---- */
+html[data-skin='yosemite'] { --sb-size:11px; --sb-thumb:rgba(0,0,0,0.32); --sb-thumb-hover:rgba(0,0,0,0.5); --sb-radius:999px; --sb-border:2px solid transparent; --sb-thumb-c:#a0a0a0; --sb-track-c:transparent; }
+html[data-skin='yosemite'] ::-webkit-scrollbar-thumb { background-clip:padding-box; }
+html[data-skin='yosemite'] ::-webkit-scrollbar-track:vertical { border-left:1px solid rgba(0,0,0,0.07); background:rgba(0,0,0,0.02); }
+html[data-skin='yosemite'] ::-webkit-scrollbar-track:horizontal { border-top:1px solid rgba(0,0,0,0.07); background:rgba(0,0,0,0.02); }
+html[data-skin='yosemite'] .toggle .sw { width:13px; height:13px; border-radius:3px; background:#fff; border:1px solid rgba(0,0,0,0.35); box-shadow:none; }
+html[data-skin='yosemite'] .toggle[aria-pressed='true'] .sw { background:var(--accent); border-color:var(--accent); }
+html[data-skin='yosemite'] .toggle .sw::after { content:''; left:4px; top:0; width:3px; height:7px; border:solid #fff; border-width:0 2px 2px 0; border-radius:0; background:none; transform:rotate(45deg); opacity:0; transition:none;  }
+html[data-skin='yosemite'] .toggle[aria-pressed='true'] .sw::after { left:4px; opacity:1; }
