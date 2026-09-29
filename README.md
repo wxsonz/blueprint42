@@ -106,6 +106,8 @@ nvim/                 the Neovim plugin
 samples/line_reader/  a get_next_line-style line reader: an example, and the
                       fixture the acceptance tests run on
 docs/SPEC.md          principles, metaphor, architecture, milestones
+docs/VISUALS.md       the visual grammar: every picture, its Norm construct, what moves it
+docs/OBJECTIVES.md    where it goes next
 docs/decisions/       every decision along the way, one file each, with the reason
 docs/HANDOFF.md,      working notes for an agent picking this up
   CLAUDE.md
