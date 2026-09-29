@@ -26,6 +26,10 @@ for cmd in (
     "set print pretty off", "set print elements 24", "set print repeats 8",
     "set debuginfod enabled off", "set disable-randomization on",
     "set breakpoint pending on", "set startup-with-shell on",
+    # one return breakpoint per live frame: leave them in memory between steps
+    # instead of inserting and removing all of them every time (gdb still
+    # shows the original bytes underneath)
+    "set breakpoint always-inserted on",
 ):
     try:
         gdb.execute(cmd, to_string=True)
@@ -113,11 +117,42 @@ def source_lines(path):
 
 # ---------------- values ----------------
 
+# Memory read once per stop (the stack, the heap's span): reads that fall
+# inside are served from these copies. The inferior is stopped, so they are
+# exact; they are dropped as soon as it runs again.
+regions = []  # [(start, bytes)]
+
+
 def read_bytes(addr, size):
+    for start, blob in regions:
+        if start <= addr and addr + size <= start + len(blob):
+            return blob[addr - start:addr - start + size]
     try:
         return INF().read_memory(addr, size).tobytes()
     except Exception:
         return None
+
+
+def load_regions():
+    regions.clear()
+    try:
+        sp = int(gdb.parse_and_eval("$sp"))
+    except gdb.error:
+        sp = None
+    live = (frame_cache.get(fr["id"]) for fr in frames)
+    top = max((a + n for c in live if c for _k, a, n, _t in c["vars"] if a is not None and sp is not None and a >= sp), default=None)
+    if sp is not None and top is not None and top - sp <= 8 << 20:
+        blob = read_bytes(sp, top - sp)
+        if blob is not None:
+            regions.append((sp, blob))
+    if heap:
+        lo = min(heap)
+        hi = max(a + min(b["size"], 1 << 16) for a, b in heap.items())
+        total = sum(min(b["size"], 1 << 16) for b in heap.values())
+        if hi - lo <= max(4 * total, 1 << 16) and hi - lo <= 16 << 20:
+            blob = read_bytes(lo, hi - lo)
+            if blob is not None:
+                regions.append((lo, blob))
 
 
 def ser(v, depth=0):
@@ -254,6 +289,7 @@ def var_record(key, name, v):
 
 def frame_vars(frame, fid):
     out = []
+    entries = []
     try:
         block = frame.block()
     except RuntimeError:
@@ -267,13 +303,37 @@ def frame_vars(frame, fid):
                 continue  # function-local statics are reported with the statics
             seen.add(sym.name)
             try:
-                out.append(var_record(f"{fid}.{sym.name}", sym.name, sym.value(frame)))
+                v = sym.value(frame)
+                rec = var_record(f"{fid}.{sym.name}", sym.name, v)
+                out.append(rec)
+                entries.append((f"{fid}.{sym.name}", rec["addr"], rec["size"], v.type.strip_typedefs()))
             except Exception:
                 pass
         if block.function is not None:
             break
         block = block.superblock
+    frame_cache[fid] = {"vars": entries}
     return out
+
+
+# A waiting caller's variables keep their addresses for the frame's life; what
+# its records show changes only when these bytes do (seen_bytes: the value,
+# plus a string or struct it points at). A frame whose bytes are all the same
+# is not re-read through gdb or re-sent.
+frame_cache = {}  # frame id -> {"vars": [(key, addr, size, type)]}
+
+
+def frame_unchanged(fid):
+    c = frame_cache.get(fid)
+    if c is None:
+        return False
+    for key, addr, size, t in c["vars"]:
+        if addr is None or size > 1 << 16:
+            return False
+        hit = cache.get(key)
+        if hit is None or hit[0] is None or seen_bytes(t, read_bytes(addr, size)) != hit[0]:
+            return False
+    return True
 
 
 STATICS = []  # (owner function or "", owner's file, symbol)
@@ -567,6 +627,8 @@ class Write(gdb.Breakpoint):
         caller = user_caller()
         raw = read_bytes(addr, min(n, OUT_TEXT_MAX)) if n > 0 else b""
         ev = {"k": "out", "fd": fd, "n": n, "text": (raw or b"").decode("utf-8", "replace"), "via": "write" if caller is not None else "printf"}
+        if fd == 1:
+            out_total[0] += n
         if caller is not None:
             ev["line"], ev["file"] = caller_line(caller), frame_file(caller)
         pending.append(ev)
@@ -599,12 +661,48 @@ def stdout_buffer():
         return None
 
 
+# ---------------- windows: step silently up to `from` ----------------
+
+W_FROM = float("inf") if CFG.get("overview") else int((CFG.get("window") or {}).get("from") or 0)
+W_TO = (CFG.get("window") or {}).get("to")
+W_TO = int(W_TO) if W_TO is not None else None
+FP_EVERY = 1000
+fingerprints = []  # every FP_EVERY steps: where the run was, and how much it had printed
+out_total = [0]  # bytes written to stdout so far, whole run
+out_before = {"text": [], "n": 0}  # stdout before the window (kept, up to a limit)
+pre_mode = [False]  # the window's first stop: its frames and blocks already existed
+
+
+def fingerprint(k):
+    try:
+        f = gdb.newest_frame()
+        return {"step": k, "fn": f.name(), "line": f.find_sal().line, "out": out_total[0]}
+    except gdb.error:
+        return {"step": k, "fn": None, "line": None, "out": out_total[0]}
+
+
+def drain_silent():
+    for e in pending:
+        if e["k"] == "out" and e["fd"] == 1 and out_before["n"] < 1 << 16:
+            out_before["text"].append(e["text"])
+            out_before["n"] += len(e["text"])
+    pending.clear()
+
+
+def start_window():
+    drain_silent()
+    pre_mode[0] = True
+    for addr, b in sorted(heap.items(), key=lambda kv: kv[1]["id"]):
+        pending.append({"k": "alloc", "id": b["id"], "addr": addr, "size": b["size"], "line": b["line"], "file": b.get("file"), "pre": True})
+
+
 # ---------------- the stepping loop ----------------
 
 frames = []   # [{"id", "fn", "frame"}] oldest first
 next_frame = [1]
 stops = []
 local_kinds = {}  # frame id -> {name: is_argument}
+last_top = [None]  # the top frame's id at the previous stop
 defined_locals = set()  # (frame id, name), only after an executed assignment
 previous_lines = {}  # frame id -> previous stop's source line
 
@@ -630,15 +728,28 @@ def line_assigns(line, name):
     return bool(re.search(r"(^|[^\w.>])" + n + r"\s*(?:[-+*/%&|^]|<<|>>)?=(?!=)|(?:\+\+|--)\s*" + n + r"\b|\b" + n + r"\s*(?:\+\+|--)", line))
 
 
+def frame_sp(f):
+    try:
+        return int(f.read_register("sp"))
+    except (gdb.error, ValueError):
+        return None
+
+
 def user_stack():
-    out = []
+    """The user frames, oldest first. Walks from the newest frame only until
+    it reaches one it already knows (by its stack pointer, unique per live
+    frame, recursion included): everything older than that is unchanged."""
+    known = {fr["sp"]: i for i, fr in enumerate(frames) if fr.get("sp") is not None}
+    new = []
     f = gdb.newest_frame()
     while f is not None:
         if is_user(f):
-            out.append(f)
+            j = known.get(frame_sp(f))
+            if j is not None and frames[j]["frame"] == f:
+                return [fr["frame"] for fr in frames[:j + 1]] + new[::-1]
+            new.append(f)
         f = f.older()
-    out.reverse()
-    return out
+    return new[::-1]
 
 
 def eval_expr(expr, scope):
@@ -767,20 +878,27 @@ def record_stop():
         if gone["id"] not in returned:
             returned[gone["id"]] = None
             pending.append({"k": "ret", "id": gone["id"], "value": None})
+    for gone in frames[keep:]:
+        frame_cache.pop(gone["id"], None)
     frames = frames[:keep]
     for f in cur[keep:]:
         fid = next_frame[0]
         next_frame[0] += 1
-        frames.append({"id": fid, "fn": f.name(), "file": frame_file(f), "frame": f})
-        pending.append({"k": "call", "id": fid, "fn": f.name(), "file": frame_file(f)})
+        frames.append({"id": fid, "fn": f.name(), "file": frame_file(f), "frame": f, "sp": frame_sp(f)})
+        pending.append({"k": "call", "id": fid, "fn": f.name(), "file": frame_file(f), **({"pre": True} if pre_mode[0] else {})})
         try:
             Ret(f, fid)
         except Exception:
             pass
+    load_regions()
     out_frames = []
-    for fr in frames:
+    for i, fr in enumerate(frames):
         f = fr["frame"]
         fid = fr["id"]
+        # the top frame, a new one, or the one that was on top a stop ago are
+        # always read in full; a waiting caller only when its bytes changed
+        if i < len(frames) - 1 and fid in seen_frames and fid != last_top[0] and frame_unchanged(fid):
+            continue
         symbols = local_symbols(f)
         local_kinds[fid] = symbols
         line = previous_lines.get(fid)
@@ -794,11 +912,15 @@ def record_stop():
         out_frames.append({"id": fid, "fn": fr["fn"], "file": fr["file"], "line": caller_line(f), "vars": sent, "delta": fid in seen_frames})
         seen_frames.add(fid)
     heap_blocks, heap_ids = heap_now()
+    regions.clear()
+    pre_mode[0] = False
+    last_top[0] = frames[-1]["id"] if frames else None
     stops.append({
-        "line": out_frames[-1]["line"] if out_frames else None,
-        "file": out_frames[-1]["file"] if out_frames else None,
+        "line": out_frames[-1]["line"] if out_frames and frames and out_frames[-1]["id"] == frames[-1]["id"] else None,
+        "file": out_frames[-1]["file"] if out_frames and frames and out_frames[-1]["id"] == frames[-1]["id"] else None,
         "events": pending[:],
         "frames": out_frames,
+        "stack": [fr["id"] for fr in frames],
         "statics": statics_now(),
         "heap": heap_blocks,
         "heapIds": heap_ids,
@@ -843,13 +965,33 @@ def main():
     Write()
     collect_statics()
 
-    steps = 0
+    # Step k is the k-th time round this loop, the same in every mode, so a
+    # window [from, to] is exactly those steps of this run. Before `from` the
+    # loop steps silently: nothing is serialized, but the heap and output
+    # breakpoints keep their state, so the window starts from the real one.
+    k = 0
+    recorded = 0
     while alive():
-        record_stop()
-        steps += 1
-        if steps >= MAX_STEPS or time.monotonic() > DEADLINE:
-            result["truncated"] = True
-            break
+        silent = k < W_FROM
+        if k % FP_EVERY == 0:
+            fingerprints.append(fingerprint(k))
+        if silent:
+            drain_silent()
+            if time.monotonic() > DEADLINE:
+                result["truncated"] = True
+                break
+        else:
+            if k == W_FROM and W_FROM > 0:
+                start_window()
+            record_stop()
+            recorded += 1
+            if W_TO is not None and k >= W_TO:
+                result["truncated"] = True
+                break
+            if recorded >= MAX_STEPS or time.monotonic() > DEADLINE:
+                result["truncated"] = True
+                break
+        k += 1
         step_no[0] += 1
         try:
             gdb.execute("step", to_string=True)
@@ -868,6 +1010,18 @@ def main():
         except gdb.error:
             pass
 
+    result["steps"] = k  # the steps reached (a run that exited: all of them)
+    result["fingerprints"] = fingerprints
+    result["window"] = {"from": W_FROM if W_FROM != float("inf") else None, "to": k}
+    if W_FROM > 0:
+        result["outBefore"] = "".join(out_before["text"])
+    if W_FROM == float("inf") or k < W_FROM:
+        # the overview, or a run that ended (or ran out of time) before its window
+        drain_silent()
+        result["overview"] = W_FROM == float("inf")
+        result["exit"] = state["exit"]
+        result["signal"] = state["signal"]
+        return result
     if state["signal"]:
         result["signal"] = state["signal"]
         record_stop()

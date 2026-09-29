@@ -1,7 +1,7 @@
 // Real execution (M3): send the buffer to the trace server, then turn gdb's
 // timeline into the same Trace the renderer plays for the interpreter.
 import type { Model } from './parse';
-import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type StdBuf, type Trace, type V } from './interp';
+import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type StdBuf, type Trace, type V } from './interp';
 import type { BoundValue, Sprite } from './blueprint';
 
 // ---------------- wire format (server/tracer.py) ----------------
@@ -44,6 +44,7 @@ interface GStop {
   statics: GVar[];
   heap: { id: number; addr: number; size: number; hex: string; line: number | null; file?: string | null }[];
   heapIds?: number[]; // live blocks (heap then only lists blocks whose bytes changed)
+  stack?: number[]; // live frames, oldest first (frames then only lists the ones re-read)
   bound?: Record<string, BoundValue>;
   exited?: boolean;
   stdbuf?: StdBuf | null; // printf's buffer after this stop, when it changed
@@ -103,6 +104,7 @@ export async function requestTrace(req: GdbRequest, signal?: AbortSignal): Promi
 // Rebuild full stops: every frame with all its variables, every static.
 export function expandStops(stops: GStop[]): GStop[] {
   const frameVars = new Map<number, Map<string, GVar>>();
+  const lastFrame = new Map<number, GStop['frames'][number]>(); // a frame's last record, for the ones not re-sent
   const statics = new Map<string, GVar>();
   const blocks = new Map<number, GStop['heap'][number]>();
   let bound: Record<string, BoundValue> | undefined;
@@ -110,15 +112,19 @@ export function expandStops(stops: GStop[]): GStop[] {
     for (const b of st.heap) blocks.set(b.id, b);
     const heap = st.heapIds ? st.heapIds.map((id) => blocks.get(id)!).filter(Boolean) : st.heap;
     if (st.bound) bound = { ...bound, ...st.bound };
-    const frames = st.frames.map((f) => {
+    const sent = st.frames.map((f) => {
       let vars = frameVars.get(f.id);
       if (!vars || !f.delta) {
         vars = new Map();
         frameVars.set(f.id, vars);
       }
       for (const v of f.vars) vars.set(v.name, v);
-      return { ...f, vars: [...vars.values()] };
+      const full = { ...f, vars: [...vars.values()] };
+      lastFrame.set(f.id, full);
+      return full;
     });
+    // a waiting caller whose bytes didn't change isn't re-sent: it is as it was
+    const frames = st.stack ? st.stack.map((id) => lastFrame.get(id)).filter((f): f is GStop['frames'][number] => !!f) : sent;
     for (const v of st.statics) statics.set(`${v.owner ?? ''}.${v.ownerFile ?? ''}.${v.name}`, v);
     return { ...st, frames, statics: st.exited ? [] : [...statics.values()], heap, ...(bound ? { bound } : {}) };
   });
@@ -216,11 +222,31 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   let outText = '';
   let buf: StdBuf | null = null;
+  // Snapshots share what didn't change: a list of cells is reused while every
+  // cell in it holds the same value and extras (both are replaced, never
+  // edited in place), so memory grows with changes, not with depth × steps.
+  const shared = new Map<string, { ids: number[]; vals: (V | undefined)[]; ex: unknown[]; cells: SnapCell[] }>();
+  const shareCells = (key: string, ids: number[]): SnapCell[] => {
+    const prev = shared.get(key);
+    if (prev && prev.ids.length === ids.length && ids.every((id, i) => id === prev.ids[i] && vals.get(id) === prev.vals[i] && extras.get(id) === prev.ex[i])) return prev.cells;
+    const next = { ids, vals: ids.map((id) => vals.get(id)), ex: ids.map((id) => extras.get(id)), cells: ids.map(snapCell) };
+    shared.set(key, next);
+    return next.cells;
+  };
+  const frameSnaps = new Map<number, SnapFrame>();
+  const snapFrame = (f: { id: number; fn: string; cells: Map<string, number> }): SnapFrame => {
+    const cells = shareCells(`f${f.id}`, [...f.cells.values()]);
+    const prev = frameSnaps.get(f.id);
+    if (prev && prev.cells === cells && prev.fn === f.fn) return prev;
+    const next = { id: f.id, fn: f.fn, cells };
+    frameSnaps.set(f.id, next);
+    return next;
+  };
   const snapshot = (): Snap => ({
     ...(r.outMode ? { out: { sent: outText.length, buf } } : {}),
-    stack: stack.map((f) => ({ id: f.id, fn: f.fn, cells: [...f.cells.values()].map(snapCell) })),
-    statics: [...statics.values()].map(snapCell),
-    heap: [...heapCell.values()].map(snapCell),
+    stack: stack.map(snapFrame),
+    statics: shareCells('s', [...statics.values()]),
+    heap: shareCells('h', [...heapCell.values()]),
     ...(currentBound ? { bound: Object.fromEntries([...boundIds].map((id) => [id, currentBound![id] ?? { bound: false }])) } : {}),
   });
   const emit = (e: Ev) => {

@@ -120,7 +120,7 @@ function validBinding(s) {
 }
 
 export async function handleTrace(req) {
-  const { src, project, files = {}, defines = [], stdin = '', args = [], fns = [], bindings = [], maxSteps = 20000, maxSeconds = 20, terminal = true } = req ?? {};
+  const { src, project, files = {}, defines = [], stdin = '', args = [], fns = [], bindings = [], maxSteps = 20000, maxSeconds = 20, terminal = true, window = null, overview = false } = req ?? {};
   if (project !== undefined) {
     const pf = project?.files;
     if (!pf || typeof pf !== 'object' || Array.isArray(pf)) return { ok: false, error: 'bad request: project' };
@@ -165,6 +165,9 @@ export async function handleTrace(req) {
       max_seconds: Math.min(Math.max(1, Number(maxSeconds) || 20), 120),
       stdin: join(dir, 'in.txt'), stdout: join(dir, 'out.txt'), stderr: join(dir, 'err.txt'), out: join(dir, 'trace.json'),
       terminal: terminal !== false, // stdout a terminal (line-buffered) or a pipe (fully buffered)
+      // steps [from, to] of the run (stepped silently up to from), or an overview: the whole run, nothing recorded
+      window: window && Number.isInteger(window.from) && window.from >= 0 ? { from: window.from, to: Number.isInteger(window.to) ? window.to : null } : null,
+      overview: overview === true,
     };
     await writeFile(join(dir, 'cfg.json'), JSON.stringify(cfg));
     const started = Date.now();
