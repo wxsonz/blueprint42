@@ -28,6 +28,12 @@ limits); read the part you need.
   reviewed there unless the author names it; log every skin pass there.
   Prototype new pictures in Minimal and Barebone only; don't edit other
   skins' code for them until the design settles.
+- **Hard rule: the picture obeys how C really works** (SPEC principle 4).
+  Every design shows what actually happens under the hood: a copied value is
+  a copy, a pointer's line goes to the address it holds, memory is drawn
+  where it lives. No workaround, shortcut or friendlier metaphor that
+  contradicts the real behaviour. If the truth can't be drawn yet, draw
+  less, never something false. This overrides looks, convenience and speed.
 - Look and feel lives in skins. New visuals go through the `Skin` interface
   (`src/skins/types.ts`) and every skin, never hard-coded colours in
   the engine.

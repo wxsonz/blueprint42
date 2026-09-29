@@ -188,6 +188,11 @@ Unbound ones are dimmed and never animated. ✅
 
 ## Clarity rules
 
+0. **The truth comes first (hard rule).** Every picture follows how C and
+   the machine really work: what is copied, what is shared, where a pointer
+   points, where memory lives, who owns it. No workaround or friendlier story
+   that contradicts it. If the truth can't be drawn yet, draw less, never
+   something false. The rules below never override this one.
 1. **One picture, one meaning.** If two things look alike, one of them
    changes. If one thing looks two ways, pick one.
 2. **The same meaning in every skin.** A skin changes the style, never the

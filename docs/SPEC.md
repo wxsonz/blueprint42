@@ -30,6 +30,13 @@ These decide arguments. If a feature conflicts with one of them, the principle w
 4. **The picture must not lie.** Anything animated is driven by values from a
    real execution. Something the author drew but never tied to code is shown
    as unbound (dimmed), never animated with made-up data.
+   **Hard rule (author, 2026-09-29):** every picture follows how C and the
+   machine really work, not an easier story. Its shape, where lines go, what
+   is copied and what is shared, where memory lives and who owns it, must be
+   what actually happens. No workaround, simplification or metaphor that
+   contradicts the real behaviour, even if it looks clearer or is easier to
+   build. When a picture can't show the truth yet, it shows less, never
+   something false. *(See `decisions/042-truth-under-the-hood.md`.)*
 5. **42 scope only.** C under the Norminette rules. A small, fixed toolbox. No
    attempt to picture arbitrary programs.
 6. **Sandbox before project.** Until Milestone 5 the app works only on code
