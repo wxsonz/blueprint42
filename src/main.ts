@@ -1,29 +1,26 @@
-import { baseName } from './skins/util';
-import { $, esc, store } from './dom';
-import { payloadText, renderDuel, renderFeed, renderStageCard } from './feed';
-import { paintPage, setUiZoom, stepUiZoom, ui } from './page';
-import { beatNow, beatStarts, computeText, writesOf } from './beats';
+import { beatStarts } from './beats';
 import { machineSize } from './machine';
-import { planOf } from './interior';
-import { connectLive, liveReplay, liveReveal, type LiveMsg } from './live';
-import { EditorView } from '@codemirror/view';
+import { connectLive } from './live';
 import { Vim } from '@replit/codemirror-vim';
-import { createEditor, createState, jumpTo, setDoc, setExecLine, setVim, swapState, type EditorHooks } from './editor';
-import { evaluateInterpreterBindings, fmtVal, run, type Ev, type Trace } from './interp';
-import { isSafeBindingExpr, parseBlueprint, serializeBlueprint, type Blueprint, type Sprite, type SpriteKind } from './blueprint';
-import { doorsOf, folded, footprint, Layout, shut } from './layout';
+import { createEditor, setVim, type EditorHooks } from './editor';
+import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp';
+import type { Sprite, SpriteKind } from './blueprint';
+import { folded, shut } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
-import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
-import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, prepareStage, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
-import { buildScene } from './route';
-import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
-import {
-  BP_JSON, DRIVER, META, RUN_JSON, buildFiles, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, projectModel,
-  runEmpty, save, serializeRun, splitArgs, type Listing, type Opened, type PFile, type Project,
-} from './workspace';
+import { initParser, parse, type Model } from './parse';
+import { activeHostRect, animMode, prepareStage, computeBelts, durationAt, entityAt, foldAt, frameAt, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity } from './render';
+import { SAMPLE_PROJECTS } from './samples';
+import { buildFiles, fsCall, isDirty, isSource, projectModel, splitArgs } from './workspace';
 import { SKINS, SKIN_FONTS, SKIN_GROUPS, isWip, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
+import { $, esc, store } from './dom';
+import { LEGEND, S, alerts, canvas, debounce, editor, gridPane, inspector, layout, loadingSample, menu, modelRevision, overlay, setDebounce, setEditor, setLastInspectorKey, setLastPbKey, setModelRevision, setTraceRevision, timeline, toast, traceRevision, view } from './state';
+import { renderDuel, renderFeed, renderStageCard } from './feed';
+import { paintPage, setUiZoom, stepUiZoom, ui } from './page';
+import { renderAlerts, renderDock, renderInspector, renderLiveStatus, renderSampleTabs, renderStatus, violations } from './panels';
+import { renderPlaybar } from './playbar';
+import { dirtyFiles, liveFrom, onLive, openAt, openFolder, openFolderDialog, openSaveDialog, quickOpen, refreshMeta, renderLive, renderProjectChrome, runChanged, sampleRunChanged, setLiveEditors, switchFile, toggleExplorer, writeProjectBackup } from './project-ui';
+import { bindingsChanged, exportBlueprint, importBlueprint, loadSample, revertSample, saveSoon, setAllShut, tidy, toggleShut } from './sample-ui';
 import './styles/base.css';
 import './styles/amp.css';
 import './styles/classic.css';
@@ -60,52 +57,7 @@ import './styles/switch.css';
 import './styles/switch-dark.css';
 
 // ---------------- state ----------------
-const layout = new Layout();
-const S: ViewState & {
-  playing: boolean;
-  speed: number;
-  stepTarget: number | null;
-  follow: boolean;
-  legend: IconKind | null;
-  sample: Sample;
-  mode: string;
-  vim: boolean;
-  skin: Skin;
-  cursor: { line: number; col: number };
-  engine: 'auto' | 'interp' | 'gdb';
-  stdin: string;
-  args: string[]; // a single file's command-line arguments (a project keeps its own in run.json)
-  defines: string[]; // …and its -D flags
-  gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
-  sprites: Sprite[];
-  project: Project | null; // M5: an open folder (or a bundled sample project)
-} = {
-  layout,
-  model: null,
-  trace: null,
-  pos: 0,
-  selected: null,
-  hovered: null,
-  editorFn: null,
-  playing: false,
-  speed: 1,
-  stepTarget: null,
-  follow: true,
-  legend: null,
-  sample: SAMPLES[0],
-  mode: 'normal',
-  vim: store.get('vim') !== 'off',
-  skin: SKINS.find((s) => s.id === store.get('skin')) ?? SKINS[0],
-  cursor: { line: 0, col: 0 },
-  engine: (['auto', 'interp', 'gdb'].includes(store.get('engine') ?? '') ? store.get('engine') : 'auto') as 'auto' | 'interp' | 'gdb',
-  stdin: '',
-  args: [],
-  defines: [],
-  gdb: { status: 'idle' },
-  sprites: [],
-  project: null,
-};
-
+// S, the layout and the DOM handles live in state.ts.
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 12, 20];
 const FOCUS_MAX = 1.5; // focus scenes never play faster than this, whatever the speed
 
@@ -130,66 +82,15 @@ function autoSpeed(trace: Trace): void {
   $('pb-speed').textContent = `${S.speed}×`;
 }
 
-const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: string }[] = [
-  { kind: 'node', name: 'Function', c: 'function definition', live: true, text: 'One per function. Shows whether it is running, waiting on a callee, or idle.' },
-  { kind: 'belt', name: 'Call', c: 'f(a, b)', live: true, text: 'Caller → callee. Arguments ride in, the return value rides back. Animated while the call is in progress. Drag it to re-route.' },
-  { kind: 'frame', name: 'Stack frame', c: 'parameters + locals', live: true, text: 'Attached under its function. Appears on call; after the return it stays dimmed with the last values.' },
-  { kind: 'wire', name: 'Pointer', c: 'T *p', live: true, text: 'Runs from a pointer to what it points at. A write through *p travels along it.' },
-  { kind: 'chest', name: 'Static', c: 'static / global variable', live: true, text: 'Lives for the whole program, not one call. Tethered to the function that owns it.' },
-  { kind: 'strip', name: 'Strip', c: 'array with indices', live: true, text: 'Drag onto the grid; bind bytes, length and markers in the inspector.' },
-  { kind: 'chest', name: 'Chest', c: 'value or storage', live: true, text: 'Drag onto the grid and bind a value.' },
-  { kind: 'marker' as IconKind, name: 'Marker', c: 'cursor or index', live: true, text: 'Standalone card showing a bound index. To make a cursor ride a strip, add it in that strip’s Markers field.' },
-  { kind: 'drill', name: 'Drill', c: 'input fd', live: true, text: 'Drag onto the grid and bind its source.' },
-  { kind: 'copy', name: 'Inserter', c: 'memcpy / copy loop', live: true, text: 'Drag onto the grid and bind what the copy is moving, e.g. the bytes left (n) in lr_copy.' },
-  { kind: 'train', name: 'Train', c: 'linked list', live: true, text: 'Drag onto the grid and bind a pointer.' },
-  { kind: 'stack', name: 'Stack', c: 'stack A / B', live: true, text: 'Drag onto the grid and bind a value.' },
-];
-
-// ---------------- DOM ----------------
-const canvas = $<HTMLCanvasElement>('grid');
-const view = new GridView(canvas);
-const gridPane = $<HTMLElement>('grid-pane');
-const editorPane = $<HTMLElement>('editor-pane');
-const inspector = $<HTMLElement>('inspector');
-const alerts = $<HTMLElement>('alerts');
-const overlay = $<HTMLElement>('overlay');
-const toastEl = $<HTMLElement>('toast');
-const timeline = $<HTMLCanvasElement>('timeline');
-const menu = $<HTMLElement>('menu');
-
-const decl = (type: string, name: string) => (type.endsWith('*') ? type + name : `${type} ${name}`);
-
-let toastTimer = 0;
-function toast(msg: string, action?: { label: string; run: () => void }): void {
-  toastEl.textContent = msg;
-  toastEl.classList.toggle('act', !!action);
-  if (action) {
-    const b = document.createElement('button');
-    b.className = 'btn sm';
-    b.textContent = action.label;
-    b.addEventListener('click', () => {
-      toastEl.hidden = true;
-      action.run();
-    });
-    toastEl.append(' ', b);
-  }
-  toastEl.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toastEl.hidden = true), action ? 6000 : 2000);
-}
-
 // ---------------- analysis ----------------
-let debounce = 0;
-let editor: ReturnType<typeof createEditor>;
-
 // The buffer (a sample) or every file of the open project.
-function currentSrc(): string {
+export function currentSrc(): string {
   return editor.state.doc.toString();
 }
 
-function analyze(src: string, fresh: boolean): void {
+export function analyze(src: string, fresh: boolean): void {
   const model = S.project ? projectModel(S.project) : parse(src);
-  modelRevision++;
+  setModelRevision(modelRevision + 1);
   if (fresh) layout.reset();
   // an open machine whose code changed size: make room again
   // a machine is as big as its code: when an edit resizes one, make room again
@@ -226,13 +127,13 @@ function analyze(src: string, fresh: boolean): void {
   }
 }
 
-function applyTrace(trace: Trace | null, fresh: boolean): void {
+export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
   S.trace = trace;
   prepareStage(trace); // focus mode sizes each return's card before playing it
-  traceRevision++;
-  lastInspectorKey = '';
+  setTraceRevision(traceRevision + 1);
+  setLastInspectorKey('');
   const n = trace?.evs.length ?? 0;
   S.pos = fresh ? 0 : atEnd ? n : Math.min(S.pos, n);
   S.stepTarget = null;
@@ -240,7 +141,7 @@ function applyTrace(trace: Trace | null, fresh: boolean): void {
 }
 
 // ---------------- engines: the interpreter, or the real thing under gdb ----------------
-function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
+export function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
   if (model.error || !model.byName.has('main')) return 'none';
   if (model.project) return 'gdb'; // the interpreter reads one buffer
   if (S.engine !== 'auto') return S.engine;
@@ -249,14 +150,14 @@ function engineFor(model: Model): 'interp' | 'gdb' | 'none' {
 
 let gdbTimer = 0;
 let gdbAbort: AbortController | null = null;
-function cancelGdb(): void {
+export function cancelGdb(): void {
   clearTimeout(gdbTimer);
   gdbAbort?.abort();
   gdbAbort = null;
   if (S.gdb.status === 'running') S.gdb = { status: 'idle' };
 }
 
-function startGdb(src: string, model: Model, fresh: boolean): void {
+export function startGdb(src: string, model: Model, fresh: boolean): void {
   S.gdb = { status: 'running' };
   gdbTimer = window.setTimeout(async () => {
     const ac = new AbortController();
@@ -322,941 +223,10 @@ function renderEngines(): void {
   );
 }
 
-// ---------------- per-sample work, kept in this browser ----------------
-interface Saved {
-  src: string;
-  stdin?: string;
-  args?: string[];
-  defines?: string[];
-  places: [string, number, number, boolean][];
-  waypoints: [string, number, number][];
-  sprites?: Sprite[];
-  folded?: string[];
-  shut?: string[];
-}
-
-function readSaved(key: string): Saved | null {
-  try {
-    const raw = store.get(`sample.${key}`);
-    return raw ? (JSON.parse(raw) as Saved) : null;
-  } catch {
-    return null;
-  }
-}
-
-const saveTimers = new Map<string, number>();
-function saveSoon(): void {
-  if (S.project) return projectSaveSoon();
-  const key = S.sample.key;
-  clearTimeout(saveTimers.get(key));
-  const saved: Saved = {
-    src: editor.state.doc.toString(),
-    stdin: S.stdin,
-    args: S.args,
-    defines: S.defines,
-    places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
-    waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
-    sprites: structuredClone(S.sprites),
-    folded: [...folded],
-    shut: [...shut],
-  };
-  saveTimers.set(key, window.setTimeout(() => {
-    store.set(`sample.${key}`, JSON.stringify(saved));
-    saveTimers.delete(key);
-    if (S.sample.key === key) renderRevert();
-  }, 400));
-}
-
-function applySavedLayout(saved: Saved): void {
-  for (const [id, x, y, pinned] of saved.places) {
-    const n = layout.nodes.get(id);
-    if (n) n.place = { x, y, pinned };
-  }
-  for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
-  for (const k of saved.shut ?? []) shut.add(k);
-  if (saved.folded?.length || saved.shut?.length) {
-    for (const k of saved.folded ?? []) folded.add(k);
-    if (S.model) layout.reflow(S.model);
-  }
-  settle();
-}
-
-// A layout saved when machines were smaller can overlap now: lay it out again.
-function settle(): void {
-  renderInsides();
-  if (!S.model) return;
-  const moved = layout.settle(S.model);
-  if (moved) toast(`rearranged ${moved} machine${moved === 1 ? '' : 's'} that overlapped`);
-}
-
-// Back to the auto layout (with an undo for a few seconds).
-function tidy(): void {
-  if (!S.model) return;
-  const was = new Map([...layout.nodes].map(([id, n]) => [id, { ...n.place }]));
-  const wp = new Map(layout.waypoints);
-  const mods = new Map([...layout.modules].map(([f, m]) => [f, { ...m }]));
-  layout.tidy(S.model);
-  saveSoon();
-  view.fit(S);
-  toast('tidied: every machine back to its auto place', {
-    label: 'Undo',
-    run: () => {
-      for (const [id, p] of was) {
-        const n = layout.nodes.get(id);
-        if (n) n.place = p;
-      }
-      layout.waypoints.clear();
-      for (const [k, v] of wp) layout.waypoints.set(k, v);
-      for (const [f, m] of mods) layout.modules.set(f, m);
-      saveSoon();
-    },
-  });
-}
-
-// Show or hide the insides of one machine, or of all of them.
-function toggleShut(fn: string): void {
-  if (!S.model) return;
-  if (shut.has(fn)) shut.delete(fn);
-  else shut.add(fn);
-  layout.reflow(S.model);
-  lastInspectorKey = '';
-  saveSoon();
-  renderInsides();
-}
-function setAllShut(closed: boolean): void {
-  if (!S.model) return;
-  for (const f of S.model.fns) {
-    if (closed) shut.add(f.name);
-    else shut.delete(f.name);
-  }
-  layout.reflow(S.model);
-  saveSoon();
-  renderInsides();
-  view.fit(S);
-}
-function renderInsides(): void {
-  const all = !!S.model?.fns.length && S.model.fns.every((f) => shut.has(f.name));
-  document.querySelectorAll<HTMLButtonElement>('#insides button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === 'hide' ? all : !all)));
-}
-
-function blueprint(): Blueprint {
-  if (S.project) return layout.toBlueprint(S.sprites, true);
-  return {
-    version: 1,
-    nodes: Object.fromEntries([...layout.nodes.values()].map((n) => [n.id, { x: n.place.x, y: n.place.y, pinned: n.place.pinned }])),
-    waypoints: Object.fromEntries([...layout.waypoints].map(([k, p]) => [k, { x: p.x, y: p.y }])),
-    sprites: S.sprites,
-  };
-}
-
-function exportBlueprint(): void {
-  const data = new Blob([serializeBlueprint(blueprint())], { type: 'application/json' });
-  const url = URL.createObjectURL(data);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${S.project?.name ?? S.sample.key}.blueprint.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function importBlueprint(file: File): Promise<void> {
-  try {
-    if (file.size > 200_000) throw new Error('Blueprint is too large');
-    const bp = parseBlueprint(await file.text());
-    if (S.project && S.model) (layout.applyBlueprint(bp, S.model, false), settle());
-    else {
-      for (const [id, p] of Object.entries(bp.nodes)) {
-        const n = layout.nodes.get(id);
-        if (n) n.place = { ...p };
-      }
-      layout.waypoints.clear();
-      for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
-    }
-    S.sprites = bp.sprites;
-    S.selected = null;
-    bindingsChanged();
-    saveSoon();
-    view.fit(S);
-    toast(`loaded ${bp.sprites.length} sprite${bp.sprites.length === 1 ? '' : 's'}`);
-  } catch (e) { toast(`Blueprint: ${(e as Error).message}`); }
-}
-
-function renderRevert(): void {
-  if (S.project) return void ($<HTMLButtonElement>('btn-revert').hidden = true);
-  const saved = readSaved(S.sample.key);
-  const edited = !!saved && (saved.src !== S.sample.src || (saved.stdin ?? '') !== (S.sample.stdin ?? '') || saved.places.some((p) => p[3]) || saved.waypoints.length > 0 || !!saved.sprites?.length);
-  $<HTMLButtonElement>('btn-revert').hidden = !edited;
-}
-
-function revertSample(): void {
-  clearTimeout(saveTimers.get(S.sample.key));
-  saveTimers.delete(S.sample.key);
-  store.set(`sample.${S.sample.key}`, '');
-  loadSample(S.sample.key, true);
-  toast('back to the original sample (Ctrl+Z in the editor undoes this)');
-}
-
-function loadSample(key: string | undefined, pristine = false): void {
-  const sp = SAMPLE_PROJECTS.find((x) => x.key === key);
-  if (sp) return openSampleProject(sp);
-  const s = SAMPLES.find((x) => x.key === key || x.title === key) ?? (key ? SAMPLES[Number(key) - 1] : undefined);
-  if (!s) return toast(`no sample “${key}” — try ${SAMPLES.map((x) => x.key).join(', ')}`);
-  if (S.project) leaveProject();
-  S.sample = s;
-  S.selected = null;
-  store.set('lastSample', s.key);
-  const saved = pristine ? null : readSaved(s.key);
-  S.sprites = saved?.sprites ? parseSavedSprites(saved.sprites) : [];
-  const src = saved?.src ?? s.src;
-  S.stdin = saved?.stdin ?? s.stdin ?? '';
-  S.args = saved?.args ?? [];
-  S.defines = saved?.defines ?? s.defines ?? [];
-  $<HTMLTextAreaElement>('stdin').value = S.stdin;
-  renderRunFields();
-  $('file-name').textContent = s.file;
-  renderSampleTabs();
-  loadingSample = true;
-  setDoc(editor, src);
-  loadingSample = false;
-  clearTimeout(debounce);
-  analyze(src, true);
-  renderProjectChrome();
-  if (saved) {
-    applySavedLayout(saved);
-    view.home(S, true);
-  }
-  renderRevert();
-  if (S.trace) setTimeout(() => play(), 450);
-}
-
-function parseSavedSprites(sprites: Sprite[]): Sprite[] {
-  try { return parseBlueprint({ version: 1, nodes: {}, waypoints: {}, sprites }).sprites; }
-  catch { return []; }
-}
-
-function bindingsChanged(): void {
-  lastInspectorKey = '';
-  if (!S.model) return;
-  const engine = engineFor(S.model);
-  if (engine === 'interp') applyTrace(evaluateInterpreterBindings(run(S.model), S.sprites), false);
-  else if (engine === 'gdb') {
-    cancelGdb();
-    applyTrace(null, false);
-    startGdb(editor.state.doc.toString(), S.model, false);
-    renderAlerts();
-  }
-}
-
-// ---------------- projects (M5) ----------------
-// A project's unsaved work lives in the page, backed up to this browser
-// ("hot exit"), and reaches disk only through the Save dialog.
-
-interface ProjectSaved {
-  layout: Blueprint; // every position, for continuity
-  bpBase: string; // hash of blueprint.json on disk when this was saved
-  buffers: Record<string, { text: string; base: string | null }>; // unsaved files, over this disk text
-  run: Project['run'];
-  runBase: string;
-  tabs: string[];
-  active: string;
-}
-
-const projectStore = (p: Project) => `project.${p.key}`;
-function readProjectSaved(p: Project): ProjectSaved | null {
-  try {
-    const raw = store.get(projectStore(p));
-    return raw ? (JSON.parse(raw) as ProjectSaved) : null;
-  } catch {
-    return null;
-  }
-}
-
-// The editor has the active file's newest text.
-function syncActive(): void {
-  const p = S.project;
-  const f = p?.files.get(p.active);
-  if (f) f.text = editor.state.doc.toString();
-}
-
-let projectSaveTimer = 0;
-function projectSaveSoon(): void {
-  const p = S.project;
-  if (!p) return;
-  clearTimeout(projectSaveTimer);
-  projectSaveTimer = window.setTimeout(() => {
-    if (S.project === p) writeProjectBackup(p);
-  }, 400);
-}
-
-function writeProjectBackup(p: Project): void {
-  if (S.project === p) syncActive();
-  const buffers: ProjectSaved['buffers'] = {};
-  for (const f of p.files.values()) {
-    if (!isSource(f.path) || !isDirty(f) || liveFrom.has(f.path)) continue; // an editor's unsaved text lives in that editor
-    buffers[f.path] = { text: f.text, base: f.disk === null ? null : hash(f.disk) };
-  }
-  const saved: ProjectSaved = {
-    layout: layout.toBlueprint(S.sprites, true), bpBase: hash(p.files.get(BP_JSON)?.disk ?? ''),
-    buffers, run: p.run, runBase: hash(p.files.get(RUN_JSON)?.disk ?? ''), tabs: p.tabs, active: p.active,
-  };
-  store.set(projectStore(p), JSON.stringify(saved));
-  if (S.project === p) renderProjectChrome();
-}
-
-function stateFor(f: PFile) {
-  return (f.state ??= createState(f.text, hooks, S.vim));
-}
-
-const mainFileOf = (p: Project) =>
-  [...p.files.values()].find((f) => f.path.endsWith('.c') && f.path !== DRIVER && /^\s*int\s+main\s*\(/m.test(f.text))?.path ??
-  (p.files.has(DRIVER) ? DRIVER : [...p.files.keys()].filter((k) => k.endsWith('.c')).sort()[0] ?? [...p.files.keys()][0]);
-
-function leaveProject(): void {
-  const p = S.project;
-  if (!p) return;
-  store.set('lastProject', '');
-  clearTimeout(projectSaveTimer);
-  writeProjectBackup(p);
-  stopPolling();
-  S.project = null;
-  cancelGdb();
-  layout.reset();
-  // a fresh state: the sample must not share the project file's undo history
-  loadingSample = true;
-  swapState(editor, createState('', hooks, S.vim), S.vim, hooks);
-  loadingSample = false;
-  const kept = [...p.files.values()].filter(isDirty).length;
-  if (kept && !p.readOnly) toast(`${p.name}: ${kept} unsaved file${kept === 1 ? '' : 's'} kept in this browser — reopen to save`);
-}
-
-async function openFolder(path: string): Promise<boolean> {
-  let r: Opened | 'unavailable';
-  try {
-    r = await fsCall<Opened>('open', { dir: path });
-  } catch (e) {
-    toast(`Open Folder: ${(e as Error).message}`);
-    return false;
-  }
-  if (r === 'unavailable') {
-    toast('opening a folder needs the local server (npm run dev)');
-    return false;
-  }
-  const recent = [r.root, ...readRecent().filter((x) => x !== r.root)].slice(0, 8);
-  store.set('recent', JSON.stringify(recent));
-  loadProject(fromFiles(r.root, r.name, r.files, r.truncated));
-  return true;
-}
-
-function readRecent(): string[] {
-  try {
-    const v = JSON.parse(store.get('recent') ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function openSampleProject(sp: SampleProject): void {
-  loadProject(fromFiles(null, sp.name, Object.entries(sp.files).map(([path, text]) => ({ path, text, mtime: null }))));
-}
-
-function loadProject(p: Project): void {
-  if (S.project) leaveProject();
-  S.project = p;
-  S.selected = null;
-  S.sprites = [];
-  store.set('lastProject', p.root ? `folder:${p.root}` : `sample:${SAMPLE_PROJECTS.find((x) => x.name === p.name)?.key ?? ''}`);
-  // Hot exit: unsaved buffers come back only over the disk text they were edited from.
-  const saved = readProjectSaved(p);
-  let restored = 0;
-  for (const [path, b] of Object.entries(saved?.buffers ?? {})) {
-    const f = p.files.get(path);
-    if (f && f.disk !== null && hash(f.disk) === b.base) (f.text = b.text), restored++;
-    else if (!f && b.base === null) (p.files.set(path, { path, text: b.text, disk: null, mtime: null, state: null }), restored++);
-  }
-  if (saved && saved.runBase === hash(p.files.get(RUN_JSON)?.disk ?? '')) p.run = saved.run;
-  p.active = saved?.active && p.files.has(saved.active) ? saved.active : mainFileOf(p);
-  p.tabs = (saved?.tabs ?? []).filter((t) => p.files.has(t));
-  if (!p.tabs.includes(p.active)) p.tabs.push(p.active);
-  loadingSample = true;
-  swapState(editor, stateFor(p.files.get(p.active)!), S.vim, hooks);
-  loadingSample = false;
-  renderRunFields();
-  cancelGdb();
-  clearTimeout(debounce);
-  analyze('', true);
-  // The committed blueprint, then this browser's newer layout made on top of it.
-  const bpDisk = p.files.get(BP_JSON)?.disk ?? null;
-  if (bpDisk && S.model) {
-    try {
-      const bp = parseBlueprint(bpDisk);
-      layout.applyBlueprint(bp, S.model, false);
-      S.sprites = bp.sprites;
-    } catch (e) {
-      toast(`${BP_JSON}: ${(e as Error).message} — ignored`);
-    }
-  }
-  if (saved && saved.bpBase === hash(bpDisk ?? '') && S.model) {
-    try {
-      const bp = parseBlueprint(saved.layout);
-      layout.applyBlueprint(bp, S.model, true);
-      S.sprites = bp.sprites;
-    } catch {
-      /* an old backup format: the committed blueprint stands */
-    }
-  }
-  if (S.sprites.length) bindingsChanged();
-  settle();
-  renderInsides();
-  view.home(S, true);
-  renderProjectChrome();
-  renderAlerts();
-  renderStatus();
-  startPolling();
-  // an editor may already have unsaved text in this folder
-  if (p.root) void liveReplay().then((ms) => S.project === p && ms.forEach(onLive));
-  if (restored) toast(`restored ${restored} unsaved file${restored === 1 ? '' : 's'} from this browser`);
-  else if (p.truncated) toast('large folder: only the first 800 source files were loaded');
-}
-
-function closeProject(): void {
-  leaveProject();
-  loadSample(store.get('lastSample') ?? SAMPLES[0].key);
-}
-
-function switchFile(path: string, at?: { line: number; col: number }): void {
-  const p = S.project;
-  const f = p?.files.get(path);
-  if (!p || !f) return;
-  if (p.active !== path) {
-    const cur = p.files.get(p.active);
-    if (cur) (cur.state = editor.state), (cur.text = editor.state.doc.toString());
-    p.active = path;
-    if (!p.tabs.includes(path)) p.tabs.push(path);
-    loadingSample = true;
-    swapState(editor, stateFor(f), S.vim, hooks);
-    loadingSample = false;
-    lastExec = ''; // mark the running line again, in this file
-    renderProjectChrome();
-    projectSaveSoon();
-  }
-  if (at) jumpTo(editor, at.line, at.col);
-}
-
-// Jump to a place in the code: another file in a project, else this buffer.
-function openAt(file: string | undefined, line: number, col = 0): void {
-  if (S.project && file) switchFile(file, { line, col });
-  else jumpTo(editor, line, col);
-  // the connected editors (nvim…) go there too
-  if (S.project?.root && file && liveEditors.length) void liveReveal(S.project.root, file, line, col);
-}
-
-// ---- M6: live edits from any editor (the nvim plugin, …) ----
-// The page doesn't care where an edit comes from: an editor's unsaved text
-// for a file is applied like typing here, and the latest change wins.
-let liveEditors: string[] = [];
-const liveFrom = new Map<string, string>(); // project path → the editor whose unsaved text it shows
-const liveOutside = new Set<string>();
-
-function renderLive(): void {
-  const el = $('st-live');
-  el.hidden = !liveEditors.length;
-  el.innerHTML = liveEditors.length ? `<span class="ok">●</span> live: ${esc(liveEditors.join(', '))}` : '';
-  el.title = 'edits in these editors show here as you type';
-}
-
-// New text for a project file, as a minimal change so cursors and scroll stay put.
-function setFileText(p: Project, f: PFile, text: string): void {
-  if (f.path === p.active) {
-    const old = editor.state.doc.toString();
-    let a = 0;
-    while (a < old.length && a < text.length && old[a] === text[a]) a++;
-    let b = 0;
-    while (b < old.length - a && b < text.length - a && old[old.length - 1 - b] === text[text.length - 1 - b]) b++;
-    editor.dispatch({ changes: { from: a, to: old.length - b, insert: text.slice(a, text.length - b) } }); // onChange re-parses
-  } else {
-    f.text = text;
-    f.state = null;
-    renderProjectChrome();
-    clearTimeout(debounce);
-    debounce = window.setTimeout(() => analyze('', false), 150);
-  }
-}
-
-function onLive(m: LiveMsg): void {
-  if (m.k === 'ping') return;
-  if (m.k === 'hello' || m.k === 'editors') {
-    liveEditors = m.editors;
-    return renderLive();
-  }
-  if (m.k === 'open') return void openFolder(m.dir);
-  const p = S.project;
-  if (!p?.root || m.root !== p.root || !m.rel) {
-    if (m.k === 'edit' && m.text !== undefined && !liveOutside.has(m.path)) {
-      liveOutside.add(m.path);
-      toast(`${m.source} is editing ${baseName(m.path)}, outside the open folder (:FtbOpen there opens its folder here)`);
-    }
-    return;
-  }
-  syncActive();
-  const rel = m.rel;
-  let f = p.files.get(rel);
-  if (m.k === 'close') {
-    // the editor dropped its unsaved text: back to what's on disk
-    if (!f || !liveFrom.has(rel)) return;
-    liveFrom.delete(rel);
-    if (f.disk !== null) return setFileText(p, f, f.disk);
-    p.files.delete(rel);
-    p.tabs = p.tabs.filter((t) => t !== rel);
-    if (p.active === rel) switchFile(p.tabs[0] ?? [...p.files.keys()].find(isSource) ?? '');
-    renderProjectChrome();
-    return analyze('', false);
-  }
-  if (m.text !== undefined && f?.text !== m.text) {
-    if (!f) p.files.set(rel, (f = { path: rel, text: m.text, disk: null, mtime: null, state: null }));
-    else if (isDirty(f) && !liveFrom.has(rel)) toast(`${rel}: your edits here were replaced by ${m.source}'s`);
-    setFileText(p, f, m.text);
-  }
-  if (f && m.text !== undefined) {
-    if (isDirty(f)) liveFrom.set(rel, m.source);
-    else liveFrom.delete(rel);
-  }
-  // follow the editor's cursor (without taking the keyboard)
-  if (f && m.line !== undefined) {
-    if (p.active !== rel) switchFile(rel);
-    if (p.active === rel) jumpTo(editor, m.line, m.col ?? 0, false);
-  }
-}
-
-function closeTab(path: string): void {
-  const p = S.project;
-  if (!p || p.tabs.length <= 1) return;
-  const i = p.tabs.indexOf(path);
-  p.tabs = p.tabs.filter((t) => t !== path);
-  if (p.active === path) switchFile(p.tabs[Math.max(0, i - 1)]);
-  renderProjectChrome();
-  projectSaveSoon();
-}
-
-// Bring the derived .blueprint42 files up to date with the run settings and
-// the author's layout; unchanged content keeps the disk text (not dirty).
-function refreshMeta(): void {
-  const p = S.project;
-  if (!p) return;
-  syncActive();
-  const setMeta = (path: string, text: string | null, create: boolean) => {
-    const f = p.files.get(path);
-    if (f) f.text = text ?? f.disk ?? '';
-    else if (create && text !== null) p.files.set(path, { path, text, disk: null, mtime: null, state: null });
-  };
-  const runDisk = p.files.get(RUN_JSON)?.disk;
-  let sameRun = false;
-  try {
-    sameRun = runDisk != null && JSON.stringify(parseRun(runDisk)) === JSON.stringify(p.run);
-  } catch { /* a hand-broken run.json is rewritten on save */ }
-  setMeta(RUN_JSON, sameRun ? null : serializeRun(p.run), !runEmpty(p.run));
-  const bp = layout.toBlueprint(S.sprites, false, S.model?.byName.get('main')?.file);
-  const authored = Object.keys(bp.nodes).length + Object.keys(bp.modules ?? {}).length + Object.keys(bp.waypoints).length + bp.sprites.length + (bp.folded?.length ?? 0) > 0;
-  const bpText = serializeBlueprint(bp) + '\n';
-  const bpDisk = p.files.get(BP_JSON)?.disk;
-  let sameBp = false;
-  try {
-    sameBp = bpDisk != null && serializeBlueprint(parseBlueprint(bpDisk)) + '\n' === bpText;
-  } catch { /* rewritten on save */ }
-  setMeta(BP_JSON, sameBp ? null : bpText, authored);
-}
-
-function dirtyFiles(): PFile[] {
-  const p = S.project;
-  if (!p) return [];
-  refreshMeta();
-  return [...p.files.values()].filter(isDirty).sort((a, b) => a.path.localeCompare(b.path));
-}
-
-// A new driver main for a project that has none (a library: libft, gnl…).
-function createDriver(): void {
-  const p = S.project;
-  if (!p || p.files.has(DRIVER)) return;
-  const headers = [...p.files.keys()].filter((k) => k.endsWith('.h') && !k.includes('/')).sort();
-  const text = `${headers.map((h) => `#include "${h}"`).join('\n')}${headers.length ? '\n\n' : ''}int\tmain(void)\n{\n\treturn (0);\n}\n`;
-  p.files.set(DRIVER, { path: DRIVER, text, disk: null, mtime: null, state: null });
-  switchFile(DRIVER, { line: headers.length ? headers.length + 3 : 2, col: 1 });
-  analyze('', false);
-  toast(`${DRIVER} created (not saved) — it runs your code; Ctrl+S to keep it`);
-}
-
-// ---- polling: edits made on disk (nvim, git) show up here ----
-let pollTimer = 0;
-let polling = false;
-function startPolling(): void {
-  stopPolling();
-  if (S.project?.root) pollTimer = window.setInterval(() => void pollOnce(), 2000);
-}
-function stopPolling(): void {
-  clearInterval(pollTimer);
-}
-
-async function pollOnce(): Promise<void> {
-  const p = S.project;
-  if (!p?.root || polling || document.hidden) return;
-  polling = true;
-  try {
-    const known = Object.fromEntries([...p.files.values()].filter((f) => f.mtime !== null).map((f) => [f.path, f.mtime!]));
-    const r = await fsCall<{ changed: { path: string; text: string; mtime: number }[]; removed: string[] }>('poll', { root: p.root, known }).catch(() => 'unavailable' as const);
-    if (r === 'unavailable' || S.project !== p) return;
-    let changed = false;
-    syncActive();
-    for (const nf of r.changed) {
-      const f = p.files.get(nf.path);
-      if (!f) {
-        p.files.set(nf.path, { path: nf.path, text: nf.text, disk: nf.text, mtime: nf.mtime, state: null });
-        changed = true;
-        continue;
-      }
-      if (f.disk === nf.text) {
-        f.mtime = nf.mtime; // touched, same content
-        continue;
-      }
-      if (f.text === nf.text) {
-        // saved elsewhere (nvim) with the text we already show: clean now
-        f.disk = nf.text;
-        f.mtime = nf.mtime;
-        delete f.conflict;
-        liveFrom.delete(f.path);
-        changed = true;
-        continue;
-      }
-      if (isDirty(f) && !f.path.startsWith(`${META}/`)) {
-        if (f.conflict?.mtime !== nf.mtime) toast(`${nf.path} changed on disk while you have unsaved edits here`);
-        f.conflict = { text: nf.text, mtime: nf.mtime };
-        changed = true;
-        continue;
-      }
-      f.disk = f.text = nf.text;
-      f.mtime = nf.mtime;
-      delete f.conflict;
-      if (f.path === RUN_JSON) (p.run = parseRun(nf.text)), renderRunFields();
-      if (f.path === p.active) {
-        const head = Math.min(editor.state.selection.main.head, nf.text.length);
-        editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: nf.text }, selection: { anchor: head } });
-      } else f.state = null;
-      changed = true;
-    }
-    for (const path of r.removed) {
-      const f = p.files.get(path);
-      if (!f) continue;
-      if (!isDirty(f) && path !== p.active) {
-        p.files.delete(path);
-        p.tabs = p.tabs.filter((t) => t !== path);
-      } else (f.disk = null), (f.mtime = null);
-      changed = true;
-    }
-    if (changed) {
-      analyze('', false);
-      renderProjectChrome();
-    }
-  } finally {
-    polling = false;
-  }
-}
-
-function renderRunFields(): void {
-  const p = S.project;
-  const stdin = $<HTMLTextAreaElement>('stdin');
-  if (document.activeElement !== stdin) stdin.value = p ? p.run.stdin : S.stdin;
-  // a single file gets the same run settings (kept in this browser), not only a project
-  $('run-row').hidden = false;
-  $('stdin-info').textContent = p ? `run settings, saved as ${RUN_JSON}` : 'stdin, arguments and -D flags for the run under gdb';
-  const args = $<HTMLInputElement>('run-args');
-  const defs = $<HTMLInputElement>('run-defs');
-  if (document.activeElement !== args) args.value = joinArgs(p ? p.run.args : S.args);
-  if (document.activeElement !== defs) defs.value = (p ? p.run.defines : S.defines).join(' ');
-}
-
-// A single file's run settings changed: keep them, and run it again under gdb.
-function sampleRunChanged(set: () => void): void {
-  set();
-  saveSoon();
-  if (S.model && engineFor(S.model) === 'gdb') {
-    cancelGdb();
-    startGdb(editor.state.doc.toString(), S.model, false);
-    renderAlerts();
-  }
-}
-
-function runChanged(): void {
-  projectSaveSoon();
-  if (S.model && engineFor(S.model) === 'gdb') {
-    cancelGdb();
-    startGdb(currentSrc(), S.model, false);
-    renderAlerts();
-  }
-}
-
-// ---- chrome: project chip, tabs, explorer, save button ----
-let explorerOpen = store.get('explorer') !== 'off';
-
-function renderProjectChrome(): void {
-  const p = S.project;
-  const chip = $('project-chip');
-  chip.hidden = !p;
-  $('btn-files').hidden = !p;
-  $('btn-files').setAttribute('aria-pressed', String(explorerOpen));
-  $('btn-save').hidden = !p;
-  $('file-name').hidden = !!p;
-  $('tabs').hidden = !p;
-  $('explorer').hidden = !p || !explorerOpen;
-  renderSampleTabs();
-  renderRunFields();
-  // a project always runs under gdb: the interpreter reads one buffer
-  $('engines').querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
-    b.disabled = !!p && b.dataset.id !== 'gdb';
-    b.setAttribute('aria-pressed', String(p ? b.dataset.id === 'gdb' : b.dataset.id === S.engine));
-  });
-  if (!p) {
-    document.title = 'blueprint42';
-    return;
-  }
-  const dirty = p.readOnly ? [...p.files.values()].filter((f) => isDirty(f) && isSource(f.path)).length : dirtyFiles().length;
-  chip.innerHTML = `<button aria-pressed="true" title="${esc(p.root ?? 'bundled sample project (read-only)')}">${dirty ? '<span class="dirty-dot">●</span> ' : ''}${esc(p.name)}${p.readOnly ? ' <span class="c">(sample)</span>' : ''}<span class="x" data-close title="Close folder">✕</span></button>`;
-  chip.querySelector('[data-close]')!.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeProject();
-  });
-  chip.querySelector('button')!.addEventListener('click', () => void openFolderDialog());
-  $('btn-save').textContent = dirty ? `Save… (${dirty})` : 'Save…';
-  document.title = `${dirty ? '● ' : ''}${p.name} — blueprint42`;
-  // tabs
-  const tabs = $('tabs');
-  tabs.innerHTML = p.tabs.map((path) => {
-    const f = p.files.get(path);
-    const name = path.slice(path.lastIndexOf('/') + 1);
-    return `<span class="tab" role="tab" data-path="${esc(path)}" aria-selected="${path === p.active}" title="${esc(path)}">${f?.conflict ? '<span class="warn" title="changed on disk">⚠</span>' : ''}${esc(name)}${f && isDirty(f) ? ' <span class="dirty-dot">●</span>' : ''}${p.tabs.length > 1 ? '<span class="close" data-x title="Close tab (the file stays in the project)">×</span>' : ''}</span>`;
-  }).join('');
-  tabs.querySelectorAll<HTMLElement>('.tab').forEach((t) => t.addEventListener('mousedown', (e) => {
-    const path = t.dataset.path!;
-    if ((e.target as HTMLElement).closest('[data-x]') || e.button === 1) {
-      e.preventDefault();
-      return closeTab(path);
-    }
-    if (e.button === 0) switchFile(path);
-  }));
-  // explorer: folders as headers, files indented under them
-  if (!explorerOpen) return;
-  const counts = new Map<string, number>();
-  for (const f of S.model?.fns ?? []) counts.set(f.file, (counts.get(f.file) ?? 0) + 1);
-  const paths = [...p.files.keys()].filter((k) => isSource(k) || /(^|\/)(Makefile|makefile|GNUmakefile)$/.test(k) || k.startsWith(`${META}/`)).sort((a, b) => {
-    const da = a.includes('/') ? a.slice(0, a.lastIndexOf('/')) : '';
-    const db = b.includes('/') ? b.slice(0, b.lastIndexOf('/')) : '';
-    return da === db ? a.localeCompare(b) : da.localeCompare(db);
-  });
-  let lastDir = '';
-  const rows: string[] = [];
-  for (const path of paths) {
-    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-    if (dir !== lastDir) rows.push(`<div class="dir">${esc(dir)}/</div>`);
-    lastDir = dir;
-    const f = p.files.get(path)!;
-    const n = counts.get(path);
-    rows.push(`<button data-path="${esc(path)}" style="--depth:${dir ? 1 : 0}" aria-current="${path === p.active}" title="${esc(path)}"><span class="n">${esc(path.slice(path.lastIndexOf('/') + 1))}</span>${isDirty(f) ? '<span class="dirty-dot">●</span>' : ''}${n ? `<span class="m">${n} fn</span>` : ''}</button>`);
-  }
-  const ex = $('explorer');
-  ex.innerHTML = rows.join('');
-  ex.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
-    const path = b.dataset.path!;
-    if (path.startsWith(`${META}/`) && path.endsWith('.json')) return toast(`${path} is written from the run settings and the layout`);
-    switchFile(path);
-  }));
-}
-
-function toggleExplorer(): void {
-  explorerOpen = !explorerOpen;
-  store.set('explorer', explorerOpen ? 'on' : 'off');
-  renderProjectChrome();
-}
-
-// ---- dialogs ----
-function showDialog(title: string, body: string, kind: string): HTMLElement {
-  overlay.innerHTML = `<div class="dlg" role="dialog" aria-label="${esc(title)}"><div class="dlg-title"><span>${esc(title)}</span><span class="grow"></span><button class="x" data-close aria-label="Close">×</button></div><div class="dlg-body">${body}</div></div>`;
-  overlay.dataset.kind = kind;
-  overlay.hidden = false;
-  overlay.querySelector('[data-close]')!.addEventListener('click', closeOverlay);
-  return overlay.querySelector('.dlg')!;
-}
-
-// Saving always asks: which files, what changes, and what changed on disk meanwhile.
-function openSaveDialog(): void {
-  const p = S.project;
-  if (!p) return toast('samples live in this browser — Export blueprint to keep a layout');
-  const dirty = dirtyFiles();
-  if (!dirty.length) return toast('no unsaved changes');
-  if (p.readOnly) return toast(`${p.name} is a bundled sample and read-only — Open Folder… to work on real files`);
-  const rows = dirty.map((f, i) => {
-    const d = lineDiff(f.disk ?? '', f.text);
-    return `<label><input type="checkbox" data-i="${i}" checked> <span>${esc(f.path)}</span>
-      <span class="stat">${f.disk === null ? 'new file · ' : ''}<span class="a">+${d.added}</span> <span class="r">−${d.removed}</span></span>
-      ${f.conflict ? '<span class="conf">⚠ changed on disk since you opened it</span>' : ''}
-      <a data-diff="${i}">diff</a></label><pre class="diff" data-for="${i}" hidden>${d.text.split('\n').map((l) => `<span class="${l.startsWith('+ ') ? 'a' : l.startsWith('- ') ? 'r' : ''}">${esc(l)}</span>`).join('\n')}</pre>`;
-  }).join('');
-  const dlg = showDialog('Save to disk', `<p class="hint">Nothing is written until you confirm. ${esc(p.root ?? '')}</p>
-    <div class="files">${rows}</div>
-    <div class="row-btns"><span class="note">Enter saves · Esc cancels</span><button class="btn" data-cancel>Cancel</button><button class="btn" data-save>Save selected</button></div>`, 'save');
-  dlg.querySelectorAll<HTMLElement>('[data-diff]').forEach((a) => a.addEventListener('click', (e) => {
-    e.preventDefault();
-    const pre = dlg.querySelector<HTMLElement>(`pre[data-for="${a.dataset.diff}"]`)!;
-    pre.hidden = !pre.hidden;
-  }));
-  const selected = () => [...dlg.querySelectorAll<HTMLInputElement>('input[type=checkbox]')].filter((c) => c.checked).map((c) => dirty[Number(c.dataset.i)].path);
-  const go = async (force: boolean, paths = selected()) => {
-    if (!paths.length) return closeOverlay();
-    let r;
-    try {
-      r = await save(p, paths, force);
-    } catch (e) {
-      return toast(`Save failed: ${(e as Error).message}`);
-    }
-    if (r === 'unavailable') return toast('saving needs the local server (npm run dev)');
-    if (r.conflicts.length) return showConflicts(p, r.conflicts, paths);
-    closeOverlay();
-    toast(`saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'}`);
-    writeProjectBackup(p);
-    renderProjectChrome();
-  };
-  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
-  dlg.querySelector('[data-save]')!.addEventListener('click', () => void go(false));
-  dlg.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !(e.target as HTMLElement).closest('a')) {
-      e.preventDefault();
-      void go(false);
-    }
-  });
-  dlg.querySelector<HTMLButtonElement>('[data-save]')!.focus();
-}
-
-function showConflicts(p: Project, conflicts: { path: string; mtime: number | null; text: string | null }[], paths: string[]): void {
-  const dlg = showDialog('Changed on disk', `<p class="hint">These files changed on disk after you opened them (another editor, git…). Nothing was saved.</p>
-    <div class="files">${conflicts.map((c) => `<label><span>${esc(c.path)}</span> <span class="conf">${c.text === null ? 'deleted on disk' : 'edited on disk'}</span></label>`).join('')}</div>
-    <div class="row-btns"><button class="btn" data-cancel>Cancel</button><button class="btn" data-theirs title="Drop your edits to these files and load the disk version">Use disk version</button><button class="btn" data-mine title="Write your version over the disk version">Overwrite with mine</button></div>`, 'conflict');
-  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
-  dlg.querySelector('[data-theirs]')!.addEventListener('click', () => {
-    for (const c of conflicts) {
-      const f = p.files.get(c.path);
-      if (!f) continue;
-      f.disk = c.text;
-      f.mtime = c.mtime;
-      f.text = c.text ?? '';
-      f.state = null;
-      delete f.conflict;
-      if (f.path === p.active) {
-        loadingSample = true;
-        swapState(editor, stateFor(f), S.vim, hooks);
-        loadingSample = false;
-      }
-    }
-    closeOverlay();
-    analyze('', false);
-    writeProjectBackup(p);
-  });
-  dlg.querySelector('[data-mine]')!.addEventListener('click', async () => {
-    const r = await save(p, paths, true).catch((e: Error) => (toast(`Save failed: ${e.message}`), null));
-    if (!r || r === 'unavailable') return;
-    closeOverlay();
-    toast(`saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'} (overwrote the disk version)`);
-    writeProjectBackup(p);
-    renderProjectChrome();
-  });
-}
-
-// VS Code-style folder picker, served by the local server (the browser
-// can't hand a real path to the page).
-async function openFolderDialog(dir?: string): Promise<void> {
-  let listing: Listing | 'unavailable';
-  try {
-    listing = await fsCall<Listing>('list', { dir: dir ?? S.project?.root ?? store.get('lastDir') ?? '' });
-  } catch (e) {
-    if (dir !== undefined) return toast((e as Error).message);
-    listing = await fsCall<Listing>('list', { dir: '' }).catch(() => 'unavailable' as const);
-  }
-  if (listing === 'unavailable') {
-    const body = `<p class="hint">Opening a folder needs the local server. Start it with <code>npm run dev -- ~/path/to/project</code>, or try the bundled project:</p>
-      <div class="pick">${SAMPLE_PROJECTS.map((sp) => `<button data-sample="${sp.key}">${esc(sp.title)}<span class="tag">${esc(sp.blurb)}</span></button>`).join('')}</div>`;
-    const dlg = showDialog('Open Folder', body, 'open');
-    dlg.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach((b) => b.addEventListener('click', () => (closeOverlay(), loadSample(b.dataset.sample))));
-    return;
-  }
-  const L = listing;
-  store.set('lastDir', L.dir);
-  const recent = readRecent().filter((r) => r !== L.dir);
-  const items: { label: string; tag: string; act: () => void }[] = [];
-  if (L.parent) items.push({ label: '..', tag: 'up', act: () => void openFolderDialog(L.parent!) });
-  for (const d of L.dirs) items.push({ label: `${d}/`, tag: '', act: () => void openFolderDialog(`${L.dir}/${d}`) });
-  const body = `<input class="path" value="${esc(L.dir)}" spellcheck="false" aria-label="Folder path">
-    <div class="pick">${items.map((it, i) => `<button data-i="${i}">${esc(it.label)}<span class="tag">${esc(it.tag)}</span></button>`).join('') || '<div class="empty">no sub-folders</div>'}</div>
-    ${recent.length ? `<h4 style="margin-top:12px">Recent</h4><div class="pick">${recent.map((r) => `<button data-recent="${esc(r)}">${esc(r)}</button>`).join('')}</div>` : ''}
-    <div class="row-btns"><span class="note">${L.project ? 'this folder has C sources' : 'no .c/.h/Makefile here'} · Enter goes to the typed path · Ctrl+Enter opens it</span>
-    <button class="btn" data-cancel>Cancel</button><button class="btn" data-open>Open ${esc(L.dir.slice(L.dir.lastIndexOf('/') + 1) || '/')}</button></div>`;
-  const dlg = showDialog('Open Folder', body, 'open');
-  const input = dlg.querySelector<HTMLInputElement>('input.path')!;
-  dlg.querySelectorAll<HTMLButtonElement>('[data-i]').forEach((b) => b.addEventListener('click', () => items[Number(b.dataset.i)].act()));
-  dlg.querySelectorAll<HTMLButtonElement>('[data-recent]').forEach((b) => b.addEventListener('click', async () => {
-    if (await openFolder(b.dataset.recent!)) closeOverlay();
-  }));
-  dlg.querySelector('[data-cancel]')!.addEventListener('click', closeOverlay);
-  dlg.querySelector('[data-open]')!.addEventListener('click', async () => {
-    if (await openFolder(L.dir)) closeOverlay();
-  });
-  input.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const path = input.value.trim().replace(/^~(?=$|\/)/, L.home);
-    if (e.ctrlKey || e.metaKey) {
-      if (await openFolder(path)) closeOverlay();
-    } else void openFolderDialog(path);
-  });
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
-}
-
-// Ctrl+P: go to a file by typing part of its path.
-function quickOpen(): void {
-  const p = S.project;
-  if (!p) return;
-  const all = [...p.files.keys()].filter((k) => !(k.startsWith(`${META}/`) && k.endsWith('.json'))).sort();
-  const dlg = showDialog('Go to file', `<input class="path" placeholder="type part of a file name" spellcheck="false"><div class="pick"></div>`, 'quick');
-  const input = dlg.querySelector<HTMLInputElement>('input')!;
-  const list = dlg.querySelector<HTMLElement>('.pick')!;
-  let hits: string[] = [];
-  let sel = 0;
-  const render = () => {
-    const q = input.value.trim().toLowerCase();
-    hits = all.filter((k) => {
-      let i = 0;
-      for (const ch of k.toLowerCase()) if (ch === q[i]) i++;
-      return i === q.length;
-    }).slice(0, 50);
-    sel = Math.min(sel, Math.max(0, hits.length - 1));
-    list.innerHTML = hits.map((h, i) => `<button data-i="${i}" class="${i === sel ? 'on' : ''}">${esc(h)}${p.files.get(h) && isDirty(p.files.get(h)!) ? '<span class="tag">●</span>' : ''}</button>`).join('') || '<div class="empty">no match</div>';
-    list.querySelectorAll<HTMLButtonElement>('[data-i]').forEach((b) => b.addEventListener('click', () => (closeOverlay(), switchFile(hits[Number(b.dataset.i)]), editor.focus())));
-  };
-  input.addEventListener('input', () => ((sel = 0), render()));
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') (sel = Math.min(hits.length - 1, sel + 1)), render(), e.preventDefault();
-    else if (e.key === 'ArrowUp') (sel = Math.max(0, sel - 1)), render(), e.preventDefault();
-    else if (e.key === 'Enter' && hits[sel]) {
-      e.preventDefault();
-      closeOverlay();
-      switchFile(hits[sel]);
-      editor.focus();
-    }
-  });
-  render();
-  input.focus();
-}
-
 // ---------------- playback ----------------
-const N = () => S.trace?.evs.length ?? 0;
+export const N = () => S.trace?.evs.length ?? 0;
 
-function play(): void {
+export function play(): void {
   if (!S.trace) return toast(S.model?.error ? 'fix the syntax error first' : 'nothing to run: this code has no main()');
   if (S.pos >= N()) S.pos = 0;
   S.stepTarget = null;
@@ -1351,7 +321,7 @@ function restart(): void {
 }
 
 // ---------------- entity actions ----------------
-function gotoCode(e: Entity | null): void {
+export function gotoCode(e: Entity | null): void {
   if (!e || !S.model) return;
   if (e.k === 'node') {
     const f = layout.nodes.get(e.id)?.fn;
@@ -1370,7 +340,7 @@ function gotoCode(e: Entity | null): void {
   } else gotoCode({ k: 'node', id: 'func:main' });
 }
 
-function toggleModule(file: string): void {
+export function toggleModule(file: string): void {
   const m = layout.modules.get(file);
   if (!m || !S.model) return;
   layout.setCollapsed(file, !m.collapsed, S.model);
@@ -1385,7 +355,7 @@ function toggleFold(t: { fn: string; name: string }): void {
   if (folded.has(key)) folded.delete(key);
   else folded.add(key);
   if (S.model) layout.reflow(S.model);
-  lastInspectorKey = '';
+  setLastInspectorKey('');
   saveSoon();
 }
 
@@ -1409,22 +379,22 @@ function resetRoute(key: string): void {
   toast('route reset');
 }
 
-function placeSprite(kind: SpriteKind, wx: number, wy: number, preset: Partial<Sprite> = {}): Sprite {
+export function placeSprite(kind: SpriteKind, wx: number, wy: number, preset: Partial<Sprite> = {}): Sprite {
   const id = `sprite:${crypto.randomUUID()}`;
   const sprite: Sprite = { id, kind, x: Math.round(wx), y: Math.round(wy), ...preset };
   S.sprites.push(sprite);
   S.selected = { k: 'sprite', id };
   S.legend = null;
-  lastInspectorKey = '';
+  setLastInspectorKey('');
   saveSoon();
   bindingsChanged();
   return sprite;
 }
 
-function removeSprite(id: string): void {
+export function removeSprite(id: string): void {
   S.sprites = S.sprites.filter((s) => s.id !== id);
   if (S.selected?.k === 'sprite' && S.selected.id === id) S.selected = null;
-  lastInspectorKey = '';
+  setLastInspectorKey('');
   saveSoon();
   bindingsChanged();
 }
@@ -1606,7 +576,7 @@ function bindMouse(): void {
       if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
     } else if (hit?.k === 'sprite') {
-      items.push(['Bind…', () => { S.selected = hit; lastInspectorKey = ''; renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
+      items.push(['Bind…', () => { S.selected = hit; setLastInspectorKey(''); renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
       items.push(['Remove', () => removeSprite(hit.id)]);
     } else if (hit?.k === 'belt') {
       items.push(['Go to call site', () => gotoCode(hit)]);
@@ -1713,7 +683,7 @@ async function applySkin(skin: Skin): Promise<void> {
   renderDock();
   await Promise.all((SKIN_FONTS[skin.id] ?? []).map((f) => document.fonts.load(f).catch(() => null)));
   renderDock();
-  lastPbKey = '';
+  setLastPbKey('');
 }
 
 // Skins with theme colours (the PS3's XMB) get a row of swatches on the top
@@ -1842,7 +812,7 @@ function renderSkinPicker(): void {
 }
 
 // ---------------- vim toggle ----------------
-const hooks: EditorHooks = {
+export const hooks: EditorHooks = {
   onChange: (doc) => {
     if (loadingSample) return;
     const p = S.project;
@@ -1856,7 +826,7 @@ const hooks: EditorHooks = {
     }
     saveSoon();
     clearTimeout(debounce);
-    debounce = window.setTimeout(() => analyze(doc, false), 150);
+    setDebounce(window.setTimeout(() => analyze(doc, false), 150));
   },
   onCursor: (line, col) => {
     S.cursor = { line, col };
@@ -1868,7 +838,6 @@ const hooks: EditorHooks = {
     S.mode = m;
   },
 };
-let loadingSample = false;
 
 function toggleVim(): void {
   S.vim = !S.vim;
@@ -1913,12 +882,12 @@ function openHelp(): void {
   overlay.querySelectorAll<HTMLCanvasElement>('canvas[data-kind]').forEach((c) => drawIcon(c, c.dataset.kind as IconKind, 34));
   $('dlg-close').addEventListener('click', closeOverlay);
 }
-function closeOverlay(): void {
+export function closeOverlay(): void {
   overlay.hidden = true;
   overlay.dataset.kind = '';
 }
 
-function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
+export function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
   const dpr = window.devicePixelRatio || 1;
   c.width = c.height = Math.round(size * dpr);
   c.style.width = c.style.height = `${size}px`;
@@ -1926,560 +895,6 @@ function drawIcon(c: HTMLCanvasElement, kind: IconKind, size: number): void {
   g.scale(dpr, dpr);
   g.clearRect(0, 0, size, size);
   S.skin.icon(g, kind, size);
-}
-
-// ---------------- panels ----------------
-// The examples: one dropdown on the top bar, grouped by what they need (the
-// browser alone, or gdb through the local server), then the sample projects.
-const EXAMPLE_GROUPS: { id: Sample['group']; name: string; note: string }[] = [
-  { id: 'basics', name: 'Runs in your browser', note: 'the built-in interpreter: ints, pointers, loops, recursion, statics' },
-  { id: 'memory', name: 'Real C, traced under gdb', note: 'arrays, structs, the heap, crashes and leaks (needs npm run dev)' },
-  { id: 'io', name: 'Reading input', note: 'real read() calls on the stdin you give it (gdb)' },
-];
-function renderSampleTabs(): void {
-  const btn = $<HTMLButtonElement>('examples');
-  const list = $('example-list');
-  const openSample = S.project?.readOnly ? SAMPLE_PROJECTS.find((x) => x.name === S.project!.name) : undefined;
-  const current = openSample?.title ?? (S.project ? null : S.sample.title);
-  btn.innerHTML = `Examples${current ? `<span class="cur">${esc(current)}</span>` : ''}<span class="caret">▾</span>`;
-  const item = (key: string, title: string, blurb: string, on: boolean) =>
-    `<button role="menuitemradio" data-key="${esc(key)}" aria-checked="${on}"><b>${esc(title)}</b><span class="tag">${esc(blurb)}</span></button>`;
-  list.innerHTML = [
-    ...EXAMPLE_GROUPS.map((g) => `<section><h3>${esc(g.name)}<span>${esc(g.note)}</span></h3>${SAMPLES.filter((s) => s.group === g.id).map((s) => item(s.key, s.title, s.blurb, !S.project && s === S.sample)).join('')}</section>`),
-    `<section><h3>Projects<span>several files opened as a folder: modules, headers, a Makefile (gdb)</span></h3>${SAMPLE_PROJECTS.map((s) => item(s.key, s.title, s.blurb, openSample === s)).join('')}</section>`,
-  ].join('');
-  list.querySelectorAll<HTMLButtonElement>('button[data-key]').forEach((b) => b.addEventListener('click', () => {
-    list.hidden = true;
-    btn.setAttribute('aria-expanded', 'false');
-    loadSample(b.dataset.key);
-  }));
-  btn.onclick = () => {
-    list.hidden = !list.hidden;
-    btn.setAttribute('aria-expanded', String(!list.hidden));
-  };
-}
-
-function renderDock(): void {
-  const dock = $('dock');
-  dock.innerHTML = LEGEND.map((l, i) => `<button class="slot${S.legend === l.kind ? ' on' : ''}${i >= 5 ? ' placeable' : ''}" data-i="${i}" ${i >= 5 ? 'draggable="true"' : ''} title="${esc(l.name)} — ${i >= 5 ? 'drag onto the grid' : esc(l.c)}"><canvas></canvas></button>`).join('');
-  dock.querySelectorAll<HTMLButtonElement>('.slot').forEach((b) => {
-    const l = LEGEND[Number(b.dataset.i)];
-    drawIcon(b.querySelector('canvas')!, l.kind === ('marker' as IconKind) ? 'strip' : l.kind, 26);
-    if (Number(b.dataset.i) >= 5) b.addEventListener('dragstart', (e) => {
-      e.dataTransfer?.setData('application/x-ftb-sprite', l.kind);
-      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
-    });
-    b.addEventListener('click', () => {
-      S.legend = S.legend === l.kind ? null : l.kind;
-      if (S.legend) S.selected = null;
-      renderDock();
-    });
-  });
-}
-
-const ICON = {
-  warn: '<svg class="ico" viewBox="0 0 16 16"><path d="M8 1l7.5 13h-15z M7.2 6v4.2h1.6V6z M7.2 11.3v1.6h1.6v-1.6z" fill-rule="evenodd"/></svg>',
-  err: '<svg class="ico" viewBox="0 0 16 16"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.8 3.5h1.6v5H7.2zm0 6.3h1.6v1.6H7.2z" fill-rule="evenodd"/></svg>',
-  info: '<svg class="ico" viewBox="0 0 16 16"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.8 3h1.6v1.6H7.2zm0 3h1.6v5H7.2z" fill-rule="evenodd"/></svg>',
-};
-
-function renderAlerts(): void {
-  const out: string[] = [];
-  const m = S.model;
-  const al = (kind: keyof typeof ICON, html: string) => out.push(`<div class="alert ${kind}">${ICON[kind]}<div>${html}</div></div>`);
-  const p = S.project;
-  // a link to a line, in whichever file it is
-  const at = (line: number, file?: string, label?: string) =>
-    `<a data-line="${line}"${file ? ` data-file="${esc(file)}"` : ''}>${label ?? `${file ? `${esc(file)}:` : 'line '}${line + 1}`}</a>`;
-  if (m?.error) al('warn', `<b>Syntax error</b> at ${at(m.error.line, m.error.file)}. The picture keeps its last shape; nothing runs until it parses.`);
-  else if (m && !m.byName.has('main'))
-    al('info', p && !p.files.has(DRIVER)
-      ? `<b>Structure view.</b> No <code>main()</code> — a library? Give it a driver to run it.<br><button class="btn sm" data-driver>Create ${esc(DRIVER)}</button>`
-      : `<b>Structure view.</b> No <code>main()</code>, so nothing runs.`);
-  if (p?.driverIgnored) al('info', `<b>${esc(DRIVER)} is set aside:</b> the project has its own <code>main()</code>.`);
-  for (const w of m?.warnings ?? []) al('warn', `<b>Link:</b> ${esc(w.msg)} (${at(w.line, w.file)})`);
-  for (const f of p ? [...p.files.values()].filter((x) => x.conflict) : []) al('warn', `<b>${esc(f.path)} changed on disk</b> while you have unsaved edits here. Saving will ask which version wins.`);
-  const g = S.gdb;
-  const defines = p ? p.run.defines : S.sample.defines ?? [];
-  if (g.status === 'running') al('info', `<b>Running under gdb…</b> ${p?.files.has('Makefile') ? 'building with your <code>Makefile</code>' : 'compiling with <code>cc -Wall -Wextra -Werror</code>'}${defines.length ? ` <code>${defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
-  if (g.status === 'unavailable') al('warn', `<b>No trace server.</b> Real execution runs inside <code>npm run dev</code> (or <code>npm run preview</code>); a static build can only use the interpreter.`);
-  if (g.status === 'error' && g.compile) {
-    const errs = g.compile.diagnostics.filter((d) => d.severity === 'error');
-    const first = errs[0];
-    al('err', first
-      ? `<b>Compile failed</b> at ${at(first.line, first.file || undefined)}: ${esc(first.msg)}${errs.length > 1 ? ` <span class="c">(+${errs.length - 1} more)</span>` : ''}`
-      : `<b>Compile failed.</b> <code>${esc(g.compile.text.split('\n').find((l) => /error/i.test(l)) ?? g.compile.text.split('\n')[0] ?? '')}</code>`);
-  } else if (g.status === 'error') al('err', `<b>Can't run it:</b> ${esc(g.error ?? 'unknown error')}`);
-  if (S.trace?.error) al('err', `<b>Stopped</b> at ${at(S.trace.error.line, S.trace.error.file)}: ${esc(S.trace.error.msg)}`);
-  if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
-  const leaks = S.trace?.leaks ?? [];
-  if (leaks.length) {
-    const bytes = leaks.reduce((a, l) => a + l.size, 0);
-    al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from ${at(l.line, l.file)}` : ''}`).join(', ')}).`);
-  }
-  for (const w of S.trace?.warnings ?? []) al('warn', esc(w));
-  // M4: invariants that broke, and calls the static picture didn't predict
-  const vs = violations();
-  const byInv = new Map<string, Violation[]>();
-  for (const v of vs) {
-    const k = `${v.sprite}|${v.invariant}`;
-    if (!byInv.has(k)) byInv.set(k, []);
-    byInv.get(k)!.push(v);
-  }
-  for (const list of byInv.values()) {
-    const v = list[0];
-    const sp = S.sprites.find((x) => x.id === v.sprite);
-    const where = `<a data-seek="${v.at}"${v.line !== null ? ` data-line="${v.line}"` : ''}${v.file ? ` data-file="${esc(v.file)}"` : ''}>step ${v.at}${v.line !== null ? `, ${v.file ? `${esc(v.file)}:` : 'line '}${v.line + 1}` : ''}</a>`;
-    al('err', `<b>${v.builtin ? 'Picture mismatch' : 'Invariant broken'}:</b> <code>${esc(v.invariant)}</code> on ${esc(sp?.label || sp?.binding?.expr || 'sprite')} — first at ${where}: ${esc(v.detail)}${list.length > 1 ? ` <span class="c">(${list.length} times)</span>` : ''}`);
-  }
-  for (const c of surpriseCalls(S.trace, (a, b) => a === b || !!S.model?.byName.get(a)?.calls.some((x) => x.callee === b)))
-    al('warn', `<b>Unpredicted call:</b> <code>${esc(c.caller)} → ${esc(c.callee)}</code> at <a data-seek="${c.at}" data-line="${c.line}"${c.file ? ` data-file="${esc(c.file)}"` : ''}>${c.file ? `${esc(c.file)}:` : 'line '}${c.line + 1}</a> is not in the code's call graph — a function pointer?`);
-  alerts.innerHTML = out.join('');
-  alerts.querySelector('[data-driver]')?.addEventListener('click', createDriver);
-}
-
-function renderStatus(): void {
-  const m = S.model;
-  const belts = m?.fns.reduce((a, f) => a + new Set(f.calls.map((c) => c.callee)).size, 0) ?? 0;
-  const statics = m?.fns.reduce((a, f) => a + f.statics.length, 0) ?? 0;
-  $('st-parse').innerHTML = !m
-    ? ''
-    : m.error
-      ? `<span class="bad">syntax error, ${m.error.file ? `${esc(m.error.file)}:` : 'line '}${m.error.line + 1}</span>`
-      : `<span class="ok">parsed</span> · ${m.project ? `${m.files.length} file${m.files.length === 1 ? '' : 's'} · ` : ''}${m.fns.length} function${m.fns.length === 1 ? '' : 's'} · ${belts} call${belts === 1 ? '' : 's'}${statics ? ` · ${statics} static` : ''}`;
-  const t = S.trace;
-  $('st-trace').innerHTML = !t
-    ? ''
-    : t.error
-      ? `<span class="bad">runtime error</span> · ${t.evs.length} steps`
-      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · ${t.truncated ? '<span class="bad">truncated</span>' : `<span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`}`;
-  $('grid-info').textContent = S.project ? `${S.project.name}${S.project.root ? '' : ' (sample)'}` : m ? `${S.sample.file}` : '';
-}
-
-let lastStatusKey = '';
-function renderLiveStatus(): void {
-  const f = gridPane.contains(document.activeElement) ? 'canvas' : 'editor';
-  const key = `${f}|${S.mode}|${S.vim}|${S.cursor.line}:${S.cursor.col}|${Math.round(view.cam.zoom * 100)}`;
-  if (key === lastStatusKey) return;
-  lastStatusKey = key;
-  const modeEl = $('st-mode');
-  if (S.vim) {
-    modeEl.hidden = false;
-    modeEl.textContent = (S.mode || 'normal').toUpperCase();
-    modeEl.className = `mode ${(S.mode || 'normal').split(' ')[0]}`;
-  } else modeEl.hidden = true;
-  $('st-pos').textContent = `Ln ${S.cursor.line + 1}, Col ${S.cursor.col + 1}`;
-  editorPane.classList.toggle('focused', f === 'editor');
-  gridPane.classList.toggle('focused', f === 'canvas');
-  $('st-hint').textContent = f === 'canvas' ? 'Space play · ←/→ step · middle-drag pan · wheel zoom' : 'Ctrl+Enter run';
-}
-
-let lastInspectorKey = '';
-let traceRevision = 0;
-let modelRevision = 0;
-
-// M4: invariant violations for the current trace and sprites, recomputed only
-// when either changes (invariants are checked client-side on sampled values).
-let violationCache = { key: '', list: [] as Violation[] };
-function violations(): Violation[] {
-  const key = `${traceRevision}|${JSON.stringify(S.sprites.map((sp) => [sp.id, sp.kind, sp.invariants, sp.markers?.map((m) => m.label)]))}`;
-  if (key !== violationCache.key) {
-    violationCache = { key, list: findViolations(S.trace, S.sprites) };
-    queueMicrotask(renderAlerts);
-  }
-  return violationCache.list;
-}
-const suggestions: { fn: string; expr: string; lengthExpr: string; markers: { expr: string; label: string }[]; label: string }[] = [];
-
-function suggestionButtons(vars: Var[], fn: string): string {
-  suggestions.length = 0;
-  if (!S.model) return '';
-  for (const v of vars) {
-    const shape = bufferShapes(S.model).find((s) => new RegExp(`(^|\\W)${s.type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\W)`).test(v.type));
-    if (!shape) continue;
-    const index = S.model.byName.get(fn)?.params.some((p) => p.name === 'fd') ? 'fd' : '0';
-    const base = v.type.includes('*') ? `${v.name}->` : v.type.includes('[]') ? `${v.name}[${index}].` : `${v.name}.`;
-    const expr = `${base}${shape.data}`;
-    const markers = shape.markers.map((field) => ({ expr: `${base}${field}`, label: field }));
-    const cap = markers.find((m) => /^(cap|capacity|size)$/i.test(m.label)) ?? markers.find((m) => /^(len|length)$/i.test(m.label));
-    if (!cap) continue;
-    suggestions.push({ fn, expr, lengthExpr: cap.expr, markers, label: v.name });
-  }
-  if (!suggestions.length) return '';
-  // Once a strip with that binding exists, say so instead of offering a duplicate.
-  const placed = (x: (typeof suggestions)[number]) =>
-    (S.sprites ?? []).some((sp) => sp.kind === 'strip' && sp.binding?.fn === x.fn && sp.binding?.expr === x.expr);
-  return `<div class="suggestions"><div class="hint">Suggested from struct fields</div>${suggestions.map((s, i) => placed(s)
-    ? `<span class="hint">✓ ${esc(s.label)} strip placed</span>`
-    : `<button class="btn sm" data-suggest="${i}">Add ${esc(s.label)} strip + markers</button>`).join('')}</div>`;
-}
-
-function bindSuggestionButtons(): void {
-  inspector.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => b.addEventListener('click', () => {
-    const s = suggestions[Number(b.dataset.suggest)];
-    if (!s) return;
-    const node = layout.nodes.get(`func:${s.fn}`);
-    const place = freeSuggestionPlace(node);
-    // Offer the ordering the field names imply (pos <= len <= cap); the author edits or removes it.
-    const order = ['pos', 'len', 'cap'].filter((l) => s.markers.some((m) => m.label === l));
-    const invariants = order.length >= 2 ? [order.join(' <= ')] : undefined;
-    const sprite = placeSprite('strip', place.x, place.y, { label: `${s.label} buffer`, binding: { scope: 'fn', fn: s.fn, expr: s.expr }, lengthExpr: s.lengthExpr, markers: s.markers, invariants });
-    const r = spriteWorldRect(sprite);
-    view.ensureVisible(r.x, r.y, r.w, r.h, 1);
-    // The inspector skips re-rendering while it has focus; release it so the
-    // suggestion turns into "placed" instead of offering a duplicate.
-    b.blur();
-    lastInspectorKey = '';
-    renderInspector();
-    toast('suggested strip placed — edit its binding in the inspector');
-  }));
-}
-
-function freeSuggestionPlace(node: ReturnType<Layout['nodes']['get']>): { x: number; y: number } {
-  const x = node?.place.x ?? 0;
-  const y = node?.place.y ?? 0;
-  const below = node ? footprint(node).y + footprint(node).h + 1 : 2;
-  const occupied = [
-    ...layout.visible().map((n) => footprint(n)),
-    ...buildScene(layout, S.model, S.trace).obstacles,
-    ...S.sprites.map((sp) => spriteWorldRect(sp)),
-  ];
-  const free = (cx: number, cy: number) => {
-    const test = { x: cx, y: cy, w: 8.2, h: 2.35 }; // largest bound strip footprint
-    return !occupied.some((o) => test.x < o.x + o.w + 0.5 && o.x < test.x + test.w + 0.5 && test.y < o.y + o.h + 0.5 && o.y < test.y + test.h + 0.5);
-  };
-  for (let ring = 0; ring < 24; ring++) {
-    const candidates: [number, number][] = [
-      [x, below + ring * 4], [x, y - 4 - ring * 4],
-      [x + 7 + ring * 5, y], [x - 9 - ring * 5, y],
-    ];
-    const found = candidates.find(([cx, cy]) => free(cx, cy));
-    if (found) return { x: found[0], y: found[1] };
-  }
-  return { x, y: below + 96 };
-}
-
-function renderSpriteInspector(id: string, bound: { bound: boolean; value?: string; number?: number; length?: number; error?: string } | undefined): void {
-  const sprite = S.sprites.find((s) => s.id === id);
-  if (!sprite) return void (inspector.hidden = true);
-  const b = sprite.binding;
-  inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(sprite.label || sprite.kind)}</span><span class="k">${esc(sprite.kind)}</span></div>
-    <form class="ins-body sprite-form">
-      <label>Label<input name="label" value="${esc(sprite.label ?? '')}" maxlength="100" placeholder="${esc(sprite.kind)}"></label>
-      <label>Scope<select name="scope"><option value="fn" ${b?.scope !== 'global' ? 'selected' : ''}>Function frame</option><option value="global" ${b?.scope === 'global' ? 'selected' : ''}>Global</option></select></label>
-      <label>Function<select name="fn">${(S.model?.fns ?? []).map((f) => `<option value="${esc(f.name)}" ${f.name === (b?.fn ?? S.model?.fns[0]?.name) ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
-      <label>Expression<input name="expr" value="${esc(b?.expr ?? '')}" placeholder="buf-&gt;data" spellcheck="false"></label>
-      ${sprite.kind === 'marker' ? '<p class="hint">This card shows an index. For a cursor that rides a strip, edit the strip’s Markers field.</p>' : ''}
-      ${sprite.kind === 'strip' ? `<label>Length expression<input name="length" value="${esc(sprite.lengthExpr ?? '')}" placeholder="buf-&gt;cap" spellcheck="false"></label>
-      <label>Markers <span class="hint">one label = expression per line</span><textarea name="markers" rows="4" spellcheck="false" placeholder="pos = buf-&gt;pos">${esc(sprite.markers?.map((m) => `${m.label} = ${m.expr}`).join('\n') ?? '')}</textarea></label>` : ''}
-      <label>Invariants <span class="hint">one per line — e.g. pos &lt;= len &lt;= cap, on return: zero after len for 8</span><textarea name="invariants" rows="3" spellcheck="false" placeholder="${sprite.kind === 'strip' ? 'pos &lt;= len &lt;= cap' : 'value &gt;= 0'}">${esc((sprite.invariants ?? []).join('\n'))}</textarea></label>
-      <div class="binding-status">${bound?.bound ? `Observed: ${esc(bound.value ?? String(bound.number ?? 'value'))}${bound.length !== undefined ? ` · length ${bound.length}` : ''}` : bound?.error ? esc(bound.error) : b ? 'No live value at this step' : 'Unbound — dimmed on the grid'}</div>
-      <div class="sprite-actions"><button class="btn sm" type="submit">Apply binding</button><button class="btn sm" type="button" data-remove>Remove</button></div>
-    </form>`;
-  const form = inspector.querySelector<HTMLFormElement>('form')!;
-  const scope = form.elements.namedItem('scope') as HTMLSelectElement;
-  const fn = form.elements.namedItem('fn') as HTMLSelectElement;
-  const sync = () => { fn.disabled = scope.value === 'global'; };
-  scope.addEventListener('change', sync);
-  sync();
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement).value.trim();
-    const expr = get('expr');
-    const length = sprite.kind === 'strip' ? get('length') : '';
-    const markerLines = sprite.kind === 'strip' ? get('markers').split(/\n/).map((x) => x.trim()).filter(Boolean) : [];
-    const check = (x: string) => isSafeBindingExpr(x) ? validateBindingExpr(x) : 'use an identifier with field and index access only';
-    if (expr && check(expr)) return toast(`Expression: ${check(expr)}`);
-    if (length && check(length)) return toast(`Length: ${check(length)}`);
-    const markers: { expr: string; label: string }[] = [];
-    for (const line of markerLines) {
-      const m = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(line);
-      if (!m || check(m[2])) return toast(`Marker: ${m ? check(m[2]) : 'use label = expression'}`);
-      markers.push({ label: m[1], expr: m[2] });
-    }
-    if (markers.length > 16) return toast('At most 16 markers');
-    sprite.label = get('label');
-    sprite.binding = expr ? { scope: scope.value as 'fn' | 'global', ...(scope.value === 'fn' ? { fn: fn.value } : {}), expr } : undefined;
-    sprite.lengthExpr = length || undefined;
-    sprite.markers = markers;
-    const invariants = get('invariants').split(/\n/).map((x) => x.trim()).filter(Boolean);
-    for (const inv of invariants) {
-      const r = parseInvariant(inv);
-      if (typeof r === 'string') return toast(`Invariant “${inv}”: ${r}`);
-    }
-    if (invariants.length > 8) return toast('At most 8 invariants');
-    sprite.invariants = invariants.length ? invariants : undefined;
-    saveSoon();
-    bindingsChanged();
-    inspector.querySelector<HTMLElement>('[name="expr"]')?.blur();
-    lastInspectorKey = '';
-    renderInspector();
-    toast(expr ? 'binding applied' : 'sprite is unbound');
-  });
-  form.querySelector<HTMLButtonElement>('[data-remove]')!.addEventListener('click', () => removeSprite(id));
-}
-
-function renderInspector(): void {
-  const fr = S.trace && S.trace.evs.length ? frameAt(S.trace, S.pos) : null;
-  const key = `${S.legend}|${entKey(S.selected)}:${S.selected?.k === 'node' ? S.selected.copy ?? 1 : ''}|${fr ? `${fr.si}` : ''}|${traceRevision}|${modelRevision}|${S.skin.id}|${S.selected?.k === 'module' ? `${layout.modules.get(S.selected.file)?.collapsed}${layout.modules.get(S.selected.file)?.pinned}` : ''}`;
-  if (key === lastInspectorKey) return;
-  if (inspector.contains(document.activeElement)) return;
-  lastInspectorKey = key;
-
-  if (S.legend) {
-    const l = LEGEND.find((x) => x.kind === S.legend)!;
-    inspector.hidden = false;
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(l.name)}</span><span class="k">legend</span></div>
-      <div class="ins-body"><div class="row"><span class="l">C</span><span class="v">${esc(l.c)}</span></div><p>${esc(l.text)}</p>
-      ${['strip', 'chest', 'marker', 'drill', 'copy', 'train', 'stack'].includes(l.kind) ? '<div class="foot"><span>drag from dock onto grid</span></div>' : ''}</div>`;
-    return;
-  }
-  const e = S.selected;
-  if (!e) {
-    inspector.hidden = true;
-    return;
-  }
-  inspector.hidden = false;
-  const snap = fr?.snap ?? null;
-  const row = (l: string, v: string) => `<div class="row"><span class="l">${l}</span><span class="v">${v}</span></div>`;
-  if (e.k === 'sprite') {
-    renderSpriteInspector(e.id, fr?.snap.bound?.[e.id]);
-  } else if (e.k === 'node') {
-    const node = layout.nodes.get(e.id);
-    if (!node) return void (inspector.hidden = true);
-    const f = node.fn;
-    const copy = e.copy ?? 1;
-    const all = snap?.stack.filter((x) => x.fn === node.name) ?? [];
-    const frames = copy > 1 ? all.slice(copy - 1, copy) : all.slice(0, 1);
-    const top = snap?.stack[snap.stack.length - 1];
-    const state = !frames.length ? 'idle' : top?.fn === node.name ? 'running' : 'waiting';
-    const waitingOn = state === 'waiting' ? snap!.stack[snap!.stack.indexOf(frames[frames.length - 1]) + 1]?.fn : null;
-    const callers = S.model?.fns.filter((g) => g.calls.some((c) => c.callee === node.name)).map((g) => g.name) ?? [];
-    const sig = f ? `${f.isStatic ? 'static ' : ''}${decl(f.ret, f.name)}(${f.params.map((p) => decl(p.type, p.name)).join(', ') || 'void'})` : node.name;
-    const recursive = !!f?.calls.some((c) => c.callee === node.name);
-    // A pointer's label ("bufs[0]", "#1+10", "freed #2") is more precise than the cell it lands in.
-    const vals = frames[0]?.cells.map((c) => `${c.name} = ${c.val.k === 'ptr' && c.val.to !== null && !c.val.label ? `→${pointeeName(S.trace, c.val.to, frames[0])}` : fmtVal(c.val, c.type)}`).join(' · ');
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(copy > 1 ? `${node.name} #${copy}` : node.name)}</span><span class="k">${copy > 1 ? 'recursive copy' : 'function'}</span></div>
-      <div class="ins-body"><div class="sig">${esc(sig)}</div>
-      ${row('state', `<span class="state ${state}">${state}${waitingOn ? ` on ${esc(waitingOn)}` : ''}</span>${frames.length > 1 ? ` · ${frames.length} frames` : ''}${node.stale ? ' · stale' : ''}`)}
-      ${vals ? row('frame', esc(vals)) : ''}
-      ${recursive ? row('recursion', copy > 1 ? `call depth ${copy} — spawned by ${esc(node.name)} #${copy - 1}` : 'each call spawns a copy') : ''}
-      ${f?.file ? row('file', `<a data-open-file="${esc(f.file)}">${esc(f.file)}</a>`) : ''}
-      ${row('calls', esc([...new Set(f?.calls.map((c) => c.callee))].join(', ') || '—'))}
-      ${row('called by', esc(callers.join(', ') || (node.name === 'main' ? 'process' : '—')))}
-      ${f?.externals.length ? row('external', esc(f.externals.join(', '))) : ''}
-      ${suggestionButtons([...f?.params ?? [], ...f?.locals ?? []], f?.name ?? '')}
-      <div class="foot"><span>double-click a statement → its line</span><span>${node.place.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
-    bindSuggestionButtons();
-  } else if (e.k === 'static') {
-    const id = S.trace ? [...S.trace.cells].find(([, c]) => c.frame === -1 && c.owner === e.fn && c.name === e.name)?.[0] : undefined;
-    const c = id !== undefined ? snap?.statics.find((x) => x.id === id) : null;
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(e.name)}</span><span class="k">static</span></div>
-      <div class="ins-body">${row('owner', esc(e.fn))}${row('value', c ? esc(fmtVal(c.val, c.type)) : '—')}
-      <p>Lives for the whole program, not just one call.</p>${suggestionButtons(S.model?.byName.get(e.fn)?.statics.filter((v) => v.name === e.name) ?? [], e.fn)}</div>`;
-    bindSuggestionButtons();
-  } else if (e.k === 'module') {
-    const m = layout.modules.get(e.file);
-    if (!m || !S.model) return void (inspector.hidden = true);
-    const fns = S.model.fns.filter((f) => f.file === e.file);
-    const doors = doorsOf(fns);
-    const into = new Set<string>();
-    const from = new Set<string>();
-    for (const f of S.model.fns) for (const c of f.calls) {
-      const to = S.model.byName.get(c.callee)?.file;
-      if (f.file === e.file && to && to !== e.file) into.add(to);
-      if (to === e.file && f.file !== e.file) from.add(f.file);
-    }
-    const inside = snap?.stack.filter((x) => S.model!.byName.get(x.fn)?.file === e.file) ?? [];
-    const top = snap?.stack.at(-1);
-    const state = !inside.length ? 'idle' : S.model.byName.get(top?.fn ?? '')?.file === e.file ? 'running' : 'waiting';
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(e.file)}</span><span class="k">module</span></div>
-      <div class="ins-body">
-      ${row('state', `<span class="state ${state}">${state}${inside.length ? ` in ${esc(S.model.byName.get(inside.at(-1)!.fn)?.cname ?? '')}` : ''}</span>${inside.length > 1 ? ` · ${inside.length} frames` : ''}`)}
-      ${row('functions', `${fns.length}${fns.some((f) => f.isStatic) ? ` · ${fns.filter((f) => f.isStatic).length} static` : ''}`)}
-      ${row('doors', doors.map((d) => `${esc(d.cname)}${d.declared === false ? ' <span class="soon" title="no prototype in any header">(no prototype)</span>' : ''}`).join(', ') || '—')}
-      ${row('calls into', esc([...into].join(', ') || '—'))}
-      ${row('called from', esc([...from].join(', ') || '—'))}
-      <div class="sprite-actions"><button class="btn sm" data-toggle>${m.collapsed ? 'Open module' : 'Close module'}</button><button class="btn sm" data-goto>Go to file</button></div>
-      <div class="foot"><span>double-click → ${m.collapsed ? 'open' : 'close'}</span><span>drag → move</span><span>${m.pinned ? 'pinned by you' : 'auto-placed'}</span></div></div>`;
-    inspector.querySelector('[data-toggle]')!.addEventListener('click', () => {
-      toggleModule(e.file);
-      lastInspectorKey = '';
-    });
-    inspector.querySelector('[data-goto]')!.addEventListener('click', () => gotoCode(e));
-  } else if (e.k === 'proc') {
-    const t = S.trace;
-    inspector.innerHTML = `<div class="ins-title"><span class="n">process</span><span class="k">the OS</span></div>
-      <div class="ins-body"><p>Calls <code>main</code> and keeps its return value as the exit status.</p>
-      ${row('exit', t && S.pos >= t.evs.length && t.exit ? esc(fmtVal(t.exit)) : '—')}</div>`;
-  } else {
-    const b = computeBelts(layout, S.model, S.trace).find((x) => x.key === e.key);
-    if (!b) return void (inspector.hidden = true);
-    const hostName = (k: string) => (k.startsWith('mod:') ? k.slice(4) : k);
-    const sites = b.lines.slice(0, 12).map((l) => `<a data-line="${l}" data-file="${esc(b.srcFile)}">${b.srcFile ? `${esc(b.srcFile.slice(b.srcFile.lastIndexOf('/') + 1))}:` : 'line '}${l + 1}</a>`).join(', ') + (b.lines.length > 12 ? ` +${b.lines.length - 12}` : '');
-    inspector.innerHTML = `<div class="ins-title"><span class="n">${esc(hostName(b.from) || 'process')} → ${esc(hostName(b.to))}</span><span class="k">${b.fromHost.startsWith('mod:') || b.toHost.startsWith('mod:') ? 'trunk' : 'call'}</span></div>
-      <div class="ins-body">${b.toHost.startsWith('mod:') || b.fromHost.startsWith('mod:') ? row('delivers to', esc(b.callees.map((c) => S.model?.byName.get(c)?.cname ?? c).join(', '))) : ''}
-      ${b.lines.length ? row('call sites', sites) : ''}
-      ${row('route', b.custom ? 'yours' : 'auto')}
-      <div class="foot"><span>drag → re-route</span>${b.custom ? '<span>double-click → reset</span>' : ''}</div></div>`;
-  }
-}
-
-// ---------------- playbar ----------------
-function describe(e: Ev, trace: Trace): string {
-  const f = (s: string) => `<span class="fn">${esc(s)}</span>`;
-  switch (e.k) {
-    case 'call':
-      return `${f(e.caller ?? 'process')} <span class="arrow">→</span> ${f(e.fn)}(${e.args.map((a) => (a.data ? `<span class="ptr">${esc(payloadText(a.data))}</span>` : a.val.k === 'ptr' ? `<span class="ptr">${esc(a.text)}</span>` : esc(fmtVal(a.val)))).join(', ')})`;
-    case 'ret':
-      return `${f(e.fn)} <span class="arrow">returns</span> <span class="ret">${e.data ? esc(payloadText(e.data)) : e.val.k === 'void' ? 'void' : esc(e.val.k === 'ptr' ? (e.val.to === null ? 'NULL' : `→${pointeeName(trace, e.val.to, null)}`) : fmtVal(e.val))}</span> <span class="arrow">to</span> ${f(e.caller ?? 'process')}`;
-    case 'write':
-      return e.via !== null ? `<span class="ptr">${esc(e.text)}</span> <span class="arrow">→</span> ${esc(pointeeName(trace, e.cell, null))}` : esc(e.text);
-    case 'eval':
-      return `${esc(e.text)} <span class="${e.result ? 'ret' : 'no'}">${e.result ? 'true' : 'false'}</span>`;
-    case 'error':
-      return `<span class="err">${esc(e.msg)}</span>`;
-    case 'step':
-      return `<span class="no">line ${e.line + 1}</span>`;
-    case 'alloc':
-      return `malloc <span class="arrow">→</span> <span class="ret">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span> (${e.size} B)`;
-    case 'free':
-      return `free(<span class="ptr">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span>)`;
-  }
-}
-
-let lastPbKey = '';
-let lastExec = '';
-// During a statement the playbar tells it with its values and what it wrote.
-function roomLine(): { html: string; ev: Ev | null; key: string } | null {
-  const t = S.trace;
-  if (!t || !S.model || !t.evs.length) return null;
-  const bn = beatNow(t, S.model, S.pos);
-  if (!bn) return null;
-  const b = bn.beat;
-  const fn = S.model.byName.get(b.fn);
-  if (!fn) return null;
-  const st = planOf(fn).stations[b.station];
-  const ev = t.evs[b.from];
-  const code = esc(bn.phase === 'read' ? st.text : computeText(b, fn, t) || st.text);
-  const res = b.kind === 'switch' && b.result !== undefined && bn.phase === 'write' ? ` <span class="arrow">→</span> <span class="ret">${b.result}</span>` : '';
-  const wrote = bn.phase === 'write' ? writesOf(b, fn, t).slice(0, 4).map((w) => `${w.key.slice(2).replace('.', '->')}${w.index !== undefined ? `[${w.index}]` : ''} = ${w.text}`) : [];
-  return {
-    html: `<span class="fn">${esc(fn.cname)}</span> <span class="no">l.${st.line + 1}</span> ${code}${res}${wrote.length ? ` <span class="arrow">⇒</span> ${esc(wrote.join(', '))}` : ''}`,
-    ev, key: `${b.from}|${bn.phase}`,
-  };
-}
-
-function renderPlaybar(): void {
-  const t = S.trace;
-  const n = N();
-  const fr = t && n ? frameAt(t, S.pos) : null;
-  const inRoom = roomLine();
-  const ev = inRoom ? inRoom.ev : fr ? (fr.ev ?? (fr.i > 0 ? t!.evs[fr.i - 1] : null)) : null;
-  const key = `${Math.floor(S.pos)}|${!!fr?.ev}|${S.playing}|${n}|${t?.exit ? 1 : 0}|${inRoom?.key ?? ''}`;
-  if (key !== lastPbKey) {
-    lastPbKey = key;
-    const idx = fr ? (fr.ev ? fr.i + 1 : fr.i) : 0;
-    $('pb-step').textContent = t
-      ? `${t.engine === 'gdb' ? 'gdb  ' : ''}${String(idx).padStart(2, '0')} / ${String(n).padStart(2, '0')}${S.pos >= n && n ? '  done' : ''}`
-      : S.gdb.status === 'running' ? 'running under gdb…' : 'no trace';
-    $('pb-event').innerHTML = inRoom ? inRoom.html : ev ? describe(ev, t!) : t ? '<span class="no">ready — press play</span>' : '<span class="no">nothing to run</span>';
-    $('play-icon').innerHTML = S.playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
-    $('play-icon').closest('button')?.classList.toggle('playing', S.playing);
-    document.querySelectorAll<HTMLButtonElement>('.pb-buttons button').forEach((b) => (b.disabled = !t));
-  }
-  const diag = !t ? S.gdb.compile?.diagnostics.find((d) => d.severity === 'error') : undefined;
-  const brokeHere = t && !S.playing && Number.isInteger(S.pos) ? violations().find((v) => v.at === S.pos && v.line !== null) : undefined;
-  const markFile = (brokeHere ? brokeHere.file : ev ? ev.file : diag?.file) || undefined;
-  const execKey = `${brokeHere ? `v${brokeHere.line}` : ev ? `${ev.line}|${ev.k === 'error' ? 'e' : 'x'}` : diag ? `c${diag.line}` : ''}|${markFile ?? ''}|${S.project?.active ?? ''}`;
-  if (execKey !== lastExec) {
-    lastExec = execKey;
-    let mark: { line: number; kind: 'exec' | 'error' } | null = brokeHere ? { line: brokeHere.line!, kind: 'error' } : ev ? { line: ev.line, kind: ev.k === 'error' ? 'error' : 'exec' } : diag ? { line: diag.line, kind: 'error' } : null;
-    // In a project the running line may be in another file: follow it there
-    // like a debugger, unless the author is typing.
-    const p = S.project;
-    if (mark && p && markFile && markFile !== p.active) {
-      if ((S.playing || !editor.hasFocus) && p.files.has(markFile)) {
-        switchFile(markFile);
-        lastExec = `${execKey.slice(0, execKey.lastIndexOf('|'))}|${p.active}`;
-      } else mark = null;
-    }
-    editor.dispatch({ effects: setExecLine.of(mark) });
-    // Follow the running line, unless the author is typing in the editor.
-    if (mark && (S.playing || !editor.hasFocus) && mark.line < editor.state.doc.lines) {
-      const pos = editor.state.doc.line(mark.line + 1).from;
-      editor.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'nearest', yMargin: 60 }) });
-    }
-  }
-  drawTimeline();
-}
-
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
-}
-
-// The timeline under the playbar: its bars are drawn once per trace, skin and
-// size (bright and dim copies); each frame only lays the bright part over the
-// dim one up to the playhead.
-let tlCache: { key: string; bright: HTMLCanvasElement; dim: HTMLCanvasElement; head: string } | null = null;
-let tlSize = { w: 0, h: 0, at: 0 };
-function drawTimeline(): void {
-  const now = performance.now();
-  if (now - tlSize.at > 500 || !tlSize.w) {
-    // the strip's size only changes on resize: don't ask layout every frame
-    const r = timeline.getBoundingClientRect();
-    tlSize = { w: r.width, h: r.height, at: now };
-  }
-  const dpr = window.devicePixelRatio || 1;
-  const W = tlSize.w;
-  const H = tlSize.h;
-  if (timeline.width !== Math.round(W * dpr) || timeline.height !== Math.round(H * dpr)) {
-    timeline.width = Math.round(W * dpr);
-    timeline.height = Math.round(H * dpr);
-  }
-  const g = timeline.getContext('2d')!;
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, timeline.width, timeline.height);
-  const t = S.trace;
-  if (!t || !t.evs.length) return;
-  const n = t.evs.length;
-  const key = `${traceRevision}|${S.skin.id}|${timeline.width}x${timeline.height}`;
-  if (tlCache?.key !== key) {
-    const make = (alpha: number) => {
-      const c = document.createElement('canvas');
-      c.width = timeline.width;
-      c.height = timeline.height;
-      const cg = c.getContext('2d')!;
-      cg.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const maxD = Math.max(1, ...t.snaps.map((s) => s.stack.length));
-      const colW = W / n;
-      const col = {
-        call: cssVar('--tl-call'), ret: cssVar('--tl-ret'), ptr: cssVar('--tl-ptr'),
-        write: cssVar('--tl-write'), eval: cssVar('--tl-eval'), error: cssVar('--tl-err'),
-      };
-      cg.globalAlpha = alpha;
-      for (let i = 0; i < n; i++) {
-        const e = t.evs[i];
-        const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
-        const h = 3 + (d / maxD) * (H - 8);
-        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : col[e.k];
-        cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
-      }
-      return c;
-    };
-    tlCache = { key, bright: make(1), dim: make(0.3), head: cssVar('--tl-head') };
-  }
-  const x = Math.round((S.pos / n) * W * dpr);
-  g.drawImage(tlCache.dim, 0, 0);
-  if (x > 0) g.drawImage(tlCache.bright, 0, 0, x, timeline.height, 0, 0, x, timeline.height);
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = tlCache.head;
-  g.fillRect(x / dpr - 1, 0, 2, H);
-  g.fillStyle = '#ef5b50';
-  for (const v of violations()) {
-    const vx = (v.at / n) * W;
-    g.beginPath(); g.moveTo(vx - 4, 0); g.lineTo(vx + 4, 0); g.lineTo(vx, 7); g.fill();
-  }
 }
 
 // ---------------- main loop ----------------
@@ -2630,14 +1045,14 @@ function frame(now: number): void {
 async function boot(): Promise<void> {
   document.documentElement.dataset.skin = S.skin.id;
   await initParser();
-  editor = createEditor($('editor'), S.sample.src, hooks, S.vim);
+  setEditor(createEditor($('editor'), S.sample.src, hooks, S.vim));
   Vim.defineEx('write', 'w', () => (S.project ? openSaveDialog() : restart()));
   Vim.defineEx('sample', 'sa', (_cm: unknown, p: { args?: string[] }) => loadSample(p.args?.[0]));
 
   $('vim-toggle').addEventListener('click', toggleVim);
   renderVimToggle();
   connectLive(onLive, () => {
-    liveEditors = [];
+    setLiveEditors([]);
     renderLive();
   });
   $('btn-help').addEventListener('click', openHelp);
