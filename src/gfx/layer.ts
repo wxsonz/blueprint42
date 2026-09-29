@@ -125,6 +125,7 @@ export class GfxLayer {
   private ready: Promise<void> | null = null;
   private uni = new Float32Array(0);
   lastMs = 0; // CPU time of the last frame (the scene's JS and the submit)
+  frames = 0; // frames drawn, ever (the GFX readout counts them per second)
 
   constructor(under: HTMLCanvasElement) {
     this.canvas = document.createElement('canvas');
@@ -246,6 +247,7 @@ export class GfxLayer {
     }
     this.canvas.hidden = !drawn;
     this.lastMs = performance.now() - t0;
+    if (drawn) this.frames++;
     return drawn;
   }
 

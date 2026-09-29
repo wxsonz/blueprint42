@@ -29,6 +29,10 @@
   1.4 ms); the GPU scene costs about 0.2–0.4 ms of CPU a frame. Checked:
   the WGSL compiles and draws the same picture as the WebGL2 path, through
   wgpu-native on the RTX 4060 (headless Chromium here has no WebGPU device).
+- **Beside the button (author):** what draws the background (`WebGPU`,
+  `WebGL2`, `canvas`, `still`, `off`) and a live readout, `fps · ms`: the
+  background's frames a second and the CPU time of one frame (the GPU's own
+  time isn't measured).
 - **Chrome's compiler is the strict one.** Tint (Chrome) refuses WGSL that
   naga (wgpu, Firefox) accepts: `a * b ^ c` needs parentheses. That broke
   PS2's scene in Chrome only. WGSL is checked with Tint (Dawn's `webgpu`

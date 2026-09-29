@@ -1,6 +1,7 @@
 // The top bar's GFX button: Full, Simple or Off for the skins' backgrounds,
 // and what's drawing them (the GPU scene and its backend, or the canvas).
 import { $, esc } from '../dom';
+import { pageStats } from '../page';
 import type { GridView } from '../render';
 import type { Skin } from '../skins/types';
 import { gfxMode, setGfx, type GfxMode } from './gfx';
@@ -38,6 +39,24 @@ export function initGfxButton(view: GridView, skin: () => Skin): void {
     if (on) render();
   };
   label();
+  // the readout beside the button: what draws it, frames a second, CPU ms
+  const api = document.querySelector<HTMLElement>('#gfx-stats .gfx-api')!;
+  const rate = document.querySelector<HTMLElement>('#gfx-stats .gfx-rate')!;
+  let last = { t: performance.now(), gpu: 0, bg: 0, page: 0 };
+  setInterval(() => {
+    const now = performance.now();
+    const L = view.gfx;
+    const kind = view.bgKind === 'gpu' ? L.backend ?? 'webgpu' : view.bgKind;
+    const names: Record<string, string> = { webgpu: 'WebGPU', webgl2: 'WebGL2', canvas: 'canvas', page: 'canvas', still: 'still', off: 'off' };
+    api.textContent = names[kind] ?? kind;
+    api.dataset.kind = kind;
+    api.title = kind === 'webgpu' || kind === 'webgl2' ? 'drawn on the GPU' : kind === 'canvas' || kind === 'page' ? 'drawn on the CPU (the canvas): this skin has no GPU scene yet, or the GPU is unavailable' : kind === 'still' ? 'a still picture, painted once' : 'a flat colour';
+    const dt = (now - last.t) / 1000;
+    const n = view.bgKind === 'gpu' ? L.frames - last.gpu : view.bgKind === 'page' ? pageStats.frames - last.page : view.bgFrames - last.bg;
+    const ms = view.bgKind === 'gpu' ? L.lastMs : view.bgKind === 'page' ? pageStats.ms : view.bgMs;
+    rate.textContent = view.bgKind === 'off' ? '' : view.bgKind === 'still' ? `${ms.toFixed(1)} ms` : `${Math.round(n / dt)} fps · ${ms.toFixed(ms < 10 ? 2 : 1)} ms`;
+    last = { t: now, gpu: L.frames, bg: view.bgFrames, page: pageStats.frames };
+  }, 500);
   btn.addEventListener('click', () => open(menu.hidden !== false));
   menu.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-gfx]');

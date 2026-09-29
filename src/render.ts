@@ -170,6 +170,10 @@ export class GridView {
   // the GPU background (GFX: full), under this canvas
   readonly gfx: GfxLayer;
   private still: { key: string; c: HTMLCanvasElement } | null = null; // GFX: simple
+  // the background drawn on this canvas: its frames and the last one's cost
+  bgFrames = 0;
+  bgMs = 0;
+  bgKind: 'gpu' | 'canvas' | 'still' | 'off' | 'page' = 'canvas';
 
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
@@ -185,9 +189,12 @@ export class GridView {
     const scene = mode === 'full' ? sceneFor(skin.id) : null;
     if (scene && this.gfx.ok && this.gfx.render(scene, this.gfxView(now))) {
       dc.g.clearRect(0, 0, this.w, this.h);
+      this.bgKind = 'gpu';
       return true;
     }
     this.gfx.hide();
+    this.bgKind = mode === 'full' ? 'canvas' : mode === 'simple' ? 'still' : 'off';
+    const t0 = performance.now();
     const g = dc.g;
     g.save();
     if (mode === 'off') {
@@ -209,6 +216,8 @@ export class GridView {
       g.drawImage(this.still.c, 0, 0);
     } else skin.background(dc, this.cam.x, this.cam.y);
     g.restore();
+    this.bgMs = performance.now() - t0;
+    this.bgFrames++;
     return false;
   }
 
@@ -371,6 +380,7 @@ export class GridView {
     if (skin.fullBleed) {
       g.clearRect(0, 0, this.w, this.h); // the page behind shows through
       this.gfx.hide();
+      this.bgKind = 'page';
     } else this.background(skin, dc, now);
 
     const trace = s.trace;

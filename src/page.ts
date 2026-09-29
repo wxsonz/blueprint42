@@ -64,6 +64,7 @@ export function paintPage(now: number, S: { skin: Skin }, view: GridView): void 
   const key = `${S.skin.id}|${W}x${H}|${mode}`;
   if (mode !== 'full' && pageKey === key) return;
   pageKey = key;
+  const t0 = performance.now();
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.save();
   if (mode === 'off') {
@@ -71,5 +72,9 @@ export function paintPage(now: number, S: { skin: Skin }, view: GridView): void 
     g.fillRect(0, 0, w, h);
   } else S.skin.background({ g, z: 1, cs: 40, time: mode === 'simple' ? 0 : now / 1000, vw: w, vh: h }, 0, 0);
   g.restore();
+  pageStats.ms = performance.now() - t0;
+  pageStats.frames++;
 }
+// the page background's frames and the last one's cost (the GFX readout)
+export const pageStats = { frames: 0, ms: 0 };
 let pageKey = '';
