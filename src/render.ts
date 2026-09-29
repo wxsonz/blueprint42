@@ -500,25 +500,23 @@ export class GridView {
     });
     const order = (b: Belt) => (related(b) && focus ? 3 : b.key === animKey ? 2 : liveKeys.has(b.key) ? 1 : 0);
     visible.sort((a, b) => order(a) - order(b));
-    const drawn: Belt[] = [];
-    for (const b of visible) {
+    // a belt passes under every belt drawn after it that crosses it: it's
+    // clipped there (the background shows through the gap, whatever it is)
+    const gaps = visible.map((b, i) => visible.slice(i + 1).flatMap((o) => crossings(o.pts, b.pts)));
+    for (const [i, b] of visible.entries()) {
       const dim = !related(b);
       g.save();
-      g.globalAlpha = dim ? 0.22 : 1;
-      // cut a gap in anything already drawn underneath
-      g.strokeStyle = skin.casing;
-      g.lineCap = 'butt';
-      g.lineWidth = 0.34 * cs;
-      for (const o of drawn) {
-        for (const c of crossings(b.pts, o.pts)) {
-          const L = 0.3;
-          const [p0, p1] = c.horizontal ? [[c.x - L, c.y], [c.x + L, c.y]] : [[c.x, c.y - L], [c.x, c.y + L]];
-          g.globalAlpha = 1;
-          g.beginPath();
-          g.moveTo(this.sx(p0[0]), this.sy(p0[1]));
-          g.lineTo(this.sx(p1[0]), this.sy(p1[1]));
-          g.stroke();
+      if (gaps[i].length) {
+        const L = 0.3 * cs;
+        const T = 0.17 * cs;
+        g.beginPath();
+        g.rect(-1e5, -1e5, 2e5, 2e5);
+        for (const c of gaps[i]) {
+          const [x, y] = this.sp([c.x, c.y]);
+          if (c.horizontal) g.rect(x - L, y - T, 2 * L, 2 * T);
+          else g.rect(x - T, y - L, 2 * T, 2 * L);
         }
+        g.clip('evenodd');
       }
       g.globalAlpha = dim ? 0.22 : 1;
       skin.belt(dc, b.pts.map((p) => this.sp(p)), {
@@ -545,7 +543,6 @@ export class GridView {
         g.fillText('?', hx, hy + 0.5);
         g.restore();
       }
-      drawn.push(b);
     }
 
     // ---- doors: where a belt passes through the wall of a module it serves ----
