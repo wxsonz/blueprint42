@@ -3,7 +3,8 @@
 // machines that are working.
 import { makeSkin, countBadge, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { arrowHead, rrect, Walk } from './util';
+import { chevron, ride } from './belts';
+import { arrowHead, rrect, strokeLine, Walk } from './util';
 
 const AMBER = '#ffb000';
 const STEEL = '#353a40';
@@ -118,31 +119,35 @@ export const factoryTheme: Theme = {
     for (let x = x0; x < x1; x += P) for (let y = y0; y < y1; y += P) g.fillRect((x - camX) * cs + rv, (y - camY) * cs + rv, rv, rv);
   },
 
-  // A conveyor: a dark band with rails, chevrons riding it.
+  // A roller conveyor: steel side rails, a dark bed, rollers set across it that
+  // turn the data's way when live, with lit amber chevrons; selected wears a
+  // hazard rail of yellow and black stripes.
   belt(dc, pts, o, t) {
     const g = dc.g;
-    const W = Math.max(4, 9 * dc.z);
+    const z = dc.z;
+    const W = Math.max(6, 10 * z);
     g.lineJoin = 'miter';
     g.lineCap = 'butt';
-    const path = () => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); };
-    path(); g.strokeStyle = '#0c0d0e'; g.lineWidth = W + 2; g.stroke();
-    path(); g.strokeStyle = o.live ? '#3a3326' : o.selected || o.hovered ? '#3a3f45' : '#2a2d31'; g.lineWidth = W; g.stroke();
+    if (o.selected) {
+      strokeLine(g, pts, W + 9 * z, '#15130a');
+      strokeLine(g, pts, W + 9 * z, AMBER, [Math.max(5, 7 * z), Math.max(5, 7 * z)]);
+    }
+    strokeLine(g, pts, W + 5, '#8a9099');
+    strokeLine(g, pts, W + 2, '#2c2f33');
+    strokeLine(g, pts, W - 1, o.hovered ? '#2a2d31' : '#17191b');
+    const step = Math.max(6, 9 * z);
+    const shift = o.live ? (((dc.time * 30 * z * o.dir) % step) + step) % step : 0;
+    const r1 = Math.max(2, 3 * z), r2 = Math.max(1, z);
+    strokeLine(g, pts, W - 1, o.live ? '#4a4030' : '#3a3e44', [r1, step - r1], -shift);
+    strokeLine(g, pts, W - 1, o.live ? '#8a6a20' : '#565b62', [r2, step - r2], -shift);
     const w = new Walk(pts);
-    const step = Math.max(8, 16 * dc.z);
-    const shift = o.live ? (dc.time * 30 * dc.z * o.dir) % step : 0;
-    g.strokeStyle = o.live ? AMBER : '#5a5f66';
-    g.lineWidth = Math.max(1, 1.6 * dc.z);
-    for (let d = step / 2 + shift; d < w.length - step / 2; d += step) {
-      const a = w.at(d);
-      const s = W * 0.32;
-      g.beginPath();
-      g.moveTo(a.x - a.dx * s - a.dy * s, a.y - a.dy * s + a.dx * s);
-      g.lineTo(a.x, a.y);
-      g.lineTo(a.x - a.dx * s + a.dy * s, a.y - a.dy * s - a.dx * s);
-      g.stroke();
+    if (o.live) {
+      g.strokeStyle = AMBER;
+      g.lineWidth = Math.max(1.5, 2 * z);
+      ride(dc, w, o, 30 * z, Math.max(28, 48 * z), (x, y, dx, dy) => chevron(g, x, y, dx, dy, W * 0.3), 0, W);
     }
     const e = w.at(w.length);
-    arrowHead(g, e.x, e.y, e.dx, e.dy, W * 0.9, o.live ? AMBER : '#5a5f66');
+    arrowHead(g, e.x, e.y, e.dx, e.dy, W * 0.9, o.live ? AMBER : '#8a9099');
     countBadge(dc, pts, o, t);
   },
 

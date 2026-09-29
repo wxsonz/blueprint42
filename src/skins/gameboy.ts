@@ -78,12 +78,31 @@ export const gameboyTheme: Theme = {
     const g = dc.g;
     const w = new Walk(pts);
     const s = Math.max(2, Math.round(3 * Math.min(1.5, dc.z)));
-    const step = s * 3;
-    const shift = o.live ? Math.floor((dc.time * 20 * o.dir) % 3) * s : 0;
-    g.fillStyle = o.live || o.selected ? C0 : C1;
-    for (let d = shift; d < w.length; d += step) {
-      const a = w.at(d);
-      g.fillRect(Math.round(a.x - s / 2), Math.round(a.y - s / 2), s, s);
+    // idle: single dark dots; hovered: a solid line; selected: a solid line
+    // with a lighter rim. Live: a two-pixel line of the four shades in
+    // rising order, so every run of them points the data's way (lightest
+    // behind, darkest ahead), stepping like a sprite animation, never smoothly.
+    const n = Math.floor(w.length / s);
+    const seq = [C2, C1, C0, C0];
+    const shift = Math.floor(dc.time * 8);
+    const at = (i: number) => w.at(Math.min(w.length, i * s + s / 2));
+    for (let i = 0; i < n; i++) {
+      const a = at(i);
+      const x = Math.round(a.x - s / 2), y = Math.round(a.y - s / 2);
+      if (o.live) {
+        const ti = o.dir < 0 ? n - 1 - i : i;
+        g.fillStyle = seq[(((ti - shift) % 4) + 4) % 4];
+        const k = Math.round(s / 2);
+        g.fillRect(x - Math.abs(a.dy) * k, y - Math.abs(a.dx) * k, s + Math.abs(a.dy) * 2 * k, s + Math.abs(a.dx) * 2 * k);
+      } else if (o.selected) {
+        g.fillStyle = C1;
+        g.fillRect(x - Math.abs(a.dy) * s, y - Math.abs(a.dx) * s, s + Math.abs(a.dy) * 2 * s, s + Math.abs(a.dx) * 2 * s);
+        g.fillStyle = C0;
+        g.fillRect(x, y, s, s);
+      } else if (o.hovered || i % 2 === 0) {
+        g.fillStyle = o.hovered ? C0 : C1;
+        g.fillRect(x, y, s, s);
+      }
     }
     const e = w.at(w.length);
     // a pixel arrow

@@ -52,7 +52,9 @@ function barebone(dark: boolean): Theme {
       const col = o.live ? c.live : o.hovered || o.selected ? c.beltOn : c.belt;
       g.lineCap = 'butt';
       g.lineJoin = 'miter';
-      strokeLine(g, pts, o.live ? 2 : 1, col);
+      // live: 2px dashes marching the data's way (one dash pattern, no sprites)
+      if (o.live) strokeLine(g, pts, 2, col, [6, 4], -(((dc.time * 30 * o.dir) % 10) + 10) % 10);
+      else strokeLine(g, pts, 1, col);
       const e = new Walk(pts).at(Infinity);
       arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(4, 6 * dc.z), col);
       countBadge(dc, pts, o, t);

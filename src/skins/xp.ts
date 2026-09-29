@@ -1,9 +1,9 @@
 // "Windows XP" — Luna blue: rounded blue title bars with a glossy gradient,
 // beige window faces, the red close button, green progress blocks, on the
 // Bliss hill.
-import { backdrop, makeSkin, plainCard, type Theme } from './kit';
+import { backdrop, countBadge, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { fitText, rrect } from './util';
+import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
 
 const FACE = '#ece9d8';
 const UI = (px: number, w = 400) => `${w >= 600 ? 700 : 400} ${px}px Tahoma, Verdana, "DejaVu Sans", sans-serif`;
@@ -51,6 +51,38 @@ export const xpTheme: Theme = {
     param: '#1f4e9c', cell: '#c9dcfa', track: '#ffffff',
   },
   pulseColor: 'rgba(49,106,197,0.8)',
+
+  // A Luna pipe: a rounded, glossy tube with a pale blue-grey edge; live, the
+  // progress bar's green blocks run through it (the way the data goes);
+  // hovered, the edge turns Luna orange; selected, a blue halo.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(6, 9 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, w + 9 * z, 'rgba(49,106,197,0.35)');
+    strokeLine(g, pts, w + 2, o.hovered ? '#e08a1e' : o.live ? '#1f4e9c' : '#7f9db9');
+    strokeLine(g, pts, w, o.live ? '#dbe8fb' : '#f1efe2');
+    strokeLine(g, pts, w * 0.55, o.live ? '#c3d7f7' : '#dddbca');
+    const walk = new Walk(pts);
+    if (o.live) {
+      // green progress blocks, each with its own gloss
+      const blk = Math.max(4, 6 * z), gap = Math.max(2, 2.5 * z), per = blk + gap;
+      const off = (((dc.time * 34 * z * o.dir) % per) + per) % per;
+      g.lineCap = 'butt';
+      g.lineJoin = 'miter';
+      strokeLine(g, pts, w - 3, '#2fae22', [blk, gap], -off);
+      strokeLine(g, pts, Math.max(1.5, (w - 3) * 0.5), '#7be36a', [blk, gap], -off);
+      strokeLine(g, pts, Math.max(1, (w - 3) * 0.18), '#e6ffd9', [blk, gap], -off);
+      g.lineCap = 'round';
+    } else {
+      strokeLine(g, pts, Math.max(1, w * 0.2), 'rgba(255,255,255,0.9)');
+    }
+    const e = walk.at(walk.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? '#1f4e9c' : o.hovered ? '#e08a1e' : '#5c7fa8');
+    countBadge(dc, pts, o, t);
+  },
 
   card(dc, r, o) {
     plainCard(dc, r, o.kind === 'plate' ? 3 : 3, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : FACE });

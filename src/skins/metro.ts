@@ -1,9 +1,10 @@
 // "Windows 8" — Metro: flat colour, no gradients, no shadows. Every window
 // takes its own tile colour, titles in light lowercase, square everything,
 // on the start-screen purple.
-import { makeSkin, plainCard, type Theme } from './kit';
+import { chevron, ride } from './belts';
+import { countBadge, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { fitText, hash } from './util';
+import { fitText, hash, strokeLine, Walk } from './util';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 300} ${px}px "Segoe UI", "Open Sans", "DejaVu Sans", sans-serif`;
 const TILES = ['#2d89ef', '#00a300', '#ff0097', '#9f00a7', '#da532c', '#1e7145', '#b91d47', '#00aba9', '#603cba', '#e3a21a'];
@@ -45,6 +46,36 @@ function metroOf(dark: boolean): Theme {
     param: '#1b5fb4', cell: '#dce9fa', track: '#ffffff',
   },
   pulseColor: 'rgba(45,137,239,0.85)',
+
+  // Metro: a flat 3px stroke with square ends and an open chevron. Live, the
+  // loading dots of the Windows 8 progress bar run along it, five squares
+  // in a loose group, always the data's way.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const th = Math.max(2, Math.round(3 * z));
+    g.lineCap = 'butt';
+    g.lineJoin = 'miter';
+    const base = o.live ? t.p.accent : o.hovered || o.selected ? t.p.dim : t.p.faint;
+    if (o.selected) strokeLine(g, pts, th + Math.round(8 * z), dark ? 'rgba(45,137,239,0.3)' : 'rgba(45,137,239,0.22)');
+    strokeLine(g, pts, th, base, o.live ? undefined : o.hovered || o.selected ? undefined : [Math.round(10 * z) + 2, Math.round(5 * z) + 2]);
+    const w = new Walk(pts);
+    if (o.live) {
+      const s = Math.max(4, Math.round(6 * z));
+      g.fillStyle = dark ? '#ffffff' : t.p.fg;
+      const gap = Math.max(160, 330 * z);
+      for (let k = 0; k < 5; k++) {
+        // the dots of a group trail one another at growing gaps
+        ride(dc, w, o, 150 * z, gap, (x, y) => g.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s), [0, 12, 28, 48, 72][k] * z, s);
+      }
+    }
+    const e = w.at(w.length);
+    g.lineWidth = Math.max(2, Math.round(3 * z));
+    g.strokeStyle = base;
+    g.lineCap = 'square';
+    chevron(g, e.x, e.y, e.dx, e.dy, Math.max(5, 8 * z));
+    countBadge(dc, pts, o, t);
+  },
 
   card(dc, r, o) {
     plainCard(dc, r, 0, { ...o, glow: null, lw: o.glow ? 2 : 1 });

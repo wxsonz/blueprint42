@@ -2,9 +2,10 @@
 // Leopard, OS X Yosemite, macOS Big Sur and macOS Tahoe (Liquid Glass).
 // (Mac OS X 10.0–10.4 "Aqua" is its own hand-written skin.) Mac windows put
 // their controls on the left and centre their titles.
-import { backdrop, glassBehind, makeSkin, plainCard, type Theme } from './kit';
-import type { Dc, Rect } from './types';
-import { fitText, rrect } from './util';
+import { barberPole, chevron, layers, ride } from './belts';
+import { backdrop, countBadge, glassBehind, makeSkin, plainCard, type Theme } from './kit';
+import type { Dc, Pt, Rect } from './types';
+import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
 
 const SANS = (family: string) => (px: number, w = 400) => `${w >= 600 ? 700 : w} ${px}px ${family}`;
 const MONO = (family: string) => (px: number, w = 400) => `${w >= 600 ? 700 : 400} ${px}px ${family}`;
@@ -94,6 +95,28 @@ export const system7Theme: Theme = {
     param: '#000000', cell: '#dddddd', track: '#ffffff',
   },
   pulseColor: 'rgba(0,0,0,0.5)',
+  // 1-bit: black on a white keyline. Idle is a dotted (checker) line, hovered
+  // solid, selected fat; live it is the marching ants of a selection, running
+  // the data's way.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = Math.max(1, Math.round(dc.z));
+    g.lineCap = 'butt';
+    g.lineJoin = 'miter';
+    const th = 2 * z;
+    strokeLine(g, pts, th + 2 * z + (o.selected ? 2 * z : 0), '#ffffff');
+    if (o.selected) strokeLine(g, pts, th + 2 * z, '#000000');
+    else if (o.live) {
+      const per = 8 * z;
+      strokeLine(g, pts, th, '#000000', [5 * z, 3 * z], -Math.floor((((dc.time * 16 * z * o.dir) % per) + per) % per));
+    } else if (o.hovered) strokeLine(g, pts, th, '#000000');
+    else strokeLine(g, pts, th, '#000000', [z, z]);
+    if (o.selected && o.live) strokeLine(g, pts, th, '#ffffff', [3 * z, 5 * z], -Math.floor((((dc.time * 16 * z * o.dir) % (8 * z)) + 8 * z) % (8 * z)) - 5 * z);
+    const w = new Walk(pts);
+    const e = w.at(w.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, Math.round(8 * dc.z)), '#000000');
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     const g = dc.g;
     const R = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) };
@@ -167,6 +190,31 @@ export const platinumTheme: Theme = {
     param: '#333399', cell: '#ccccff', track: '#ffffff',
   },
   pulseColor: 'rgba(102,102,204,0.7)',
+  // Platinum: a grey trough, etched (dark inside edge, white lip), like the
+  // scroll bar's; live, it is the barber-pole progress bar, lavender stripes
+  // running the data's way; selected gets the dark outline of a focused control.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(6, Math.round(8 * z));
+    g.lineCap = 'butt';
+    g.lineJoin = 'miter';
+    if (o.selected) layers(g, pts, [[w + 8, '#000000']]);
+    layers(g, pts, [[w + 2, '#ffffff']], [1, 1]);
+    layers(g, pts, [[w + 2, o.hovered || o.selected ? '#000000' : '#5a5a5a']]);
+    layers(g, pts, [[w - 1, o.live ? '#eef0ff' : o.hovered ? '#f4f4f4' : '#cfcfcf']]);
+    layers(g, pts, [[Math.max(1, w * 0.25), o.live ? '#ffffff' : '#e6e6e6']], [0, -w * 0.25]);
+    const walk = new Walk(pts);
+    if (o.live) {
+      g.fillStyle = '#6666cc';
+      barberPole(dc, walk, o, (w - 1) / 2, Math.max(3, 4 * z), Math.max(8, 10 * z), 28 * z, w);
+      g.fillStyle = '#9999dd';
+      barberPole(dc, walk, o, (w - 1) / 2, Math.max(1, 1.5 * z), Math.max(8, 10 * z), 28 * z, w);
+    }
+    const e = walk.at(walk.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? '#3a3a99' : '#333333');
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     const g = dc.g;
     plainCard(dc, r, 0, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : '#dddddd' });
@@ -241,6 +289,34 @@ export const leopardTheme: Theme = {
     param: '#2a56a8', cell: '#c8dcfb', track: '#ffffff',
   },
   pulseColor: 'rgba(56,117,215,0.8)',
+  // Leopard: a brushed-metal cable in the unified grey; live, glossy blue
+  // capsules (the pulsing default button, sliced) slide along it the data's way.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(5, 7 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, w + 9 * z, 'rgba(56,117,215,0.4)');
+    layers(g, pts, [[w + 2, o.hovered || o.selected ? '#3f5f99' : '#6e6e6e'], [w, '#9c9c9c'], [w * 0.62, '#c9c9c9']]);
+    layers(g, pts, [[Math.max(1, w * 0.2), 'rgba(255,255,255,0.85)']], [0, -w * 0.22]);
+    const walk = new Walk(pts);
+    if (o.live) {
+      const len = Math.max(10, 16 * z);
+      g.lineCap = 'round';
+      ride(dc, walk, o, 60 * z, Math.max(28, 46 * z), (x, y, dx, dy) => {
+        const a = { x: x - dx * len / 2, y: y - dy * len / 2 }, b = { x: x + dx * len / 2, y: y + dy * len / 2 };
+        g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
+        g.lineWidth = w + 1; g.strokeStyle = '#1d4fa8'; g.stroke();
+        g.lineWidth = w - 1.5; g.strokeStyle = '#4f93f0'; g.stroke();
+        g.beginPath(); g.moveTo(a.x + dy * 0, a.y - w * 0.15); g.lineTo(b.x, b.y - w * 0.15);
+        g.lineWidth = Math.max(1, w * 0.3); g.strokeStyle = 'rgba(255,255,255,0.75)'; g.stroke();
+      }, 0, len);
+    }
+    const e = walk.at(walk.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? '#1d4fa8' : '#555555');
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     plainCard(dc, r, 5, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : '#e8e8e8' });
   },
@@ -310,6 +386,33 @@ export const yosemiteTheme: Theme = {
     param: '#1e6fd9', cell: '#d6e8fd', track: '#ffffff',
   },
   pulseColor: 'rgba(30,136,247,0.8)',
+  // Yosemite: flat and thin. A frosted white 4px track with a hairline edge;
+  // live, it is the flat blue progress bar with a pale streak of light
+  // sweeping the data's way; a thin rounded chevron for the arrow.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(3, 4 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, w + 9 * z, 'rgba(30,136,247,0.3)');
+    strokeLine(g, pts, w + 1.5, 'rgba(0,0,0,0.16)');
+    strokeLine(g, pts, w, o.live ? '#1e88f7' : o.hovered || o.selected ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.72)');
+    const walk = new Walk(pts);
+    if (o.live) {
+      const len = Math.max(12, 30 * z);
+      g.lineCap = 'round';
+      ride(dc, walk, o, 90 * z, Math.max(60, 120 * z), (x, y, dx, dy) => {
+        g.beginPath(); g.moveTo(x - dx * len / 2, y - dy * len / 2); g.lineTo(x + dx * len / 2, y + dy * len / 2);
+        g.lineWidth = w - 1; g.strokeStyle = 'rgba(200,228,255,0.9)'; g.stroke();
+      }, 0, len / 2);
+    }
+    const e = walk.at(walk.length);
+    g.lineWidth = Math.max(1.6, 2 * z);
+    g.strokeStyle = o.live ? '#1e88f7' : o.hovered || o.selected ? '#ffffff' : 'rgba(255,255,255,0.9)';
+    chevron(g, e.x, e.y, e.dx, e.dy, Math.max(5, 7 * z));
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     plainCard(dc, r, 5, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : '#f6f6f6' });
   },
@@ -374,6 +477,32 @@ function bigSurOf(dark: boolean): Theme {
       param: '#0066d6', cell: '#d8e9ff', track: '#ffffff',
     },
     pulseColor: 'rgba(10,132,255,0.8)',
+    // Big Sur: a plump rounded pill with a soft drop shadow, like a symbol
+    // in a toolbar; live, it is filled system blue and white dots (round
+    // pips) stream along it the data's way; the arrow is a bold rounded chevron.
+    belt(dc, pts, o, t) {
+      const g = dc.g;
+      const z = dc.z;
+      const w = Math.max(5, 7 * z);
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      if (o.selected) strokeLine(g, pts, w + 10 * z, dark ? 'rgba(10,132,255,0.4)' : 'rgba(0,122,255,0.28)');
+      strokeLine(g, pts.map(([x, y]) => [x, y + 1.5 * z] as Pt), w + 2, dark ? 'rgba(0,0,0,0.35)' : 'rgba(0,20,60,0.22)');
+      const idle = dark ? (o.hovered || o.selected ? '#8e8e93' : '#5a5a5f') : o.hovered || o.selected ? '#ffffff' : 'rgba(255,255,255,0.86)';
+      strokeLine(g, pts, w, o.live ? t.p.accent : idle);
+      if (!o.live) strokeLine(g, pts, Math.max(1, w * 0.3), dark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)', undefined, 0);
+      const walk = new Walk(pts);
+      if (o.live) {
+        g.fillStyle = '#ffffff';
+        const r = Math.max(1.6, w * 0.24);
+        ride(dc, walk, o, 70 * z, Math.max(14, 20 * z), (x, y) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }, 0, w);
+      }
+      const e = walk.at(walk.length);
+      g.lineWidth = Math.max(2.4, 3.2 * z);
+      g.strokeStyle = o.live ? t.p.accent : dark ? '#a1a1a6' : '#ffffff';
+      chevron(g, e.x + e.dx * w * 0.8, e.y + e.dy * w * 0.8, e.dx, e.dy, Math.max(5, 7 * z));
+      countBadge(dc, pts, o, t);
+    },
     card(dc, r, o) {
       plainCard(dc, r, o.kind === 'plate' ? 8 : 9, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? white : face });
     },
@@ -457,6 +586,33 @@ function tahoeOf(dark: boolean): Theme {
       param: '#0a6fe0', cell: 'rgba(10,132,255,0.16)', track: 'rgba(0,0,0,0.04)',
     },
     pulseColor: 'rgba(10,132,255,0.85)',
+    // Tahoe: a Liquid Glass tube: a bright specular rim round a clear
+    // core; live, the core fills with tinted blue glass and glass lenses (white
+    // capsules with a bright lip) glide through it the data's way.
+    belt(dc, pts, o, t) {
+      const g = dc.g;
+      const z = dc.z;
+      const w = Math.max(6, 9 * z);
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      if (o.selected) strokeLine(g, pts, w + 10 * z, dark ? 'rgba(10,132,255,0.4)' : 'rgba(10,132,255,0.3)');
+      strokeLine(g, pts.map(([x, y]) => [x, y + 1.5 * z] as Pt), w + 2, dark ? 'rgba(0,0,0,0.3)' : 'rgba(0,30,80,0.16)');
+      strokeLine(g, pts, w, o.hovered || o.selected ? 'rgba(255,255,255,0.95)' : dark ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.85)');
+      strokeLine(g, pts, w - 2.4, o.live ? (dark ? 'rgba(20,90,220,0.85)' : 'rgba(10,132,255,0.72)') : dark ? 'rgba(30,26,70,0.62)' : 'rgba(200,225,250,0.5)');
+      strokeLine(g, pts.map(([x, y]) => [x, y - w * 0.18] as Pt), Math.max(1, w * 0.13), 'rgba(255,255,255,0.6)');
+      const walk = new Walk(pts);
+      if (o.live) {
+        const len = Math.max(10, 18 * z);
+        ride(dc, walk, o, 70 * z, Math.max(36, 60 * z), (x, y, dx, dy) => {
+          g.beginPath(); g.moveTo(x - dx * len / 2, y - dy * len / 2); g.lineTo(x + dx * len / 2, y + dy * len / 2);
+          g.lineWidth = w - 3; g.strokeStyle = 'rgba(255,255,255,0.7)'; g.stroke();
+          g.lineWidth = Math.max(1, w - 6); g.strokeStyle = 'rgba(255,255,255,0.35)'; g.stroke();
+        }, 0, len);
+      }
+      const e = walk.at(walk.length);
+      arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? (dark ? '#64a8ff' : '#0a84ff') : dark ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.95)');
+      countBadge(dc, pts, o, t);
+    },
     // flat grouped cards, the way Settings and Finder group content
     card(dc, r, o) {
       const g = dc.g;
