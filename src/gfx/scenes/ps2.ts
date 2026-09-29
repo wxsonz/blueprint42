@@ -160,9 +160,9 @@ fn fogAt(p: vec2f) -> vec3f {
 }
 // what a glass face reflects: a dark blue room with a soft light strip
 fn envAt(r: vec3f) -> vec3f {
-  let sky = mix(vec3f(0.01, 0.014, 0.05), vec3f(0.24, 0.3, 0.6), smoothstep(-0.3, 0.9, -r.y));
+  let sky = mix(vec3f(0.01, 0.02, 0.07), vec3f(0.16, 0.26, 0.62), smoothstep(-0.3, 0.9, -r.y));
   let strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
-  return sky + vec3f(0.75, 0.85, 1.0) * strip;
+  return sky + vec3f(0.55, 0.72, 1.0) * strip;
 }
 // near an edge of the cube: the second-largest coordinate of the hit point near 1
 fn edgeOf(h: vec3f, w: f32) -> f32 {
@@ -202,15 +202,16 @@ fn scene(p: vec2f) -> vec4f {
     let through = bent * exp(-thick * vec3f(0.42, 0.3, 0.12)) + vec3f(0.012, 0.018, 0.045) * thick;
     // off it: Fresnel reflection of the room, and the light's highlight
     let cosv = clamp(nf.z, 0.0, 1.0);
-    let F = 0.06 + 0.94 * pow(1.0 - cosv, 3.0);
+    let F = 0.05 + 0.45 * pow(1.0 - cosv, 3.0);
     let refl = envAt(reflect(vec3f(0.0, 0.0, -1.0), nf));
     let spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
     // edges: bright on the near side, faint through the glass on the far side
     let lit = max(0.0, dot(nf, L));
-    let front = (edgeOf(ol + dl * tn, px * 2.2) + 0.22 * edgeOf(ol + dl * tn, 0.3)) * (0.35 + 0.65 * lit);
-    let back = edgeOf(ol + dl * tf, px * 2.2) * 0.22;
+    let ew = max(px * 2.2, 0.035);
+    let front = (edgeOf(ol + dl * tn, ew) + 0.3 * edgeOf(ol + dl * tn, 0.35)) * (0.5 + 0.7 * lit);
+    let back = edgeOf(ol + dl * tf, ew) * 0.3;
     let g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    let body = vec3f(0.05, 0.07, 0.17) * (0.35 + lit) * (1.1 - g) * (0.6 + 0.25 * thick);
+    let body = vec3f(0.07, 0.12, 0.3) * (0.45 + lit) * (1.15 - 0.6 * g) * (0.55 + 0.3 * thick);
     let glass = mix(through + body, refl, F) + vec3f(1.0, 0.97, 0.92) * spec + vec3f(0.72, 0.84, 1.0) * (front * 0.85 + back);
     // soft silhouette: coverage from how much glass the ray crossed
     c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
@@ -272,9 +273,9 @@ vec3 fogAt(vec2 p) {
   return c.rgb;
 }
 vec3 envAt(vec3 r) {
-  vec3 sky = mix(vec3(0.01, 0.014, 0.05), vec3(0.24, 0.3, 0.6), smoothstep(-0.3, 0.9, -r.y));
+  vec3 sky = mix(vec3(0.01, 0.02, 0.07), vec3(0.16, 0.26, 0.62), smoothstep(-0.3, 0.9, -r.y));
   float strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
-  return sky + vec3(0.75, 0.85, 1.0) * strip;
+  return sky + vec3(0.55, 0.72, 1.0) * strip;
 }
 float edgeOf(vec3 h, float w) {
   vec3 a = abs(h);
@@ -311,14 +312,15 @@ vec4 scene(vec2 p) {
     vec3 bent = fogAt(p + (nf.xy - nb.xy) * cc.z * 0.45);
     vec3 through = bent * exp(-thick * vec3(0.42, 0.3, 0.12)) + vec3(0.012, 0.018, 0.045) * thick;
     float cosv = clamp(nf.z, 0.0, 1.0);
-    float F = 0.06 + 0.94 * pow(1.0 - cosv, 3.0);
+    float F = 0.05 + 0.45 * pow(1.0 - cosv, 3.0);
     vec3 refl = envAt(reflect(vec3(0.0, 0.0, -1.0), nf));
     float spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
     float lit = max(0.0, dot(nf, L));
-    float front = (edgeOf(ol + dl * tn, px * 2.2) + 0.22 * edgeOf(ol + dl * tn, 0.3)) * (0.35 + 0.65 * lit);
-    float back = edgeOf(ol + dl * tf, px * 2.2) * 0.22;
+    float ew = max(px * 2.2, 0.035);
+    float front = (edgeOf(ol + dl * tn, ew) + 0.3 * edgeOf(ol + dl * tn, 0.35)) * (0.5 + 0.7 * lit);
+    float back = edgeOf(ol + dl * tf, ew) * 0.3;
     float g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    vec3 body = vec3(0.05, 0.07, 0.17) * (0.35 + lit) * (1.1 - g) * (0.6 + 0.25 * thick);
+    vec3 body = vec3(0.07, 0.12, 0.3) * (0.45 + lit) * (1.15 - 0.6 * g) * (0.55 + 0.3 * thick);
     vec3 glass = mix(through + body, refl, F) + vec3(1.0, 0.97, 0.92) * spec + vec3(0.72, 0.84, 1.0) * (front * 0.85 + back);
     c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
