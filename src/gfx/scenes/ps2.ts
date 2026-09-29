@@ -158,11 +158,22 @@ fn fogAt(p: vec2f) -> vec3f {
   }
   return c.rgb;
 }
-// what a cube's face reflects: a pale blue-white room, a soft light strip
-fn envAt(r: vec3f) -> vec3f {
-  let sky = mix(vec3f(0.16, 0.18, 0.28), vec3f(0.7, 0.76, 0.92), smoothstep(-0.6, 0.8, -r.y));
-  let strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 4.0, 2.0)) * 0.25;
-  return sky + vec3f(0.85, 0.9, 1.0) * strip;
+// What the glass shows, reflected and seen through: a room of frosted
+// blocks like the boot screen's towers, their ends facing in (a grid, each
+// block its own shade, grain on it, dark gaps between). A room close by:
+// where on screen (at, in blocks) as well as which way, so the blocks slide
+// across a face and jump between faces.
+fn envAt(r: vec3f, at: vec2f) -> vec3f {
+  let uv = at + r.xy / (abs(r.z) + 0.55) * 1.6 + vec2f(select(0.0, 17.0, r.z < 0.0));
+  let cell = floor(uv);
+  let f = fract(uv);
+  let shade = 0.42 + 0.45 * h21(cell, 5.0);
+  // each block's end, and its sides darker toward the gap
+  let side = smoothstep(0.78, 0.9, max(f.x, f.y));
+  let gap = smoothstep(0.9, 0.97, max(f.x, f.y));
+  let grain = 0.85 + 0.3 * vnoise(uv * 24.0, 7.0);
+  let block = vec3f(0.74, 0.79, 0.95) * shade * grain * (1.0 - 0.45 * side);
+  return mix(block, vec3f(0.02, 0.025, 0.06), gap);
 }
 // near an edge of the cube: the second-largest coordinate of the hit point near 1
 fn edgeOf(h: vec3f, w: f32) -> f32 {
@@ -194,23 +205,25 @@ fn scene(p: vec2f) -> vec4f {
     if (tn > tf) { continue; }
     let toView = mat3x3f(r0, r1, r2);
     let nf = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x) * -sign(dl));
-    let thick = tf - tn; // how much cube the ray crosses, in half-sides
+    let thick = tf - tn; // how much glass the ray crosses, in half-sides
     let px = 1.0 / cc.z; // one screen pixel, in half-sides
-    // where the ray meets the face, in the cube's own coordinates, and the
-    // face's 2D coordinates on it (so its grain turns with the cube)
-    let h = ol + dl * tn;
-    let an = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x);
-    let uv = select(select(h.xy, h.xz, an.y > 0.5), h.yz, an.x > 0.5);
-    let face = f32(i) * 13.0 + dot(an * sign(h), vec3f(1.0, 2.0, 3.0));
-    // a mirror, solid: the pale room it reflects, brighter where it turns to the light
-    let refl = envAt(reflect(vec3f(0.0, 0.0, -1.0), nf));
-    let lit = max(0.0, dot(nf, L));
-    let grain = 0.78 + 0.34 * vnoise(uv * 38.0, face) + 0.2 * (vnoise(uv * 150.0, face + 50.0) - 0.5);
-    let spec = pow(max(dot(nf, H), 0.0), 60.0) * 0.5;
-    var col = refl * (0.42 + 0.58 * lit) * grain + vec3f(1.0, 0.98, 0.95) * spec;
-    // the seams between faces a touch darker, as on the boot screen's blocks
-    col = col * (1.0 - 0.45 * edgeOf(h, max(px * 1.6, 0.02)));
-    c = mix(c, col * 0.9, clamp(thick / (px * 1.5), 0.0, 1.0));
+    let nb = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tf == tf3.y), vec3f(1.0, 0.0, 0.0), tf == tf3.x) * sign(dl));
+    // clear glass: what's behind, bent going in and coming out (glass 1.5)
+    let v = vec3f(0.0, 0.0, -1.0);
+    let inside = refract(v, nf, 1.0 / 1.5);
+    var outd = refract(inside, -nb, 1.5);
+    if (dot(outd, outd) < 1e-4) { outd = reflect(inside, -nb); } // total internal reflection
+    let through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6) * 0.8 + envAt(outd, p / 70.0) * 0.55;
+    // and on it, the room reflected: faint face-on, strong edge-on (Fresnel)
+    let cosv = clamp(nf.z, 0.0, 1.0);
+    let F = 0.08 + 0.72 * pow(1.0 - cosv, 3.0);
+    let refl = envAt(reflect(v, nf), p / 70.0);
+    let spec = pow(max(dot(nf, H), 0.0), 80.0) * 0.7;
+    // glass edges catch the light: thin and bright, the far ones fainter
+    let ew = max(px * 1.6, 0.02);
+    let edges = edgeOf(ol + dl * tn, ew) * 0.55 + edgeOf(ol + dl * tf, ew) * 0.2;
+    let col = mix(through, refl, F) + vec3f(1.0, 0.98, 0.95) * spec + vec3f(0.8, 0.86, 1.0) * edges;
+    c = mix(c, col, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (var i = 0; i < 4; i++) {
     let h = U.v[${V_HEAD} + i];
@@ -268,10 +281,16 @@ vec3 fogAt(vec2 p) {
   }
   return c.rgb;
 }
-vec3 envAt(vec3 r) {
-  vec3 sky = mix(vec3(0.16, 0.18, 0.28), vec3(0.7, 0.76, 0.92), smoothstep(-0.6, 0.8, -r.y));
-  float strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 4.0, 2.0)) * 0.25;
-  return sky + vec3(0.85, 0.9, 1.0) * strip;
+vec3 envAt(vec3 r, vec2 at) {
+  vec2 uv = at + r.xy / (abs(r.z) + 0.55) * 1.6 + vec2(r.z < 0.0 ? 17.0 : 0.0);
+  vec2 cell = floor(uv);
+  vec2 f = fract(uv);
+  float shade = 0.42 + 0.45 * h21(cell, 5.0);
+  float side = smoothstep(0.78, 0.9, max(f.x, f.y));
+  float gap = smoothstep(0.9, 0.97, max(f.x, f.y));
+  float grain = 0.85 + 0.3 * vnoise(uv * 24.0, 7.0);
+  vec3 block = vec3(0.74, 0.79, 0.95) * shade * grain * (1.0 - 0.45 * side);
+  return mix(block, vec3(0.02, 0.025, 0.06), gap);
 }
 float edgeOf(vec3 h, float w) {
   vec3 a = abs(h);
@@ -304,17 +323,20 @@ vec4 scene(vec2 p) {
     vec3 nf = toView * (axisOf(tn, tn3) * -sign(dl));
     float thick = tf - tn;
     float px = 1.0 / cc.z;
-    vec3 h = ol + dl * tn;
-    vec3 an = axisOf(tn, tn3);
-    vec2 uv = an.x > 0.5 ? h.yz : an.y > 0.5 ? h.xz : h.xy;
-    float face = float(i) * 13.0 + dot(an * sign(h), vec3(1.0, 2.0, 3.0));
-    vec3 refl = envAt(reflect(vec3(0.0, 0.0, -1.0), nf));
-    float lit = max(0.0, dot(nf, L));
-    float grain = 0.78 + 0.34 * vnoise(uv * 38.0, face) + 0.2 * (vnoise(uv * 150.0, face + 50.0) - 0.5);
-    float spec = pow(max(dot(nf, H), 0.0), 60.0) * 0.5;
-    vec3 col = refl * (0.42 + 0.58 * lit) * grain + vec3(1.0, 0.98, 0.95) * spec;
-    col *= 1.0 - 0.45 * edgeOf(h, max(px * 1.6, 0.02));
-    c = mix(c, col * 0.9, clamp(thick / (px * 1.5), 0.0, 1.0));
+    vec3 nb = toView * (axisOf(tf, tf3) * sign(dl));
+    vec3 v = vec3(0.0, 0.0, -1.0);
+    vec3 inside = refract(v, nf, 1.0 / 1.5);
+    vec3 outd = refract(inside, -nb, 1.5);
+    if (dot(outd, outd) < 1e-4) outd = reflect(inside, -nb);
+    vec3 through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6) * 0.8 + envAt(outd, p / 70.0) * 0.55;
+    float cosv = clamp(nf.z, 0.0, 1.0);
+    float F = 0.08 + 0.72 * pow(1.0 - cosv, 3.0);
+    vec3 refl = envAt(reflect(v, nf), p / 70.0);
+    float spec = pow(max(dot(nf, H), 0.0), 80.0) * 0.7;
+    float ew = max(px * 1.6, 0.02);
+    float edges = edgeOf(ol + dl * tn, ew) * 0.55 + edgeOf(ol + dl * tf, ew) * 0.2;
+    vec3 col = mix(through, refl, F) + vec3(1.0, 0.98, 0.95) * spec + vec3(0.8, 0.86, 1.0) * edges;
+    c = mix(c, col, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (int i = 0; i < 4; i++) {
     vec4 h = v[${V_HEAD} + i];

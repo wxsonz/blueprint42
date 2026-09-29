@@ -29,13 +29,16 @@
   1.4 ms); the GPU scene costs about 0.2–0.4 ms of CPU a frame. Checked:
   the WGSL compiles and draws the same picture as the WebGL2 path, through
   wgpu-native on the RTX 4060 (headless Chromium here has no WebGPU device).
-- **Cubes (author, from the boot screen):** solid and reflective, not
-  see-through: each face reflects a pale blue-white room (brighter where it
-  turns to the light), with a frosted grain printed on the face so it turns
-  with the cube, a soft highlight, slightly darker seams and an antialiased
-  silhouette. A first try at clear glass (refraction, absorption) was the
-  wrong reading of it. Simple mode and the canvas fallback keep the old look.
-  The output is dithered by half a step, so the dark fog doesn't band.
+- **Cubes (author, from the boot screen, circled):** clear glass. Seen
+  through them and reflected on them are the boot screen's frosted blocks,
+  broken up and shifted where the glass bends them. The scene has no towers
+  behind its cubes, so the glass shows a nearby room of frosted blocks
+  (`envAt`: by position as well as direction, or a flat face would show one
+  flat tone), refracted in and out at 1.5 and reflected with Fresnel, plus
+  the fog behind bent the same way, a highlight and thin bright edges. Two
+  wrong readings came first (tinted see-through glass, then solid frosted
+  blocks). Simple mode and the canvas fallback keep the old look. The output
+  is dithered by half a step, so the dark fog doesn't band.
 - **Beside the button (author):** what draws the background (`WebGPU`,
   `WebGL2`, `canvas`, `still`, `off`) and a live readout, `fps · ms`: the
   background's frames a second and the CPU time of one frame (the GPU's own
