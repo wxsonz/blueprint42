@@ -18,7 +18,7 @@ import { $, esc, store } from './dom';
 import { LEGEND, S, alerts, canvas, debounce, editor, gridPane, inspector, layout, loadingSample, menu, modelRevision, overlay, setDebounce, setEditor, setLastInspectorKey, setLastPbKey, setModelRevision, setTraceRevision, timeline, toast, traceRevision, view } from './state';
 import { renderDuel, renderFeed, renderStageCard } from './feed';
 import { paintPage, setUiZoom, stepUiZoom, ui } from './page';
-import { renderAlerts, renderDock, renderInspector, renderLiveStatus, renderSampleTabs, renderStatus, violations } from './panels';
+import { renderAlerts, renderDock, renderInspector, renderLiveStatus, renderSampleTabs, renderStatus, renderTestsMenu, violations } from './panels';
 import { renderPlaybar } from './playbar';
 import { dirtyFiles, liveFrom, onLive, openAt, openFolder, openFolderDialog, openSaveDialog, quickOpen, refreshMeta, renderLive, renderProjectChrome, runChanged, sampleRunChanged, setLiveEditors, switchFile, toggleExplorer, writeProjectBackup } from './project-ui';
 import { bindingsChanged, exportBlueprint, importBlueprint, loadSample, revertSample, saveSoon, setAllShut, tidy, toggleShut } from './sample-ui';
@@ -1129,12 +1129,16 @@ async function boot(): Promise<void> {
     if (!list.hidden && !(e.target as HTMLElement).closest('#skin-list, #skins')) list.hidden = true;
     const ex = $('example-list');
     if (!ex.hidden && !(e.target as HTMLElement).closest('#example-list, #examples')) (ex.hidden = true), $('examples').setAttribute('aria-expanded', 'false');
+    const tl = $('test-list');
+    if (!tl.hidden && !(e.target as HTMLElement).closest('#test-list, #tests')) (tl.hidden = true), $('tests').setAttribute('aria-expanded', 'false');
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     $('skin-list').hidden = true;
     $('example-list').hidden = true;
     $('examples').setAttribute('aria-expanded', 'false');
+    $('test-list').hidden = true;
+    $('tests').setAttribute('aria-expanded', 'false');
   });
   $('feed').addEventListener('click', (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.kf');
@@ -1215,6 +1219,7 @@ async function boot(): Promise<void> {
   new ResizeObserver(() => view.resize()).observe($('grid-wrap'));
 
   renderSampleTabs();
+  renderTestsMenu();
   renderSkinPicker();
   $('pb-speed').textContent = `${S.speed}×`;
   $('file-name').textContent = S.sample.file;

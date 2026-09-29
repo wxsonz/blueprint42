@@ -6,11 +6,12 @@ import { fmtVal } from './interp';
 import { type Violation, findViolations, parseInvariant, surpriseCalls } from './invariants';
 import { Layout, doorsOf, footprint } from './layout';
 import { type Var, bufferShapes, validateBindingExpr } from './parse';
-import { createDriver } from './project-ui';
+import { createDriver, openSampleProject } from './project-ui';
 import { pointeeName } from './render';
 import { computeBelts, entKey, frameAt, spriteWorldRect } from './playback';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample } from './samples';
+import { STRESS_CASES, STRESS_SIZES, stressFiles } from '../stress/gen.mjs';
 import type { IconKind } from './skins/types';
 import { LEGEND, S, alerts, decl, editorPane, gridPane, inspector, lastInspectorKey, layout, modelRevision, setLastInspectorKey, toast, traceRevision, view } from './state';
 import { DRIVER } from './workspace';
@@ -41,6 +42,32 @@ export function renderSampleTabs(): void {
     list.hidden = true;
     btn.setAttribute('aria-expanded', 'false');
     loadSample(b.dataset.key);
+  }));
+  btn.onclick = () => {
+    list.hidden = !list.hidden;
+    btn.setAttribute('aria-expanded', String(!list.hidden));
+  };
+}
+
+// Tests: generated stress projects (stress/gen.mjs), built when picked, opened
+// read-only like a sample project. They find the limits: of the tracer, the
+// layout and the drawing.
+export function renderTestsMenu(): void {
+  const btn = $<HTMLButtonElement>('tests');
+  const list = $('test-list');
+  const open = S.project?.readOnly && S.project.name.startsWith('test:') ? S.project.name.slice(5) : null;
+  btn.innerHTML = `Tests${open ? `<span class="cur">${esc(open)}</span>` : ''}<span class="caret">▾</span>`;
+  list.innerHTML = STRESS_SIZES.map((n) => `<section><h3>N = ${n}<span>generated 42-style projects (Norm shape); run under gdb</span></h3>${STRESS_CASES.map((c) => {
+    const key = `${c.id}-${n}`;
+    return `<button role="menuitemradio" data-case="${esc(c.id)}" data-n="${n}" aria-checked="${open === key}"><b>${esc(c.title)} · ${n}</b><span class="tag">${esc(c.blurb.replaceAll('N', String(n)))}</span></button>`;
+  }).join('')}</section>`).join('');
+  list.querySelectorAll<HTMLButtonElement>('button[data-case]').forEach((b) => b.addEventListener('click', () => {
+    list.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    const id = b.dataset.case!;
+    const n = Number(b.dataset.n);
+    openSampleProject({ key: `test-${id}-${n}`, title: `${id} ${n}`, name: `test:${id}-${n}`, blurb: '', files: stressFiles(id, n) });
+    renderTestsMenu();
   }));
   btn.onclick = () => {
     list.hidden = !list.hidden;
