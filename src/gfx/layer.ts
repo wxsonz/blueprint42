@@ -171,7 +171,8 @@ export class GfxLayer {
     this.failed ||= 'no WebGPU or WebGL2';
   }
 
-  private fallBack(why: string): void {
+  // (public for tests)
+  fallBack(why: string): void {
     this.failed = why;
     this.gpu = null;
     this.backend = null;
@@ -254,6 +255,12 @@ export class GfxLayer {
     let sc = G.scenes.get(scene.id);
     if (!sc) {
       const mod = device.createShaderModule({ code: fullWgsl(scene) });
+      // ask the compiler, don't wait for an error event: a shader it refuses
+      // draws nothing at all (fall back to WebGL2, and say why in the menu)
+      void mod.getCompilationInfo().then((ci) => {
+        const err = ci.messages.find((m) => m.type === 'error');
+        if (err && this.gpu?.device === device) this.fallBack(`WebGPU refused ${scene.id}'s shader (line ${err.lineNum}: ${err.message})`);
+      });
       const pipe = device.createRenderPipeline({
         layout: 'auto',
         vertex: { module: mod, entryPoint: 'vs_full' },

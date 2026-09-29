@@ -117,7 +117,8 @@ const WGSL = /* wgsl */ `
 // an integer hash of a lattice point: exact, so a corner is the same value
 // from every cell that shares it (a sin-based hash isn't, and cells jump)
 fn h21(p: vec2f, s: f32) -> f32 {
-  var h = bitcast<u32>(i32(p.x)) * 1597334677u ^ bitcast<u32>(i32(p.y)) * 3812015801u ^ u32(s) * 2654435769u;
+  // WGSL wants every mix of * and ^ in parentheses (Chrome's compiler refuses it otherwise)
+  var h = (bitcast<u32>(i32(p.x)) * 1597334677u) ^ (bitcast<u32>(i32(p.y)) * 3812015801u) ^ (u32(s) * 2654435769u);
   h = (h ^ (h >> 16u)) * 2246822519u;
   h = (h ^ (h >> 13u)) * 3266489917u;
   h = h ^ (h >> 16u);
@@ -214,7 +215,7 @@ fn scene(p: vec2f) -> vec4f {
 
 const GLSL = /* glsl */ `
 float h21(vec2 p, float s) {
-  uint h = uint(int(p.x)) * 1597334677u ^ uint(int(p.y)) * 3812015801u ^ uint(s) * 2654435769u;
+  uint h = (uint(int(p.x)) * 1597334677u) ^ (uint(int(p.y)) * 3812015801u) ^ (uint(s) * 2654435769u);
   h = (h ^ (h >> 16u)) * 2246822519u;
   h = (h ^ (h >> 13u)) * 3266489917u;
   h = h ^ (h >> 16u);

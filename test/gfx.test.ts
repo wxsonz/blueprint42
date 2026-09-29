@@ -20,4 +20,20 @@ describe('GPU scenes', () => {
     expect(sceneFor('ps2')).toBe(ps2Scene);
     expect(sceneFor('minimal')).toBeNull();
   });
+
+  // naga (wgpu, Firefox) lets \`a * b ^ c\` through; Tint (Chrome) refuses the
+  // whole shader: "mixing '*' and '^' requires parenthesis"
+  it('WGSL: arithmetic next to a bitwise operator is parenthesised', () => {
+    // a bitwise operator with arithmetic beside it at the same level (inner
+    // parentheses folded away first)
+    const bad = (line: string) => {
+      let bare = line.replace(/\/\/.*$/, '');
+      for (let k = 0; k < 6; k++) bare = bare.replace(/\([^()]*\)/g, '_');
+      bare = bare.replace(/&&|\|\||->/g, ' ');
+      return /[\^|&]/.test(bare) && /[*+/%]|[^\w\s(]\s*-|\w\s+-\s/.test(bare);
+    };
+    expect(bad('  var h = bitcast<u32>(i32(p.x)) * 1597334677u ^ u32(s) * 2654435769u;')).toBe(true);
+    expect(bad('  var h = (bitcast<u32>(i32(p.x)) * 1597334677u) ^ (u32(s) * 2654435769u);')).toBe(false);
+    for (const line of ps2Scene.wgsl.split('\n')) expect(bad(line), line).toBe(false);
+  });
 });
