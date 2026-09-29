@@ -1,4 +1,4 @@
-import { chevron, ride } from '../belts';
+import { chevron, ride, smooth } from '../belts';
 import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
 import { rrect, strokeLine, Walk } from '../util';
@@ -27,7 +27,7 @@ function switchOf(dark: boolean): Theme {
     // 2px-outlined strip with square ends. Idle it is grey; live the outline
     // pulses through the blue of the selection and small cyan blocks slide
     // through it the data's way.
-    belt(dc, pts, o, t) {
+    belt(dc, pts, o, t) { pts = smooth(dc, pts);
       const g = dc.g;
       const z = dc.z;
       const w = Math.max(6, 9 * z);

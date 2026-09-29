@@ -1,7 +1,7 @@
 // "Windows 7" — Aero: glass frames over the Harmony wallpaper, dark title
 // text with a soft white glow, glossy caption buttons with the wide red
 // close, the green shine-sweep progress bar.
-import { span } from './belts';
+import { smooth, span } from './belts';
 import { backdrop, countBadge, glassBehind, makeSkin, plainCard, softShadow, type Theme } from './kit';
 import type { Dc, Pt, Rect } from './types';
 import { arrowHead, fitText, hash, rrect, strokeLine, Walk } from './util';
@@ -107,7 +107,7 @@ export const sevenTheme: Theme = {
   // An Aero glass tube: a translucent pipe with a white rim and a bright
   // gloss line; live, it fills with the green progress bar and a soft shimmer
   // sweeps through it the data's way; hovered, the rim glows; selected, halo.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(6, 9 * z);

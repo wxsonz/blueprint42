@@ -61,10 +61,65 @@ function fitTextSlow(g: CanvasRenderingContext2D, text: string, font: (px: numbe
 }
 
 // Arc-length walker over a polyline, for chevrons, dots and arrowheads.
+// Opt-in: the same polyline with every bend replaced by a circular fillet of
+// radius `r` (shrunk so neighbouring bends never overlap: at most half of
+// either adjacent segment). Arcs are sampled every ~7 degrees, so a `Walk`
+// over the result turns smoothly, and a belt stroked from it matches its
+// riders. The result is cached per input array and radius.
+const filleted = new WeakMap<Pt[], { r: number; out: Pt[] }>();
+export function roundPts(pts: Pt[], r: number): Pt[] {
+  if (r < 0.5 || pts.length < 3) return pts;
+  const hit = filleted.get(pts);
+  if (hit && hit.r === r) return hit.out;
+  const out: Pt[] = [pts[0]];
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const [px, py] = pts[i - 1];
+    const [x, y] = pts[i];
+    const [nx, ny] = pts[i + 1];
+    const l1 = Math.hypot(x - px, y - py);
+    const l2 = Math.hypot(nx - x, ny - y);
+    if (l1 < 1e-6 || l2 < 1e-6) continue;
+    const ax = (px - x) / l1, ay = (py - y) / l1; // toward the previous point
+    const bx = (nx - x) / l2, by = (ny - y) / l2; // toward the next
+    const cos = Math.max(-1, Math.min(1, ax * bx + ay * by));
+    const ang = Math.acos(cos); // interior angle: PI is straight, 0 a U-turn
+    if (ang > Math.PI - 0.02 || ang < 0.02) {
+      out.push(pts[i]);
+      continue;
+    }
+    const half = ang / 2;
+    const t = Math.min(r / Math.tan(half), l1 / 2, l2 / 2); // tangent length
+    const rad = t * Math.tan(half);
+    const p0x = x + ax * t, p0y = y + ay * t;
+    const p1x = x + bx * t, p1y = y + by * t;
+    // Circle centre lies on the bisector, rad / sin(half) from the corner.
+    let mx = ax + bx, my = ay + by;
+    const ml = Math.hypot(mx, my) || 1;
+    mx /= ml;
+    my /= ml;
+    const cx = x + mx * (rad / Math.sin(half)), cy = y + my * (rad / Math.sin(half));
+    let a0 = Math.atan2(p0y - cy, p0x - cx);
+    let a1 = Math.atan2(p1y - cy, p1x - cx);
+    let da = a1 - a0;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    const n = Math.max(2, Math.ceil(Math.abs(da) / 0.125));
+    for (let k = 0; k <= n; k++) {
+      const a = a0 + (da * k) / n;
+      out.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  filleted.set(pts, { r, out });
+  return out;
+}
+
 export class Walk {
   segs: { x: number; y: number; dx: number; dy: number; len: number; at: number }[] = [];
   length = 0;
-  constructor(pts: Pt[]) {
+  // `round` (px, optional): fillet the bends with that radius (see roundPts).
+  constructor(pts: Pt[], round = 0) {
+    if (round > 0) pts = roundPts(pts, round);
     for (let i = 0; i + 1 < pts.length; i++) {
       const [x, y] = pts[i];
       const [x2, y2] = pts[i + 1];

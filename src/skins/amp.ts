@@ -3,6 +3,7 @@
 // dances while it runs, and a transport row whose lit button is the state.
 // Frames are the playlist; pointers are amber.
 import type { Dc, IconKind, Rect, Skin } from './types';
+import { smooth } from './belts';
 import { arrowHead, baseName, beltMid, brackets, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -140,7 +141,7 @@ export const amp: Skin = {
     }
   },
 
-  belt(dc, pts, o) {
+  belt(dc, pts, o) { pts = smooth(dc, pts);
     const g = dc.g;
     const w = Math.max(3, 7 * dc.z);
     g.lineJoin = 'miter';

@@ -3,6 +3,7 @@
 // Bliss hill.
 import { backdrop, countBadge, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Rect } from './types';
+import { smooth } from './belts';
 import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
 
 const FACE = '#ece9d8';
@@ -55,7 +56,7 @@ export const xpTheme: Theme = {
   // A Luna pipe: a rounded, glossy tube with a pale blue-grey edge; live, the
   // progress bar's green blocks run through it (the way the data goes);
   // hovered, the edge turns Luna orange; selected, a blue halo.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(6, 9 * z);

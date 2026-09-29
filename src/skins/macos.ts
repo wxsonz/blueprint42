@@ -2,7 +2,7 @@
 // Leopard, OS X Yosemite, macOS Big Sur and macOS Tahoe (Liquid Glass).
 // (Mac OS X 10.0–10.4 "Aqua" is its own hand-written skin.) Mac windows put
 // their controls on the left and centre their titles.
-import { barberPole, chevron, layers, ride } from './belts';
+import { barberPole, chevron, layers, ride, smooth } from './belts';
 import { backdrop, countBadge, glassBehind, makeSkin, plainCard, type Theme } from './kit';
 import type { Dc, Pt, Rect } from './types';
 import { arrowHead, fitText, rrect, strokeLine, Walk } from './util';
@@ -193,7 +193,7 @@ export const platinumTheme: Theme = {
   // Platinum: a grey trough, etched (dark inside edge, white lip), like the
   // scroll bar's; live, it is the barber-pole progress bar, lavender stripes
   // running the data's way; selected gets the dark outline of a focused control.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(6, Math.round(8 * z));
@@ -291,7 +291,7 @@ export const leopardTheme: Theme = {
   pulseColor: 'rgba(56,117,215,0.8)',
   // Leopard: a brushed-metal cable in the unified grey; live, glossy blue
   // capsules (the pulsing default button, sliced) slide along it the data's way.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(5, 7 * z);
@@ -389,7 +389,7 @@ export const yosemiteTheme: Theme = {
   // Yosemite: flat and thin. A frosted white 4px track with a hairline edge;
   // live, it is the flat blue progress bar with a pale streak of light
   // sweeping the data's way; a thin rounded chevron for the arrow.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(3, 4 * z);
@@ -480,7 +480,7 @@ function bigSurOf(dark: boolean): Theme {
     // Big Sur: a plump rounded pill with a soft drop shadow, like a symbol
     // in a toolbar; live, it is filled system blue and white dots (round
     // pips) stream along it the data's way; the arrow is a bold rounded chevron.
-    belt(dc, pts, o, t) {
+    belt(dc, pts, o, t) { pts = smooth(dc, pts);
       const g = dc.g;
       const z = dc.z;
       const w = Math.max(5, 7 * z);
@@ -589,7 +589,7 @@ function tahoeOf(dark: boolean): Theme {
     // Tahoe: a Liquid Glass tube: a bright specular rim round a clear
     // core; live, the core fills with tinted blue glass and glass lenses (white
     // capsules with a bright lip) glide through it the data's way.
-    belt(dc, pts, o, t) {
+    belt(dc, pts, o, t) { pts = smooth(dc, pts);
       const g = dc.g;
       const z = dc.z;
       const w = Math.max(6, 9 * z);
