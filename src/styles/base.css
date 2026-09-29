@@ -648,3 +648,7 @@ kbd {
 .stats-panel th { text-align: left; font-weight: 600; color: var(--panel-dim); padding: 2px 6px 2px 0; }
 .stats-panel td { padding: 2px 6px 2px 0; vertical-align: top; }
 .stats-panel tr.cur td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+/* opened out of the step banner: one piece, the banner's bottom corners and
+   the panel's top ones square where they meet */
+.stats-panel.attached { border-top-left-radius: 0; border-top-right-radius: 0; max-height: calc(100vh - 140px); }
+.alert.stats-open { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }

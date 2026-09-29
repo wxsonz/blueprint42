@@ -38,10 +38,20 @@ export const session = {
   info: null as SavepointInfo | null,
 };
 
+// Past this a window gets heavy for the page (every event keeps a snapshot):
+// 50,000 steps of push_swap-1024 is already ~70,000 events.
+export const WINDOW_MAX = 50000;
+
 export function windowSize(): number {
   const n = Number(store.get('windowSteps'));
-  return Number.isInteger(n) && n >= 1000 && n <= 100000 ? n : WINDOW_DEFAULT;
+  return Number.isInteger(n) && n >= 1000 && n <= WINDOW_MAX ? n : WINDOW_DEFAULT;
 }
+
+// The window being fetched right now (a long one can take a minute or more:
+// the banner counts the time so it never looks stuck).
+export const loading = { from: -1, to: -1, since: 0, reached: -1 }; // reached: how far a long skip got so far
+// the page redraws its banner when loading starts or moves on (set by main.ts)
+export const onLoading = { fn: (): void => {} };
 
 async function post<T>(route: string, body: unknown, signal?: AbortSignal): Promise<T | 'unavailable'> {
   let res: Response;
@@ -86,7 +96,22 @@ export async function traceWindow(req: GdbRequest, from: number, signal?: AbortS
     }
     const size = windowSize();
     const t0 = performance.now();
-    const r = await post<GResult & { bytes?: number; gone?: boolean }>('window', { id: session.id, from, to: from + size, maxSteps: size + 1, maxSeconds: 120 }, signal);
+    Object.assign(loading, { from, to: from + size, since: Date.now(), reached: -1 });
+    onLoading.fn();
+    let r: (GResult & { bytes?: number; gone?: boolean }) | 'unavailable';
+    try {
+      for (;;) {
+        r = await post<GResult & { bytes?: number; gone?: boolean }>('window', { id: session.id, from, to: from + size, maxSteps: size + 1, maxSeconds: 120 }, signal);
+        // A far jump can take longer than one request's time: the tracer
+        // stops partway with no steps recorded, leaving savepoints behind
+        // it. Ask again: it goes on from the furthest one.
+        if (r === 'unavailable' || !r.ok || r.stops?.length || !r.truncated || (r.window?.to ?? from) >= from) break;
+        loading.reached = r.window!.to;
+        onLoading.fn();
+      }
+    } finally {
+      loading.since = 0;
+    }
     if (r === 'unavailable') return 'unavailable';
     if (!r.ok && r.gone) {
       // the session closed (idle, or gdb went away): open a new one, once

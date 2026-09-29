@@ -17,6 +17,10 @@ import { LEGEND, S, alerts, decl, editorPane, gridPane, inspector, lastInspector
 import { DRIVER } from './workspace';
 import { drawIcon, gotoCode, placeSprite, removeSprite, toggleModule } from './main';
 import { bindingsChanged, loadSample, saveSoon } from './sample-ui';
+import { reanchorStats, statsOpen } from './stats-ui';
+import { loading } from './session';
+
+let loadingTick = 0;
 
 // ---------------- panels ----------------
 // The examples: one dropdown on the top bar, grouped by what they need (the
@@ -117,7 +121,14 @@ export function renderAlerts(): void {
   for (const f of p ? [...p.files.values()].filter((x) => x.conflict) : []) al('warn', `<b>${esc(f.path)} changed on disk</b> while you have unsaved edits here. Saving will ask which version wins.`);
   const g = S.gdb;
   const defines = p ? p.run.defines : S.sample.defines ?? [];
-  if (g.status === 'running') al('info', `<b>Running under gdb…</b> ${p?.files.has('Makefile') ? 'building with your <code>Makefile</code>' : 'compiling with <code>cc -Wall -Wextra -Werror</code>'}${defines.length ? ` <code>${defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
+  if (g.status === 'running' && loading.since) {
+    // a window of steps on its way: count the time, so a long one never looks stuck
+    const num = (x: number) => x.toLocaleString('en-US');
+    const secs = Math.round((Date.now() - loading.since) / 1000);
+    al('info', `<b>Loading steps ${num(loading.from)}–${num(loading.to)}…</b> ${secs} s${loading.reached >= 0 ? ` · skipped to step ${num(loading.reached)} so far` : ''}<br><span class="c">gdb records about 1,000 steps a second; jumping ahead first steps silently from the nearest savepoint.</span>`);
+    clearTimeout(loadingTick);
+    loadingTick = window.setTimeout(renderAlerts, 1000);
+  } else if (g.status === 'running') al('info', `<b>Running under gdb…</b> ${p?.files.has('Makefile') ? 'building with your <code>Makefile</code>' : 'compiling with <code>cc -Wall -Wextra -Werror</code>'}${defines.length ? ` <code>${defines.map((d) => `-D${esc(d)}`).join(' ')}</code>` : ''}`);
   if (g.status === 'unavailable') al('warn', `<b>No trace server.</b> Real execution runs inside <code>npm run dev</code> (or <code>npm run preview</code>); a static build can only use the interpreter.`);
   if (g.status === 'error' && g.compile) {
     const errs = g.compile.diagnostics.filter((d) => d.severity === 'error');
@@ -133,7 +144,7 @@ export function renderAlerts(): void {
     const n = (x: number) => x.toLocaleString('en-US');
     const of = win.total !== null ? `of ${n(win.total)}` : win.more ? `of at least ${n(win.to)}` : `of ${n(win.to)}`;
     if (win.from > 0 || win.more) al('info', `<b>Steps ${n(win.from)}–${n(win.to)}</b> ${of}
-      <span class="winnav"><button class="btn sm" data-win="prev" ${win.from > 0 ? '' : 'disabled'}>◂ Previous</button><button class="btn sm" data-win="next" ${win.more ? '' : 'disabled'}>Next ▸</button><input data-goto type="number" min="0" step="1" placeholder="go to step" aria-label="go to step"><button class="btn sm" data-win="stats">Stats</button></span>`);
+      <span class="winnav"><button class="btn sm" data-win="prev" ${win.from > 0 ? '' : 'disabled'}>◂ Previous</button><button class="btn sm" data-win="next" ${win.more ? '' : 'disabled'}>Next ▸</button><input data-goto type="number" min="0" step="1" placeholder="go to step" aria-label="go to step"><button class="btn sm" data-win="stats" aria-expanded="${statsOpen()}">${statsOpen() ? 'Stats ▴' : 'Stats ▾'}</button></span>`);
   } else if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
   const leaks = S.trace?.leaks ?? [];
   if (leaks.length) {
@@ -159,6 +170,7 @@ export function renderAlerts(): void {
     al('warn', `<b>Unpredicted call:</b> <code>${esc(c.caller)} → ${esc(c.callee)}</code> at <a data-seek="${c.at}" data-line="${c.line}"${c.file ? ` data-file="${esc(c.file)}"` : ''}>${c.file ? `${esc(c.file)}:` : 'line '}${c.line + 1}</a> is not in the code's call graph — a function pointer?`);
   alerts.innerHTML = out.join('');
   alerts.querySelector('[data-driver]')?.addEventListener('click', createDriver);
+  reanchorStats(); // the stats hang off the step banner, which was just rebuilt
 }
 
 export function renderStatus(): void {
@@ -171,11 +183,17 @@ export function renderStatus(): void {
       ? `<span class="bad">syntax error, ${m.error.file ? `${esc(m.error.file)}:` : 'line '}${m.error.line + 1}</span>`
       : `<span class="ok">parsed</span> · ${m.project ? `${m.files.length} file${m.files.length === 1 ? '' : 's'} · ` : ''}${m.fns.length} function${m.fns.length === 1 ? '' : 's'} · ${belts} call${belts === 1 ? '' : 's'}${statics ? ` · ${statics} static` : ''}`;
   const t = S.trace;
+  const num = (x: number) => x.toLocaleString('en-US');
+  const secs = (ms: number) => (ms >= 10000 ? `${Math.round(ms / 1000)} s` : `${num(ms)} ms`);
+  // how long gdb took; which steps of the run this is (a window), or how many;
+  // how many events (calls, returns, writes, output… more than steps); how it ends
+  const span = t?.window ? `steps ${num(t.window.from)}–${num(t.window.to)}` : t ? `${num(t.evs.filter((e) => e.k === 'step').length || t.evs.length)} steps` : '';
+  const end = t?.window?.more ? '<span class="dim" title="the run goes on past these steps: Next ▸ or go to step">continues</span>' : t?.truncated ? '<span class="bad" title="stopped at the step or time limit before the program ended">cut short</span>' : `<span class="ok">exit ${t?.exit ? fmtVal(t.exit) : '?'}</span>`;
   $('st-trace').innerHTML = !t
     ? ''
     : t.error
-      ? `<span class="bad">runtime error</span> · ${t.evs.length} steps`
-      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${S.gdb.ms} ms` : ''} · ` : ''}${t.evs.length} steps · ${t.truncated ? '<span class="bad">truncated</span>' : `<span class="ok">exit ${t.exit ? fmtVal(t.exit) : '?'}</span>`}`;
+      ? `<span class="bad">runtime error</span> · ${span} · ${num(t.evs.length)} events`
+      : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${secs(S.gdb.ms)}` : ''} · ` : ''}${span} · ${num(t.evs.length)} events · ${end}`;
   $('grid-info').textContent = S.project ? `${S.project.name}${S.project.root ? '' : ' (sample)'}` : m ? `${S.sample.file}` : '';
 }
 

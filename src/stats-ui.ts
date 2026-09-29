@@ -33,8 +33,27 @@ function el(): HTMLElement {
   return box;
 }
 
+// The panel opens out of the step banner: right under it, left-aligned, as
+// one piece (it falls back to the top right when the banner isn't there).
+function anchor(box: HTMLElement): void {
+  const banner = document.querySelector('.winnav')?.closest<HTMLElement>('.alert');
+  box.classList.toggle('attached', !!banner);
+  banner?.classList.add('stats-open');
+  if (!banner) {
+    box.style.left = box.style.top = box.style.width = '';
+    return;
+  }
+  const r = banner.getBoundingClientRect();
+  const width = Math.min(Math.max(r.width, 600), window.innerWidth - r.left - 16);
+  box.style.left = `${r.left}px`;
+  box.style.top = `${r.bottom - 1}px`;
+  box.style.width = `${width}px`;
+  banner.style.minWidth = `${width}px`; // the banner widens to meet it
+}
+
 function render(): void {
   const box = el();
+  anchor(box);
   const w = S.trace?.window;
   const info = session.info;
   const size = windowSize();
@@ -77,11 +96,22 @@ function render(): void {
     </dl></section>`}`;
 }
 
+export function statsOpen(): boolean {
+  return document.getElementById('stats-panel')?.hidden === false;
+}
+
 export function toggleStats(open?: boolean): void {
   const box = el();
   box.hidden = open === undefined ? !box.hidden : !open;
   clearInterval(timer);
-  if (box.hidden) return;
+  const banner = document.querySelector('.winnav')?.closest<HTMLElement>('.alert');
+  const btn = document.querySelector<HTMLButtonElement>('button[data-win="stats"]');
+  if (btn) btn.textContent = box.hidden ? 'Stats ▾' : 'Stats ▴';
+  if (box.hidden) {
+    banner?.classList.remove('stats-open');
+    if (banner) banner.style.minWidth = '';
+    return;
+  }
   render();
   void refreshInfo().then(render);
   timer = window.setInterval(() => {
@@ -89,6 +119,12 @@ export function toggleStats(open?: boolean): void {
     void refreshInfo().then(render);
   }, 1500);
 }
+
+// the banner is rebuilt with the alerts and moves with the layout: keep up
+export function reanchorStats(): void {
+  if (statsOpen()) anchor(el());
+}
+window.addEventListener('resize', reanchorStats);
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('stats-panel')?.hidden === false) toggleStats(false);

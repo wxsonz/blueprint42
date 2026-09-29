@@ -7,7 +7,7 @@ import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp'
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
 import { convertGdb, type GResult } from './gdb';
-import { closeSession, session, traceWindow, windowSize } from './session';
+import { closeSession, onLoading, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
 import { animMode, prepareStage, computeBelts, durationAt, frameAt, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity } from './playback';
@@ -152,6 +152,12 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
       return;
     }
     S.gdb = { status: 'done', ms: r.ms };
+    if (r.window && r.window.to < from && !r.truncated) {
+      // the run ended before that step: show its last window instead
+      toast(`the run ends at step ${r.window.to.toLocaleString('en-US')}`);
+      windowLoading = false;
+      return loadWindow(r.window.to, play_);
+    }
     const p = S.project;
     applyTrace(convertGdb(r, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
     // the event where step `target` is: each 'step' event is one step of the run
@@ -1109,6 +1115,7 @@ async function boot(): Promise<void> {
     if (a.dataset.openFile !== undefined) switchFile(a.dataset.openFile);
   };
   alerts.addEventListener('click', lineLinks);
+  onLoading.fn = renderAlerts; // a window of steps started loading: say so, with its time
   // window navigation (gdb sessions)
   alerts.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-win]');
@@ -1139,7 +1146,10 @@ async function boot(): Promise<void> {
   winInput.value = String(windowSize());
   winInput.addEventListener('change', () => {
     const v = Math.round(Number(winInput.value) / 1000) * 1000;
-    if (!(v >= 1000 && v <= 100000)) return void (winInput.value = String(windowSize()));
+    if (!(v >= 1000 && v <= WINDOW_MAX)) {
+      toast(`window: 1,000 to ${WINDOW_MAX.toLocaleString('en-US')} steps`);
+      return void (winInput.value = String(windowSize()));
+    }
     store.set('windowSteps', String(v));
     winInput.value = String(v);
     closeSession();
