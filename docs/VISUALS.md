@@ -245,7 +245,7 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 1. **Capacity** (module 5 definitions, machine 25 physical lines, ports 4,
    storage 5 including local statics).
 2. ~~Return type~~: done, in the RETURN panel.
-3. **Argument vs return plates**: different in shape, not just in colour.
+3. ~~Argument vs return plates~~: done, hexagon vs notched (Minimal and Barebone).
 4. **The types shelf** (structs, typedefs, enums, macro constants).
 5. **Dereference**: where a `*p` or `p->f` value came from.
 6. **Ownership** of heap blocks.
