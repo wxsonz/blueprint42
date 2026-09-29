@@ -187,8 +187,8 @@ Aim: fun to look at, and every mark means exactly one thing.
      in the run settings), reports every write(2) (the user's own, or libc
      flushing printf's buffer) and the buffer's real contents each step; the
      terminal box shows what has really arrived by then. The buffer node is
-     drawn above the terminal in Minimal and Barebone (decision 046). Next:
-     the bytes flying out on a flush.
+     drawn above the terminal in Minimal and Barebone, and the bytes fly
+     out as they really leave (decision 046).
 4. **Fun without lying (S each).** Every effect is driven by a real event:
    - a leak is an item falling off the shelf at exit;
    - a segfault jams the machine at the statement that died;

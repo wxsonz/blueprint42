@@ -1,6 +1,7 @@
 // Grid engine: camera and drawing. Playback timing and hosts live in
 // playback.ts, hit-testing and rects in hit.ts, routing in route.ts; every
 // pixel is delegated to the active skin (skins/*.ts).
+import { cLiteral } from './skins/stdbuf';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
@@ -591,6 +592,23 @@ export class GridView {
           text: buf.buf?.text ?? '', n, cap: buf.buf?.cap ?? 4096, mode: trace.outMode,
           flushed: was > 0 && n < was && prev!.sent < buf.sent ? prev!.buf!.text : null,
         });
+      }
+      // bytes really leaving through write(2) (gdb engine): printf's flush
+      // falls from its buffer into the terminal; the program's own write goes
+      // straight in from its side, past the buffer
+      if (ev?.k === 'out' && ev.fd === 1 && t > 0 && t < 1) {
+        const [bx, by, bw] = [this.sx(pp.x), this.sy(pp.y), MW * cs];
+        const into: Pt = [bx + bw * 0.45, by + 1.1 * cs];
+        const from: Pt = ev.via === 'printf' ? [bx + bw * 0.45, by - 0.9 * cs] : [bx + bw + 1.2 * cs, by + 1.1 * cs];
+        const u = Math.min(1, t / 0.85);
+        const e = u * u * (3 - 2 * u);
+        const x = from[0] + (into[0] - from[0]) * e;
+        const y = from[1] + (into[1] - from[1]) * e;
+        g.save();
+        if (skin.trail) skin.trail(dc, [from, [x, y]], 'arg');
+        skin.pulse(dc, x, y);
+        skin.plate(dc, x, y, cLiteral(ev.text.length > 24 ? `${ev.text.slice(0, 23)}…` : ev.text), 'arg');
+        g.restore();
       }
       g.restore();
     }

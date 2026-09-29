@@ -10,6 +10,9 @@
     terminal: at each `\n`; to a pipe: when full or at exit). A flush shows
     what just left (`→ terminal`). Drawn only when the trace really read the
     buffer (the gdb engine); the interpreter draws nothing rather than guess.
+    Bytes that really leave through write(2) fly as they go (every skin):
+    printf's flush falls from the buffer into the terminal; the program's
+    own `write` goes straight in from its side, past the buffer.
   - **The statement that died** is crossed out in its stations, in the
     error colour, with its signal (`✕ SIGSEGV`); the running token isn't
     drawn over it. Every skin (the stations drawing is shared).

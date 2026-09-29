@@ -254,7 +254,7 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 7. **Aliasing**: pointer arrows from rows to the memory they point at.
 8. **Loop history**: past values are shown per row now; past rounds of a
    loop as a whole are not.
-9. ~~Output as it happens~~: the printf buffer node, in Minimal and Barebone (decision 046); the bytes flying out on a flush still to do.
+9. ~~Output as it happens~~: the printf buffer node (Minimal and Barebone), and the bytes flying out: a flush falls from the buffer into the terminal, `write` goes straight in past it (every skin; decision 046).
 10. **`static` functions** marked the same way in every skin.
 
 Each one becomes a decision entry when it's built.
