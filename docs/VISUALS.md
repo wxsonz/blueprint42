@@ -71,6 +71,28 @@ Each section below is one level. The columns are:
 | A header's types | Declared in `.h` only | Nothing on the grid; struct fields appear in storage rows | — | ⬜ | A types shelf: drag a field in to add it |
 | A macro constant | Literal values only, uppercase | Nothing | — | ⬜ | Constants on the types shelf |
 
+#### Output: the printf buffer and the terminal (designed, not built)
+
+Author's design (2026-09-29). Above the process box (the terminal) sits a
+**printf buffer** node, `stdout`'s buffer inside libc:
+
+- `printf` (and `puts`, `putchar`…) put their text into the buffer. It
+  appears there at the statement that called it.
+- A **flush** moves the buffer's bytes into the terminal. When one happens
+  depends on where stdout goes: to a terminal, at each `\n`; to a pipe or
+  file (`./a.out | cat -e`), only when 4096 bytes fill up. Either way also at
+  exit and on `fflush`.
+- `write(1, …)` goes straight to the terminal, past the buffer.
+
+So mixing them shows its real result: `printf("a"); write(1, "b", 1);
+printf("\n");` prints `ba`, and you can see why. The terminal node says which
+case it is showing (terminal or pipe), and the trace must really run that way:
+today the tracer sends stdout to a file, which is the pipe case.
+
+Truth comes from the run, not from a model of libc: the bytes that really
+reached the output after each step, and the buffer's real contents
+(`stdout`'s write pointers in glibc) read under gdb.
+
 ### 2. Module (a `.c` file)
 
 | Construct | Norm | Picture | Moves when | Status | Edit later |
@@ -218,7 +240,8 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 7. **Aliasing**: pointer arrows from rows to the memory they point at.
 8. **Loop history**: past values are shown per row now; past rounds of a
    loop as a whole are not.
-9. **Output as it happens**, not only at exit.
+9. **Output as it happens**: the printf buffer node and `write` going straight
+   to the terminal (designed above, under Project).
 10. **`static` functions** marked the same way in every skin.
 
 Each one becomes a decision entry when it's built.
