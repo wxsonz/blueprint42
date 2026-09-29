@@ -190,9 +190,9 @@ the grammar only covers what the Norm allows.
 
 | Construct | Picture | Moves when | Status | Edit later |
 | --- | --- | --- | --- | --- |
-| An argument | A plate riding the belt into the callee | the call | ✅ | — |
+| An argument | A hexagonal plate (pointed ends) riding the belt into the callee | the call | ✅ | — |
 | A pointer argument | A plate saying "same address · what it points at is below" | the call | ✅ | — |
-| A return value | A plate riding back | the return | 🟡 the argument and the return plate differ only in colour and direction | — |
+| A return value | A plate riding back | the return | ✅ notched ends, the argument's reverse (Minimal and Barebone; other skins still differ only in colour) | — |
 | A struct on a belt | A crate: its type, where it lives, its fields | the call or the return | ✅ | — |
 | A byte buffer | A strip, with `pos`/`len`/`cap` markers moving | bytes written | ✅ | — |
 | A heap block | A block on the heap shelf; freed ones go, leaked ones stay at exit | `malloc`, `free`, exit | ✅ | — |

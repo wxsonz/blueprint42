@@ -47,7 +47,12 @@ Next, in this order:
    to show says where it points (`(stack)`, `(static)`) or `NULL`. Only heap
    bytes are drawn so far: a stack array or a string literal gets the line
    and the label, not its bytes.
-4. [ ] **Argument vs return plates** (S). Different in shape, not just colour.
+4. [x] **Argument vs return plates** (S). Different in shape, not just
+   colour: a call's argument on a belt is a hexagon (pointed ends), a
+   return value the reverse (notched ends); everything else keeps its pill.
+   Neither shape points a way, since a belt can run in any direction.
+   `plate(…, role)`, `platePath`; prototyped in Minimal and Barebone (the
+   kit's `plateShapes`).
 5. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
    4 ports, 5 storage rows including local statics, counted the way
    norminette counts.

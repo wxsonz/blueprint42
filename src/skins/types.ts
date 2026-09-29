@@ -106,6 +106,7 @@ export interface ProcInfo {
 }
 
 export type PlateKind = 'arg' | 'ptr' | 'ret' | 'void';
+export type PlateRole = 'arg' | 'ret';
 
 // A struct riding a belt: its type, where it lives (for a pointer), fields.
 export interface CrateInfo {
@@ -218,7 +219,10 @@ export interface Skin {
   strip(dc: Dc, r: Rect, info: StripInfo): void;
   sprite(dc: Dc, r: Rect, kind: Exclude<SpriteKind, 'strip'>, info: SpriteInfo): void;
   proc(dc: Dc, r: Rect, p: ProcInfo): void;
-  plate(dc: Dc, x: number, y: number, text: string, kind: PlateKind): void;
+  // role: what the plate is on a belt (a call's argument, a return value),
+  // told apart by shape where the skin draws roles (Minimal, Barebone), never
+  // by an arrow (a belt can run any way); kind is its colour
+  plate(dc: Dc, x: number, y: number, text: string, kind: PlateKind, role?: PlateRole): void;
   crate(dc: Dc, x: number, y: number, c: CrateInfo): void; // centred on (x, y)
   wire(dc: Dc, pts: Pt[], complete: boolean): void;
   dangling(dc: Dc, p: Pt): void;

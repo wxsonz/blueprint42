@@ -6,7 +6,7 @@ import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
 import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -35,6 +35,7 @@ export interface Theme {
   mono: (px: number, weight?: number) => string; // code and values
   radius: number; // corner radius at zoom 1 (0 = square)
   ptrTags?: boolean; // pointer rows show an address tag, not a value (prototyped in Barebone)
+  plateShapes?: boolean; // a belt's arguments and return values differ in shape (prototyped in Barebone)
   upper?: boolean; // titles in capitals
   spotlight: string;
   pixel?: boolean; // snap every rect to whole pixels (Game Boy)
@@ -421,14 +422,23 @@ export function makeSkin(t: Theme): Skin {
       if (pr.selected || pr.hovered) outline(dc, r, pr.selected);
     },
 
-    plate(dc, x, y, text, kind) {
+    plate(dc, x, y, text, kind, role) {
       const g = dc.g;
       const fs = px(dc, 11.5, 7);
       g.font = t.mono(fs, 700);
       const h = fs + px(dc, 8, 4);
-      const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8));
+      const shaped = !!role && t.plateShapes;
+      const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8) + (shaped ? h * 0.5 : 0));
       const col = kind === 'ptr' ? p.ptr : kind === 'ret' ? p.ret : kind === 'void' ? p.faint : t.flow ?? p.accent;
-      t.card(dc, snapR({ x: x - w / 2, y: y - h / 2, w, h }), { fill: p.panel, stroke: col, lw: 1.3, glow: kind === 'void' ? null : col, kind: 'plate' });
+      if (shaped) {
+        // a belt's argument or return value: its role in its outline
+        platePath(g, x, y, w, h, role);
+        g.fillStyle = p.panel;
+        g.fill();
+        g.strokeStyle = col;
+        g.lineWidth = 1.3;
+        g.stroke();
+      } else t.card(dc, snapR({ x: x - w / 2, y: y - h / 2, w, h }), { fill: p.panel, stroke: col, lw: 1.3, glow: kind === 'void' ? null : col, kind: 'plate' });
       g.fillStyle = kind === 'void' ? p.dim : p.fg;
       g.textAlign = 'center';
       g.textBaseline = 'middle';

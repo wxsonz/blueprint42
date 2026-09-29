@@ -1,4 +1,4 @@
-import type { Dc, Pt, Rect } from './types';
+import type { Dc, PlateRole, Pt, Rect } from './types';
 
 export function rrect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | [number, number, number, number]): void {
   const [a, b, c, d] = typeof r === 'number' ? [r, r, r, r] : r;
@@ -261,6 +261,20 @@ export function pastText(g: CanvasRenderingContext2D, past: string[] | undefined
   }
   return text;
 }
+// A plate's outline by role: an argument is a hexagon (pointed ends), a
+// return value the reverse (notched ends), anything else a pill. Neither
+// points a way: a belt can run in any direction.
+export function platePath(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, role: PlateRole | undefined, radius = h / 2): void {
+  const l = x - w / 2, r = x + w / 2, t = y - h / 2, b = y + h / 2, k = h * (role === 'ret' ? 0.3 : 0.42);
+  g.beginPath();
+  if (role === 'arg') {
+    g.moveTo(l + k, t); g.lineTo(r - k, t); g.lineTo(r, y); g.lineTo(r - k, b); g.lineTo(l + k, b); g.lineTo(l, y);
+  } else if (role === 'ret') {
+    g.moveTo(l, t); g.lineTo(r, t); g.lineTo(r - k, y); g.lineTo(r, b); g.lineTo(l, b); g.lineTo(l + k, y);
+  } else return rrect(g, l, t, w, h, radius);
+  g.closePath();
+}
+
 // A pointer's address tag, right-aligned at x (left-aligned with `left`), centred on y: a
 // small plate with a socket dot (an address, not a value) and what lives
 // there. Returns its width. `fill` null: an outline in `col`; else a shade.

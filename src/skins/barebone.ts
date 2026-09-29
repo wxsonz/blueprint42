@@ -21,6 +21,7 @@ function barebone(dark: boolean): Theme {
     blurb: dark ? 'black and white, colour only where it matters; the fastest to draw' : 'white paper, black ink, colour only where it matters',
     radius: 0,
     ptrTags: true,
+    plateShapes: true,
     spotlight: dark ? 'rgba(10,10,10,0.72)' : 'rgba(255,255,255,0.78)',
     ui: UI,
     mono: MONO,

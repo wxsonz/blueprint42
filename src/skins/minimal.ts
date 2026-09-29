@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -391,14 +391,14 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     if (p.selected || p.hovered) outline(g, r, rad, p.selected);
   },
 
-  plate(dc, x, y, text, kind) {
+  plate(dc, x, y, text, kind, role) {
     const g = dc.g;
     const fs = px(dc, 11.5, 7);
     g.font = MONO(fs, 600);
     const h = fs + px(dc, 8, 4);
-    const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8));
+    const w = Math.max(h, g.measureText(text).width + px(dc, 14, 8) + (role ? h * 0.5 : 0));
     const col = kind === 'ptr' ? PTR : kind === 'ret' ? RET : kind === 'void' ? FAINT : ACCENT;
-    rrect(g, x - w / 2, y - h / 2, w, h, h / 2);
+    platePath(g, x, y, w, h, role);
     g.fillStyle = C.plate;
     g.fill();
     g.strokeStyle = col;

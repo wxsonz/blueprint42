@@ -764,8 +764,8 @@ export class GridView {
             if (d < 0) return;
             const p = walk.at(d);
             if (a.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(a.data, 'arg'));
-            else if (a.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(a.data.text, 18), 'ptr');
-            else skin.plate(ddc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg');
+            else if (a.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(a.data.text, 18), 'ptr', 'arg');
+            else skin.plate(ddc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg', 'arg');
           });
         } else if (shown && ev.k === 'ret') {
           // The end product includes what the function changed through its
@@ -785,8 +785,8 @@ export class GridView {
           if (skin.trail) skin.trail(ddc, walkTrail(walk, d + ddc.z * CELL_PX * 7, d), 'ret');
           if (crate) skin.crate(ddc, p[0], p[1], crate);
           else if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
-          else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret');
-          else skin.plate(ddc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret');
+          else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret', 'ret');
+          else skin.plate(ddc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret', 'ret');
         }
       }
       if (ev.k === 'write' && ev.via !== null && ((!ph!.switched && ph!.travel < 1) || ph!.parked)) {
@@ -950,7 +950,7 @@ export class GridView {
       const before = on && !call && trace?.window && trace.window.from > 0 ? trace.window.from : null;
       skin.dock(dc, motorR, {
         name: h.fn, state, waitingOn, frames: stacked, stale, copy: h.copy, editing, inPorts, before,
-        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: a.text, ...ptrTag(a.val, trace!, on) })) : null,
+        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: fmtVal(a.val), ...ptrTag(a.val, trace!, on) })) : null,
         last: !frame && !!call,
         crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
       });
