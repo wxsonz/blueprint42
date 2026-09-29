@@ -19,7 +19,7 @@ skin by name.
 | PS2 | `ps2` | PlayStation | **reviewed** | |
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
-| PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles |
+| PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts |
 | Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles, belts |
 | Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles, belts |
 | Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
@@ -33,10 +33,10 @@ skin by name.
 | Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts |
 | Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
 | Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
-| Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles |
-| GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles |
-| Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles |
-| Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles |
+| Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
+| GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
+| Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
+| Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
 | Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles |
 | Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles |
 | Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles |

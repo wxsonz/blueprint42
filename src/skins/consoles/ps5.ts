@@ -1,6 +1,7 @@
-import { backdrop, makeSkin, softShadow, type Palette, type Theme } from '../kit';
-import { rrect } from '../util';
-import { bar, MONO, psSymbol, SST, text } from './common';
+import { ride } from '../belts';
+import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
+import { arrowHead, rrect, strokeLine, Walk } from '../util';
+import { bar, MONO, ps2Still, psSymbol, SST, text } from './common';
 
 // PS5, after its home screen (and khaledOghli/PS5_Online's measurements):
 // near-black under the selected game's art, blurred and darkened; cards with
@@ -15,6 +16,33 @@ export const ps5Theme: Theme = {
   id: 'ps5', name: 'PlayStation 5', blurb: 'the home screen: game art behind, dark cards, the white focus ring',
   p: ps5P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 12, spotlight: 'rgba(0,0,0,0.6)',
   pulseColor: 'rgba(255,255,255,0.9)',
+  // The home screen's download bar: a thin round track of translucent white;
+  // live, white pills fill it, one after another, the data's way, and the
+  // whole bar breathes softly like the controller's light; hovered and
+  // selected lift the track and give it the ring's crisp white edge.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(3, 4 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, w + 10 * z, 'rgba(255,255,255,0.14)');
+    strokeLine(g, pts, w, o.hovered || o.selected ? 'rgba(255,255,255,0.45)' : o.live ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.16)');
+    const walk = new Walk(pts);
+    if (o.live) {
+      const len = Math.max(16, 34 * z);
+      g.globalAlpha = ps2Still ? 1 : 0.8 + 0.2 * Math.sin(dc.time * 3);
+      g.lineWidth = w;
+      g.strokeStyle = '#ffffff';
+      ride(dc, walk, o, 80 * z, Math.max(44, 70 * z), (x, y, dx, dy) => {
+        g.beginPath(); g.moveTo(x - dx * len / 2, y - dy * len / 2); g.lineTo(x + dx * len / 2, y + dy * len / 2); g.stroke();
+      }, 0, len / 2);
+      g.globalAlpha = 1;
+    }
+    const e = walk.at(walk.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? '#ffffff' : o.hovered || o.selected ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)');
+    countBadge(dc, pts, o, t);
+  },
   card(dc, r, o) {
     const g = dc.g;
     const rad = Math.max(2, (o.kind === 'wall' ? 17 : 12) * dc.z);

@@ -1,6 +1,7 @@
-import { backdrop, makeSkin, softShadow, type Palette, type Theme } from '../kit';
+import { chevron, ride } from '../belts';
+import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
-import { rrect } from '../util';
+import { rrect, strokeLine, Walk } from '../util';
 import { bar, MONO, NUNITO, text } from './common';
 
 // The Switch HOME Menu: Basic White (#ebebeb) or Basic Black (#2d2d2d),
@@ -22,6 +23,34 @@ function switchOf(dark: boolean): Theme {
     id: dark ? 'switch-dark' : 'switch', name: 'Switch', blurb: dark ? 'Basic Black: plain tiles, the pulsing blue outline' : 'Basic White: plain tiles, the pulsing blue outline',
     p, ui: NUNITO, mono: MONO('"JetBrains Mono"'), radius: 4, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(200,200,200,0.6)',
     pulseColor: 'rgba(0,160,255,0.9)',
+    // A hollow channel, drawn like the HOME Menu's selection outline: a flat
+    // 2px-outlined strip with square ends. Idle it is grey; live the outline
+    // pulses through the blue of the selection and small cyan blocks slide
+    // through it the data's way.
+    belt(dc, pts, o, t) {
+      const g = dc.g;
+      const z = dc.z;
+      const w = Math.max(6, 9 * z);
+      const edge = Math.max(1.5, 2 * z);
+      g.lineCap = 'butt';
+      g.lineJoin = 'miter';
+      const outline = o.live ? pulse(dc) : o.hovered || o.selected ? p.dim : p.faint;
+      if (o.selected) strokeLine(g, pts, w + edge * 2 + 8 * z, dark ? 'rgba(0,195,227,0.25)' : 'rgba(10,176,207,0.22)');
+      strokeLine(g, pts, w + edge * 2, outline);
+      strokeLine(g, pts, w, p.card);
+      const walk = new Walk(pts);
+      if (o.live) {
+        const s = w * 0.6;
+        g.fillStyle = p.accent;
+        ride(dc, walk, o, 70 * z, Math.max(22, 34 * z), (x, y) => g.fillRect(x - s / 2, y - s / 2, s, s), 0, s);
+      }
+      const e = walk.at(walk.length);
+      g.lineCap = 'square';
+      g.lineWidth = Math.max(2, 3 * z);
+      g.strokeStyle = outline;
+      chevron(g, e.x + e.dx * w * 0.9, e.y + e.dy * w * 0.9, e.dx, e.dy, Math.max(5, 8 * z));
+      countBadge(dc, pts, o, t);
+    },
     card(dc, r, o) {
       const g = dc.g;
       rrect(g, r.x, r.y, r.w, r.h, Math.max(1, 4 * dc.z));

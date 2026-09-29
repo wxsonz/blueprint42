@@ -1,5 +1,7 @@
-import { backdrop, makeSkin, softShadow, type Palette, type Theme } from '../kit';
-import { rrect } from '../util';
+import { ride } from '../belts';
+import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
+import type { Pt } from '../types';
+import { arrowHead, rrect, strokeLine, Walk } from '../util';
 import { MONO, RODIN, text } from './common';
 
 // ---------------- Nintendo ----------------
@@ -26,6 +28,35 @@ function wiiOf(dark: boolean): Theme {
     id: dark ? 'wii-dark' : 'wii', name: 'Wii', blurb: dark ? 'the Wii Menu after dark' : 'the Wii Menu: glossy channels on fine blue lines',
     p, ui: RODIN, mono: MONO('"JetBrains Mono"'), radius: 10, spotlight: dark ? 'rgba(0,0,0,0.55)' : 'rgba(200,222,232,0.6)',
     pulseColor: 'rgba(53,180,229,0.9)',
+    // The Wii Menu's fine blue line, with a glossy white lower lip; live, glossy
+    // blue pearls (the pointer's blue) roll along it the data's way.
+    belt(dc, pts, o, t) {
+      const g = dc.g;
+      const z = dc.z;
+      const w = Math.max(3, 4 * z);
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      const line = dark ? (o.hovered || o.selected ? '#7fd6f2' : o.live ? '#35b4e5' : '#4c5861') : o.hovered || o.selected ? '#0b6a9c' : o.live ? '#189fd6' : '#8fb9cc';
+      if (o.selected) strokeLine(g, pts, w + 10 * z, dark ? 'rgba(53,180,229,0.35)' : 'rgba(24,159,214,0.3)');
+      strokeLine(g, pts.map(([x, y]) => [x, y + 1.2 * z] as Pt), w, dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.95)');
+      strokeLine(g, pts, w, line);
+      strokeLine(g, pts.map(([x, y]) => [x, y - w * 0.18] as Pt), Math.max(1, w * 0.25), 'rgba(255,255,255,0.4)');
+      const walk = new Walk(pts);
+      if (o.live) {
+        const r = Math.max(4, 5.5 * z);
+        ride(dc, walk, o, 60 * z, Math.max(26, 38 * z), (x, y) => {
+          g.fillStyle = dark ? '#1c7fa8' : '#0f86c0';
+          g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#4fc8f2';
+          g.beginPath(); g.arc(x, y - r * 0.12, r * 0.8, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(255,255,255,0.85)';
+          g.beginPath(); g.ellipse(x - r * 0.15, y - r * 0.4, r * 0.5, r * 0.28, 0, 0, Math.PI * 2); g.fill();
+        }, 0, r);
+      }
+      const e = walk.at(walk.length);
+      arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), line);
+      countBadge(dc, pts, o, t);
+    },
     card(dc, r, o) {
       const g = dc.g;
       const rad = Math.max(2, 9 * dc.z);
