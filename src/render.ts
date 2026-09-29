@@ -134,6 +134,29 @@ function strPlate(text: string, val: V, trace: Trace): string {
   return `${clip(text, 18)} · ${tag ? `ptr→${tag}` : 'ptr'}`;
 }
 
+// Font sizes in half pixels on the grid. Zooming scales every label, so each
+// frame would ask for new fractional sizes: Chrome then rasterizes fresh
+// glyphs for all of them (a 10-17 ms frame on the author's machine, against
+// 1 ms at rest). Half-pixel steps look the same and reuse its glyph cache.
+function quantizeFonts(g: CanvasRenderingContext2D): void {
+  const d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
+  if (!d?.get || !d.set) return;
+  const memo = new Map<string, string>();
+  Object.defineProperty(g, 'font', {
+    configurable: true,
+    get: () => d.get!.call(g),
+    set: (v: string) => {
+      let q = memo.get(v);
+      if (q === undefined) {
+        q = v.replace(/(\d+(?:\.\d+)?)px/, (_, n: string) => `${Math.round(Number(n) * 2) / 2}px`);
+        if (memo.size > 4000) memo.clear();
+        memo.set(v, q);
+      }
+      d.set!.call(g, q);
+    },
+  });
+}
+
 // Each frame's call event and the error it died of, found once per trace.
 // …and each heap block's malloc: the line, and the function that called it.
 const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]>; allocs: Map<number, { line: number; fn: string | null }> }>();
@@ -177,6 +200,7 @@ export class GridView {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
+    quantizeFonts(this.g);
     this.gfx = new GfxLayer(canvas); // started when a skin's GPU scene first needs it
   }
 

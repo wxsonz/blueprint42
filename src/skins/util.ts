@@ -35,6 +35,8 @@ export function strokeLine(g: CanvasRenderingContext2D, pts: Pt[], w: number, co
 // frame, so results (and the font they settled on) are remembered.
 const fitMemo = new Map<string, { text: string; font: string }>();
 export function fitText(g: CanvasRenderingContext2D, text: string, font: (px: number) => string, px: number, maxW: number, minPx = 7): string {
+  // sizes in half pixels (as the grid draws them): a zoom then hits the memo
+  px = Math.round(px * 2) / 2;
   const key = `${font(px)}|${Math.round(maxW * 2)}|${minPx}|${text}`;
   const hit = fitMemo.get(key);
   if (hit) {
