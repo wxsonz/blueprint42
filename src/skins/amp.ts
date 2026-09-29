@@ -4,7 +4,7 @@
 // Frames are the playlist; pointers are amber.
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { smooth } from './belts';
-import { arrowHead, baseName, beltMid, brackets, fitText, hash, snapRect, strokeLine, Walk } from './util';
+import { arrowHead, baseName, beltMid, brackets, drawPast, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -481,7 +481,14 @@ export const amp: Skin = {
       g.fillStyle =
         f.mode !== 'live' || row.recent ? base :
         row.kind === 'ptr' ? AMBER : row.kind === 'dangling' ? RED : row.kind === 'undef' || row.kind === 'null' ? LCD_DIM : LCD;
-      g.fillText(fitText(g, val, VT, fs, rr.w * 0.42, 7), rr.x + rr.w - px(dc, 4), rr.y + rr.h / 2 + 1);
+      const vt = fitText(g, val, VT, fs, rr.w * 0.42, 7);
+      g.fillText(vt, rr.x + rr.w - px(dc, 4), rr.y + rr.h / 2 + 1);
+      if (row.past?.length) {
+        const vw = g.measureText(vt).width;
+        g.font = VT(px(dc, 13, 8));
+        g.fillStyle = LCD_DIM;
+        drawPast(g, row.past, rr.x + rr.w - px(dc, 4) - vw - px(dc, 4), rr.y + rr.h / 2 + 1, rr.w * 0.42 - vw - px(dc, 4));
+      }
     });
   },
 

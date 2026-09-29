@@ -2,7 +2,7 @@
 // the active (navy) title bar, everything else is inactive grey. Statics are
 // floppy disks, pointers are links, stale code is "(Not Responding)".
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, bevel, brackets, fitText, hiddenLines, snapRect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, bevel, brackets, fitText, hiddenLines, pastText, snapRect, strokeLine, tailLines, Walk } from './util';
 import { layers } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -443,8 +443,17 @@ export const classic: Skin = {
       g.font = UI(fs);
       g.fillText(fitText(g, row.name, (s) => UI(s), fs, c1 - is - 12), ix + is + 4, rr.y + rr.h / 2 + 0.5);
       if (!row.value) continue;
-      const vx = rr.x + c1 + 3;
-      const vw = rr.w - c1 - 6;
+      let vx = rr.x + c1 + 3;
+      let vw = rr.w - c1 - 6;
+      if (row.past?.length) {
+        // what it held before, dimmed, then the value: "? → 0 → 16"
+        const pt = pastText(g, row.past, vw - g.measureText(fitText(g, row.value, (s) => UI(s), fs, vw)).width - 4);
+        g.fillStyle = SHADOW;
+        g.fillText(pt, vx, rr.y + rr.h / 2 + 0.5);
+        const pw = g.measureText(pt).width;
+        vx += pw;
+        vw -= pw;
+      }
       let col = textCol;
       if (!sel && f.mode === 'live') col = row.kind === 'ptr' ? '#0000ff' : row.kind === 'dangling' ? '#800000' : row.kind === 'undef' || row.kind === 'null' ? SHADOW : DARK;
       g.fillStyle = col;

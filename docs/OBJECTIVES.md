@@ -18,27 +18,28 @@ Done:
       (the Norm's declaration block), KEPT (statics), REACHED (memory through
       a pointer, written `buf->len`).
 - [x] RETURN at the bottom: the return type, and the value when it leaves.
-- [x] Each row's past values: `cap  ? → 0 → 8 → 16`.
+- [x] Each row's past values, `cap  ? → 0 → 8 → 16`, in every skin (the
+      five storage-table drawings: the kit's, Minimal, Aqua, Classic, Amp).
 - [x] `->` in labels no longer drawn as one arrow glyph.
 
 Next, in this order:
-1. [ ] **IN dock** (S). Its own look at the top left: *idle* (dim, waiting to
-   be called) and *running* (holding the arguments that arrived). Waiting
-   shows on the machine body; a crash on the station that died.
+1. [ ] **IN dock** (S). Its own look at the top left, in the engine's four
+   states: *idle* (dim, not called), *running* (holding the arguments that
+   arrived), *waiting* (it called another function and is paused until that
+   returns) and *crashed* (it died; the station that died is marked too).
 2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
    its line leads to what it points at in REACHED.
 3. [ ] **Byte strips inside REACHED** (S). They're reached memory too, and
    today sit on their own below the stations. Their label says where the
    bytes live (heap, stack, static) and who allocated them.
-4. [ ] **Past values in every skin** (S). Aqua, Classic and Amp draw their own
-   storage tables and don't show them yet.
-5. [ ] **Argument vs return plates** (S). Different in shape, not just colour.
-6. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
+4. [ ] **Argument vs return plates** (S). Different in shape, not just colour.
+5. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
    4 ports, 5 storage rows including local statics, counted the way
    norminette counts.
 
-Settled today: the dock shows idle and running only. Every skin gets the new
-anatomy in its existing parts now; per-skin looks come later.
+Settled today: the dock shows all four of the engine's states. The anatomy
+is an engine change, so every skin gets all of it at once, in its existing
+parts; per-skin looks come later.
 
 Still open: are expressions typed as text inside a station (recommended),
 or built from blocks? See `docs/VISUALS.md`.
@@ -90,7 +91,7 @@ reserved slot of a recursive copy).
    proposes the prototype (`static int ft_count(char *s)`) and an empty body.
    Drop a belt from machine A onto a station inside B and it proposes the
    call on that line. Undo takes it back.
-4. **Norminette as the game's rules (S; its capacity pictures are item 6 of
+4. **Norminette as the game's rules (S; its capacity pictures are item 5 of
    Today).** A machine's 25 lines are a
    capacity bar. Its 4 parameters are 4 input slots, and a fifth won't fit.
    A file's 5 functions are 5 module slots. Hitting a limit looks like a full

@@ -3,7 +3,7 @@
 // running shows a barber-pole bar, stale code gets the spinning pinwheel.
 // Belts are gel tubes: blue while carrying a call, graphite otherwise.
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, fitText, hiddenLines, pastText, rrect, strokeLine, tailLines, Walk } from './util';
 import { barberPole, smooth } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -481,7 +481,19 @@ export const aqua: Skin = {
       g.fillStyle =
         sel || f.mode !== 'live' ? col :
         row.kind === 'ptr' ? ORANGE : row.kind === 'dangling' ? '#b3261e' : row.kind === 'undef' || row.kind === 'null' ? '#9a9a9a' : '#1a1a1a';
-      g.fillText(fitText(g, row.value, MONO, px(dc, 10.5, 7), rr.w * 0.5 - 10, 6), c1 + 6, rr.y + rr.h / 2 + 0.5);
+      const vt = fitText(g, row.value, MONO, px(dc, 10.5, 7), rr.w * 0.5 - 10, 6);
+      let vx = c1 + 6;
+      if (row.past?.length) {
+        const vc = g.fillStyle;
+        g.font = MONO(px(dc, 9.5, 6));
+        const pt = pastText(g, row.past, rr.w * 0.5 - 10 - g.measureText(vt).width - 4);
+        g.fillStyle = '#9a9a9a';
+        g.fillText(pt, vx, rr.y + rr.h / 2 + 0.5);
+        vx += g.measureText(pt).width;
+        g.font = MONO(px(dc, 10.5, 7));
+        g.fillStyle = vc;
+      }
+      g.fillText(vt, vx, rr.y + rr.h / 2 + 0.5);
     });
     g.restore();
     rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 3);
