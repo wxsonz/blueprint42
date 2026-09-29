@@ -7,7 +7,7 @@ import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue
 import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
-import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace } from './interp';
+import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
@@ -122,6 +122,13 @@ class PathWalk {
 }
 
 // ---------------- the view ----------------
+
+// A char * on a belt: what it points at, for reading, then what really
+// travels, the pointer (only the address is copied; the bytes stay put).
+function strPlate(text: string, val: V, trace: Trace): string {
+  const tag = ptrTag(val, trace, null).tag;
+  return `${clip(text, 18)} · ${tag ? `ptr→${tag}` : 'ptr'}`;
+}
 
 // Each frame's call event and the error it died of, found once per trace.
 // …and each heap block's malloc: the line, and the function that called it.
@@ -764,7 +771,7 @@ export class GridView {
             if (d < 0) return;
             const p = walk.at(d);
             if (a.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(a.data, 'arg'));
-            else if (a.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(a.data.text, 18), 'ptr', 'arg');
+            else if (a.data?.k === 'str') skin.plate(ddc, p[0], p[1], strPlate(a.data.text, a.val, trace), 'ptr', 'arg');
             else skin.plate(ddc, p[0], p[1], argLabel(a.val, a.text, trace, after), a.val.k === 'ptr' ? 'ptr' : 'arg', 'arg');
           });
         } else if (shown && ev.k === 'ret') {
@@ -785,7 +792,7 @@ export class GridView {
           if (skin.trail) skin.trail(ddc, walkTrail(walk, d + ddc.z * CELL_PX * 7, d), 'ret');
           if (crate) skin.crate(ddc, p[0], p[1], crate);
           else if (ev.data?.k === 'struct') skin.crate(ddc, p[0], p[1], crateOf(ev.data, 'ret'));
-          else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], clip(ev.data.text, 18), 'ret', 'ret');
+          else if (ev.data?.k === 'str') skin.plate(ddc, p[0], p[1], strPlate(ev.data.text, ev.val, trace), 'ret', 'ret');
           else skin.plate(ddc, p[0], p[1], ev.val.k === 'void' ? 'void' : retLabel(ev.val, trace), ev.val.k === 'void' ? 'void' : 'ret', 'ret');
         }
       }
