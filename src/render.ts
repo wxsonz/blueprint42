@@ -1277,7 +1277,8 @@ export class GridView {
         if (u <= 0 || u >= 1) return;
         // `*p` flies from the memory at p's address (its row, wherever it is), not from p
         const src = r.cell !== undefined ? anchors.get(r.cell) : undefined;
-        const c = curve(src ? [src.left, src.y] : slotAt.get(r.key) ?? [X + W, Y], at);
+        const row = slotAt.get(r.key) ?? slotAt.get(r.key.replace(/^d:/, 'c:').replace(/\[.*$/, '')); // an element: its array's row
+        const c = curve(src ? [src.left, src.y] : row ?? [X + W, Y], at);
         const [x, y] = bez(c, u);
         if (skin.trail) skin.trail(dc, bezTrail(c, u), 'arg');
         skin.pulse(dc, x, y);

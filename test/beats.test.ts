@@ -143,4 +143,19 @@ describe('machines are their insides', () => {
     expect(reads).toContainEqual({ key: 'd:n', text: '3', cell: a.id });
     expect(computeText(b, fn, t)).toBe('*n = 3 + 1');
   });
+
+  it('a[i] reads the element (from the array\'s row) and i; a[i] = … reads only i (gdb)', async () => {
+    const src = 'int\tmain(void)\n{\n\tint\ttab[3];\n\tint\ti;\n\tint\tx;\n\n\ttab[0] = 7;\n\ttab[1] = 8;\n\ttab[2] = 9;\n\ti = 1;\n\tx = tab[i] + 1;\n\treturn (x);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name) });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    const fn = m.byName.get('main')!;
+    const beats = timelineOf(t, m).beats.filter((x) => x.fn === 'main');
+    const use = beats.find((x) => text(m, x).startsWith('x = tab[i]'))!;
+    expect(readsOf(use, fn, t)).toEqual([{ key: 'c:tab[i]', text: '8' }, { key: 'c:i', text: '1' }]);
+    expect(computeText(use, fn, t)).toBe('x = 8 + 1');
+    const set = beats.find((x) => text(m, x).startsWith('tab[1] = 8'))!;
+    expect(readsOf(set, fn, t)).toEqual([]);
+  }, 60000);
 });

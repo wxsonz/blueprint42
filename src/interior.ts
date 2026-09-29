@@ -18,6 +18,7 @@ export interface Leaf {
   path: [string] | [string, string]; // `x`, or `a->b` / `a.b`
   keep?: boolean; // read, but shown as written (`i++`, `&x`): a value there would read wrong
   deref?: boolean; // `*p`: the read is of the memory p holds the address of, not of p
+  index?: string; // `a[i]`: an element of array a, at this index (a name or a number)
 }
 
 export interface Station {
@@ -111,7 +112,10 @@ export function leavesOf(cond: Node): Leaf[] {
       return;
     }
     if (n.type === 'subscript_expression') {
+      const a = n.childForFieldName('argument') ?? n.namedChild(0);
       const i = n.childForFieldName('index') ?? n.namedChild(1);
+      // `a[i]` with a plain index: the element is read (and i, to find it)
+      if (a?.type === 'identifier' && (i?.type === 'identifier' || i?.type === 'number_literal')) out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], index: i.text });
       if (i) walk(i);
       return;
     }
@@ -142,8 +146,9 @@ function readsOf(n: Node): Leaf[] {
     const op = e.childForFieldName('operator')?.text ?? '=';
     const out = right ? shift(leavesOf(right), right, base) : [];
     // `*p = …` reads p (where to write), not *p: only `*p += …` reads what's there
-    const target = (l: Leaf): Leaf => (op === '=' && l.deref && l.from === 0 && l.to === left!.text.length ? { ...l, deref: undefined, keep: true } : l);
-    if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left).map(target), left, base));
+    const whole = (l: Leaf) => op === '=' && l.from === 0 && l.to === left!.text.length;
+    const target = (l: Leaf): Leaf => (whole(l) && l.deref ? { ...l, deref: undefined, keep: true } : l);
+    if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left).filter((l) => !(whole(l) && l.index !== undefined)).map(target), left, base));
     return out;
   }
   return shift(leavesOf(e), e, base);

@@ -184,7 +184,7 @@ the grammar only covers what the Norm allows.
 | A read | The value flies from its row into the station | the line runs | ✅ | — |
 | The whole expression | Its text, with each name replaced by the value read (`6 == 8 → false`) | the line runs | ✅ | Typed as text in the station |
 | A call inside an expression | A belt out; the return plate comes back into the expression | the call and its return | ✅ | — |
-| A dereference `*p`, `p->f`, `a[i]` | `*p`: the value flies from the memory at p's address (its row, wherever it's drawn) and fills the expression; `*p = …` reads only p. `p->f`: from its REACHED row | the line runs | ✅ `*p` of a plain cell and `p->f`; 🟡 `a[i]` and deeper chains show the index or pointer read | — |
+| A dereference `*p`, `p->f`, `a[i]` | `*p`: the value flies from the memory at p's address (its row, wherever it's drawn) and fills the expression; `*p = …` reads only p. `p->f`: from its REACHED row. `a[i]` of a local array with a plain index: the element, from the array's row, and `i`; `a[i] = …` reads only `i` | the line runs | ✅ `*p` of a plain cell, `p->f`, `a[i]` with a name or number index; 🟡 computed indexes (`a[j + 1]`) and deeper chains stay as written, with the reads they make | — |
 
 ### 6. Values and memory
 
@@ -249,7 +249,7 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 2. ~~Return type~~: done, in the RETURN panel.
 3. ~~Argument vs return plates~~: done, hexagon vs notched (Minimal and Barebone).
 4. **The types shelf** (structs, typedefs, enums, macro constants).
-5. ~~Dereference~~: `*p` and `p->f` read from where the memory is (decision 046); `a[i]` still to do.
+5. ~~Dereference~~: `*p`, `p->f` and `a[i]` read from where the memory is (decision 046); computed indexes still to do.
 6. **Ownership** of heap blocks.
 7. **Aliasing**: pointer arrows from rows to the memory they point at.
 8. **Loop history**: past values are shown per row now; past rounds of a

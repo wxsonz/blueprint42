@@ -18,6 +18,10 @@
     the station shows it (`*n = 3 + 1`). `*p = …` reads only p (where to
     write). With no cell for the address, `*p` stays as written and only p's
     read is shown.
+  - **`a[i]`** of a local array with a plain index (a name or a number)
+    reads the element, flying from the array's row, and `i`; `a[i] = …`
+    reads only `i`. A computed index, or an array text that can't be read
+    for certain, stays as written (draw less, never something false).
   - **Nothing is dropped silently.** Where something doesn't fit, a count
     says so: a row's older values (`+15 … 4 → 5`, and the history keeps the
     last 8 with the count of the rest), reads past 8 and writes past 10 in

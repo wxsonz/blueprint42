@@ -159,6 +159,22 @@ function derefOf(leaf: Leaf, fnName: string, frame: SnapFrame | null, snap: Snap
   return t && !t.fields ? { cell: t.id, text: valueOf(t, frame, trace, null).text } : null;
 }
 
+// `a[i]`: the element of a local array, when its value is plain to read
+// ("[1, 2, 3]" / "{1, 2, 3}", a plain index); null otherwise (then only the
+// index's read is shown and `a[i]` stays as written)
+function elementOf(leaf: Leaf, frame: SnapFrame | null): string | null {
+  const c = frame?.cells.find((x) => x.name === leaf.path[0]);
+  if (!c || c.val.k !== 'raw' || leaf.index === undefined) return null;
+  const m = /^[[{]([^[\]{}<>"']*)[\]}]$/.exec(c.val.text.trim());
+  if (!m) return null;
+  const items = m[1].split(',').map((x) => x.trim());
+  const idx = /^\d+$/.test(leaf.index) ? Number(leaf.index) : (() => {
+    const v = frame!.cells.find((x) => x.name === leaf.index)?.val;
+    return v?.k === 'int' ? v.v : NaN;
+  })();
+  return Number.isInteger(idx) && idx >= 0 && idx < items.length && items[idx] !== '' && !items[idx].includes('.') ? items[idx] : null;
+}
+
 export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
   const slots = slotsOf(fn);
   const snap = trace.snaps[b.before];
@@ -168,6 +184,13 @@ export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
     const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
     if (d) {
       if (!out.some((r) => r.cell === d.cell)) out.push({ key: `d:${leaf.path[0]}`, text: d.text, cell: d.cell });
+      continue;
+    }
+    if (leaf.index !== undefined) {
+      // the element flies from the array's own row
+      const e = elementOf(leaf, frame);
+      const k = `c:${leaf.path[0]}`;
+      if (e !== null && slots.some((s) => s.key === k) && !out.some((r) => r.key === `${k}[${leaf.index}]`)) out.push({ key: `${k}[${leaf.index}]`, text: e });
       continue;
     }
     const key = slotKeyOf(leaf, slots);
@@ -185,8 +208,16 @@ export function computeText(b: Beat, fn: FnInfo, trace: Trace): string {
   const snap = trace.snaps[b.before];
   const frame = frameIn(snap, b.frame);
   let out = src;
+  // an element read replaces `a[i]` whole, so the index inside it isn't replaced first
+  const whole = leaves.filter((l) => l.index !== undefined && elementOf(l, frame) !== null);
   for (const leaf of [...leaves].sort((x, y) => y.from - x.from)) {
     if (leaf.keep) continue;
+    if (leaf.index !== undefined) {
+      const e = elementOf(leaf, frame);
+      if (e !== null) out = out.slice(0, leaf.from) + e + out.slice(leaf.to);
+      continue;
+    }
+    if (whole.some((w) => leaf.from >= w.from && leaf.to <= w.to)) continue;
     const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
     if (d) out = out.slice(0, leaf.from) + d.text + out.slice(leaf.to);
     if (leaf.deref) continue; // with no cell to read, `*p` stays as written
