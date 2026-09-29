@@ -11,17 +11,38 @@ partial, ⬜ not drawn yet.
 Plain C can't be edited as pictures without losing something. Norm C can,
 because its shape is fixed:
 
-| Norm rule (v4.1) | What it gives the grammar |
-| --- | --- |
-| At most 5 function definitions per `.c` file | A module has 5 machine slots |
-| At most 4 named parameters; `void` if none | A machine has at most 4 input ports, all named |
-| At most 5 variables per function, declared first, one per line, never initialised on the same line | Storage is a fixed block of at most 5 rows above the stations. A value is set by a statement, never by the declaration. |
-| At most 25 lines per function | A machine holds at most 25 station rows (capacity) |
-| One instruction or control structure per line; no assignment inside a condition | One station = one line = one action. A condition only reads. |
-| No `for`, `do…while`, `switch`, `case`, `goto` or `?:` | Control flow is only `if` / `else if` / `else`, `while`, `return`, `break`, `continue` |
-| Declarations only at the top; no VLAs | Storage never appears midway, and its size is known up front |
-| Structs, typedefs, enums, unions (`s_`, `t_`, `e_`, `u_`) declared in headers | Types live in one place per project, not in machines |
-| Globals only `static` or `const` (`g_`) | Every global is a chest: visible, and owned by a file |
+The rules come from the Norm (v4.1, `en.norm.pdf` in
+[42school/norminette](https://github.com/42school/norminette)). The last
+column is the error code of the checker that enforces each one, so the
+checker can be the test for everything the grid writes later. Where the
+PDF and the checker differ, this table follows what the checker does,
+tested with norminette 3.3.59:
+
+| Norm rule | What it gives the grammar | Checker |
+| --- | --- | --- |
+| At most 5 function **definitions** per `.c` file; prototypes don't count | A module has 5 machine slots | `TOO_MANY_FUNCS` |
+| At most 4 named parameters; `void` if none | A machine has at most 4 input ports, all named | `TOO_MANY_ARGS`, `NO_ARGS_VOID` |
+| At most 5 variables per function, a local `static` included | Storage has at most 5 rows, and a local chest takes one of them | `TOO_MANY_VARS_FUNC` |
+| Declarations first, at function scope only (not inside an `if` or `while`), then one empty line | Storage is one block above the stations, never inside a branch | `VAR_DECL_START_FUNC`, `WRONG_SCOPE_VAR`, `NL_AFTER_VAR_DECL` |
+| One declaration per line, never initialised on it (except `static` and `const`) | A value is set by a station, not by its row, except a chest's starting value | `MULT_DECL_LINE`, `DECL_ASSIGN_LINE` |
+| At most 25 **physical lines** between the function's braces | The capacity bar counts lines, not stations. Declarations, the empty line after them, an inner block's braces, `else` and a statement wrapped onto two lines all use it up. | `TOO_MANY_LINES` |
+| One instruction or control structure per line, one assignment per line, none inside a condition | One station = one action. A condition only reads. | `TOO_MANY_INSTR`, `MULT_ASSIGN_LINE`, `ASSIGN_IN_CONTROL` |
+| A control structure's braces are optional around a single instruction | A branch with one station can be drawn without a block (and written without braces) | `MULT_IN_SINGLE_INSTR` |
+| No `for`, `switch`, `case`, `goto`, labels or `?:`. `do…while` is rejected too, though the checker catches it indirectly (as scope and indent errors, not as a forbidden structure). | Control flow is only `if` / `else if` / `else`, `while`, `return`, `break`, `continue` | `FORBIDDEN_CS`, `GOTO_FBIDDEN`, `LABEL_FBIDDEN`, `TERNARY_FBIDDEN` |
+| `return (x);`, with the parentheses | The shape a return station writes | `RETURN_PARENTHESIS` |
+| No variable-length arrays | Storage size is known up front | `VLA_FORBIDDEN` |
+| Structs, typedefs, enums and unions only in headers, at global scope, named `s_`, `t_`, `e_`, `u_` | Types live on one shelf per project, never in a machine or a `.c` file | `FORBIDDEN_STRUCT`, `FORBIDDEN_TYPEDEF`, `TYPE_NOT_GLOBAL`, `STRUCT_TYPE_NAMING` |
+| Globals only `static` or `const`, named `g_` | Every global is a chest owned by a file | `GLOBAL_VAR_NAMING`, `GLOBAL_VAR_DETECTED` (a warning) |
+| `#define` only for literal constants, uppercase, single line | Constants sit on the types shelf; no macro functions | `PREPROC_CONSTANT`, `MACRO_FUNC_FORBIDDEN`, `MACRO_NAME_CAPITAL` |
+
+The PDF marks some rules with (*): the checker can't check them (an unused
+header, a `#define` used to dodge the Norm, a comment justifying a bad
+function). The grammar doesn't depend on any of them.
+
+The rest of the Norm is layout: tabs, spaces, 80 columns, alignment, the 42
+header. It decides how the code is *written*, not its structure, so it has
+no picture. A grid that writes code has to follow it exactly, and the
+checker says whether it did.
 
 So a program is a small tree with fixed kinds of nodes at every level. The
 only open-ended part is expressions: the right side of `=`, the condition,
@@ -67,10 +88,10 @@ Each section below is one level. The columns are:
 | The function | ≤ 25 lines, a tab before its name | A machine: title (its name), storage, stations, memory floor | its frame is running, waiting, returned | ✅ | Palette: new machine |
 | Parameters | ≤ 4, named | Input ports on the left; parameter rows in storage | a call arrives | ✅ | Drag a belt end onto an empty port |
 | Return type | — | Not drawn: the parser reads it (`ret`) but `NodeInfo` doesn't carry it | a return | ⬜ | Pick from the types shelf |
-| Locals | ≤ 5, declared first | Storage rows (int, ptr, NULL, unset, dangling), struct fields folded under their row | a write lands (flash) | ✅ | Drop a row into storage |
+| Locals | ≤ 5 (a local `static` counts), declared first | Storage rows (int, ptr, NULL, unset, dangling), struct fields folded under their row | a write lands (flash) | ✅ | Drop a row into storage |
 | A local `static` | Can initialise on its line | A chest | written | ✅ | — |
 | `static` function | — | The word `static` in the title's meta line, in the skins that draw one (the kit's and a few others) | — | 🟡 not in every skin | Toggle |
-| Line capacity | 25 | Not shown | — | ⬜ | A fill bar: lines used of 25 |
+| Line capacity | 25 physical lines | Not shown | — | ⬜ | A fill bar: lines used of 25, counted the way the checker counts |
 | Recursion | — | One copy per level, stacked; a reserved slot for the next copy | a call to itself | ✅ | — |
 | Stale | — | Dimmed, keeps its place when the code stops parsing | a parse error | ✅ | — |
 
@@ -92,7 +113,7 @@ kinds:
 | The closing `}` | The end station | the function falls off its end | ✅ | — |
 
 Outside the Norm, the parser also handles `for` and `do…while` (the
-interpreter accepts them). They get no picture of their own and never will:
+interpreter accepts them; the Norm checker rejects both). They get no picture of their own and never will:
 the grammar only covers what the Norm allows.
 
 ### 5. Expression
@@ -155,7 +176,8 @@ Unbound ones are dimmed and never animated. ✅
 
 The 🟡 and ⬜ rows, in the order they matter for editing later:
 
-1. **Capacity** (module 5, machine 25 lines, ports 4, storage 5).
+1. **Capacity** (module 5 definitions, machine 25 physical lines, ports 4,
+   storage 5 including local statics).
 2. **Return type** drawn in the title (it's parsed already).
 3. **Argument vs return plates**: different in shape, not just in colour.
 4. **The types shelf** (structs, typedefs, enums, macro constants).

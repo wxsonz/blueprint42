@@ -20,3 +20,8 @@
   disk without the Save dialog.
 - **Open:** Whether expressions are typed as text inside a station
   (recommended) or built from blocks. See `docs/VISUALS.md`.
+- **Decision:** The grammar's Norm rules are checked against the checker
+  ([42school/norminette](https://github.com/42school/norminette); tested
+  with 3.3.59), not only the PDF. Each rule in `docs/VISUALS.md` names the
+  error code that enforces it. When the grid writes code, its output must
+  pass norminette, and the tests will run it (it is installed locally).
