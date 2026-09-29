@@ -3,10 +3,12 @@
 // adapter, else WebGL2; with neither, the skin draws on the canvas as before.
 //
 // A scene is two passes, the same in both backends:
-// 1. a full-screen fragment shader (fog, shapes, glows), reading one uniform
-//    block of vec4s the scene fills each frame;
-// 2. hairlines: line segments the scene computes on the CPU (x, y in CSS px,
-//    then r, g, b, a), added on top (additive, premultiplied).
+// 1. the backdrop, into an offscreen image: a full-screen fragment shader
+//    (`backdrop`: fog, glows) and hairlines the scene computes on the CPU
+//    (x, y in CSS px, then r, g, b, a; additive, premultiplied);
+// 2. the frame (`scene`), which can look anywhere in the backdrop with
+//    `backAt(p)`: what's behind a glass cube, bent, or reflected in it.
+// Both read one uniform block of vec4s the scene fills each frame.
 
 export interface GfxView {
   w: number; // CSS px
@@ -22,9 +24,11 @@ export interface GfxView {
 export interface GpuScene {
   id: string;
   vec4s: number; // the uniform block's size, in vec4s
-  // fragment shaders: WGSL `fn scene(p: vec2f) -> vec4f` and GLSL
-  // `vec4 scene(vec2 p)`, p in CSS px from the top left, reading `U.v[i]`
-  // (WGSL) / `v[i]` (GLSL); the result is premultiplied, opaque at the end
+  // fragment shaders: WGSL `fn backdrop(p: vec2f) -> vec4f` and
+  // `fn scene(p: vec2f) -> vec4f`, GLSL `vec4 backdrop(vec2 p)` and
+  // `vec4 scene(vec2 p)`; p in CSS px from the top left, reading `U.v[i]`
+  // (WGSL) / `v[i]` (GLSL); `scene` may call `backAt(p)` (the backdrop's
+  // colour at p, clamped to the edges); results opaque
   wgsl: string;
   glsl: string;
   // fill the uniforms for this frame; return the hairline vertices (pairs)
@@ -34,7 +38,7 @@ export interface GpuScene {
 type Backend = 'webgpu' | 'webgl2';
 
 // GPUBufferUsage flags (the constants aren't in TypeScript's DOM lib)
-const USE = { COPY_DST: 0x08, VERTEX: 0x20, UNIFORM: 0x40 };
+const USE = { COPY_DST: 0x08, TEXTURE_BINDING: 0x04, RENDER_ATTACHMENT: 0x10, VERTEX: 0x20, UNIFORM: 0x40 };
 
 export const LINE_WGSL = /* wgsl */ `
 struct LU { res: vec4f };
@@ -53,11 +57,17 @@ export const fullWgsl = (s: GpuScene) => /* wgsl */ `
 struct Uni { v: array<vec4f, ${s.vec4s}> };
 @group(0) @binding(0) var<uniform> U: Uni;
 @group(0) @binding(1) var<uniform> R: vec4f; // css w, h, dpr
+@group(0) @binding(2) var T: texture_2d<f32>; // the backdrop (pass 2 only)
+@group(0) @binding(3) var S: sampler;
 @vertex fn vs_full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   var q = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
   return vec4f(q[i], 0.0, 1.0);
 }
+fn backAt(p: vec2f) -> vec3f { return textureSampleLevel(T, S, p / R.xy, 0.0).rgb; }
 ${s.wgsl}
+@fragment fn fs_back(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  return vec4f(backdrop(fc.xy / R.z).rgb, 1.0);
+}
 @fragment fn fs_full(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let c = scene(fc.xy / R.z);
   // a half-step of noise: dark gradients don't band into rings at 8 bits
@@ -71,16 +81,18 @@ void main() {
   vec2 q = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   gl_Position = vec4(q, 0.0, 1.0);
 }`;
-const glFullFs = (s: GpuScene) => `#version 300 es
+const glFs = (s: GpuScene, pass: 'backdrop' | 'scene') => `#version 300 es
 precision highp float;
 layout(std140) uniform Uni { vec4 v[${s.vec4s}]; };
 uniform vec4 R; // css w, h, dpr, framebuffer height
+uniform sampler2D T; // the backdrop (pass 2 only)
 out vec4 outColor;
+vec3 backAt(vec2 p) { return textureLod(T, vec2(p.x / R.x, 1.0 - p.y / R.y), 0.0).rgb; }
 ${s.glsl}
 void main() {
   vec2 p = vec2(gl_FragCoord.x, R.w - gl_FragCoord.y) / R.z;
-  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-  outColor = vec4(scene(p).rgb + vec3(n / 255.0), 1.0);
+  ${pass === 'backdrop' ? 'outColor = vec4(backdrop(p).rgb, 1.0);' : `float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  outColor = vec4(scene(p).rgb + vec3(n / 255.0), 1.0);`}
 }`;
 const GL_LINE_VS = `#version 300 es
 layout(location = 0) in vec2 p;
@@ -105,7 +117,8 @@ interface GpuState {
   lineU: GPUBuffer;
   lineBind: GPUBindGroup;
   resU: GPUBuffer;
-  scenes: Map<string, { pipe: GPURenderPipeline; buf: GPUBuffer; bind: GPUBindGroup }>;
+  scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; tex: GPUTexture | null }>;
+  sampler: GPUSampler;
   verts: GPUBuffer | null;
   vertCap: number;
 }
@@ -116,7 +129,10 @@ interface GlState {
   lineR: WebGLUniformLocation | null;
   vao: WebGLVertexArrayObject;
   vbo: WebGLBuffer;
-  scenes: Map<string, { prog: WebGLProgram; ubo: WebGLBuffer; r: WebGLUniformLocation | null }>;
+  scenes: Map<string, { back: WebGLProgram; prog: WebGLProgram; ubo: WebGLBuffer; rBack: WebGLUniformLocation | null; r: WebGLUniformLocation | null; t: WebGLUniformLocation | null }>;
+  fbo: WebGLFramebuffer;
+  tex: WebGLTexture;
+  size: [number, number];
 }
 
 export class GfxLayer {
@@ -210,7 +226,8 @@ export class GfxLayer {
     const lineU = device.createBuffer({ size: 16, usage: USE.UNIFORM | USE.COPY_DST });
     const lineBind = device.createBindGroup({ layout: line.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: lineU } }] });
     const resU = device.createBuffer({ size: 16, usage: USE.UNIFORM | USE.COPY_DST });
-    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, scenes: new Map(), verts: null, vertCap: 0 };
+    const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, scenes: new Map(), sampler, verts: null, vertCap: 0 };
   }
 
   private setupGl(gl: WebGL2RenderingContext): void {
@@ -224,7 +241,7 @@ export class GfxLayer {
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8);
     gl.bindVertexArray(null);
-    this.glS = { gl, line, lineR: gl.getUniformLocation(line, 'R'), vao, vbo, scenes: new Map() };
+    this.glS = { gl, line, lineR: gl.getUniformLocation(line, 'R'), vao, vbo, scenes: new Map(), fbo: gl.createFramebuffer()!, tex: gl.createTexture()!, size: [0, 0] };
   }
 
   hide(): void {
@@ -243,7 +260,7 @@ export class GfxLayer {
     const verts = scene.frame(this.uni, view);
     let drawn = false;
     try {
-      drawn = this.gpu ? this.drawGpu(scene, view, verts) : this.drawGl(scene, view, verts, W, H);
+      drawn = this.gpu ? this.drawGpu(scene, view, verts, W, H) : this.drawGl(scene, view, verts, W, H);
     } catch (e) {
       this.failed = `${scene.id}: ${(e as Error).message}`;
       drawn = false;
@@ -254,7 +271,7 @@ export class GfxLayer {
     return drawn;
   }
 
-  private drawGpu(scene: GpuScene, view: GfxView, verts: Float32Array): boolean {
+  private drawGpu(scene: GpuScene, view: GfxView, verts: Float32Array, W: number, H: number): boolean {
     const G = this.gpu!;
     const { device } = G;
     let sc = G.scenes.get(scene.id);
@@ -266,16 +283,27 @@ export class GfxLayer {
         const err = ci.messages.find((m) => m.type === 'error');
         if (err && this.gpu?.device === device) this.fallBack(`WebGPU refused ${scene.id}'s shader (line ${err.lineNum}: ${err.message})`);
       });
-      const pipe = device.createRenderPipeline({
+      const pipeOf = (entry: string) => device.createRenderPipeline({
         layout: 'auto',
         vertex: { module: mod, entryPoint: 'vs_full' },
-        fragment: { module: mod, entryPoint: 'fs_full', targets: [{ format: G.format }] },
+        fragment: { module: mod, entryPoint: entry, targets: [{ format: G.format }] },
         primitive: { topology: 'triangle-list' },
       });
+      const back = pipeOf('fs_back');
+      const pipe = pipeOf('fs_full');
       const buf = device.createBuffer({ size: scene.vec4s * 16, usage: USE.UNIFORM | USE.COPY_DST });
-      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } }] });
-      sc = { pipe, buf, bind };
+      const backBind = device.createBindGroup({ layout: back.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } }] });
+      sc = { back, pipe, buf, backBind, bind: null, tex: null };
       G.scenes.set(scene.id, sc);
+    }
+    // the backdrop's image, as big as the canvas
+    if (!sc.tex || sc.tex.width !== W || sc.tex.height !== H) {
+      sc.tex?.destroy();
+      sc.tex = device.createTexture({ size: [W, H], format: G.format, usage: USE.TEXTURE_BINDING | USE.RENDER_ATTACHMENT });
+      sc.bind = device.createBindGroup({ layout: sc.pipe.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: sc.buf } }, { binding: 1, resource: { buffer: G.resU } },
+        { binding: 2, resource: sc.tex.createView() }, { binding: 3, resource: G.sampler },
+      ] });
     }
     const res = new Float32Array([view.w, view.h, view.dpr, 0]);
     device.queue.writeBuffer(sc.buf, 0, this.uni);
@@ -290,17 +318,24 @@ export class GfxLayer {
       device.queue.writeBuffer(G.verts, 0, verts);
     }
     const enc = device.createCommandEncoder();
-    const pass = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
-    pass.setPipeline(sc.pipe);
-    pass.setBindGroup(0, sc.bind);
-    pass.draw(3);
+    // 1. the backdrop and the hairlines, into its image
+    const a = enc.beginRenderPass({ colorAttachments: [{ view: sc.tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+    a.setPipeline(sc.back);
+    a.setBindGroup(0, sc.backBind);
+    a.draw(3);
     if (verts.length && G.verts) {
-      pass.setPipeline(G.line);
-      pass.setBindGroup(0, G.lineBind);
-      pass.setVertexBuffer(0, G.verts);
-      pass.draw(verts.length / 6);
+      a.setPipeline(G.line);
+      a.setBindGroup(0, G.lineBind);
+      a.setVertexBuffer(0, G.verts);
+      a.draw(verts.length / 6);
     }
-    pass.end();
+    a.end();
+    // 2. the frame, looking into it
+    const b = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+    b.setPipeline(sc.pipe);
+    b.setBindGroup(0, sc.bind!);
+    b.draw(3);
+    b.end();
     device.queue.submit([enc.finish()]);
     return true;
   }
@@ -310,21 +345,37 @@ export class GfxLayer {
     const { gl } = S;
     let sc = S.scenes.get(scene.id);
     if (!sc) {
-      const prog = program(gl, GL_FULL_VS, glFullFs(scene));
+      const back = program(gl, GL_FULL_VS, glFs(scene, 'backdrop'));
+      const prog = program(gl, GL_FULL_VS, glFs(scene, 'scene'));
       const ubo = gl.createBuffer()!;
       gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
       gl.bufferData(gl.UNIFORM_BUFFER, scene.vec4s * 16, gl.DYNAMIC_DRAW);
-      gl.uniformBlockBinding(prog, gl.getUniformBlockIndex(prog, 'Uni'), 0);
-      sc = { prog, ubo, r: gl.getUniformLocation(prog, 'R') };
+      for (const pr of [back, prog]) gl.uniformBlockBinding(pr, gl.getUniformBlockIndex(pr, 'Uni'), 0);
+      sc = { back, prog, ubo, rBack: gl.getUniformLocation(back, 'R'), r: gl.getUniformLocation(prog, 'R'), t: gl.getUniformLocation(prog, 'T') };
       S.scenes.set(scene.id, sc);
     }
+    // the backdrop's image, as big as the canvas
+    if (S.size[0] !== W || S.size[1] !== H) {
+      gl.bindTexture(gl.TEXTURE_2D, S.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, S.fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, S.tex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      S.size = [W, H];
+    }
     gl.viewport(0, 0, W, H);
-    gl.disable(gl.BLEND);
-    gl.useProgram(sc.prog);
     gl.bindBuffer(gl.UNIFORM_BUFFER, sc.ubo);
     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, this.uni);
     gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sc.ubo);
-    gl.uniform4f(sc.r, view.w, view.h, view.dpr, H);
+    // 1. the backdrop and the hairlines, into its image
+    gl.bindFramebuffer(gl.FRAMEBUFFER, S.fbo);
+    gl.disable(gl.BLEND);
+    gl.useProgram(sc.back);
+    gl.uniform4f(sc.rBack, view.w, view.h, view.dpr, H);
     gl.bindVertexArray(null);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (verts.length) {
@@ -337,7 +388,16 @@ export class GfxLayer {
       gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STREAM_DRAW);
       gl.drawArrays(gl.LINES, 0, verts.length / 6);
       gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
     }
+    // 2. the frame, looking into it
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.useProgram(sc.prog);
+    gl.uniform4f(sc.r, view.w, view.h, view.dpr, H);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, S.tex);
+    gl.uniform1i(sc.t, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
   }
 }

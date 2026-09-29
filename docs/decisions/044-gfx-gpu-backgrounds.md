@@ -13,7 +13,9 @@
   default is Full, or Simple when the browser asks for reduced motion or has
   no GPU.
 - **How:** `src/gfx/layer.ts` puts its own canvas under the grid's, which is
-  then drawn clear. WebGPU when the browser gives an adapter, else WebGL2;
+  then drawn clear. A scene is two passes: its backdrop (and the hairlines)
+  into an offscreen image, then the frame, which can look anywhere in that
+  image (`backAt`). WebGPU when the browser gives an adapter, else WebGL2;
   if the WebGPU device is lost or rejects a shader, it falls back to WebGL2
   on a fresh canvas (a canvas that had a WebGPU context can't give a WebGL
   one). A scene (`src/gfx/scenes/`) is one full-screen fragment shader
@@ -29,14 +31,18 @@
   1.4 ms); the GPU scene costs about 0.2–0.4 ms of CPU a frame. Checked:
   the WGSL compiles and draws the same picture as the WebGL2 path, through
   wgpu-native on the RTX 4060 (headless Chromium here has no WebGPU device).
-- **Cubes (author):** clear glass. They show what is really behind them
-  (the fog, the space), bent going in and coming out at 1.5, with a faint
-  Fresnel reflection of a dim sky, a small highlight and thin edges. Nothing
-  is baked in: the boot screen's glass shows its towers only because the
-  towers are there. Readings tried first and dropped: tinted glass, solid
-  frosted blocks, a baked room of blocks. Simple mode and the canvas
-  fallback keep the old look. The output is dithered by half a step, so the
-  dark fog doesn't band.
+- **Cubes (author): clear glass in a real 3D space.** The fog, the light
+  heads and the trails are a wall just behind the cubes; each cube has a
+  depth (the one its parallax already used). A pixel's ray is traced into
+  the nearest cube, bent going in (glass 1.5), bounced inside when it meets
+  a face too steeply (total internal reflection, up to three times), bent
+  coming out, and followed on to another cube or the wall. The reflected ray
+  is followed the same way, weighted by Fresnel. So the glass shows what is
+  really around it: the fog and trails bent, the other cubes, and dark where
+  it looks out into dark space. One bounce between cubes: a cube seen in
+  another is plain glass. Readings tried first and dropped: tinted glass,
+  solid frosted blocks, a baked room of blocks. Simple mode and the canvas
+  fallback keep the old look. The output is dithered by half a step.
 - **Beside the button (author):** what draws the background (`WebGPU`,
   `WebGL2`, `canvas`, `still`, `off`) and a live readout, `fps · ms`: the
   background's frames a second and the CPU time of one frame (the GPU's own
