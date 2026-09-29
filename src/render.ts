@@ -622,13 +622,13 @@ export class GridView {
       g.save();
       if (focus) g.globalAlpha = 0.55;
       if (owner?.id !== topId && !focused && !travelling) g.globalAlpha *= 0.4;
-      if (!live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]);
+      if (!live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]); // the skin draws it pointing right
       else if (!b) {
         // points at something not drawn here (heap, a collapsed module, off
         // screen): a short stub with its arrow, so it still reads as a pointer
         const L = this.cs * 0.9;
         const pts: Pt[] = [];
-        for (let i = 0; i <= 8; i++) pts.push([a.right + (L * i) / 8, a.y]);
+        for (let i = 0; i <= 8; i++) pts.push([a.left - (L * i) / 8, a.y]);
         skin.wire(dc, pts, true);
       } else {
         const inNew = newFrame !== null && st.find((f) => f.id === newFrame)?.cells.some((x) => x.id === c.id);
@@ -1052,9 +1052,11 @@ export class GridView {
     for (const [key, m] of mem) {
       const from = slotAt.get(key);
       if (!from || !m.len) continue;
-      const to: Pt = [m.r.x + 12 * z, m.r.y];
+      // out of the row's left side, into the strip's left end (as every pointer line)
+      const start: Pt = [X, from[1]];
+      const to: Pt = [m.r.x, m.r.y + m.r.h / 2];
       const out = Math.max(cs * 0.7, 14 * z);
-      const c: [Pt, Pt, Pt, Pt] = [from, [from[0] + out, from[1]], [to[0], to[1] - out], to];
+      const c: [Pt, Pt, Pt, Pt] = [start, [Math.min(start[0], to[0]) - out, start[1]], [Math.min(start[0], to[0]) - out, to[1]], to];
       const pts: Pt[] = [];
       for (let i = 0; i <= 32; i++) pts.push(bez(c, i / 32));
       g.save();
@@ -1117,21 +1119,18 @@ export class GridView {
     });
   }
 
+  // A pointer's line leaves its row on the left and plugs into its target's
+  // row on the left too, bulging out past whichever is further left (the
+  // author's design: storage rows are read from the left, and the lines keep
+  // clear of the values on the right).
   private wireCurve(a: Anchor, b: Anchor): [Pt, Pt, Pt, Pt] {
     const cs = this.cs;
-    const ax = (a.left + a.right) / 2;
-    const bx = (b.left + b.right) / 2;
-    if (Math.abs(ax - bx) < 4) {
-      const p0: Pt = [a.right, a.y];
-      const p3: Pt = [b.right, b.y];
-      const bulge = cs * 0.9;
-      return [p0, [p0[0] + bulge, p0[1]], [p3[0] + bulge, p3[1]], p3];
-    }
-    const p0: Pt = bx > ax ? [a.right, a.y] : [a.left, a.y];
-    const p3: Pt = bx > ax ? [b.left, b.y] : [b.right, b.y];
+    const p0: Pt = [a.left, a.y];
+    const p3: Pt = [b.left, b.y];
     const dist = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
-    const sag = Math.min(cs * 1.6, dist * 0.28);
-    const dx = (p3[0] - p0[0]) * 0.3;
-    return [p0, [p0[0] + dx, p0[1] + sag], [p3[0] - dx, p3[1] + sag], p3];
+    const out = Math.min(cs * 2.4, Math.max(cs * 0.8, dist * 0.3));
+    const x = Math.min(p0[0], p3[0]) - out;
+    return [p0, [x, p0[1]], [x, p3[1]], p3];
   }
+
 }
