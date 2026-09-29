@@ -4,7 +4,9 @@
 // with its own Makefile when it has one. Nothing here touches the author's
 // folder; see project.mjs for that.
 import { spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { constants as fsc } from 'node:fs';
+import { access, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,7 +121,10 @@ function validBinding(s) {
   return s.markers === undefined || (Array.isArray(s.markers) && s.markers.length <= 16 && s.markers.every((m) => m && safeExpr(m.expr) && typeof m.label === 'string' && m.label.length <= 40));
 }
 
-export async function handleTrace(req) {
+// Validate a request and build its program in a fresh temp dir: the part a
+// one-shot trace and a session share. Returns { ok: false, … } or the dir
+// and the tracer's config.
+async function prepare(req) {
   const { src, project, files = {}, defines = [], stdin = '', args = [], fns = [], bindings = [], maxSteps = 20000, maxSeconds = 20, terminal = true, window = null, overview = false } = req ?? {};
   if (project !== undefined) {
     const pf = project?.files;
@@ -145,7 +150,7 @@ export async function handleTrace(req) {
         await writeFile(join(src, p), text);
       }
       const b = await buildProject(src, Object.keys(project.files), defines);
-      if (!b.ok) return b;
+      if (!b.ok) return (await rm(dir, { recursive: true, force: true }), b);
       prog = b.prog;
       flags = b.flags;
     } else {
@@ -154,6 +159,7 @@ export async function handleTrace(req) {
       flags = [...FLAGS, ...defines.map((d) => `-D${d}`)];
       const cc = await run('cc', [...flags, SRC, '-o', 'prog'], { cwd: dir, timeout: 20000 });
       if (cc.code !== 0) {
+        await rm(dir, { recursive: true, force: true });
         return { ok: false, compile: { flags, text: cc.err.slice(0, OUT_CAP), diagnostics: parseDiagnostics(cc.err) } };
       }
     }
@@ -169,6 +175,19 @@ export async function handleTrace(req) {
       window: window && Number.isInteger(window.from) && window.from >= 0 ? { from: window.from, to: Number.isInteger(window.to) ? window.to : null } : null,
       overview: overview === true,
     };
+    const bindingScopes = Object.fromEntries(bindings.filter((s) => s.binding).map((s) => [s.id, { scope: s.binding.scope, fn: s.binding.fn, file: s.binding.file }]));
+    return { ok: true, dir, cfg, prog, flags, args, bindingScopes };
+  } catch (e) {
+    await rm(dir, { recursive: true, force: true });
+    throw e;
+  }
+}
+
+export async function handleTrace(req) {
+  const p = await prepare(req);
+  if (!p.ok) return p;
+  const { dir, cfg, prog, flags, args, bindingScopes } = p;
+  try {
     await writeFile(join(dir, 'cfg.json'), JSON.stringify(cfg));
     const started = Date.now();
     // The program runs from its project's folder, so relative paths it opens resolve there.
@@ -185,11 +204,145 @@ export async function handleTrace(req) {
     }
     if (trace.error && (!trace.stops || trace.stops.length === 0)) return { ok: false, error: trace.error, gdb: gdb.err.slice(-4000) };
     const read = async (n) => (await readFile(join(dir, n), 'utf8').catch(() => '')).slice(0, OUT_CAP);
-    const bindingScopes = Object.fromEntries(bindings.filter((s) => s.binding).map((s) => [s.id, { scope: s.binding.scope, fn: s.binding.fn, file: s.binding.file }]));
     return { ok: true, flags, ms: Date.now() - started, ...trace, bindingScopes, args, stdout: await read('out.txt'), stderr: await read('err.txt') };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+// ---------------- sessions: one live run, windows of it on request ----------------
+// The page opens a session per program; the tracer keeps gdb and the stopped
+// program alive (with savepoints, see tracer.py's serve mode) and answers
+// window requests. Commands and replies go through two named pipes in the
+// session's temp dir. Idle sessions are closed; at most SESSION_MAX live.
+const sessions = new Map();
+const SESSION_IDLE_MS = 10 * 60 * 1000;
+const SESSION_MAX = 4;
+
+async function mkfifo(path) {
+  const r = await run('mkfifo', ['-m', '600', path], { timeout: 5000 });
+  if (r.code !== 0) throw new Error(`mkfifo: ${r.err}`);
+}
+
+// Write to a named pipe without ever blocking a worker thread on open: a
+// pipe with no reader yet fails with ENXIO, so retry until the reader is
+// there, the session dies, or the time runs out.
+async function writeFifo(path, text, sess, ms = 10000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    let fh;
+    try {
+      fh = await open(path, fsc.O_WRONLY | fsc.O_NONBLOCK);
+    } catch (e) {
+      if (e.code !== 'ENXIO' || (sess && sess.dead) || Date.now() > until) return false;
+      await new Promise((r) => setTimeout(r, 15));
+      continue;
+    }
+    try {
+      await fh.write(text);
+      return true;
+    } finally {
+      await fh.close();
+    }
+  }
+}
+
+// A reply from the tracer, or '' if gdb went away (its exit unblocks the read).
+async function reply(sess) {
+  return (await readFile(sess.resp, 'utf8').catch(() => '')).trim();
+}
+
+function ask(sess, cmd) {
+  const job = sess.queue.then(async () => {
+    if (sess.dead) return '';
+    if (!(await writeFifo(sess.cmd, JSON.stringify(cmd) + '\n', sess))) return '';
+    return reply(sess);
+  });
+  sess.queue = job.catch(() => '');
+  sess.last = Date.now();
+  return job;
+}
+
+async function closeSession(id) {
+  const sess = sessions.get(id);
+  if (!sess) return;
+  sessions.delete(id);
+  if (!sess.dead) {
+    await writeFifo(sess.cmd, JSON.stringify({ cmd: 'quit' }) + '\n', sess, 1000);
+    setTimeout(() => sess.proc.kill('SIGKILL'), 2000).unref();
+  }
+  setTimeout(() => rm(sess.dir, { recursive: true, force: true }).catch(() => {}), 3000).unref();
+}
+
+setInterval(() => {
+  for (const [id, sess] of sessions) if (Date.now() - sess.last > SESSION_IDLE_MS) void closeSession(id);
+}, 60000).unref();
+process.on('exit', () => {
+  for (const sess of sessions.values()) sess.proc.kill('SIGKILL');
+});
+
+export async function openSession(req) {
+  const p = await prepare(req);
+  if (!p.ok) return p;
+  const { dir, cfg, prog, flags, args, bindingScopes } = p;
+  while (sessions.size >= SESSION_MAX) {
+    const oldest = [...sessions.entries()].sort((a, b) => a[1].last - b[1].last)[0][0];
+    await closeSession(oldest);
+  }
+  const sess = { id: randomUUID(), dir, cmd: join(dir, 'cmd.fifo'), resp: join(dir, 'resp.fifo'), queue: Promise.resolve(''), last: Date.now(), dead: false, flags, args, bindingScopes, n: 0 };
+  await mkfifo(sess.cmd);
+  await mkfifo(sess.resp);
+  cfg.serve = { cmd: sess.cmd, resp: sess.resp };
+  cfg.max_seconds = 120;
+  await writeFile(join(dir, 'cfg.json'), JSON.stringify(cfg));
+  sess.proc = spawn('gdb', ['-nx', '-batch', '-q', '-x', TRACER, `./${prog}`], {
+    cwd: cfg.root,
+    env: { ...process.env, FTB_CFG: join(dir, 'cfg.json'), DEBUGINFOD_URLS: '' },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  sess.err = '';
+  sess.proc.stderr.on('data', (d) => (sess.err = (sess.err + d).slice(-4000)));
+  sess.proc.on('exit', () => {
+    sess.dead = true;
+    // unblock a read waiting for a reply that will never come
+    void writeFifo(sess.resp, '', null, 200);
+  });
+  let ready;
+  try {
+    ready = JSON.parse((await reply(sess)) || '{}');
+  } catch {
+    ready = {};
+  }
+  if (!ready.ok) {
+    sess.proc.kill('SIGKILL');
+    await rm(dir, { recursive: true, force: true });
+    return { ok: false, error: ready.error ?? 'gdb could not start the program', gdb: sess.err };
+  }
+  sessions.set(sess.id, sess);
+  return { ok: true, id: sess.id, flags };
+}
+
+export async function sessionWindow(b) {
+  const sess = sessions.get(b?.id);
+  if (!sess) return { ok: false, error: 'no such session (it closed; open it again)', gone: true };
+  const from = Math.max(0, Number(b.from) || 0);
+  const to = Number.isInteger(b.to) ? b.to : null;
+  const out = join(sess.dir, `w${sess.n++}.json`);
+  const started = Date.now();
+  const r = await ask(sess, { cmd: 'window', from, to, maxSteps: Math.min(Math.max(1, Number(b.maxSteps) || 20000), 100000), maxSeconds: Math.min(Math.max(1, Number(b.maxSeconds) || 20), 120), out });
+  if (r !== 'ok') return { ok: false, error: r ? (JSON.parse(r).error ?? r) : 'gdb went away', gdb: sess.err, gone: sess.dead };
+  const text = await readFile(out, 'utf8');
+  await rm(out, { force: true });
+  const trace = JSON.parse(text);
+  if (trace.error && !trace.stops?.length) return { ok: false, error: trace.error };
+  return { ok: true, ms: Date.now() - started, bytes: text.length, flags: sess.flags, args: sess.args, bindingScopes: sess.bindingScopes, ...trace };
+}
+
+export async function sessionStats(b) {
+  const sess = sessions.get(b?.id);
+  if (!sess) return { ok: false, gone: true };
+  const r = await ask(sess, { cmd: 'stats' });
+  return r ? { ok: true, ...JSON.parse(r) } : { ok: false, gone: sess.dead };
 }
 
 // Only same-origin requests with our header get through: a page on another
@@ -208,6 +361,10 @@ function allowed(req) {
 export function traceMiddleware(opts = {}) {
   const routes = {
     '/api/trace': (b) => handleTrace(b),
+    '/api/trace/open': (b) => openSession(b),
+    '/api/trace/window': (b) => sessionWindow(b),
+    '/api/trace/stats': (b) => sessionStats(b),
+    '/api/trace/close': async (b) => (await closeSession(b?.id), { ok: true }),
     '/api/fs/initial': async () => ({ ok: true, path: opts.initial ?? null }),
     '/api/fs/list': async (b) => ({ ok: true, ...(await listDir(b.dir)) }),
     '/api/fs/open': async (b) => ({ ok: true, ...(await openProject(b.dir)) }),

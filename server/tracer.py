@@ -29,7 +29,7 @@ for cmd in (
     # one return breakpoint per live frame: leave them in memory between steps
     # instead of inserting and removing all of them every time (gdb still
     # shows the original bytes underneath)
-    "set breakpoint always-inserted on",
+    *(() if CFG.get("serve") else ("set breakpoint always-inserted on",)),
 ):
     try:
         gdb.execute(cmd, to_string=True)
@@ -443,10 +443,14 @@ def bound_delta(bound):
 
 # ---------------- breakpoints: returns and the heap ----------------
 
+ret_bps = []  # live Ret breakpoints (a new window deletes the last one's)
+
+
 class Ret(gdb.FinishBreakpoint):
     def __init__(self, frame, fid):
         super().__init__(frame, internal=True)
         self.fid = fid
+        ret_bps.append(self)
 
     def stop(self):
         try:
@@ -518,7 +522,7 @@ class Alloc(gdb.Breakpoint):
 
 def collect_alloc():
     w = alloc_wait.pop()
-    gdb.execute("finish", to_string=True)
+    run_cmd("finish") if CFG.get("serve") else gdb.execute("finish", to_string=True)
     try:
         addr = int(gdb.parse_and_eval("$rax"))
     except Exception:
@@ -629,6 +633,7 @@ class Write(gdb.Breakpoint):
         ev = {"k": "out", "fd": fd, "n": n, "text": (raw or b"").decode("utf-8", "replace"), "via": "write" if caller is not None else "printf"}
         if fd == 1:
             out_total[0] += n
+            out_log.append((step_no[0], ev["text"]))
         if caller is not None:
             ev["line"], ev["file"] = caller_line(caller), frame_file(caller)
         pending.append(ev)
@@ -669,6 +674,7 @@ W_TO = int(W_TO) if W_TO is not None else None
 FP_EVERY = 1000
 fingerprints = []  # every FP_EVERY steps: where the run was, and how much it had printed
 out_total = [0]  # bytes written to stdout so far, whole run
+out_log = []  # [(step, text)]: every stdout write, in order
 out_before = {"text": [], "n": 0}  # stdout before the window (kept, up to a limit)
 pre_mode = [False]  # the window's first stop: its frames and blocks already existed
 
@@ -933,28 +939,33 @@ def record_stop():
     pending.clear()
 
 
-def main():
+RUN_CMD = [None]  # how the program was started (serve mode may start it again)
+
+
+def setup(result):
+    """Start the program at main with the breakpoints in place. False (with
+    result["error"] set) when it can't be traced."""
     global X86_64
-    result = {"stops": stops, "truncated": False, "exit": None, "signal": None, "error": None, "outMode": "terminal" if TERMINAL else "pipe"}
     try:
         gdb.execute("break main", to_string=True)
         args = " ".join(shlex.quote(a) for a in CFG.get("args", []))
         q = shlex.quote
         out = open_terminal() if TERMINAL else CFG["stdout"]
-        gdb.execute(f"run {args} < {q(CFG['stdin'])} > {q(out)} 2> {q(CFG['stderr'])}", to_string=True)
+        RUN_CMD[0] = f"run {args} < {q(CFG['stdin'])} > {q(out)} 2> {q(CFG['stderr'])}"
+        gdb.execute(RUN_CMD[0], to_string=True)
     except gdb.error as e:
         result["error"] = str(e)
-        return result
+        return False
     if not alive():
         result["error"] = "the program exited before reaching main"
-        return result
+        return False
     try:
         has_lines = gdb.selected_frame().find_sal().symtab is not None
     except gdb.error:
         has_lines = False
     if not has_lines:
         result["error"] = "main has no debug info: was it built with -g? (a Makefile that calls cc directly instead of $(CC) drops it)"
-        return result
+        return False
     for spec in ("malloc", "calloc", "realloc"):
         Alloc(spec)
     Free()
@@ -964,6 +975,13 @@ def main():
         X86_64 = False
     Write()
     collect_statics()
+    return True
+
+
+def main():
+    result = {"stops": stops, "truncated": False, "exit": None, "signal": None, "error": None, "outMode": "terminal" if TERMINAL else "pipe"}
+    if not setup(result):
+        return result
 
     # Step k is the k-th time round this loop, the same in every mode, so a
     # window [from, to] is exactly those steps of this run. Before `from` the
@@ -1031,12 +1049,366 @@ def main():
             if gone["id"] not in returned:
                 pending.append({"k": "ret", "id": gone["id"], "value": None})
         heap_blocks, heap_ids = heap_now()
-        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_blocks, "heapIds": heap_ids,
+        stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_blocks, "heapIds": heap_ids, "stack": [],
                       "bound": bound_delta({sid: {"bound": False} for sid in (b["id"] for b in BINDINGS)}), "exited": True})
         pending.clear()
     result["exit"] = state["exit"]
     return result
 
+
+# ---------------- serve mode: one run, windows on request ----------------
+# The trace server keeps this gdb open while the page shows the program.
+# Commands come one per line through a named pipe; a window's result goes to
+# a file and "ok" goes back through another pipe. Every CK_EVERY steps the
+# run leaves a savepoint (gdb's checkpoint: a forked copy of the stopped
+# program, plus the tracer's own state at that step), placed as the run goes.
+# A window starts from the nearest savepoint at or before it (or from where
+# the program already is), so reaching step 100,000 costs at most CK_EVERY
+# silent steps. Restoring one uses it up, so it is saved again at once.
+
+CK_EVERY = int(CFG.get("checkpoint_every", 20000))
+CK_MAX = int(CFG.get("checkpoint_max", 100))
+ck = {}  # step -> {"id": gdb checkpoint id, "py": tracer state}
+sess = {"k": 0, "active": 0, "total": None, "exit": None, "signal": None}
+
+
+def py_state():
+    return {"heap": {a: dict(b) for a, b in heap.items()}, "next_block": next_block[0], "out_total": out_total[0], "out_len": len(out_log)}
+
+
+def checkpoint_ids(active=False):
+    """gdb's checkpoint ids (or, with active, the running one's id)."""
+    ids = []
+    try:
+        text = gdb.execute("info checkpoints", to_string=True)
+    except gdb.error:
+        return None if active else []
+    for line in text.splitlines():
+        m = re.match(r"^(\*)?\s*(\d+)\s", line)
+        if m:
+            if active and m.group(1):
+                return int(m.group(2))
+            ids.append(int(m.group(2)))
+    return None if active else ids
+
+
+def reinsert_breakpoints():
+    # A checkpoint is forked with gdb's breakpoints taken out of its memory;
+    # with always-inserted on, gdb would not put them back after a restart
+    # (heap and output breakpoints would miss hits). Toggling re-inserts them.
+    if not CFG.get("serve"):
+        gdb.execute("set breakpoint always-inserted off", to_string=True)
+        gdb.execute("set breakpoint always-inserted on", to_string=True)
+
+
+def adopt(step):
+    """Make savepoint `step` the running program: its tracer state back, and
+    a fresh copy saved (running it uses it up)."""
+    c = ck.pop(step)
+    sess["active"] = c["id"]
+    reinsert_breakpoints()
+    p = c["py"]
+    heap.clear()
+    heap.update({a: dict(b) for a, b in p["heap"].items()})
+    next_block[0] = p["next_block"]
+    out_total[0] = p["out_total"]
+    del out_log[p["out_len"]:]
+    state["exit"] = state["signal"] = None
+    sess["exit"] = sess["signal"] = None
+    seen_hits.clear()
+    alloc_wait.clear()
+    pending.clear()
+    sess["k"] = step
+    save_checkpoint(step)
+
+
+def after_exit():
+    """When the running program exits, gdb switches to another checkpoint by
+    itself, and may carry on the stepping command that was running (a
+    `finish`) on it: that savepoint is no longer at its step. Drop it; if
+    gdb can't say which one it picked, drop them all (the run is started
+    again when needed). Slower, never wrong."""
+    active = checkpoint_ids(active=True)
+    if active is None:
+        ck.clear()
+        return
+    for step, c in list(ck.items()):
+        if c["id"] == active:
+            del ck[step]
+
+
+def rerun():
+    """Start the program again from main (no usable savepoint left)."""
+    try:
+        gdb.execute("kill inferiors 1", to_string=True)
+    except gdb.error:
+        pass
+    ck.clear()
+    heap.clear()
+    next_block[0] = 1
+    out_total[0] = 0
+    del out_log[:]
+    state["exit"] = state["signal"] = None
+    sess["exit"] = sess["signal"] = None
+    seen_hits.clear()
+    alloc_wait.clear()
+    pending.clear()
+    gdb.execute(RUN_CMD[0], to_string=True)
+    sess["k"] = 0
+    sess["active"] = checkpoint_ids(active=True) or 0
+    save_checkpoint(0)
+
+
+def save_checkpoint(k):
+    if k in ck or len(ck) >= CK_MAX or not alive():
+        return
+    before = set(checkpoint_ids())
+    gdb.execute("checkpoint", to_string=True)
+    active = checkpoint_ids(active=True)
+    new = [i for i in checkpoint_ids() if i not in before and i != active]
+    if new:
+        ck[k] = {"id": max(new), "py": py_state()}
+
+
+def goto_checkpoint(k):
+    """Restore savepoint k. False if gdb no longer has it."""
+    c = ck[k]
+    left = sess["active"]
+    try:
+        gdb.execute(f"restart {c['id']}", to_string=True)
+    except gdb.error:
+        del ck[k]
+        return False
+    if left not in (x["id"] for x in ck.values()):
+        try:
+            gdb.execute(f"delete checkpoint {left}", to_string=True)
+        except gdb.error:
+            pass  # it had already exited
+    adopt(k)
+    return True
+
+
+def reset_recording():
+    global frames
+    for b in ret_bps:
+        try:
+            b.delete()
+        except Exception:
+            pass
+    ret_bps.clear()
+    frames = []
+    for d in (frame_cache, last_sent, cache, returned, local_kinds, previous_lines):
+        d.clear()
+    seen_frames.clear()
+    defined_locals.clear()
+    last_buf[0] = None
+    last_top[0] = None
+    stops.clear()
+    pending.clear()
+
+
+def ended():
+    return state["exit"] is not None or state["signal"] is not None or not alive()
+
+
+def run_cmd(cmd):
+    """Run a stepping command. With savepoints around, a program that exits
+    makes gdb switch to one of them silently (no exit event): notice it by
+    the process id changing, or by gdb saying so, and record the exit."""
+    pid = INF().pid
+    try:
+        text = gdb.execute(cmd, to_string=True)
+    except gdb.error:
+        raise
+    finally:
+        if state["exit"] is None and (INF().pid != pid or "exited" in (locals().get("text") or "")):
+            try:
+                code = gdb.parse_and_eval("$_exitcode")
+                state["exit"] = int(code) if code.type.code != gdb.TYPE_CODE_VOID else 0
+            except (gdb.error, ValueError):
+                state["exit"] = 0
+            sess["switched"] = INF().pid != pid
+    return text
+
+
+def advance():
+    """One step, as the one-shot loop takes it. False when the run is over
+    (judged by gdb's exit event: after an exit gdb may already have switched
+    to a savepoint, which is alive but is not this run)."""
+    try:
+        run_cmd("step")
+        while alloc_wait and not ended():
+            collect_alloc()
+            if ended():
+                break
+            run_cmd("step")
+    except gdb.error:
+        return False
+    if ended():
+        return False
+    try:
+        if gdb.newest_frame().find_sal().symtab is None:
+            run_cmd("finish")
+    except gdb.error:
+        pass
+    return not ended()
+
+
+def window(frm, to, max_steps, seconds):
+    global DEADLINE
+    DEADLINE = time.monotonic() + seconds
+    t0 = time.monotonic()
+    res = {"outMode": "terminal" if TERMINAL else "pipe", "error": None}
+    if sess["total"] is not None and frm > sess["total"]:
+        frm = sess["total"]
+    # the last window's return breakpoints belong to frames of the run as it
+    # was then: gone before anything runs, restored or not
+    reset_recording()
+    done = sess["exit"] is not None or sess["signal"] is not None or ended()
+    start = "here"
+    while True:
+        best = max((s for s in ck if s <= frm), default=None)
+        if not (done or sess["k"] > frm or (best is not None and best > sess["k"])):
+            break
+        if best is None:
+            rerun()  # nothing to start from: from main again
+            start = "rerun"
+            break
+        if goto_checkpoint(best):
+            start = best
+            break
+    k = sess["k"]
+    silent0 = k
+    live = not ended()
+    while live and k < frm:
+        if k % CK_EVERY == 0:
+            save_checkpoint(k)
+        step_no[0] = k
+        pending.clear()
+        if time.monotonic() > DEADLINE:
+            break
+        live = advance()
+        k += 1
+    t1 = time.monotonic()
+    silent = k - silent0
+    reset_recording()
+    res["truncated"] = False
+    if k < frm:
+        res["truncated"] = live
+    else:
+        pre_mode[0] = frm > 0
+        for addr, b in sorted(heap.items(), key=lambda kv: kv[1]["id"]):
+            if frm > 0:
+                pending.append({"k": "alloc", "id": b["id"], "addr": addr, "size": b["size"], "line": b["line"], "file": b.get("file"), "pre": True})
+        recorded = 0
+        while live:
+            if k % CK_EVERY == 0:
+                save_checkpoint(k)
+            step_no[0] = k
+            record_stop()
+            recorded += 1
+            if (to is not None and k >= to) or recorded >= max_steps or time.monotonic() > DEADLINE:
+                res["truncated"] = True
+                break
+            live = advance()
+            k += 1
+        if not live:
+            if state["signal"]:
+                res["signal"] = state["signal"]
+                record_stop()
+            else:
+                for gone in reversed(frames):
+                    if gone["id"] not in returned:
+                        pending.append({"k": "ret", "id": gone["id"], "value": None})
+                heap_blocks, heap_ids = heap_now()
+                stops.append({"line": None, "events": pending[:], "frames": [], "statics": [], "heap": heap_blocks, "heapIds": heap_ids, "stack": [], "bound": {}, "exited": True})
+                pending.clear()
+    exit_code, sig = state["exit"], state["signal"]
+    sess["k"] = k
+    if not live:
+        sess["total"] = k
+        sess["exit"], sess["signal"] = exit_code, sig
+        after_exit()  # gdb may have switched to a savepoint: that's where we are now
+    res.update({
+        "stops": stops[:], "exit": exit_code, "signal": sig or res.get("signal"),
+        "window": {"from": frm, "to": k}, "steps": k,
+        "outBefore": "".join(t for s, t in out_log if s < frm),
+        "stdout": "".join(t for _s, t in out_log),
+        "stats": {
+            "start": start, "silentSteps": silent, "silentMs": round((t1 - t0) * 1000),
+            "recordMs": round((time.monotonic() - t1) * 1000), "recorded": len(stops),
+            "savepoints": sorted(ck), "every": CK_EVERY, "total": sess["total"],
+        },
+    })
+    return res
+
+
+def savepoint_sizes():
+    """Each savepoint's real memory (PSS: pages it doesn't share), in KB."""
+    out = {}
+    lines = gdb.execute("info checkpoints", to_string=True).splitlines()
+    pid_of = {}
+    for line in lines:
+        m = re.match(r"^\*?\s*(\d+)\s+\S+\s+process (\d+)", line)
+        if m:
+            pid_of[int(m.group(1))] = int(m.group(2))
+    for step, c in ck.items():
+        pid = pid_of.get(c["id"])
+        try:
+            with open(f"/proc/{pid}/smaps_rollup") as fh:
+                pss = next((int(l.split()[1]) for l in fh if l.startswith("Pss:")), None)
+        except (OSError, TypeError):
+            pss = None
+        out[str(step)] = pss
+    return out
+
+
+def serve():
+    ready = {"outMode": "terminal" if TERMINAL else "pipe", "error": None}
+    ok = setup(ready)
+    if ok:
+        save_checkpoint(0)
+    reply(json.dumps({"ok": ok, "error": ready["error"]}))
+    while True:
+        with open(CFG["serve"]["cmd"]) as fh:
+            line = fh.readline()
+        if not line:
+            continue
+        try:
+            cmd = json.loads(line)
+        except ValueError:
+            continue
+        if cmd.get("cmd") == "quit":
+            break
+        try:
+            if cmd.get("cmd") == "window":
+                res = window(int(cmd["from"]), cmd.get("to"), int(cmd.get("maxSteps", 20000)), float(cmd.get("maxSeconds", 20)))
+                with open(cmd["out"], "w") as fh:
+                    json.dump(res, fh)
+                reply("ok")
+            elif cmd.get("cmd") == "stats":
+                reply(json.dumps({"at": sess["k"], "total": sess["total"], "savepoints": sorted(ck), "every": CK_EVERY, "kb": savepoint_sizes()}))
+            else:
+                reply(json.dumps({"error": "unknown command"}))
+        except Exception as e:  # keep serving: one bad window must not end the session
+            reply(json.dumps({"error": f"tracer: {e!r}"}))
+
+
+def reply(text):
+    with open(CFG["serve"]["resp"], "w") as fh:
+        fh.write(text + "\n")
+
+
+if CFG.get("serve"):
+    try:
+        serve()
+    finally:
+        try:
+            gdb.execute("kill inferiors 1", to_string=True)
+        except gdb.error:
+            pass
+        close_terminal()
+        gdb.execute("quit", to_string=True)
 
 try:
     RESULT = main()
