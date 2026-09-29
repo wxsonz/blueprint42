@@ -5,7 +5,43 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 **L** a milestone.
 
 Skin polish is not on this list. It's optional and guided by the author one
-skin at a time.
+skin at a time; `docs/SKINS.md` says which skins are reviewed.
+
+## Today (2026-09-29): the machine, redesigned
+
+The main objective: a machine reads as the life of one call, top to bottom
+(`docs/VISUALS.md`, "Machine anatomy"; decision 041). It's the first piece of
+the visual grammar that later becomes the editor.
+
+Done:
+- [x] Storage in pools: PARAMETERS (the copies it was called with), LOCALS
+      (the Norm's declaration block), KEPT (statics), REACHED (memory through
+      a pointer, written `buf->len`).
+- [x] RETURN at the bottom: the return type, and the value when it leaves.
+- [x] Each row's past values: `cap  ? → 0 → 8 → 16`.
+- [x] `->` in labels no longer drawn as one arrow glyph.
+
+Next, in this order:
+1. [ ] **IN dock** (S). Its own look at the top left: *idle* (dim, waiting to
+   be called) and *running* (holding the arguments that arrived). Waiting
+   shows on the machine body; a crash on the station that died.
+2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
+   its line leads to what it points at in REACHED.
+3. [ ] **Byte strips inside REACHED** (S). They're reached memory too, and
+   today sit on their own below the stations. Their label says where the
+   bytes live (heap, stack, static) and who allocated them.
+4. [ ] **Past values in every skin** (S). Aqua, Classic and Amp draw their own
+   storage tables and don't show them yet.
+5. [ ] **Argument vs return plates** (S). Different in shape, not just colour.
+6. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
+   4 ports, 5 storage rows including local statics, counted the way
+   norminette counts.
+
+Settled today: the dock shows idle and running only. Every skin gets the new
+anatomy in its existing parts now; per-skin looks come later.
+
+Still open: are expressions typed as text inside a station (recommended),
+or built from blocks? See `docs/VISUALS.md`.
 
 ## What Upload Labs gets right
 
@@ -44,10 +80,9 @@ reserved slot of a recursive copy).
 
 ## A. Build with belts (L)
 
-1. **Ghost machines (M).** Space opens a palette on the grid. Pick a blank
-   machine, name it, and it sits there dimmed as a plan (principle 4: drawn
-   but not in code). A "to build" list shows every ghost that doesn't exist
-   yet. It turns solid the moment a function with that name parses.
+1. **Plans (M).** Space opens a palette on the grid. Pick a blank machine,
+   name it, and it sits there dimmed as a plan (principle 4: drawn but not in
+   code). A "to build" list shows every plan that doesn't exist yet. It turns solid the moment a function with that name parses.
 2. **Typed ports (M).** Ports carry their C types. Dragging a belt from an
    output highlights only compatible inputs. A mismatch shows red, with the
    reason the compiler would give (`char *` into `int`).
@@ -55,7 +90,8 @@ reserved slot of a recursive copy).
    proposes the prototype (`static int ft_count(char *s)`) and an empty body.
    Drop a belt from machine A onto a station inside B and it proposes the
    call on that line. Undo takes it back.
-4. **Norminette as the game's rules (S).** A machine's 25 lines are a
+4. **Norminette as the game's rules (S; its capacity pictures are item 6 of
+   Today).** A machine's 25 lines are a
    capacity bar. Its 4 parameters are 4 input slots, and a fifth won't fit.
    A file's 5 functions are 5 module slots. Hitting a limit looks like a full
    machine, not an error message later.
@@ -63,7 +99,7 @@ reserved slot of a recursive copy).
    return belt. Name them in the palette too, so a design can have them
    before the code does.
 6. **Schematics (M).** Select machines and belts, save them as a pattern
-   ("read loop", "split into words", "list push") and stamp them as ghosts
+   ("read loop", "split into words", "list push") and stamp them as plans
    elsewhere. They're stored in the blueprint file, never as code.
 
 ## B. Goals and progress (L)
@@ -74,7 +110,7 @@ reserved slot of a recursive copy).
    output first went wrong.
 2. **Missions (L).** One per Common Core project (libft, get_next_line,
    ft_printf, push_swap…, from the current curriculum). A mission is ghost
-   machines named by the subject plus behaviour tests. It says what must go
+   plans named by the subject plus behaviour tests. It says what must go
    in and come out, never how, so it can't turn into a solution sheet.
 3. **Run stats as a score (S).** Steps, the deepest stack, bytes malloc'd,
    bytes leaked, the longest machine. Refactor and try to beat your own
@@ -89,8 +125,9 @@ reserved slot of a recursive copy).
 
 Aim: fun to look at, and every mark means exactly one thing.
 
-1. **A visual dictionary (S).** Write `docs/VISUALS.md` and add a Legend
-   overlay in the app that shows the real drawings. Each entry gives what it
+1. **A visual dictionary (S).** ✅ `docs/VISUALS.md`, checked against
+   norminette. Still to do: a Legend overlay in the app that shows the real
+   drawings. Each entry gives what it
    is, what it means in C, and what makes it light up. Entries:
    - machine (storage rows, stations, memory floor), recursion copies,
      modules and walls;
@@ -111,8 +148,8 @@ Aim: fun to look at, and every mark means exactly one thing.
      block, and a warning belt when it leaves a function that forgot it.
    - **Aliasing.** Two names for the same memory: pointer arrows from storage
      rows to the bytes they point at.
-   - **Loop history.** A ghost trail of the last few rounds' values, not just
-     the round count.
+   - **Loop history.** ✅ per row (each storage row shows its past values);
+     a loop's rounds as a whole are not shown yet.
    - **Output as it happens.** `printf` lines appearing at the statement that
      wrote them (the tracer has to unbuffer stdout).
 4. **Fun without lying (S each).** Every effect is driven by a real event:
@@ -123,9 +160,9 @@ Aim: fun to look at, and every mark means exactly one thing.
 
 ## Order
 
-C1 first (`docs/VISUALS.md`, the grammar every later picture and every
-editing gesture fits into), then C2 and its to-do list. Then A1–A2, A3, B1 and B3. Missions (B2) come last:
-they need the rest.
+Today's list first (the machine is the grammar's core), then the rest of
+C2's to-do list in `docs/VISUALS.md`. Then A1–A2, A3, B1 and B3. Missions
+(B2) come last: they need the rest.
 
 ## Sources
 
