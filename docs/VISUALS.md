@@ -112,6 +112,13 @@ Top to bottom, the life of one call:
 Every row in a pool shows what it held before, dimmed, newest nearest:
 `cap   ? → 0 → 8 → 16`. That's how the data changes over time.
 
+A pointer's line goes to the address it holds, and nowhere else. Passing a
+pointer down a call chain copies the address, so every copy's line goes
+straight to the origin (`lr_grow`'s `buf` → `bufs[0]`), never through the
+caller's pointer. A real chain (`t_reader **pp` → `buf` → `bufs[0]`) is drawn
+only when a variable holds the address of another pointer. How the address
+travelled is the belts' story, not the lines' (author's call, 2026-09-29).
+
 Labels write C's `->` with a non-breaking hyphen, so code fonts don't join it
 into one arrow glyph: a plain arrow means "points to", never "field of".
 

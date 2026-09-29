@@ -28,7 +28,9 @@ Next, in this order:
    arrived), *waiting* (it called another function and is paused until that
    returns) and *crashed* (it died; the station that died is marked too).
 2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
-   its line leads to what it points at in REACHED. Done so far: every
+   its line leads to what it points at in REACHED. The tag and the line say
+   only what the pointer holds (the origin), never where it was handed down
+   from. Done so far: every
    pointer always has its line (quieter outside the running frame, never
    hidden); one whose target isn't drawn gets a stub with its arrow; a
    `char *` gets a line to its byte strip.
