@@ -54,6 +54,7 @@ type Backend = 'webgpu' | 'webgl2';
 
 // GPUBufferUsage flags (the constants aren't in TypeScript's DOM lib)
 const USE = { COPY_DST: 0x08, TEXTURE_BINDING: 0x04, RENDER_ATTACHMENT: 0x10, VERTEX: 0x20, UNIFORM: 0x40 };
+const FRAGMENT = 0x2; // GPUShaderStage.FRAGMENT
 
 export const LINE_WGSL = /* wgsl */ `
 struct LU { res: vec4f };
@@ -139,6 +140,7 @@ interface GpuState {
   lineU: GPUBuffer;
   lineBind: GPUBindGroup;
   resU: GPUBuffer;
+  frameLayout: GPUPipelineLayout;
   scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; wall: GPURenderPipeline; wallBind: GPUBindGroup | null; tex: GPUTexture | null; bake: { pipe: GPURenderPipeline; tex: GPUTexture; done: boolean } | null }>;
   sampler: GPUSampler;
   verts: GPUBuffer | null;
@@ -168,9 +170,9 @@ export class GfxLayer {
   lastMs = 0; // CPU time of the last frame (the scene's JS and the submit)
   frames = 0; // frames drawn, ever (the GFX readout counts them per second)
 
-  constructor(under: HTMLCanvasElement) {
+  constructor(under: HTMLCanvasElement, id = 'gfx') {
     this.canvas = document.createElement('canvas');
-    this.canvas.id = 'gfx';
+    this.canvas.id = id;
     this.canvas.setAttribute('aria-hidden', 'true');
     this.canvas.hidden = true;
     under.before(this.canvas);
@@ -249,7 +251,16 @@ export class GfxLayer {
     const lineBind = device.createBindGroup({ layout: line.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: lineU } }] });
     const resU = device.createBuffer({ size: 16, usage: USE.UNIFORM | USE.COPY_DST });
     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
-    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, scenes: new Map(), sampler, verts: null, vertCap: 0 };
+    // the frame pass's bindings, spelled out: with 'auto' the layout only has
+    // what the shader reads, and a scene that never reads its uniforms (all in
+    // its backdrop) would refuse the bind group
+    const frameLayout = device.createPipelineLayout({ bindGroupLayouts: [device.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 3, visibility: FRAGMENT, sampler: { type: 'filtering' } },
+    ] })] });
+    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, frameLayout, scenes: new Map(), sampler, verts: null, vertCap: 0 };
   }
 
   private setupGl(gl: WebGL2RenderingContext): void {
@@ -319,14 +330,14 @@ export class GfxLayer {
         const err = ci.messages.find((m) => m.type === 'error');
         if (err && this.gpu?.device === device) this.fallBack(`WebGPU refused ${scene.id}'s shader (line ${err.lineNum}: ${err.message})`);
       });
-      const pipeOf = (entry: string, format = G.format) => device.createRenderPipeline({
-        layout: 'auto',
+      const pipeOf = (entry: string, format = G.format, layout: GPUPipelineLayout | 'auto' = 'auto') => device.createRenderPipeline({
+        layout,
         vertex: { module: mod, entryPoint: 'vs_full' },
         fragment: { module: mod, entryPoint: entry, targets: [{ format }] },
         primitive: { topology: 'triangle-list' },
       });
       const back = pipeOf('fs_back');
-      const pipe = pipeOf('fs_full');
+      const pipe = pipeOf('fs_full', G.format, G.frameLayout);
       const wall = pipeOf('fs_wall');
       const buf = device.createBuffer({ size: scene.vec4s * 16, usage: USE.UNIFORM | USE.COPY_DST });
       const bk = scene.bake
@@ -419,7 +430,11 @@ export class GfxLayer {
       const ubo = gl.createBuffer()!;
       gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
       gl.bufferData(gl.UNIFORM_BUFFER, scene.vec4s * 16, gl.DYNAMIC_DRAW);
-      for (const pr of [back, prog]) gl.uniformBlockBinding(pr, gl.getUniformBlockIndex(pr, 'Uni'), 0);
+      for (const pr of [back, prog]) {
+        // (a program that never reads the block has none: the compiler drops it)
+        const at = gl.getUniformBlockIndex(pr, 'Uni');
+        if (at !== gl.INVALID_INDEX) gl.uniformBlockBinding(pr, at, 0);
+      }
       let bake: { tex: WebGLTexture; done: boolean } | null = null;
       if (scene.bake) {
         const tex = gl.createTexture()!;

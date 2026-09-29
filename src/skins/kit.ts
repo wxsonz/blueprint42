@@ -5,8 +5,8 @@
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
-import type { Dc, IconKind, NodeInfo, PlateKind, PlateRole, Pt, Rect, Skin } from './types';
-import type { DockLook } from './dock';
+import type { Dc, DockInfo, IconKind, NodeInfo, PlateKind, PlateRole, Pt, Rect, RowInfo, Skin } from './types';
+import { INV_HEAD_PX, SLOT_PX } from '../machine';
 import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk, type CapLook, type TagLook } from './util';
 
 export interface Palette {
@@ -27,15 +27,26 @@ export interface Palette {
   track: string; // the memory strip's track
 }
 
-// A skin's own drawing of the engine's newer pictures (docs/VISUALS.md), so
-// each says the same thing in its own material: the capacity bar, the pointer
-// address tag, the plate shapes and the IN dock. Without one, the plain ones.
+// A skin's own drawing of the engine's newer pictures (docs/VISUALS.md),
+// made from the parts it already has (its progress bar, its plates, its
+// panels and lights), so each belongs to its skin: the capacity bar, the
+// pointer address tag, the plate shapes, and the IN dock.
 export interface Look {
   cap?: CapLook;
   tag?: TagLook;
   // an argument's or a return value's plate: its shape (hexagon, notched) filled and edged, in `col`
   plate?: (dc: Dc, x: number, y: number, w: number, h: number, role: PlateRole, col: string, kind: PlateKind) => void;
-  dock?: DockLook;
+  dock?: KitDock;
+}
+
+// The IN dock as one of the skin's own storage panels (the same panel, rows,
+// tags and capacity as PARAMETERS and LOCALS under it), titled IN and its
+// state. The skin marks the state its own way (a light, a stripe, a halo):
+// `lamp` draws it, in the state's colour, over the panel.
+export interface KitDock {
+  lamp(dc: Dc, r: Rect, head: Rect, s: { col: string; state: DockInfo['state']; stale: boolean }): void;
+  inset?: number; // room at the head's left for the lamp, px at zoom 1
+  run?: string; // the running colour, when it isn't the accent
 }
 
 export interface Theme {
@@ -559,6 +570,41 @@ export function makeSkin(t: Theme): Skin {
       }
     },
   };
+  if (t.look?.dock) {
+    const L = t.look.dock;
+    skin.dock = (dc, r, d) => {
+      const g = dc.g;
+      const col = d.state === 'running' && !d.stale && L.run ? L.run : stateCol(d.state, d.stale);
+      const live = d.state !== 'idle';
+      const word = d.state === 'running' ? 'running' : d.state === 'waiting' ? `waiting on ${d.waitingOn ?? '…'}` : d.state === 'error' ? 'crashed' : '';
+      const title = cap(`IN${d.frames > 1 ? ` ×${d.frames}` : ''}`);
+      const rowH = SLOT_PX * dc.z;
+      const top = r.y + INV_HEAD_PX * dc.z;
+      const rows: RowInfo[] = [];
+      const row = (name: string, value: string, kind: RowInfo['kind'], o: Partial<RowInfo> = {}) => {
+        const y = top + rows.length * rowH;
+        if (y + rowH <= r.y + r.h) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
+      };
+      if (word) row('state', word, d.state === 'error' ? 'dangling' : 'int');
+      if (d.state === 'error' && d.crash) row(`died at line ${d.crash.line}`, d.crash.msg || ' ', 'dangling');
+      if (d.before !== null) row(`called before step ${d.before.toLocaleString('en-US')}`, 'not traced', 'none');
+      else if (!d.args) row('not called', ' ', 'none');
+      else if (!d.args.length) row('no arguments', ' ', 'none');
+      else for (const a of d.args) row(a.name, a.text, a.tag ? 'ptr' : 'int', { param: true, tag: a.tag });
+      if (d.stale) g.globalAlpha *= 0.5;
+      const inset = px(dc, L.inset ?? 0, 0);
+      skin.frame(dc, r, { title, mode: d.stale ? 'none' : live ? 'live' : d.last ? 'returned' : 'none', stacked: 0, rows, head: { x: r.x + inset, y: r.y, w: r.w - inset, h: INV_HEAD_PX * dc.z }, cap: d.cap });
+      L.lamp(dc, r, { x: r.x, y: r.y, w: r.w, h: INV_HEAD_PX * dc.z }, { col, state: d.state, stale: d.stale });
+      g.globalAlpha = 1;
+      if (d.editing) {
+        g.fillStyle = p.accent;
+        g.globalAlpha = 0.7;
+        g.fillRect(r.x + r.w - px(dc, 3, 2), r.y, px(dc, 2, 1.5), r.h);
+        g.globalAlpha = 1;
+      }
+      ports(dc, r, d.inPorts, [], live ? col : p.line);
+    };
+  }
   return skin;
 }
 

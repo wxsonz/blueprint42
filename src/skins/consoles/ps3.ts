@@ -1,6 +1,5 @@
 import { backdrop, countBadge, makeSkin, type Look, type Palette, type Theme } from '../kit';
 import type { Dc, Rect } from '../types';
-import { dockOf } from '../dock';
 import { hash, platePath, rrect, strokeLine, Walk } from '../util';
 import { MONO, ps2Still, type Rgb, RODIN_R, text, toward } from './common';
 
@@ -346,21 +345,16 @@ function ps3Light(g: CanvasRenderingContext2D, pts: [number, number][], z: numbe
   strokeLine(g, pts, Math.max(1, 1.2 * z), `rgba(255,255,255,${core})`);
   g.restore();
 }
-// The newer pictures as the XMB draws things (docs/VISUALS.md): capacity as
-// its install bar, a pointer's address as a jelly capsule with a bubble, plates
-// as glass with a gloss and a soft glow, and the dock as a glass pane with a
-// soft bar of light down its side and a halo while a call is served.
-const gloss = (g: CanvasRenderingContext2D, y0: number, y1: number, a: number) => {
-  const gl = g.createLinearGradient(0, y0, 0, y1);
-  gl.addColorStop(0, `rgba(255,255,255,${a})`);
-  gl.addColorStop(1, 'rgba(255,255,255,0.03)');
-  return gl;
-};
+// The newer pictures from the XMB's own parts (docs/VISUALS.md): capacity
+// is its install bar (a see-through capsule, a glossy fill; amber when full,
+// red past it), a pointer's address and the plates are its item tiles, and
+// the IN dock is one of its panes whose state is a soft light at the head,
+// with the halo it gives whatever has focus while it serves a call.
 const ps3Look: Look = {
   cap: {
     w: (s) => s * 3.6,
     h: (s) => Math.max(4, s * 0.6),
-    draw(g, x, y, w, h, c, col) {
+    draw(g, x, y, w, h, c) {
       const top = y - h / 2;
       g.save();
       rrect(g, x, top, w, h, h / 2);
@@ -373,127 +367,66 @@ const ps3Look: Look = {
       if (c.used > 0) {
         const fw = Math.max(h, w * Math.min(1, c.used / c.max));
         rrect(g, x, top, fw, h, h / 2);
-        g.fillStyle = col;
+        g.fillStyle = c.used > c.max ? ps3P.err : c.used === c.max ? ps3P.wait : 'rgba(255,255,255,0.85)';
         g.fill();
-        g.fillStyle = gloss(g, top, top + h / 2, 0.45);
+        const gl = g.createLinearGradient(0, top, 0, top + h / 2);
+        gl.addColorStop(0, 'rgba(255,255,255,0.6)');
+        gl.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gl;
         g.fillRect(x, top, fw, h / 2);
       }
       g.restore();
     },
   },
   tag: {
-    padL: (h) => h * 1.05,
+    padL: (h) => h * 0.95,
     padR: (h) => h * 0.5,
     draw(g, x, top, w, h, col) {
-      g.save();
-      rrect(g, x, top, w, h, h / 2);
-      g.fillStyle = 'rgba(6,34,86,0.55)';
-      g.fill();
-      g.globalAlpha = 0.25;
+      ps3Tile(g, x, top, w, h, false);
       g.fillStyle = col;
-      g.fill();
-      g.globalAlpha = 1;
-      g.clip();
-      g.fillStyle = gloss(g, top, top + h / 2, 0.35);
-      g.fillRect(x, top, w, h / 2);
-      g.restore();
-      rrect(g, x + 0.5, top + 0.5, w - 1, h - 1, h / 2 - 0.5);
-      g.strokeStyle = 'rgba(255,255,255,0.5)';
-      g.lineWidth = 1;
-      g.stroke();
-      // the bubble
-      const cx = x + h * 0.55;
-      const cy = top + h / 2;
-      const r = h * 0.22;
       g.beginPath();
-      g.arc(cx, cy, r, 0, Math.PI * 2);
-      g.fillStyle = col;
+      g.arc(x + h * 0.5, top + h / 2, h * 0.17, 0, Math.PI * 2);
       g.fill();
-      g.beginPath();
-      g.arc(cx - r * 0.3, cy - r * 0.35, r * 0.32, 0, Math.PI * 2);
-      g.fillStyle = 'rgba(255,255,255,0.8)';
-      g.fill();
+      return '#ffffff';
     },
   },
-  plate(dc, x, y, w, h, role, col) {
+  // the item tile, cut to the plate's shape
+  plate(dc, x, y, w, h, role) {
     const g = dc.g;
     g.save();
     g.lineJoin = 'round';
     platePath(g, x, y, w, h, role);
-    g.fillStyle = 'rgba(6,34,86,0.6)';
-    g.fill();
     g.clip();
-    const pool = g.createLinearGradient(0, y, 0, y + h / 2);
-    pool.addColorStop(0, 'rgba(255,255,255,0)');
-    pool.addColorStop(1, 'rgba(255,255,255,0.18)');
-    g.fillStyle = pool;
-    g.fillRect(x - w / 2, y, w, h / 2);
-    g.fillStyle = gloss(g, y - h / 2, y, 0.34);
-    g.fillRect(x - w / 2, y - h / 2, w, h / 2);
+    ps3Tile(g, x - w / 2, y - h / 2, w, h, true);
     g.restore();
     g.save();
     g.lineJoin = 'round';
-    platePath(g, x, y, w, h, role);
-    g.globalAlpha = 0.22;
-    g.strokeStyle = col;
-    g.lineWidth = 4;
-    g.stroke();
-    g.globalAlpha = 1;
-    g.lineWidth = 1.3;
+    platePath(g, x + 0, y, w - 1, h - 1, role);
+    g.strokeStyle = 'rgba(255,255,255,0.75)';
+    g.lineWidth = 1;
     g.stroke();
     g.restore();
   },
   dock: {
-    intake: 8,
-    frame(dc, r, s) {
+    inset: 12,
+    lamp(dc, r, head, s) {
       const g = dc.g;
       const z = dc.z;
-      const rad = Math.max(2, 6 * z);
-      if (s.hot) ps3Halo(dc, r, rad, 0.8);
-      g.save();
-      rrect(g, r.x, r.y, r.w, r.h, rad);
-      g.fillStyle = 'rgba(6,34,86,0.5)';
-      g.fill();
-      g.clip();
-      g.fillStyle = gloss(g, r.y, r.y + r.h * 0.35, 0.14);
-      g.fillRect(r.x, r.y, r.w, r.h * 0.35);
-      // the intake: a soft bar of light down the side, in the state's colour
-      const bw = Math.max(2, 3 * z);
-      const by = r.y + 8 * z;
-      const bh = Math.max(4, r.h - 16 * z);
-      g.fillStyle = s.col;
-      g.globalAlpha = s.hot ? 0.2 : 0.1;
-      rrect(g, r.x + 3 * z, by, bw * 2.6, bh, bw * 1.3);
-      g.fill();
-      g.globalAlpha = 1;
-      rrect(g, r.x + 4 * z, by, bw, bh, bw / 2);
-      g.fill();
-      g.restore();
-      rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
-      g.strokeStyle = `rgba(255,255,255,${s.hot ? 0.6 : 0.3})`;
-      g.lineWidth = 1;
-      g.stroke();
-    },
-    rule: (dc, x, y, w, hot) => ps3Rule(dc.g, x, y, w, hot ? 0.9 : 0.4, hot),
-    // a soft light where the call comes in
-    port(dc, x, y, col, hot) {
-      const g = dc.g;
-      const z = dc.z;
-      g.fillStyle = col;
-      g.globalAlpha = 0.25;
-      g.beginPath();
-      g.arc(x, y, Math.max(4, 6 * z), 0, Math.PI * 2);
-      g.fill();
-      g.globalAlpha = 1;
-      g.beginPath();
-      g.arc(x, y, Math.max(2, 2.6 * z), 0, Math.PI * 2);
-      g.fill();
-      if (hot) {
-        g.fillStyle = 'rgba(255,255,255,0.8)';
-        g.beginPath();
-        g.arc(x - z * 0.6, y - z * 0.7, Math.max(0.8, z), 0, Math.PI * 2);
-        g.fill();
+      if (s.state === 'running' || s.state === 'error') ps3Halo(dc, r, Math.max(1, 3 * z), 0.9);
+      const lit = s.state !== 'idle' && !s.stale;
+      const x = r.x + 9 * z;
+      const y = head.y + head.h / 2;
+      if (lit && ps3Spark) {
+        const d = 16 * z;
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.drawImage(ps3Spark, x - d / 2, y - d / 2, d, d);
+        g.restore();
       }
+      g.fillStyle = lit ? s.col : 'rgba(255,255,255,0.25)';
+      g.beginPath();
+      g.arc(x, y, Math.max(1.5, 2.4 * z), 0, Math.PI * 2);
+      g.fill();
     },
   },
 };
@@ -728,7 +661,7 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
   g.restore();
 }
 
-export const ps3 = { ...makeSkin(ps3Theme), dock: dockOf(ps3Theme) };
+export const ps3 = makeSkin(ps3Theme);
 {
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));

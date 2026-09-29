@@ -1,7 +1,7 @@
 // The top bar's GFX button: Full, Simple or Off for the skins' backgrounds,
 // and what's drawing them (the GPU scene and its backend, or the canvas).
 import { $, esc } from '../dom';
-import { pageStats } from '../page';
+import { pageGfx, pageStats } from '../page';
 import type { GridView } from '../render';
 import type { Skin } from '../skins/types';
 import { gfxMode, setGfx, type GfxMode } from './gfx';
@@ -22,7 +22,7 @@ export function initGfxButton(view: GridView, skin: () => Skin): void {
   const status = (): string => {
     const sk = skin();
     const scene = sceneFor(sk.id);
-    const L = view.gfx;
+    const L = sk.fullBleed ? pageGfx : view.gfx; // a page skin's scene has the page's layer
     if (gfxMode() !== 'full') return `${esc(sk.name)}: ${gfxMode() === 'off' ? 'flat colour' : 'a still picture, drawn once'}.`;
     if (!scene) return `${esc(sk.name)} has no GPU scene yet: its background animates on the canvas.`;
     if (!L.ok) return `${esc(sk.name)}: GPU unavailable (${esc(L.failed || 'starting…')}), drawn on the canvas.`;
@@ -46,7 +46,7 @@ export function initGfxButton(view: GridView, skin: () => Skin): void {
   setInterval(() => {
     const now = performance.now();
     const L = view.gfx;
-    const kind = view.bgKind === 'gpu' ? L.backend ?? 'webgpu' : view.bgKind;
+    const kind = view.bgKind === 'gpu' ? L.backend ?? 'webgpu' : view.bgKind === 'page' && pageStats.gpu ? pageStats.gpu : view.bgKind;
     const names: Record<string, string> = { webgpu: 'WebGPU', webgl2: 'WebGL2', canvas: 'canvas', page: 'canvas', still: 'still', off: 'off' };
     api.textContent = names[kind] ?? kind;
     api.dataset.kind = kind;

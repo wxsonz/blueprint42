@@ -1,6 +1,5 @@
 import { backdrop, makeSkin, softShadow, type Look, type Palette, type Theme } from '../kit';
-import { hash, platePath, rrect } from '../util';
-import { dockOf } from '../dock';
+import { hash, rrect } from '../util';
 import { cardOf, client, MONO, plastic, PS_SYM, psSymbol, RUBIK, text } from './common';
 
 // ---------------- PlayStation ----------------
@@ -44,128 +43,72 @@ const ps1P: Palette = {
   fg: '#1c1c20', dim: '#55555c', faint: '#8d8b85', accent: '#0072ce', ptr: '#c9337a', ret: '#00864a', wait: '#c77d00', err: '#d9303f',
   param: '#0063b3', cell: '#d2dcf0', track: '#ffffff',
 };
-// The newer pictures in the console's own plastic (docs/VISUALS.md):
-// capacity as a memory card's blocks, a pointer's address as a memory card
-// (its contacts in the pointer's colour), plates as bevelled labels, and the
-// dock as one of its windows: a dark title bar, a recessed slot for the call.
-const blocksOf = (c: { max: number }) => Math.min(10, c.max);
+// The newer pictures from the console's own parts (docs/VISUALS.md):
+// capacity is the front panel's segmented load meter, a pointer's address
+// and the plates are its plain grey labels, and the IN dock is one of its
+// storage panels, its state the front panel's LED (and, while it serves a
+// call, the logo's stripe under the bar, as on the active window).
+const ps1Led = (g: CanvasRenderingContext2D, x: number, y: number, d: number, c: string | null) => {
+  if (c) {
+    g.fillStyle = c + '55';
+    g.beginPath(); g.arc(x, y, d * 2, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = c ?? '#4a4a50';
+  g.beginPath(); g.arc(x, y, d, 0, Math.PI * 2); g.fill();
+};
 const ps1Look: Look = {
   cap: {
-    w: (s, c) => blocksOf(c) * Math.max(3, s * 0.5),
-    h: (s) => Math.max(4, s * 0.7),
-    draw(g, x, y, w, h, c, col) {
-      const n = blocksOf(c);
-      const step = w / n;
-      const lit = c.used >= c.max ? n : c.used === 0 ? 0 : Math.min(n - 1, Math.max(1, Math.round((c.used / c.max) * n)));
+    w: (s, c) => Math.min(10, c.max) * Math.max(3, s * 0.55) + s * 0.6,
+    h: (s) => Math.max(5, s * 0.95),
+    draw(g, x, y, w, h, c) {
+      rrect(g, x, y - h / 2, w, h, 2);
+      g.fillStyle = '#2b2b30';
+      g.fill();
+      const n = Math.min(10, c.max);
+      const pad = h * 0.3;
+      const seg = (w - pad * 2) / n;
+      const lit = c.used > c.max ? n : Math.round((n * c.used) / c.max);
       for (let k = 0; k < n; k++) {
-        const bx = x + k * step;
-        const on = k < lit;
-        g.fillStyle = on ? col : '#2f2f35';
-        g.fillRect(bx, y - h / 2, step - 1, h);
-        g.fillStyle = on ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
-        g.fillRect(bx, y - h / 2, step - 1, 1);
-        g.fillRect(bx, y - h / 2, 1, h);
-        g.fillStyle = on ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.25)';
-        g.fillRect(bx, y + h / 2 - 1, step - 1, 1);
-        g.fillRect(bx + step - 2, y - h / 2, 1, h);
+        const u = n === 1 ? 1 : k / (n - 1);
+        const on = c.used > c.max ? '#ff4040' : u < 0.6 ? '#3dff6a' : u < 0.85 ? '#ffb020' : '#ff4040';
+        g.fillStyle = k < lit ? on : '#3c3c42';
+        g.fillRect(x + pad + k * seg + 0.5, y - h * 0.22, Math.max(1, seg - 1), h * 0.44);
       }
     },
   },
   tag: {
-    padL: (h) => h * 1.15,
+    padL: (h) => h * 0.95,
     padR: (h) => h * 0.4,
     draw(g, x, top, w, h, col) {
-      const k = h * 0.32;
-      g.beginPath();
-      g.moveTo(x, top);
-      g.lineTo(x + w - k, top);
-      g.lineTo(x + w, top + k);
-      g.lineTo(x + w, top + h);
-      g.lineTo(x, top + h);
-      g.closePath();
-      g.fillStyle = '#34343b';
-      g.fill();
-      g.strokeStyle = '#6a6a72';
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(x + 0.5, top + h - 0.5);
-      g.lineTo(x + 0.5, top + 0.5);
-      g.lineTo(x + w - k, top + 0.5);
-      g.stroke();
-      // the contacts
-      const cw = Math.max(1, h * 0.09);
+      plainCardG(g, x, top, w, h, col);
       g.fillStyle = col;
-      for (let i = 0; i < 3; i++) g.fillRect(x + h * 0.3 + i * cw * 2, top + h * 0.22, cw, h * 0.56);
-      return '#f2f2f2';
+      g.beginPath();
+      g.arc(x + h * 0.45, top + h / 2, h * 0.15, 0, Math.PI * 2);
+      g.fill();
     },
-  },
-  plate(dc, x, y, w, h, role, col) {
-    const g = dc.g;
-    const k = Math.max(1, h * 0.07);
-    g.save();
-    platePath(g, x, y, w, h, role);
-    g.fillStyle = '#e4e3de';
-    g.fill();
-    g.clip();
-    g.translate(k * 0.7, k * 0.7);
-    platePath(g, x, y, w, h, role);
-    g.strokeStyle = 'rgba(70,70,66,0.5)';
-    g.lineWidth = k * 1.6;
-    g.stroke();
-    g.translate(-k * 1.4, -k * 1.4);
-    platePath(g, x, y, w, h, role);
-    g.strokeStyle = 'rgba(255,255,255,0.9)';
-    g.stroke();
-    g.restore();
-    platePath(g, x, y, w, h, role);
-    g.strokeStyle = col;
-    g.lineWidth = 1.3;
-    g.stroke();
   },
   dock: {
-    intake: 9,
-    headInk: '#f2f2f2',
-    headBar: 3,
-    frame(dc, r, s) {
-      const g = dc.g;
+    inset: 14,
+    lamp(dc, r, head, s) {
       const z = dc.z;
-      plastic(dc, r, Math.max(1, 3 * z), '#dcdbd6', '#f6f5f1', '#8f8e89');
-      // the title bar, the logo's colours under it while a call is served
-      const bar = { x: r.x + 2 * z, y: r.y + 2 * z, w: r.w - 4 * z, h: 20 * z };
-      g.fillStyle = s.hot ? '#26262b' : '#6f6e72';
-      g.fillRect(bar.x, bar.y, bar.w, bar.h);
-      const k = Math.max(1, 2.5 * z);
-      if (s.hot) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
-      // the slot the call goes into: recessed, lit in the state's colour
-      const slot = { x: r.x + 4 * z, y: r.y + 27 * z, w: 6 * z, h: Math.max(6, r.h - 33 * z) };
-      g.fillStyle = '#2a2a2f';
-      g.fillRect(slot.x, slot.y, slot.w, slot.h);
-      g.fillStyle = 'rgba(0,0,0,0.6)';
-      g.fillRect(slot.x, slot.y, slot.w, 1);
-      g.fillRect(slot.x, slot.y, 1, slot.h);
-      g.fillStyle = 'rgba(255,255,255,0.6)';
-      g.fillRect(slot.x, slot.y + slot.h - 1, slot.w, 1);
-      g.fillRect(slot.x + slot.w - 1, slot.y, 1, slot.h);
-      g.fillStyle = s.hot || s.state === 'waiting' ? s.col : '#45454c';
-      g.fillRect(slot.x + 1.5 * z, slot.y + 1.5 * z, slot.w - 3 * z, slot.h - 3 * z);
-    },
-    port(dc, x, y, col) {
-      const g = dc.g;
-      const z = dc.z;
-      g.beginPath();
-      g.arc(x, y, Math.max(3, 4 * z), 0, Math.PI * 2);
-      g.fillStyle = '#26262b';
-      g.fill();
-      g.strokeStyle = '#f6f5f1';
-      g.lineWidth = Math.max(1, 1.2 * z);
-      g.stroke();
-      g.beginPath();
-      g.arc(x, y, Math.max(1.5, 1.8 * z), 0, Math.PI * 2);
-      g.fillStyle = col;
-      g.fill();
+      const lit = s.state !== 'idle' && !s.stale;
+      if (s.state === 'running') {
+        const k = Math.max(1, 2.5 * z);
+        logoStripe(dc.g, r.x + 2 * z, head.y + head.h - k, r.w - 4 * z, k);
+      }
+      ps1Led(dc.g, r.x + 9 * z, head.y + head.h / 2 + z, Math.max(1.5, 2.6 * z), lit ? (s.state === 'running' ? '#3dff6a' : s.col) : null);
     },
   },
 };
+// a label the way the console's plates are drawn: light grey, a coloured edge
+function plainCardG(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, col: string): void {
+  rrect(g, x + 0.5, y + 0.5, w - 1, h - 1, 3);
+  g.fillStyle = '#e4e3de';
+  g.fill();
+  g.strokeStyle = col;
+  g.lineWidth = 1.3;
+  g.stroke();
+}
 
 export const ps1Theme: Theme = {
   id: 'ps1', name: 'PlayStation', blurb: 'the grey console, the black boot screen, the four colours and △○✕□',
@@ -181,7 +124,7 @@ export const ps1Theme: Theme = {
     const bar = { x: r.x + 2 * dc.z, y: r.y + 2 * dc.z, w: r.w - 4 * dc.z, h: Math.max(6, head.h - 2 * dc.z) };
     g.fillStyle = live ? '#26262b' : '#6f6e72';
     g.fillRect(bar.x, bar.y, bar.w, bar.h);
-    text(dc, bar, title.toUpperCase(), RUBIK, 10, live ? '#f2f2f2' : '#d6d6d9', { w: 600, x: bar.x + 6 * dc.z });
+    text(dc, bar, title.toUpperCase(), RUBIK, 10, live ? '#f2f2f2' : '#d6d6d9', { w: 600, x: head.x + 8 * dc.z });
   },
   // the PAL BIOS: a grey blocked background, each block bevelled, then
   // quantised to 15-bit colour with the PS1's 4×4 ordered dither (once, cached)
@@ -297,4 +240,4 @@ export const ps1Theme: Theme = {
   },
 };
 
-export const ps1 = { ...makeSkin(ps1Theme), dock: dockOf(ps1Theme), mode: 'dark' as const };
+export const ps1 = { ...makeSkin(ps1Theme), mode: 'dark' as const };

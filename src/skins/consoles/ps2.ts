@@ -1,6 +1,5 @@
 import { backdrop, countBadge, makeSkin, softShadow, type Look, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
-import { dockOf } from '../dock';
 import { hash, platePath, strokeLine, Walk } from '../util';
 import { EXO, F, MONO, ps2Still, text } from './common';
 
@@ -327,139 +326,87 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
   g.restore();
 }
 
-// The newer pictures on the black slab (docs/VISUALS.md): capacity as
-// hairline ticks, one to a unit; a pointer's address as a chamfered plate
-// with a metal socket ring; plates as grained black with a lit edge and lit
-// tips; and the dock as a bay: ridged intake, a light, and a socket where the
-// cable plugs in.
+// The newer pictures from the console's own parts (docs/VISUALS.md):
+// capacity is its progress light running along a hairline (amber when full,
+// red past it), a pointer's address and the plates are its plates (grained
+// black, a thin edge in their colour), and the IN dock is one of its storage
+// panels whose state is the square power light, as on its windows.
 const ps2Look: Look = {
   cap: {
-    w: (s, c) => Math.min(c.max, 25) * Math.max(1.8, s * 0.19),
-    h: (s) => Math.max(4, s * 0.75),
-    draw(g, x, y, w, h, c, col) {
-      const n = Math.min(c.max, 25);
-      const step = w / n;
-      const tw = Math.max(1, step * 0.5);
-      const lit = Math.min(n, c.used);
-      for (let k = 0; k < n; k++) {
-        g.fillStyle = k < lit ? col : 'rgba(255,255,255,0.1)';
-        g.fillRect(Math.round(x + k * step), y - h / 2, tw, h);
-      }
+    w: (s) => s * 4.2,
+    h: (s) => Math.max(4, s * 0.6),
+    draw(g, x, y, w, h, c) {
+      const yy = Math.round(y) + 0.5;
+      g.fillStyle = 'rgba(255,255,255,0.1)';
+      g.fillRect(x, yy - 0.5, w, 1);
+      const e = x + w * Math.min(1, c.used / c.max);
+      if (e <= x + 1) return;
+      const hue = c.used > c.max ? '255,90,110' : c.used === c.max ? '255,204,85' : '79,120,255';
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      const glow = g.createLinearGradient(x, 0, e, 0);
+      glow.addColorStop(0, `rgba(${hue},0)`);
+      glow.addColorStop(1, `rgba(${hue},0.4)`);
+      g.fillStyle = glow;
+      g.fillRect(x, yy - h / 2, e - x, h);
+      const core = g.createLinearGradient(x, 0, e, 0);
+      core.addColorStop(0, 'rgba(212,221,255,0)');
+      core.addColorStop(1, 'rgba(230,236,255,0.9)');
+      g.fillStyle = core;
+      g.fillRect(x, yy - 0.5, e - x, 1);
+      g.restore();
     },
   },
   tag: {
-    padL: (h) => h * 1.0,
+    padL: (h) => h * 0.9,
     padR: (h) => h * 0.4,
     draw(g, x, top, w, h, col) {
-      const c = h * 0.28;
-      g.beginPath();
-      g.moveTo(x + c, top);
-      g.lineTo(x + w, top);
-      g.lineTo(x + w, top + h - c);
-      g.lineTo(x + w - c, top + h);
-      g.lineTo(x, top + h);
-      g.lineTo(x, top + c);
-      g.closePath();
-      g.fillStyle = '#08080a';
-      g.fill();
-      g.globalAlpha = 0.55;
+      g.fillStyle = ps2P.panel;
+      g.fillRect(x, top, w, h);
+      ps2Grain(g, x, top, w, h, 0.45);
       g.strokeStyle = col;
       g.lineWidth = 1;
-      g.stroke();
-      g.globalAlpha = 1;
-      // the socket: a metal ring round a dark hole
-      const cx = x + h * 0.5;
-      const cy = top + h / 2;
-      g.beginPath();
-      g.arc(cx, cy, h * 0.2, 0, Math.PI * 2);
-      g.fillStyle = '#000';
-      g.fill();
-      g.strokeStyle = '#82828c';
-      g.lineWidth = Math.max(1, h * 0.07);
-      g.stroke();
-      g.beginPath();
-      g.arc(cx, cy, h * 0.08, 0, Math.PI * 2);
+      g.strokeRect(Math.round(x) + 0.5, Math.round(top) + 0.5, Math.round(w) - 1, Math.round(h) - 1);
+      const m = Math.max(2, h * 0.24);
       g.fillStyle = col;
-      g.fill();
+      g.fillRect(x + h * 0.42 - m / 2, top + h / 2 - m / 2, m, m);
     },
   },
   plate(dc, x, y, w, h, role, col) {
     const g = dc.g;
     g.save();
     platePath(g, x, y, w, h, role, 0);
-    g.fillStyle = '#0b0b0d';
+    g.fillStyle = ps2P.panel;
     g.fill();
     g.clip();
-    ps2Grain(g, x - w / 2, y - h / 2, w, h, 0.6);
-    g.fillStyle = 'rgba(255,255,255,0.14)';
-    g.fillRect(x - w / 2, y - h / 2, w, 1);
+    ps2Grain(g, x - w / 2, y - h / 2, w, h, 0.45);
     g.restore();
     platePath(g, x, y, w, h, role, 0);
     g.strokeStyle = col;
-    g.lineWidth = 1.2;
+    g.lineWidth = 1;
     g.stroke();
-    // the tips, lit like the console's light
-    const k = h * (role === 'ret' ? 0.3 : 0.42);
-    const d = Math.max(1.2, h * 0.08);
-    g.fillStyle = col;
-    for (const tx of role === 'ret' ? [x - w / 2 + k, x + w / 2 - k] : [x - w / 2, x + w / 2]) {
-      g.beginPath();
-      g.arc(tx, y, d, 0, Math.PI * 2);
-      g.fill();
-    }
   },
+  // only the light carries the state; the panel stays the console's black
   dock: {
-    intake: 11,
-    headInk: '#c4c4cc',
-    frame(dc, r, s) {
+    inset: 12,
+    run: '#3f6bff',
+    lamp(dc, r, head, s) {
       const g = dc.g;
       const z = dc.z;
-      g.fillStyle = '#0e0e10';
-      g.fillRect(r.x, r.y, r.w, r.h);
-      ps2Grain(g, r.x, r.y, r.w, r.h, 0.5);
-      g.lineWidth = 1;
-      g.strokeStyle = 'rgba(255,255,255,0.1)';
-      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      // the intake: a ridged column and a light at its head; the light alone carries the state
-      ridges(g, r.x + 1, r.y + 1, 9 * z, r.h - 2, Math.max(3, 3.5 * z));
-      const lit = s.hot || s.state === 'waiting';
-      const cx = r.x + 5.5 * z;
-      const cy = r.y + 9 * z;
-      if (lit) {
-        g.fillStyle = s.col;
-        g.globalAlpha = 0.22;
-        g.beginPath();
-        g.arc(cx, cy, 8 * z, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 0.35;
-        g.beginPath();
-        g.arc(cx, cy, 5 * z, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 1;
-      }
+      const lit = s.state !== 'idle' && !s.stale;
+      const x = r.x + 9 * z;
+      const y = head.y + head.h / 2;
+      const q = Math.max(2, 3 * z);
       g.fillStyle = lit ? s.col : '#2a2a30';
-      g.beginPath();
-      g.arc(cx, cy, Math.max(1.5, 2.4 * z), 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.12)';
-      g.fillRect(r.x + 10.5 * z, r.y + 4 * z, Math.max(1, 1.2 * z), r.h - 8 * z);
-    },
-    // where the cable plugs in: a dark slot lined with metal, a light in it
-    port(dc, x, y, col, hot) {
-      const g = dc.g;
-      const z = dc.z;
-      const w = Math.max(5, 7 * z);
-      const h = Math.max(8, 11 * z);
-      g.fillStyle = '#040405';
-      g.fillRect(x - w / 2, y - h / 2, w, h);
-      g.fillStyle = '#82828c';
-      const b = Math.max(1, 1.5 * z);
-      g.fillRect(x - w / 2, y - h / 2, w, b);
-      g.fillRect(x - w / 2, y + h / 2 - b, w, b);
-      g.fillStyle = col;
-      g.globalAlpha = hot ? 1 : 0.5;
-      g.fillRect(x - Math.max(1, z), y - h * 0.28, Math.max(2, 2 * z), h * 0.56);
-      g.globalAlpha = 1;
+      g.fillRect(x - q, y - q, q * 2, q * 2);
+      if (lit) {
+        const d = q * 7;
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = 0.6;
+        g.drawImage(ps2Sprite(s.col), x - d / 2, y - d / 2, d, d);
+        g.restore();
+      }
     },
   },
 };
@@ -560,7 +507,7 @@ export const ps2Theme: Theme = {
     g.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
     g.fillStyle = 'rgba(255,255,255,0.06)';
     g.fillRect(r.x, r.y + head.h, r.w, 1);
-    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#8e8e97', { w: 500, x: r.x + 8 * dc.z });
+    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#8e8e97', { w: 500, x: head.x + 8 * dc.z });
   },
   // data in flight leaves the boot lights' trail: a hairline fading toward
   // the tail over a faint glow, a glowing head under the data
@@ -774,4 +721,4 @@ function ps2Door(dc: Dc, [x, y]: [number, number], vertical: boolean, live: bool
   g.restore();
 }
 
-export const ps2 = { ...makeSkin(ps2Theme), dock: dockOf(ps2Theme), door: ps2Door };
+export const ps2 = { ...makeSkin(ps2Theme), door: ps2Door };

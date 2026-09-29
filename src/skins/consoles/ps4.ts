@@ -1,6 +1,5 @@
 import { backdrop, countBadge, makeSkin, type Look, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
-import { dockOf } from '../dock';
 import { hash, platePath, Walk } from '../util';
 import { MONO, ps2Still, SST, text } from './common';
 
@@ -265,88 +264,64 @@ function ps4Belt(dc: Dc, pts: [number, number][], o: { live: boolean; dir: numbe
   }
   g.restore();
 }
-// The newer pictures, flat and square as the system screens are
-// (docs/VISUALS.md): capacity as a download bar, a pointer's address as a
-// navy input field with a square marker, plates as navy fields with the
-// controller's light bar along the foot in the plate's colour, and the dock
-// as a card with the light bar across its top.
+// The newer pictures from the system screens' own parts (docs/VISUALS.md):
+// capacity is their thin progress bar (white; amber when full, red past it),
+// a pointer's address and the plates are their navy input fields with a
+// white edge, and the IN dock is one of their cards whose state is the
+// controller's light bar (the rule under its title glows in the state's
+// colour), with the white focus border while it serves a call.
 const ps4Look: Look = {
   cap: {
     w: (s) => s * 3.6,
-    h: (s) => Math.max(3, s * 0.4),
-    draw(g, x, y, w, h, c, col) {
+    h: (s) => Math.max(2, s * 0.35),
+    draw(g, x, y, w, h, c) {
       g.fillStyle = 'rgba(255,255,255,0.22)';
       g.fillRect(x, y - h / 2, w, h);
-      g.fillStyle = col;
+      g.fillStyle = c.used > c.max ? ps4P.err : c.used === c.max ? ps4P.wait : '#ffffff';
       g.fillRect(x, y - h / 2, w * Math.min(1, c.used / c.max), h);
     },
   },
   tag: {
-    padL: (h) => h * 0.95,
+    padL: (h) => h * 0.9,
     padR: (h) => h * 0.4,
     draw(g, x, top, w, h, col) {
       g.fillStyle = 'rgba(3,5,42,0.92)';
       g.fillRect(x, top, w, h);
-      g.globalAlpha = 0.8;
-      g.strokeStyle = col;
+      g.strokeStyle = 'rgba(220,230,255,0.8)';
       g.lineWidth = 1;
       g.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
-      g.globalAlpha = 1;
-      const m = Math.max(2, h * 0.26);
+      const m = Math.max(2, h * 0.24);
       g.fillStyle = col;
       g.fillRect(x + h * 0.42 - m / 2, top + h / 2 - m / 2, m, m);
+      return '#ffffff';
     },
   },
-  plate(dc, x, y, w, h, role, col) {
+  plate(dc, x, y, w, h, role, _col, kind) {
     const g = dc.g;
-    g.save();
     platePath(g, x, y, w, h, role, 0);
     g.fillStyle = 'rgba(3,5,42,0.92)';
     g.fill();
-    g.clip();
-    const b = Math.max(2, h * 0.14);
-    g.fillStyle = col;
-    g.fillRect(x - w / 2, y + h / 2 - b, w, b);
-    g.restore();
-    platePath(g, x, y, w, h, role, 0);
-    g.strokeStyle = 'rgba(235,242,255,0.9)';
+    g.strokeStyle = kind === 'void' ? 'rgba(220,230,255,0.8)' : '#ffffff';
     g.lineWidth = 1;
     g.stroke();
   },
   dock: {
-    intake: 0,
-    top: 4,
-    frame(dc, r, s) {
+    run: '#8fd0ff',
+    lamp(dc, r, head, s) {
       const g = dc.g;
       const z = dc.z;
-      g.fillStyle = ps4P.card;
-      g.fillRect(r.x, r.y, r.w, r.h);
-      // focus is a white border; the light bar is the state
-      g.strokeStyle = s.hot ? '#ffffff' : 'rgba(150,190,255,0.45)';
-      g.lineWidth = s.hot ? Math.max(2, 2 * z) : 1;
-      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-      const bh = Math.max(2, 3 * z);
-      if (s.hot || s.state === 'waiting') {
-        g.fillStyle = s.col;
-        g.globalAlpha = 0.3;
-        g.fillRect(r.x, r.y + bh, r.w, Math.max(3, 4 * z));
-        g.globalAlpha = 1;
+      if (s.state === 'running' || s.state === 'error') {
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = Math.max(2, 3 * z);
+        g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
       }
+      if (s.state === 'idle' || s.stale) return;
+      const y = head.y + head.h - 1;
       g.fillStyle = s.col;
-      g.fillRect(r.x, r.y, r.w, bh);
-    },
-    rule(dc, x, y, w) {
-      dc.g.fillStyle = 'rgba(150,190,255,0.45)';
-      dc.g.fillRect(x, y, w, 1);
-    },
-    port(dc, x, y, col) {
-      const g = dc.g;
-      const m = Math.max(4, 6 * dc.z);
-      g.fillStyle = col;
-      g.fillRect(x - m / 2, y - m / 2, m, m);
-      g.strokeStyle = 'rgba(3,5,42,0.9)';
-      g.lineWidth = 1;
-      g.strokeRect(x - m / 2 + 0.5, y - m / 2 + 0.5, m - 1, m - 1);
+      g.globalAlpha = 0.35;
+      g.fillRect(r.x, y - 1.5 * z, r.w, 4 * z);
+      g.globalAlpha = 1;
+      g.fillRect(r.x, y, r.w, Math.max(1, 1.5 * z));
     },
   },
 };
@@ -463,5 +438,5 @@ export const ps4Theme: Theme = {
   },
 };
 
-export const ps4 = { ...makeSkin(ps4Theme), dock: dockOf(ps4Theme, { run: '#8fd0ff' }) };
+export const ps4 = makeSkin(ps4Theme);
 ps4.fullBleed = true; // the sky and its ribbons behind the whole page, as the PS3's

@@ -2,6 +2,8 @@
 // own zoom, and the full-page background.
 import { $, esc } from './dom';
 import { gfxMode } from './gfx/gfx';
+import { GfxLayer } from './gfx/layer';
+import { sceneFor } from './gfx/scenes';
 import type { GridView } from './render';
 import type { Skin } from './skins/types';
 
@@ -43,13 +45,18 @@ export function stepUiZoom(dir: 1 | -1, view: GridView, hideMenu: () => void): v
 }
 
 // ---------------- the page's background ----------------
-// Skins whose background is the whole page (PS3's XMB) paint it on a canvas
-// behind every panel; the grid's canvas is left clear over it.
+// Skins whose background is the whole page (PS3's XMB, PS4's band) paint it on
+// a canvas behind every panel, or on the GPU (its own layer under that canvas,
+// which is then left clear); the grid's canvas is left clear over it.
 const pageBg = $<HTMLCanvasElement>('page-bg');
+export const pageGfx = new GfxLayer(pageBg, 'gfx-page'); // started when a page skin's GPU scene first needs it
 export function paintPage(now: number, S: { skin: Skin }, view: GridView): void {
   const on = !!S.skin.fullBleed;
   if (pageBg.hidden === on) pageBg.hidden = !on;
-  if (!on) return;
+  if (!on) {
+    pageGfx.hide();
+    return;
+  }
   // sized by the window, not in CSS pixels: the app's zoom (CSS zoom on the
   // page) would otherwise grow it, painting far more pixels when zoomed out
   const dpr = view.pixelScale;
@@ -59,8 +66,23 @@ export function paintPage(now: number, S: { skin: Skin }, view: GridView): void 
   const H = Math.round(h * dpr);
   if (pageBg.width !== W || pageBg.height !== H) (pageBg.width = W), (pageBg.height = H);
   const g = pageBg.getContext('2d')!;
-  // GFX: simple paints one still (once per skin and size), off a flat colour
+  // GFX: full on the GPU where the skin has a scene
   const mode = gfxMode();
+  const scene = mode === 'full' ? sceneFor(S.skin.id) : null;
+  if (scene) void pageGfx.init();
+  if (scene && pageGfx.ok && pageGfx.render(scene, { w, h, dpr, time: now / 1000, z: 1, cs: 40, camX: 0, camY: 0 })) {
+    if (pageKey !== 'gpu') {
+      pageKey = 'gpu';
+      pageBg.getContext('2d')!.clearRect(0, 0, W, H);
+    }
+    pageStats.gpu = pageGfx.backend;
+    pageStats.ms = pageGfx.lastMs;
+    pageStats.frames++;
+    return;
+  }
+  pageGfx.hide();
+  pageStats.gpu = null;
+  // GFX: simple paints one still (once per skin and size), off a flat colour
   const key = `${S.skin.id}|${W}x${H}|${mode}`;
   if (mode !== 'full' && pageKey === key) return;
   pageKey = key;
@@ -76,5 +98,5 @@ export function paintPage(now: number, S: { skin: Skin }, view: GridView): void 
   pageStats.frames++;
 }
 // the page background's frames and the last one's cost (the GFX readout)
-export const pageStats = { frames: 0, ms: 0 };
+export const pageStats: { frames: number; ms: number; gpu: 'webgpu' | 'webgl2' | null } = { frames: 0, ms: 0, gpu: null };
 let pageKey = '';

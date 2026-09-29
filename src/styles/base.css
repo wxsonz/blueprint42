@@ -202,6 +202,9 @@ kbd {
 #grid { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #gfx { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 #gfx[hidden] { display: none; }
+/* the page skins' GPU background: fixed, under the (then clear) page-bg canvas */
+#gfx-page { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+#gfx-page[hidden] { display: none; }
 
 /* ---------- floating panels on the canvas ---------- */
 #alerts { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(60%, 520px); pointer-events: none; }
