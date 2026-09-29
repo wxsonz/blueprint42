@@ -11,26 +11,26 @@ initiative (a sweep across skins, a "while I'm here" tweak).
 | --- | --- |
 | **reviewed** | The author has guided it to their design standard. Change it when the author asks; don't restyle it unasked. Engine-wide changes (a new picture every skin draws) still apply, drawn in its style. |
 | **pending** | Not reviewed yet. Agents may improve it, staying true to the skin's era and palette, and log what they changed below. |
-| **WIP ⚠** | Pending, and also marked work-in-progress in the picker (`WIP` in `src/skins/index.ts`). |
+| **WIP ⚠** | Every skin that is not reviewed: marked work-in-progress in the picker (`REVIEWED` in `src/skins/index.ts` lists the exceptions). |
 
 ## Status
 
 | Skin | Ids | Group | Status | Agent passes (newest last) |
 | --- | --- | --- | --- | --- |
-| PS1 | `ps1` | PlayStation | WIP ⚠ | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; marked WIP at the author's request |
-| PS2 | `ps2` | PlayStation | WIP ⚠ | brightened at the author's request (2026-09-29): surfaces around `#101010` instead of black, dim and faint text raised, near-white softened; the viewer's windows and panels solid, matching the editor; the viewport's space stays the deepest black; accents and the boot scene kept; GPU cubes (GFX Full) as clear glass with no edges, no highlights, nothing inside, and a cheaper frame (2026-09-29); belt as an AV cable (2026-09-30): a shaded rubber cord, a ridged collar at the source, a plug with a metal tip at the destination (the arrow); the moving lights unchanged; door as a bulkhead port: a vented plate with slit grille either side of a metal-lined socket the cord passes through, a blue light while running; the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; marked WIP at the author's request |
-| PS3 | `ps3` | PlayStation | WIP ⚠ | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; marked WIP at the author's request |
-| PS4 | `ps4` | PlayStation | WIP ⚠ | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; marked WIP at the author's request |
+| PS1 | `ps1` | PlayStation | **reviewed** | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; the author's reviewed skins; all others are WIP |
+| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): surfaces around `#101010` instead of black, dim and faint text raised, near-white softened; the viewer's windows and panels solid, matching the editor; the viewport's space stays the deepest black; accents and the boot scene kept; GPU cubes (GFX Full) as clear glass with no edges, no highlights, nothing inside, and a cheaper frame (2026-09-29); belt as an AV cable (2026-09-30): a shaded rubber cord, a ridged collar at the source, a plug with a metal tip at the destination (the arrow); the moving lights unchanged; door as a bulkhead port: a vented plate with slit grille either side of a metal-lined socket the cord passes through, a blue light while running; the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; the author's reviewed skins; all others are WIP |
+| PS3 | `ps3` | PlayStation | **reviewed** | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; the author's reviewed skins; all others are WIP |
+| PS4 | `ps4` | PlayStation | **reviewed** | the Minimal/Barebone pictures adopted (2026-09-30): IN dock (`dockOf`, coloured from the theme's palette), pointer address tags, argument/return plate shapes, Norm capacity; the author's reviewed skins; all others are WIP |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
-| Minimal | `minimal`, `minimal-light` | Simple | WIP ⚠ | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; marked WIP at the author's request (2026-09-30), while PS1–PS4 adopt their pictures |
-| Barebone | `barebone`, `barebone-light` | Simple | WIP ⚠ | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; marked WIP at the author's request (2026-09-30), while PS1–PS4 adopt their pictures |
-| Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
-| XP | `xp` | Windows | pending | scrollbars, toggles, belts, corners |
-| Seven | `seven` | Windows | pending | scrollbars, toggles, belts, corners |
+| Minimal | `minimal`, `minimal-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; the author's reviewed skins; all others are WIP (2026-09-30), while PS1–PS4 adopt their pictures |
+| Barebone | `barebone`, `barebone-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; the author's reviewed skins; all others are WIP (2026-09-30), while PS1–PS4 adopt their pictures |
+| Classic (Windows 3.1) | `classic` | Windows | WIP ⚠ | scrollbars, toggles, belts |
+| XP | `xp` | Windows | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Seven | `seven` | Windows | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles, belts |
-| System 7 | `system7` | Mac | pending | scrollbars, toggles, belts |
-| Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles, belts, corners |
-| Aqua | `aqua` | Mac | pending | scrollbars, toggles, belts, corners |
+| System 7 | `system7` | Mac | WIP ⚠ | scrollbars, toggles, belts |
+| Platinum (OS 8/9) | `platinum` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Aqua | `aqua` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |

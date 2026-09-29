@@ -73,6 +73,7 @@ export const SKIN_FONTS: Record<string, string[]> = {
 
 // Skins still being worked on: they draw everything, but aren't polished
 // yet. The picker marks them (a warning on the thumbnail); a skin's other
-// mode shares its base's mark.
-const WIP = new Set(['ps1', 'ps2', 'ps3', 'ps4', 'minimal', 'barebone', 'ps5', 'gameboy', 'gamecube', 'wii', 'switch', 'leopard', 'yosemite', 'bigsur', 'tahoe', 'metro', 'amp', 'blueprint', 'factory', 'synthwave']);
-export const isWip = (skin: Skin): boolean => WIP.has(skin.variantOf ?? skin.id);
+// mode shares its base's mark. Every skin is WIP except the ones the author
+// has reviewed (docs/SKINS.md).
+const REVIEWED = new Set(['ps1', 'ps2', 'ps3', 'ps4', 'minimal', 'barebone']);
+export const isWip = (skin: Skin): boolean => !REVIEWED.has(skin.variantOf ?? skin.id);
