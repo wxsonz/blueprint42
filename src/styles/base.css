@@ -307,8 +307,25 @@ kbd {
   box-shadow: var(--tl-shadow, none);
   cursor: pointer;
 }
-.pb-speed { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: calc(12px * var(--mono-scale, 1)); }
-#pb-speed { width: 3em; text-align: center; }
+/* how it plays: the animation mode and the speed, one group */
+.tempo { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 2px; border: var(--rule, 1px solid rgba(128,128,128,0.25)); border-radius: calc(var(--btn-radius, 4px) + 2px); }
+.pb-speed { position: relative; display: flex; align-items: center; gap: 3px; font-family: var(--font-mono); font-size: calc(12px * var(--mono-scale, 1)); }
+.speed-read { min-width: 4.2em; padding: 2px 8px; font: 600 calc(13px * var(--mono-scale, 1)) var(--font-mono); text-align: center; cursor: pointer;
+  background: var(--btn-bg-on); color: var(--btn-fg-on); border: var(--btn-border); border-radius: var(--btn-radius, 4px); box-shadow: var(--btn-shadow-on, none); }
+.speed-read[aria-expanded='true'] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.speed-read.capped { text-decoration: underline dotted; text-underline-offset: 3px; }
+.speed-menu { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 60; width: 200px; padding: 8px;
+  font-family: var(--label-font, var(--font-ui)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
+.speed-menu[hidden] { display: none; }
+.speed-menu .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.speed-menu .grid button { padding: 4px 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: 600 12px var(--font-mono); cursor: pointer; }
+.speed-menu .grid button:hover { background: color-mix(in srgb, var(--panel-fg) 10%, transparent); }
+.speed-menu .grid button[aria-checked='true'] { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.speed-menu label { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; }
+.speed-menu input { width: 5em; font: 12px var(--font-mono); padding: 2px 4px; background: var(--input-bg, transparent); color: inherit; border: var(--panel-border, 1px solid rgba(128,128,128,0.4)); border-radius: 3px; }
+.speed-menu .note { margin-top: 6px; font-size: 11px; color: var(--panel-dim); line-height: 1.35; }
+.engine-pick { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.engine-pick .lbl { font-size: 0.92em; opacity: 0.75; }
 
 /* ---------- status line ---------- */
 #status {
@@ -431,9 +448,16 @@ kbd {
 .tabs .tab .close { width: 16px; text-align: center; opacity: 0.55; }
 .tabs .tab .close:hover { opacity: 1; }
 .tabs .tab .warn { color: var(--bad); }
-.run-row { display: flex; gap: 8px; }
+.run-row { display: flex; flex-direction: column; gap: 6px; }
+.run-line { display: flex; align-items: center; gap: 6px 8px; }
+.run-line.opts { flex-wrap: wrap; }
+.run-line.opts label { flex: 0 0 auto; }
+.run-line.opts #run-window { width: 6.5em; }
+.run-line.opts #run-again { margin-left: auto; }
 .run-row[hidden] { display: none; }
 .run-row label { flex: 1; display: flex; align-items: center; gap: 6px; }
+.run-row label > input { flex: 1; min-width: 0; }
+#run-tty { white-space: nowrap; }
 .run-row input, .dlg input.path {
   flex: 1; min-width: 0; padding: 3px 6px;
   font: calc(12px * var(--mono-scale, 1))/1.35 var(--font-mono); color: var(--ed-fg); background: var(--ed-bg);
@@ -652,3 +676,5 @@ kbd {
    the panel's top ones square where they meet */
 .stats-panel.attached { border-top-left-radius: 0; border-top-right-radius: 0; max-height: calc(100vh - 140px); }
 .alert.stats-open { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+/* args and -D on their own lines, their fields lined up */
+.run-line:not(.opts) label { display: grid; grid-template-columns: 2.4em 1fr; }

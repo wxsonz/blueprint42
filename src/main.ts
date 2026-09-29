@@ -74,6 +74,7 @@ function setMode(m: AnimMode): void {
   store.set('anim', m);
   lastFollowEv = -1;
   renderAnimMode();
+  showSpeed();
   toast(m === 'focus' ? 'Focus: calls and returns are staged — the rest dims, the data travels 2–3 times' : 'Fast: every step once, the camera only pans');
 }
 
@@ -82,7 +83,43 @@ function autoSpeed(trace: Trace): void {
   const total = trace.evs.reduce((a, e, i) => a + durationAt(trace, S.model, i) / (staged(e) ? Math.min(S.speed, FOCUS_MAX) : 1), 0);
   // statements animate inside the machines: never so fast they can't be followed
   S.speed = SPEEDS.find((sp) => total / sp <= 120 || sp >= 3) ?? 3;
-  $('pb-speed').textContent = `${S.speed}×`;
+  showSpeed();
+}
+
+// ---- speed: − and +, a click opens presets and a field, the wheel changes it ----
+const SPEED_MIN = 0.1;
+const SPEED_MAX = 50;
+const fmtSpeed = (v: number) => `${Number(v.toFixed(2))}×`;
+
+function showSpeed(): void {
+  const read = $('pb-speed');
+  read.textContent = fmtSpeed(S.speed);
+  // Focus stages calls and returns at no more than FOCUS_MAX: say so
+  const capped = animMode() === 'focus' && S.speed > FOCUS_MAX;
+  read.classList.toggle('capped', capped);
+  read.title = capped ? `${fmtSpeed(S.speed)}; Focus stages calls, returns and pointer writes at ${fmtSpeed(FOCUS_MAX)} at most` : 'Speed: click to pick or type one, scroll to change';
+  const menu = $('speed-menu');
+  if (!menu.hidden) renderSpeedMenu();
+}
+
+function setSpeedTo(v: number): void {
+  if (!Number.isFinite(v)) return;
+  S.speed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(v * 100) / 100));
+  showSpeed();
+}
+
+function renderSpeedMenu(): void {
+  const menu = $('speed-menu');
+  menu.innerHTML = `<div class="grid">${SPEEDS.map((v) => `<button role="menuitemradio" data-speed="${v}" aria-checked="${v === S.speed}">${fmtSpeed(v)}</button>`).join('')}</div>
+    <label>or type <input id="speed-typed" type="number" min="${SPEED_MIN}" max="${SPEED_MAX}" step="0.25" value="${S.speed}"> ×</label>
+    <div class="note">Scroll over the speed to change it. Focus stages calls and returns at ${fmtSpeed(FOCUS_MAX)} at most.</div>`;
+}
+
+function toggleSpeedMenu(open = $('speed-menu').hidden): void {
+  const menu = $('speed-menu');
+  menu.hidden = !open;
+  $('pb-speed').setAttribute('aria-expanded', String(open));
+  if (open) renderSpeedMenu();
 }
 
 // ---------------- analysis ----------------
@@ -373,10 +410,10 @@ function seek(p: number): void {
   S.pos = Math.max(0, Math.min(p, N()));
 }
 
+// one preset up or down from wherever it is (a typed 4× goes to 5× or 3×)
 function setSpeed(dir: number): void {
-  const i = SPEEDS.indexOf(S.speed);
-  S.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + dir))];
-  $('pb-speed').textContent = `${S.speed}×`;
+  const next = dir > 0 ? SPEEDS.find((v) => v > S.speed + 1e-9) : [...SPEEDS].reverse().find((v) => v < S.speed - 1e-9);
+  setSpeedTo(next ?? S.speed);
 }
 
 function restart(): void {
@@ -1238,6 +1275,7 @@ async function boot(): Promise<void> {
     $('examples').setAttribute('aria-expanded', 'false');
     $('test-list').hidden = true;
     $('tests').setAttribute('aria-expanded', 'false');
+    toggleSpeedMenu(false);
   });
   $('feed').addEventListener('click', (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.kf');
@@ -1263,6 +1301,33 @@ async function boot(): Promise<void> {
   document.querySelectorAll<HTMLButtonElement>('#anim-mode button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as AnimMode)));
   $('spd-down').addEventListener('click', () => setSpeed(-1));
   $('spd-up').addEventListener('click', () => setSpeed(1));
+  $('pb-speed').addEventListener('click', () => toggleSpeedMenu());
+  $('speed').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (Math.abs(e.deltaY) < 1) return;
+    setSpeed(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+  const speedMenu = $('speed-menu');
+  speedMenu.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-speed]');
+    if (!b) return;
+    setSpeedTo(Number(b.dataset.speed));
+    toggleSpeedMenu(false);
+  });
+  speedMenu.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.id === 'speed-typed') setSpeedTo(Number(input.value));
+  });
+  speedMenu.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // typing here isn't the player's keys
+    if (e.key === 'Enter') {
+      setSpeedTo(Number((e.target as HTMLInputElement).value));
+      toggleSpeedMenu(false);
+    } else if (e.key === 'Escape') toggleSpeedMenu(false);
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!speedMenu.hidden && !$('speed').contains(e.target as Node)) toggleSpeedMenu(false);
+  });
   let scrubbing = false;
   const scrub = (e: PointerEvent) => {
     const r = timeline.getBoundingClientRect();
@@ -1320,7 +1385,7 @@ async function boot(): Promise<void> {
   renderSampleTabs();
   renderTestsMenu();
   renderSkinPicker();
-  $('pb-speed').textContent = `${S.speed}×`;
+  showSpeed();
   $('file-name').textContent = S.sample.file;
   await applySkin(S.skin);
   await document.fonts.ready;

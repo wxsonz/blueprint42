@@ -67,11 +67,14 @@
             <label for="stdin"><span class="title">stdin</span> <span class="info" id="stdin-info">fed to the program when it runs under gdb</span></label>
             <textarea id="stdin" rows="3" spellcheck="false" autocomplete="off"></textarea>
             <div class="run-row" id="run-row" hidden>
-              <label>args <input id="run-args" spellcheck="false" autocomplete="off" placeholder="./prog arguments"></label>
-              <label>-D <input id="run-defs" spellcheck="false" autocomplete="off" placeholder="BUFFER_SIZE=42"></label>
-              <label title="How many steps of a long run the page loads at a time (gdb), 1,000 to 50,000. Recording runs at about 1,000 steps a second; bigger windows load slower and use more memory.">window <input id="run-window" type="number" min="1000" max="50000" step="1000"></label>
-              <button class="toggle" id="run-tty" aria-pressed="true" title="Where stdout goes decides printf's buffering: a terminal flushes at each newline, a pipe (./a.out | cat -e) only when the buffer fills or at exit"><span class="sw"></span><span id="run-tty-label">stdout: terminal</span></button>
-              <button class="btn sm" id="run-again" title="Compile and run it again now, from what the editor holds (Ctrl+Shift+Enter)">⟳ Rebuild &amp; run</button>
+              <div class="run-line"><label>args <input id="run-args" spellcheck="false" autocomplete="off" placeholder="./prog arguments"></label></div>
+              <div class="run-line"><label>-D <input id="run-defs" spellcheck="false" autocomplete="off" placeholder="BUFFER_SIZE=42"></label></div>
+              <div class="run-line opts">
+                <label title="How many steps of a long run the page loads at a time (gdb), 1,000 to 50,000. Recording runs at about 1,000 steps a second; bigger windows load slower and use more memory.">window <input id="run-window" type="number" min="1000" max="50000" step="1000"></label>
+                <button class="toggle" id="run-tty" aria-pressed="true" title="Where stdout goes decides printf's buffering: a terminal flushes at each newline, a pipe (./a.out | cat -e) only when the buffer fills or at exit"><span class="sw"></span><span id="run-tty-label">stdout: terminal</span></button>
+                <span class="engine-pick"><span class="lbl" title="Which engine runs the program: picking one runs it again">run with</span><span id="engines" class="seg" aria-label="Engine"></span></span>
+                <button class="btn sm" id="run-again" title="Compile and run it again now, from what the editor holds (Ctrl+Shift+Enter)">⟳ Rebuild &amp; run</button>
+              </div>
             </div>
           </div>
         </section>
@@ -116,15 +119,17 @@
         </div>
         <span class="sysclock" aria-hidden="true"></span>
         <canvas id="timeline" title="Scrub"></canvas>
-        <div id="anim-mode" class="seg" aria-label="Animation">
-          <button data-mode="fast" title="Fast: every step plays once; the camera only pans">Fast</button>
-          <button data-mode="focus" title="Focus: each call, return and pointer write is staged — the rest dims, the sender flashes, the data travels 2–3 times, the receiver flashes">Focus</button>
-        </div>
-        <div id="engines" class="seg" aria-label="Engine"></div>
-        <div class="pb-speed">
-          <button id="spd-down" class="btn sm" title="Slower">−</button>
-          <span id="pb-speed">1×</span>
-          <button id="spd-up" class="btn sm" title="Faster">+</button>
+        <div class="tempo" aria-label="How it plays">
+          <div id="anim-mode" class="seg" aria-label="Animation">
+            <button data-mode="fast" title="Fast: every step plays once; the camera only pans">Fast</button>
+            <button data-mode="focus" title="Focus: each call, return and pointer write is staged — the rest dims, the sender flashes, the data travels 2–3 times, the receiver flashes">Focus</button>
+          </div>
+          <div class="pb-speed" id="speed" title="Speed: click to pick or type one, scroll to change">
+            <button id="spd-down" class="btn sm" aria-label="Slower">−</button>
+            <button id="pb-speed" class="speed-read" aria-haspopup="menu" aria-expanded="false">1×</button>
+            <button id="spd-up" class="btn sm" aria-label="Faster">+</button>
+            <div id="speed-menu" class="speed-menu" role="menu" hidden></div>
+          </div>
         </div>
       </footer>
 
