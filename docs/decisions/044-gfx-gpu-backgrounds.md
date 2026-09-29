@@ -34,15 +34,30 @@
 - **Cubes (author): clear glass in a real 3D space.** The fog, the light
   heads and the trails are a wall just behind the cubes; each cube has a
   depth (the one its parallax already used). A pixel's ray is traced into
-  the nearest cube, bent going in (glass 1.5), bounced inside when it meets
-  a face too steeply (total internal reflection, up to three times), bent
-  coming out, and followed on to another cube or the wall. The reflected ray
-  is followed the same way, weighted by Fresnel. So the glass shows what is
-  really around it: the fog and trails bent, the other cubes, and dark where
-  it looks out into dark space. One bounce between cubes: a cube seen in
+  the nearest cube and bent going in (glass 1.5); it comes out again
+  parallel, shifted sideways by the way across (a slab of glass), and goes
+  on to another cube or the wall. The reflected ray is followed the same
+  way, weighted by Fresnel. So the glass shows what is really around it:
+  the fog and trails bent, the other cubes. No drawn edges, highlights or
+  tints (the author: "not to see an edge", "nothing inside"). A first
+  version also traced the far faces and bounced rays inside (total internal
+  reflection); it drew the cube's inner faces and edges as a shape inside
+  the glass, and was dropped. A ray leaving toward the viewer sees space
+  (black), not a tinted sky. One bounce between cubes: a cube seen in
   another is plain glass. Readings tried first and dropped: tinted glass,
   solid frosted blocks, a baked room of blocks. Simple mode and the canvas
   fallback keep the old look. The output is dithered by half a step.
+- **Cost (author: "too much compute").** Measured on the RTX 4060 (wgpu,
+  3840×2160): 2.30 ms a frame at first, 0.48 ms now. Two changes, both in
+  the layer so any scene can use them. **Bake:** a scene can draw an image
+  once (`bake`, read with `bakedAt`); the fog never changes shape, it only
+  slides and scales, so it is baked at 512×320 and the backdrop reads it,
+  instead of eight noise octaves per pixel per frame (backdrop 1.57 → 0.21
+  ms). **Regions:** a scene can name the rects it changes (`regions`); the
+  backdrop is copied across the frame and the glass shader runs only in each
+  cube's square, with a scissor (the cube search cost the same for every
+  pixel of the screen, and about 4% are glass). In the author's Chrome
+  (WebGPU, NVIDIA, 2560×1353) a frame, CPU and GPU together, is about 1 ms.
 - **Beside the button (author):** what draws the background (`WebGPU`,
   `WebGL2`, `canvas`, `still`, `off`) and a live readout, `fps · ms`: the
   background's frames a second and the CPU time of one frame (the GPU's own

@@ -7,8 +7,14 @@
 //    (`backdrop`: fog, glows) and hairlines the scene computes on the CPU
 //    (x, y in CSS px, then r, g, b, a; additive, premultiplied);
 // 2. the frame (`scene`), which can look anywhere in the backdrop with
-//    `backAt(p)`: what's behind a glass cube, bent, or reflected in it.
+//    `backAt(p)`: what's behind a glass cube, bent, or reflected in it. A
+//    scene that says where it draws over the plain backdrop (`regions`) runs
+//    only there; everywhere else the backdrop is copied across.
 // Both read one uniform block of vec4s the scene fills each frame.
+//
+// A scene can also bake: an image it draws once (`bake`, at a fixed size, when
+// the scene first runs) that `backdrop` reads back with `bakedAt(uv)` instead
+// of working the same thing out again for every pixel of every frame.
 
 export interface GfxView {
   w: number; // CSS px
@@ -31,6 +37,15 @@ export interface GpuScene {
   // colour at p, clamped to the edges); results opaque
   wgsl: string;
   glsl: string;
+  // the baked image's size in texels, and its shader: WGSL `fn bake(uv:
+  // vec2f) -> vec4f`, GLSL `vec4 bake(vec2 uv)`, uv from 0 to 1 over the
+  // image (8 bits a channel; it can't read the uniforms). `backdrop` reads it
+  // with `bakedAt(uv)` (bilinear, clamped)
+  bake?: { w: number; h: number };
+  // optional: the screen rects (x, y, w, h in CSS px) that hold everything
+  // `scene` changes; outside them the frame is just `backAt(p)`. Read from the
+  // uniforms `frame` filled
+  regions?(u: Float32Array): number[];
   // fill the uniforms for this frame; return the hairline vertices (pairs)
   frame(u: Float32Array, view: GfxView): Float32Array;
 }
@@ -59,20 +74,25 @@ struct Uni { v: array<vec4f, ${s.vec4s}> };
 @group(0) @binding(1) var<uniform> R: vec4f; // css w, h, dpr
 @group(0) @binding(2) var T: texture_2d<f32>; // the backdrop (pass 2 only)
 @group(0) @binding(3) var S: sampler;
+${s.bake ? '@group(0) @binding(4) var B: texture_2d<f32>; // the baked image (the backdrop pass only)' : ''}
 @vertex fn vs_full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   var q = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
   return vec4f(q[i], 0.0, 1.0);
 }
 fn backAt(p: vec2f) -> vec3f { return textureSampleLevel(T, S, p / R.xy, 0.0).rgb; }
+${s.bake ? 'fn bakedAt(uv: vec2f) -> vec4f { return textureSampleLevel(B, S, uv, 0.0); }' : ''}
 ${s.wgsl}
 @fragment fn fs_back(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   return vec4f(backdrop(fc.xy / R.z).rgb, 1.0);
 }
+${s.bake ? `@fragment fn fs_bake(@builtin(position) fc: vec4f) -> @location(0) vec4f { return bake(fc.xy / vec2f(${s.bake.w}.0, ${s.bake.h}.0)); }` : ''}
+// a half-step of noise: dark gradients don't band into rings at 8 bits
+fn dither(fc: vec2f) -> vec3f { return vec3f((fract(sin(dot(fc, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0); }
+@fragment fn fs_wall(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  return vec4f(backAt(fc.xy / R.z) + dither(fc.xy), 1.0);
+}
 @fragment fn fs_full(@builtin(position) fc: vec4f) -> @location(0) vec4f {
-  let c = scene(fc.xy / R.z);
-  // a half-step of noise: dark gradients don't band into rings at 8 bits
-  let n = fract(sin(dot(fc.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5;
-  return vec4f(c.rgb + vec3f(n / 255.0), 1.0);
+  return vec4f(scene(fc.xy / R.z).rgb + dither(fc.xy), 1.0);
 }
 `;
 
@@ -81,18 +101,20 @@ void main() {
   vec2 q = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   gl_Position = vec4(q, 0.0, 1.0);
 }`;
-const glFs = (s: GpuScene, pass: 'backdrop' | 'scene') => `#version 300 es
+const glFs = (s: GpuScene, pass: 'backdrop' | 'scene' | 'bake' | 'wall') => `#version 300 es
 precision highp float;
 layout(std140) uniform Uni { vec4 v[${s.vec4s}]; };
 uniform vec4 R; // css w, h, dpr, framebuffer height
 uniform sampler2D T; // the backdrop (pass 2 only)
+${s.bake ? 'uniform sampler2D B; // the baked image (the backdrop pass only)' : ''}
 out vec4 outColor;
 vec3 backAt(vec2 p) { return textureLod(T, vec2(p.x / R.x, 1.0 - p.y / R.y), 0.0).rgb; }
+${s.bake ? 'vec4 bakedAt(vec2 uv) { return textureLod(B, uv, 0.0); }' : ''}
 ${s.glsl}
 void main() {
   vec2 p = vec2(gl_FragCoord.x, R.w - gl_FragCoord.y) / R.z;
-  ${pass === 'backdrop' ? 'outColor = vec4(backdrop(p).rgb, 1.0);' : `float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-  outColor = vec4(scene(p).rgb + vec3(n / 255.0), 1.0);`}
+  ${pass === 'bake' ? `outColor = bake(gl_FragCoord.xy / vec2(${s.bake?.w}.0, ${s.bake?.h}.0));` : pass === 'backdrop' ? 'outColor = vec4(backdrop(p).rgb, 1.0);' : `float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  outColor = vec4(${pass === 'wall' ? 'backAt(p)' : 'scene(p).rgb'} + vec3(n / 255.0), 1.0);`}
 }`;
 const GL_LINE_VS = `#version 300 es
 layout(location = 0) in vec2 p;
@@ -117,7 +139,7 @@ interface GpuState {
   lineU: GPUBuffer;
   lineBind: GPUBindGroup;
   resU: GPUBuffer;
-  scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; tex: GPUTexture | null }>;
+  scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; wall: GPURenderPipeline; wallBind: GPUBindGroup | null; tex: GPUTexture | null; bake: { pipe: GPURenderPipeline; tex: GPUTexture; done: boolean } | null }>;
   sampler: GPUSampler;
   verts: GPUBuffer | null;
   vertCap: number;
@@ -129,7 +151,7 @@ interface GlState {
   lineR: WebGLUniformLocation | null;
   vao: WebGLVertexArrayObject;
   vbo: WebGLBuffer;
-  scenes: Map<string, { back: WebGLProgram; prog: WebGLProgram; ubo: WebGLBuffer; rBack: WebGLUniformLocation | null; r: WebGLUniformLocation | null; t: WebGLUniformLocation | null }>;
+  scenes: Map<string, { back: WebGLProgram; prog: WebGLProgram; wall: WebGLProgram; wallR: WebGLUniformLocation | null; wallT: WebGLUniformLocation | null; ubo: WebGLBuffer; rBack: WebGLUniformLocation | null; r: WebGLUniformLocation | null; t: WebGLUniformLocation | null; bU: WebGLUniformLocation | null; bake: { tex: WebGLTexture; done: boolean } | null }>;
   fbo: WebGLFramebuffer;
   tex: WebGLTexture;
   size: [number, number];
@@ -271,6 +293,20 @@ export class GfxLayer {
     return drawn;
   }
 
+  // the scene's regions in device px, whole pixels inside the canvas
+  private boxes(scene: GpuScene, W: number, H: number, dpr: number): [number, number, number, number][] {
+    const out: [number, number, number, number][] = [];
+    const r = scene.regions!(this.uni);
+    for (let i = 0; i + 3 < r.length; i += 4) {
+      const x0 = Math.max(0, Math.floor(r[i] * dpr));
+      const y0 = Math.max(0, Math.floor(r[i + 1] * dpr));
+      const x1 = Math.min(W, Math.ceil((r[i] + r[i + 2]) * dpr));
+      const y1 = Math.min(H, Math.ceil((r[i + 1] + r[i + 3]) * dpr));
+      if (x1 > x0 && y1 > y0) out.push([x0, y0, x1 - x0, y1 - y0]);
+    }
+    return out;
+  }
+
   private drawGpu(scene: GpuScene, view: GfxView, verts: Float32Array, W: number, H: number): boolean {
     const G = this.gpu!;
     const { device } = G;
@@ -283,17 +319,24 @@ export class GfxLayer {
         const err = ci.messages.find((m) => m.type === 'error');
         if (err && this.gpu?.device === device) this.fallBack(`WebGPU refused ${scene.id}'s shader (line ${err.lineNum}: ${err.message})`);
       });
-      const pipeOf = (entry: string) => device.createRenderPipeline({
+      const pipeOf = (entry: string, format = G.format) => device.createRenderPipeline({
         layout: 'auto',
         vertex: { module: mod, entryPoint: 'vs_full' },
-        fragment: { module: mod, entryPoint: entry, targets: [{ format: G.format }] },
+        fragment: { module: mod, entryPoint: entry, targets: [{ format }] },
         primitive: { topology: 'triangle-list' },
       });
       const back = pipeOf('fs_back');
       const pipe = pipeOf('fs_full');
+      const wall = pipeOf('fs_wall');
       const buf = device.createBuffer({ size: scene.vec4s * 16, usage: USE.UNIFORM | USE.COPY_DST });
-      const backBind = device.createBindGroup({ layout: back.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } }] });
-      sc = { back, pipe, buf, backBind, bind: null, tex: null };
+      const bk = scene.bake
+        ? { pipe: pipeOf('fs_bake', 'rgba8unorm'), tex: device.createTexture({ size: [scene.bake.w, scene.bake.h], format: 'rgba8unorm', usage: USE.TEXTURE_BINDING | USE.RENDER_ATTACHMENT }), done: false }
+        : null;
+      const backBind = device.createBindGroup({ layout: back.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } },
+        ...(bk ? [{ binding: 3, resource: G.sampler }, { binding: 4, resource: bk.tex.createView() }] : []),
+      ] });
+      sc = { back, pipe, buf, backBind, bind: null, wall, wallBind: null, tex: null, bake: bk };
       G.scenes.set(scene.id, sc);
     }
     // the backdrop's image, as big as the canvas
@@ -303,6 +346,9 @@ export class GfxLayer {
       sc.bind = device.createBindGroup({ layout: sc.pipe.getBindGroupLayout(0), entries: [
         { binding: 0, resource: { buffer: sc.buf } }, { binding: 1, resource: { buffer: G.resU } },
         { binding: 2, resource: sc.tex.createView() }, { binding: 3, resource: G.sampler },
+      ] });
+      sc.wallBind = device.createBindGroup({ layout: sc.wall.getBindGroupLayout(0), entries: [
+        { binding: 1, resource: { buffer: G.resU } }, { binding: 2, resource: sc.tex.createView() }, { binding: 3, resource: G.sampler },
       ] });
     }
     const res = new Float32Array([view.w, view.h, view.dpr, 0]);
@@ -318,6 +364,14 @@ export class GfxLayer {
       device.queue.writeBuffer(G.verts, 0, verts);
     }
     const enc = device.createCommandEncoder();
+    // (once) the baked image
+    if (sc.bake && !sc.bake.done) {
+      const z = enc.beginRenderPass({ colorAttachments: [{ view: sc.bake.tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+      z.setPipeline(sc.bake.pipe);
+      z.draw(3);
+      z.end();
+      sc.bake.done = true;
+    }
     // 1. the backdrop and the hairlines, into its image
     const a = enc.beginRenderPass({ colorAttachments: [{ view: sc.tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
     a.setPipeline(sc.back);
@@ -332,9 +386,23 @@ export class GfxLayer {
     a.end();
     // 2. the frame, looking into it
     const b = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
-    b.setPipeline(sc.pipe);
-    b.setBindGroup(0, sc.bind!);
-    b.draw(3);
+    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
+    if (boxes) {
+      // the backdrop everywhere, then the scene only where it changes anything
+      b.setPipeline(sc.wall);
+      b.setBindGroup(0, sc.wallBind!);
+      b.draw(3);
+      b.setPipeline(sc.pipe);
+      b.setBindGroup(0, sc.bind!);
+      for (const [x, y, w, h] of boxes) {
+        b.setScissorRect(x, y, w, h);
+        b.draw(3);
+      }
+    } else {
+      b.setPipeline(sc.pipe);
+      b.setBindGroup(0, sc.bind!);
+      b.draw(3);
+    }
     b.end();
     device.queue.submit([enc.finish()]);
     return true;
@@ -347,11 +415,20 @@ export class GfxLayer {
     if (!sc) {
       const back = program(gl, GL_FULL_VS, glFs(scene, 'backdrop'));
       const prog = program(gl, GL_FULL_VS, glFs(scene, 'scene'));
+      const wall = program(gl, GL_FULL_VS, glFs(scene, 'wall'));
       const ubo = gl.createBuffer()!;
       gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
       gl.bufferData(gl.UNIFORM_BUFFER, scene.vec4s * 16, gl.DYNAMIC_DRAW);
       for (const pr of [back, prog]) gl.uniformBlockBinding(pr, gl.getUniformBlockIndex(pr, 'Uni'), 0);
-      sc = { back, prog, ubo, rBack: gl.getUniformLocation(back, 'R'), r: gl.getUniformLocation(prog, 'R'), t: gl.getUniformLocation(prog, 'T') };
+      let bake: { tex: WebGLTexture; done: boolean } | null = null;
+      if (scene.bake) {
+        const tex = gl.createTexture()!;
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, scene.bake.w, scene.bake.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+        bake = { tex, done: false };
+      }
+      sc = { back, prog, wall, wallR: gl.getUniformLocation(wall, 'R'), wallT: gl.getUniformLocation(wall, 'T'), ubo, rBack: gl.getUniformLocation(back, 'R'), r: gl.getUniformLocation(prog, 'R'), t: gl.getUniformLocation(prog, 'T'), bU: gl.getUniformLocation(back, 'B'), bake };
       S.scenes.set(scene.id, sc);
     }
     // the backdrop's image, as big as the canvas
@@ -367,6 +444,25 @@ export class GfxLayer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       S.size = [W, H];
     }
+    if (sc.bake && !sc.bake.done) {
+      // (once) the baked image
+      // (its program still declares the uniform block, so bind it)
+      gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sc.ubo);
+      const bp = program(gl, GL_FULL_VS, glFs(scene, 'bake'));
+      gl.uniformBlockBinding(bp, gl.getUniformBlockIndex(bp, 'Uni'), 0);
+      const fbo = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sc.bake.tex, 0);
+      gl.viewport(0, 0, scene.bake!.w, scene.bake!.h);
+      gl.disable(gl.BLEND);
+      gl.useProgram(bp);
+      gl.bindVertexArray(null);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fbo);
+      gl.deleteProgram(bp);
+      sc.bake.done = true;
+    }
     gl.viewport(0, 0, W, H);
     gl.bindBuffer(gl.UNIFORM_BUFFER, sc.ubo);
     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, this.uni);
@@ -376,6 +472,12 @@ export class GfxLayer {
     gl.disable(gl.BLEND);
     gl.useProgram(sc.back);
     gl.uniform4f(sc.rBack, view.w, view.h, view.dpr, H);
+    if (sc.bake) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, sc.bake.tex);
+      gl.uniform1i(sc.bU, 1);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.bindVertexArray(null);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (verts.length) {
@@ -392,12 +494,30 @@ export class GfxLayer {
     }
     // 2. the frame, looking into it
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.useProgram(sc.prog);
-    gl.uniform4f(sc.r, view.w, view.h, view.dpr, H);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, S.tex);
-    gl.uniform1i(sc.t, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
+    if (boxes) {
+      // the backdrop everywhere, then the scene only where it changes anything
+      gl.useProgram(sc.wall);
+      gl.uniform4f(sc.wallR, view.w, view.h, view.dpr, H);
+      gl.uniform1i(sc.wallT, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.useProgram(sc.prog);
+      gl.uniform4f(sc.r, view.w, view.h, view.dpr, H);
+      gl.uniform1i(sc.t, 0);
+      gl.enable(gl.SCISSOR_TEST);
+      for (const [x, y, w, h] of boxes) {
+        gl.scissor(x, H - y - h, w, h);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+      gl.disable(gl.SCISSOR_TEST);
+    } else {
+      gl.useProgram(sc.prog);
+      gl.uniform4f(sc.r, view.w, view.h, view.dpr, H);
+      gl.uniform1i(sc.t, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     return true;
   }
 }

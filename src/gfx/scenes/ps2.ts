@@ -8,8 +8,11 @@
 // CPU: the numbers (fog rects, cube centres, depths and rotations, light
 // paths). GPU, in 3D (x, y as on screen, z toward the viewer, px): the
 // backdrop (fog, light heads, trails as 1px lines) is a wall behind
-// everything; each glass cube is traced, the ray bent going in and out and
-// reflected, and followed on to the other cubes or the wall.
+// everything; each cube is clear glass, the ray bent going in and out of it
+// like a slab, and followed on to the other cubes or the wall, with a faint
+// reflection at a slant. No edges, highlights or tints: only what's there.
+// The fog never changes shape (it slides and scales), so it's baked once into
+// a small image and the backdrop just reads it.
 import { ps2Still } from '../../skins/consoles/common';
 import { hash } from '../../skins/util';
 import type { GfxView, GpuScene } from '../layer';
@@ -145,6 +148,8 @@ fn fogD(uv: vec2f, seed: f32) -> f32 {
   let mask = max(0.0, 1.0 - length(vec2f((uv.x - 0.5) / 0.42, (uv.y - 0.47) / 0.42)));
   return max(0.0, n - 0.3) * 2.2 * pow(mask, 1.2);
 }
+// baked once: the two fog layers' density, halved to fit 8 bits (r: the first, g: the second)
+fn bake(uv: vec2f) -> vec4f { return vec4f(fogD(uv, 1.0) * 0.5, fogD(uv, 9.0) * 0.5, 0.0, 1.0); }
 fn over(d: vec4f, s: vec4f) -> vec4f { return s + d * (1.0 - s.a); }
 
 // ---- pass 1: the wall behind everything: space, the fog, the light heads
@@ -155,7 +160,7 @@ fn backdrop(p: vec2f) -> vec4f {
     let r = U.v[${V_FOG} + i];
     let uv = (p - r.xy) / r.zw;
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
-      let d = fogD(uv, select(9.0, 1.0, i == 0));
+      let d = bakedAt(uv)[i] * 2.0;
       let a = min(1.0, d * 0.8) * U.v[${V_FOGA}][i];
       let col = vec3f(20.0 + 26.0 * d, 22.0 + 26.0 * d, 110.0 + 70.0 * d) / 255.0;
       c = over(c, vec4f(col * a, a));
@@ -178,9 +183,8 @@ fn backdrop(p: vec2f) -> vec4f {
 
 // ---- pass 2: the cubes, traced in 3D ----
 // A ray against cube i: where it enters and leaves (tn, tf, in px along the
-// ray), the faces' normals there, and the hit points in the cube's own
-// coordinates (for its edges). tn > tf: missed.
-struct Hit { tn: f32, tf: f32, nIn: vec3f, nOut: vec3f, hIn: vec3f, hOut: vec3f };
+// ray) and the normal of the face it enters by. tn > tf: missed.
+struct Hit { tn: f32, tf: f32, nIn: vec3f };
 fn cubeRay(i: i32, o: vec3f, d: vec3f) -> Hit {
   var h: Hit;
   let cc = U.v[${V_CUBE} + i];
@@ -199,44 +203,39 @@ fn cubeRay(i: i32, o: vec3f, d: vec3f) -> Hit {
   h.tf = min(min(tf3.x, tf3.y), tf3.z);
   let toWorld = mat3x3f(r0, r1, r2);
   h.nIn = toWorld * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), h.tn == tn3.y), vec3f(1.0, 0.0, 0.0), h.tn == tn3.x) * -sign(dl));
-  h.nOut = toWorld * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), h.tf == tf3.y), vec3f(1.0, 0.0, 0.0), h.tf == tf3.x) * sign(dl));
-  h.hIn = ol + dl * h.tn;
-  h.hOut = ol + dl * h.tf;
   return h;
 }
-// near an edge of the cube: the second-largest coordinate of a point on it near 1
-fn edgeOf(h: vec3f, w: f32) -> f32 {
-  let a = abs(h);
-  let second = max(max(min(a.x, a.y), min(a.y, a.z)), min(a.x, a.z));
-  return 1.0 - smoothstep(0.0, w, 1.0 - second);
-}
-// what a ray sees once it's past the glass: the wall, where it lands
+// what a ray sees once it's past the glass: the wall, where it lands; nothing
+// (space) if it heads away from it
 fn wallAt(o: vec3f, d: vec3f) -> vec3f {
   let zb = U.v[${V_RES}].w;
-  if (d.z > -1e-3) { return mix(vec3f(0.02, 0.025, 0.07), vec3f(0.1, 0.13, 0.27), smoothstep(-0.6, 0.9, -d.y)); } // away from the wall: a faint sky
+  if (d.z > -1e-3) { return vec3f(0.0, 0.0, 3.0 / 255.0); }
   return backAt((o + d * ((zb - o.z) / d.z)).xy);
 }
-// the nearest cube a ray meets (not \`skip\`), or -1
+// the nearest cube a unit ray meets (not \`skip\`), or -1
 fn nearest(o: vec3f, d: vec3f, skip: i32) -> i32 {
   var best = -1;
   var bt = 1e9;
   for (var j = 0; j < 6; j++) {
     if (j == skip) { continue; }
+    // a cheap miss first: how far the ray passes from the cube's centre
+    let cc = U.v[${V_CUBE} + j];
+    let rel = vec3f(cc.xy, cc.w) - o;
+    let along = dot(rel, d);
+    if (along < -cc.z * 1.8 || dot(rel, rel) - along * along > 3.0 * cc.z * cc.z) { continue; }
     let h = cubeRay(j, o, d);
     if (h.tn <= h.tf && h.tn > 0.5 && h.tn < bt) { bt = h.tn; best = j; }
   }
   return best;
 }
-// what a ray from the surface of cube \`skip\` sees: another cube (glass: the
-// wall straight through it, its edges, a sheen), or the wall
+// what a ray from the surface of cube \`skip\` sees: another cube (the wall
+// straight through it, less what it reflects away), or the wall
 fn seen(o: vec3f, d: vec3f, skip: i32) -> vec3f {
   let j = nearest(o, d, skip);
   if (j < 0) { return wallAt(o, d); }
   let h = cubeRay(j, o, d);
-  let px = 1.0 / U.v[${V_CUBE} + j].z;
-  let edges = edgeOf(h.hIn, max(px * 1.6, 0.02)) * 0.3 + edgeOf(h.hOut, max(px * 1.6, 0.02)) * 0.1;
   let F = 0.04 + 0.4 * pow(1.0 - abs(dot(h.nIn, d)), 4.0);
-  return wallAt(o + d * h.tf, d) * (1.0 - F) + vec3f(0.1, 0.13, 0.25) * F + vec3f(0.8, 0.86, 1.0) * edges;
+  return wallAt(o + d * h.tf, d) * (1.0 - F);
 }
 fn scene(p: vec2f) -> vec4f {
   let o = vec3f(p, 1e4);
@@ -254,42 +253,17 @@ fn scene(p: vec2f) -> vec4f {
   let wall = backAt(p);
   if (i < 0) { return vec4f(wall, 1.0); }
   let hs = U.v[${V_CUBE} + i].z;
-  let px = 1.0 / hs; // one screen pixel, in half-sides
   let x0 = o + v * h.tn;
-  // through: bent going in (glass 1.5), bent again coming out the far face,
-  // and on to whatever is there: another cube, or the wall
-  // (a ray meeting a face too steeply stays in: total internal reflection,
-  // up to three bounces inside before it leaves)
-  var dir = refract(v, h.nIn, 1.0 / 1.5);
-  var pos = x0 - h.nIn * 0.01;
-  var outd = dir;
-  var farEdge = 0.0;
-  for (var k = 0; k < 4; k++) {
-    let hi = cubeRay(i, pos, dir);
-    let e = pos + dir * hi.tf;
-    if (k == 0) { farEdge = edgeOf(hi.hOut, max(px * 1.6, 0.02)); }
-    outd = refract(dir, -hi.nOut, 1.5);
-    pos = e;
-    if (dot(outd, outd) > 1e-4 || k == 3) {
-      if (dot(outd, outd) <= 1e-4) { outd = reflect(dir, -hi.nOut); }
-      break;
-    }
-    dir = reflect(dir, -hi.nOut);
-    pos = e + hi.nOut * 0.01;
-  }
-  let through = seen(pos, outd, i);
-  // on it: what the face reflects (the other cubes, the wall at a slant, the
-  // sky), faint face-on, stronger edge-on (Fresnel)
-  let r = reflect(v, h.nIn);
+  // through, as a slab of glass 1.5: bent going in, then out again parallel to
+  // how it came, shifted sideways by the way across
+  let dir = refract(v, h.nIn, 1.0 / 1.5);
+  let through = seen(x0 + dir * ((h.tf - h.tn) / max(-dir.z, 0.2)), v, i);
+  // on it: what the face reflects (the other cubes, the wall at a slant), faint
+  // face-on, stronger edge-on (Fresnel)
   let F = 0.04 + 0.4 * pow(1.0 - clamp(h.nIn.z, 0.0, 1.0), 4.0);
-  let refl = seen(x0, r, i);
-  let Lg = normalize(vec3f(-0.45, -0.6, 0.66));
-  let spec = pow(max(dot(h.nIn, normalize(Lg + vec3f(0.0, 0.0, 1.0))), 0.0), 80.0) * 0.7;
-  let ew = max(px * 1.6, 0.02);
-  let edges = edgeOf(h.hIn, ew) * 0.35 + farEdge * 0.12;
-  let col = mix(through, refl, F) + vec3f(1.0, 0.98, 0.95) * spec + vec3f(0.8, 0.86, 1.0) * edges;
+  let col = mix(through, seen(x0, reflect(v, h.nIn), i), F);
   // soft silhouette: coverage from how much glass the ray crossed
-  return vec4f(mix(wall, col, clamp((h.tf - h.tn) / hs / (px * 1.5), 0.0, 1.0)), 1.0);
+  return vec4f(mix(wall, col, clamp((h.tf - h.tn) / 1.5, 0.0, 1.0)), 1.0);
 }
 `;
 
@@ -317,6 +291,7 @@ float fogD(vec2 uv, float seed) {
   float mask = max(0.0, 1.0 - length(vec2((uv.x - 0.5) / 0.42, (uv.y - 0.47) / 0.42)));
   return max(0.0, n - 0.3) * 2.2 * pow(mask, 1.2);
 }
+vec4 bake(vec2 uv) { return vec4(fogD(uv, 1.0) * 0.5, fogD(uv, 9.0) * 0.5, 0.0, 1.0); }
 vec4 over(vec4 d, vec4 s) { return s + d * (1.0 - s.a); }
 vec4 backdrop(vec2 p) {
   vec4 c = vec4(0.0, 0.0, 3.0 / 255.0, 1.0);
@@ -324,7 +299,7 @@ vec4 backdrop(vec2 p) {
     vec4 r = v[${V_FOG} + i];
     vec2 uv = (p - r.xy) / r.zw;
     if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
-      float d = fogD(uv, i == 0 ? 1.0 : 9.0);
+      float d = bakedAt(uv)[i] * 2.0;
       float a = min(1.0, d * 0.8) * v[${V_FOGA}][i];
       vec3 col = vec3(20.0 + 26.0 * d, 22.0 + 26.0 * d, 110.0 + 70.0 * d) / 255.0;
       c = over(c, vec4(col * a, a));
@@ -343,7 +318,7 @@ vec4 backdrop(vec2 p) {
   }
   return vec4(c.rgb, 1.0);
 }
-struct Hit { float tn; float tf; vec3 nIn; vec3 nOut; vec3 hIn; vec3 hOut; };
+struct Hit { float tn; float tf; vec3 nIn; };
 vec3 axisOf(float t, vec3 t3) { return t == t3.x ? vec3(1.0, 0.0, 0.0) : t == t3.y ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0); }
 Hit cubeRay(int i, vec3 o, vec3 d) {
   Hit h;
@@ -361,21 +336,12 @@ Hit cubeRay(int i, vec3 o, vec3 d) {
   vec3 tf3 = max(t0, t1);
   h.tn = max(max(tn3.x, tn3.y), tn3.z);
   h.tf = min(min(tf3.x, tf3.y), tf3.z);
-  mat3 toWorld = mat3(r0, r1, r2);
-  h.nIn = toWorld * (axisOf(h.tn, tn3) * -sign(dl));
-  h.nOut = toWorld * (axisOf(h.tf, tf3) * sign(dl));
-  h.hIn = ol + dl * h.tn;
-  h.hOut = ol + dl * h.tf;
+  h.nIn = mat3(r0, r1, r2) * (axisOf(h.tn, tn3) * -sign(dl));
   return h;
-}
-float edgeOf(vec3 h, float w) {
-  vec3 a = abs(h);
-  float second = max(max(min(a.x, a.y), min(a.y, a.z)), min(a.x, a.z));
-  return 1.0 - smoothstep(0.0, w, 1.0 - second);
 }
 vec3 wallAt(vec3 o, vec3 d) {
   float zb = v[${V_RES}].w;
-  if (d.z > -1e-3) return mix(vec3(0.02, 0.025, 0.07), vec3(0.1, 0.13, 0.27), smoothstep(-0.6, 0.9, -d.y));
+  if (d.z > -1e-3) return vec3(0.0, 0.0, 3.0 / 255.0);
   return backAt((o + d * ((zb - o.z) / d.z)).xy);
 }
 int nearest(vec3 o, vec3 d, int skip) {
@@ -383,6 +349,10 @@ int nearest(vec3 o, vec3 d, int skip) {
   float bt = 1e9;
   for (int j = 0; j < 6; j++) {
     if (j == skip) continue;
+    vec4 cc = v[${V_CUBE} + j];
+    vec3 rel = vec3(cc.xy, cc.w) - o;
+    float along = dot(rel, d);
+    if (along < -cc.z * 1.8 || dot(rel, rel) - along * along > 3.0 * cc.z * cc.z) continue;
     Hit h = cubeRay(j, o, d);
     if (h.tn <= h.tf && h.tn > 0.5 && h.tn < bt) { bt = h.tn; best = j; }
   }
@@ -392,10 +362,8 @@ vec3 seen(vec3 o, vec3 d, int skip) {
   int j = nearest(o, d, skip);
   if (j < 0) return wallAt(o, d);
   Hit h = cubeRay(j, o, d);
-  float px = 1.0 / v[${V_CUBE} + j].z;
-  float edges = edgeOf(h.hIn, max(px * 1.6, 0.02)) * 0.3 + edgeOf(h.hOut, max(px * 1.6, 0.02)) * 0.1;
   float F = 0.04 + 0.4 * pow(1.0 - abs(dot(h.nIn, d)), 4.0);
-  return wallAt(o + d * h.tf, d) * (1.0 - F) + vec3(0.1, 0.13, 0.25) * F + vec3(0.8, 0.86, 1.0) * edges;
+  return wallAt(o + d * h.tf, d) * (1.0 - F);
 }
 vec4 scene(vec2 p) {
   vec3 o = vec3(p, 1e4);
@@ -411,37 +379,19 @@ vec4 scene(vec2 p) {
   }
   vec3 wall = backAt(p);
   if (i < 0) return vec4(wall, 1.0);
-  float hs = v[${V_CUBE} + i].z;
-  float px = 1.0 / hs;
   vec3 x0 = o + vd * h.tn;
   vec3 dir = refract(vd, h.nIn, 1.0 / 1.5);
-  vec3 pos = x0 - h.nIn * 0.01;
-  vec3 outd = dir;
-  float farEdge = 0.0;
-  for (int k = 0; k < 4; k++) {
-    Hit hi = cubeRay(i, pos, dir);
-    vec3 e = pos + dir * hi.tf;
-    if (k == 0) farEdge = edgeOf(hi.hOut, max(px * 1.6, 0.02));
-    outd = refract(dir, -hi.nOut, 1.5);
-    pos = e;
-    if (dot(outd, outd) > 1e-4 || k == 3) {
-      if (dot(outd, outd) <= 1e-4) outd = reflect(dir, -hi.nOut);
-      break;
-    }
-    dir = reflect(dir, -hi.nOut);
-    pos = e + hi.nOut * 0.01;
-  }
-  vec3 through = seen(pos, outd, i);
-  vec3 r = reflect(vd, h.nIn);
+  vec3 through = seen(x0 + dir * ((h.tf - h.tn) / max(-dir.z, 0.2)), vd, i);
   float F = 0.04 + 0.4 * pow(1.0 - clamp(h.nIn.z, 0.0, 1.0), 4.0);
-  vec3 refl = seen(x0, r, i);
-  vec3 Lg = normalize(vec3(-0.45, -0.6, 0.66));
-  float spec = pow(max(dot(h.nIn, normalize(Lg + vec3(0.0, 0.0, 1.0))), 0.0), 80.0) * 0.7;
-  float ew = max(px * 1.6, 0.02);
-  float edges = edgeOf(h.hIn, ew) * 0.35 + farEdge * 0.12;
-  vec3 col = mix(through, refl, F) + vec3(1.0, 0.98, 0.95) * spec + vec3(0.8, 0.86, 1.0) * edges;
-  return vec4(mix(wall, col, clamp((h.tf - h.tn) / hs / (px * 1.5), 0.0, 1.0)), 1.0);
+  vec3 col = mix(through, seen(x0, reflect(vd, h.nIn), i), F);
+  return vec4(mix(wall, col, clamp((h.tf - h.tn) / 1.5, 0.0, 1.0)), 1.0);
 }
 `;
 
-export const ps2Scene: GpuScene = { id: 'ps2', vec4s: VEC4S, wgsl: WGSL, glsl: GLSL, frame };
+export const ps2Scene: GpuScene = { id: 'ps2', vec4s: VEC4S, wgsl: WGSL, glsl: GLSL, bake: { w: 512, h: 320 }, frame,
+  // each cube's square: a cube's outline stays inside 1.75 half-sides of its centre (and a pixel more)
+  regions: (u) => Array.from({ length: 6 }, (_, i) => {
+    const [x, y, hs] = u.subarray((V_CUBE + i) * 4, (V_CUBE + i) * 4 + 3);
+    const r = hs * 1.75 + 2;
+    return [x - r, y - r, 2 * r, 2 * r];
+  }).flat() };
