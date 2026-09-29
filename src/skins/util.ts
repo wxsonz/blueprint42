@@ -263,16 +263,30 @@ export function pastText(g: CanvasRenderingContext2D, past: string[] | undefined
   }
   return text;
 }
+// How a skin draws the bar of a capacity: its width and height for a text
+// size, and the drawing (centred on y). Skins without one get the plain bar.
+export interface CapLook {
+  w?: (size: number, c: CapInfo) => number;
+  h?: (size: number) => number;
+  draw: (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, c: CapInfo, col: string, track: string) => void;
+}
+const plainBar: CapLook['draw'] = (g, x, y, w, h, c, col, track) => {
+  g.fillStyle = track;
+  g.fillRect(x, y - h / 2, w, h);
+  g.fillStyle = col;
+  g.fillRect(x, y - h / 2, w * Math.min(1, c.used / c.max), h);
+};
+
 // A Norm limit: `3/5` (and its unit) with a small bar under it, right-
 // aligned at xRight, centred on y. Faint while there's room, `full` at the
 // limit, `over` past it (norminette would reject it). Returns its width.
-export function drawCap(g: CanvasRenderingContext2D, c: CapInfo, xRight: number, y: number, o: { font: (px: number) => string; size: number; faint: string; full: string; over: string; track: string }): number {
+export function drawCap(g: CanvasRenderingContext2D, c: CapInfo, xRight: number, y: number, o: { font: (px: number) => string; size: number; faint: string; full: string; over: string; track: string; look?: CapLook }): number {
   const col = c.used > c.max ? o.over : c.used === c.max ? o.full : o.faint;
   g.font = o.font(o.size);
   const text = `${c.used}/${c.max}${c.unit ? ` ${c.unit}` : ''}`;
   const tw = g.measureText(text).width;
-  const bw = Math.max(14, o.size * 2.2);
-  const bh = Math.max(2, o.size * 0.22);
+  const bw = o.look?.w?.(o.size, c) ?? Math.max(14, o.size * 2.2);
+  const bh = o.look?.h?.(o.size) ?? Math.max(2, o.size * 0.22);
   const gap = o.size * 0.5;
   const align = g.textAlign;
   const base = g.textBaseline;
@@ -280,11 +294,7 @@ export function drawCap(g: CanvasRenderingContext2D, c: CapInfo, xRight: number,
   g.textBaseline = 'middle';
   g.fillStyle = col;
   g.fillText(text, xRight, y);
-  const bx = xRight - tw - gap - bw;
-  g.fillStyle = o.track;
-  g.fillRect(bx, y - bh / 2, bw, bh);
-  g.fillStyle = col;
-  g.fillRect(bx, y - bh / 2, bw * Math.min(1, c.used / c.max), bh);
+  (o.look?.draw ?? plainBar)(g, xRight - tw - gap - bw, y, bw, bh, c, col, o.track);
   g.textAlign = align;
   g.textBaseline = base;
   return tw + gap + bw;
@@ -304,34 +314,56 @@ export function platePath(g: CanvasRenderingContext2D, x: number, y: number, w: 
   g.closePath();
 }
 
+// How a skin draws a pointer's address tag: the room it leaves for the text
+// on each side, and the plate and marker (the text is drawn over it, in the
+// colour it returns, else `col`). Skins without one get the plain tag.
+export interface TagLook {
+  padL: (h: number) => number;
+  padR: (h: number) => number;
+  draw: (g: CanvasRenderingContext2D, x: number, top: number, w: number, h: number, col: string, o: { radius: number; fill: string | null }) => string | void;
+}
+const plainTag: TagLook = {
+  padL: (h) => h * 0.7 + h * 0.32,
+  padR: (h) => h * 0.35,
+  draw(g, x, top, w, h, col, o) {
+    const padX = h * 0.35;
+    const dot = h * 0.16;
+    rrect(g, x + 0.5, top + 0.5, w - 1, h - 1, Math.min(o.radius, h / 2));
+    if (o.fill) {
+      g.fillStyle = o.fill;
+      g.fill();
+    } else {
+      g.strokeStyle = col;
+      g.lineWidth = 1;
+      g.stroke();
+    }
+    g.fillStyle = col;
+    g.beginPath();
+    g.arc(x + padX + dot, top + h / 2, dot, 0, Math.PI * 2);
+    g.fill();
+  },
+};
+
 // A pointer's address tag, right-aligned at x (left-aligned with `left`), centred on y: a
 // small plate with a socket dot (an address, not a value) and what lives
 // there. Returns its width. `fill` null: an outline in `col`; else a shade.
-export function drawTag(g: CanvasRenderingContext2D, text: string, xAt: number, y: number, maxW: number, o: { font: (px: number) => string; size: number; col: string; fill: string | null; h: number; radius: number; left?: boolean }): number {
-  const padX = o.h * 0.35;
-  const dot = o.h * 0.16;
-  const t = fitText(g, text, o.font, o.size, maxW - padX * 3 - dot * 2, 6);
-  const w = g.measureText(t).width + padX * 3 + dot * 2;
+export function drawTag(g: CanvasRenderingContext2D, text: string, xAt: number, y: number, maxW: number, o: { font: (px: number) => string; size: number; col: string; fill: string | null; h: number; radius: number; left?: boolean; look?: TagLook }): number {
+  const look = o.look ?? plainTag;
+  const padL = look.padL(o.h);
+  const padR = look.padR(o.h);
+  const t = fitText(g, text, o.font, o.size, maxW - padL - padR, 6);
+  const w = g.measureText(t).width + padL + padR;
   const x = o.left ? xAt : xAt - w;
   const top = y - o.h / 2;
-  rrect(g, x + 0.5, top + 0.5, w - 1, o.h - 1, Math.min(o.radius, o.h / 2));
-  if (o.fill) {
-    g.fillStyle = o.fill;
-    g.fill();
-  } else {
-    g.strokeStyle = o.col;
-    g.lineWidth = 1;
-    g.stroke();
-  }
-  g.fillStyle = o.col;
-  g.beginPath();
-  g.arc(x + padX + dot, y, dot, 0, Math.PI * 2);
-  g.fill();
+  g.save();
+  const ink = look.draw(g, x, top, w, o.h, o.col, { radius: o.radius, fill: o.fill });
+  g.restore();
+  g.fillStyle = ink || o.col;
   const align = g.textAlign;
   const base = g.textBaseline;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(t, x + padX * 2 + dot * 2, y + 1);
+  g.fillText(t, x + padL, y + 1);
   g.textAlign = align;
   g.textBaseline = base;
   return w;

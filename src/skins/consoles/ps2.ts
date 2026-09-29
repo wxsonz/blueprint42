@@ -1,7 +1,7 @@
-import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
+import { backdrop, countBadge, makeSkin, softShadow, type Look, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
 import { dockOf } from '../dock';
-import { hash, strokeLine, Walk } from '../util';
+import { hash, platePath, strokeLine, Walk } from '../util';
 import { EXO, F, MONO, ps2Still, text } from './common';
 
 // the AV lead's colours: rubber (edge, body, mid, sheen) idle, lit, and carrying data
@@ -327,9 +327,146 @@ function ps2Boot(dc: Dc, camX: number, camY: number): void {
   g.restore();
 }
 
+// The newer pictures on the black slab (docs/VISUALS.md): capacity as
+// hairline ticks, one to a unit; a pointer's address as a chamfered plate
+// with a metal socket ring; plates as grained black with a lit edge and lit
+// tips; and the dock as a bay: ridged intake, a light, and a socket where the
+// cable plugs in.
+const ps2Look: Look = {
+  cap: {
+    w: (s, c) => Math.min(c.max, 25) * Math.max(1.8, s * 0.19),
+    h: (s) => Math.max(4, s * 0.75),
+    draw(g, x, y, w, h, c, col) {
+      const n = Math.min(c.max, 25);
+      const step = w / n;
+      const tw = Math.max(1, step * 0.5);
+      const lit = Math.min(n, c.used);
+      for (let k = 0; k < n; k++) {
+        g.fillStyle = k < lit ? col : 'rgba(255,255,255,0.1)';
+        g.fillRect(Math.round(x + k * step), y - h / 2, tw, h);
+      }
+    },
+  },
+  tag: {
+    padL: (h) => h * 1.0,
+    padR: (h) => h * 0.4,
+    draw(g, x, top, w, h, col) {
+      const c = h * 0.28;
+      g.beginPath();
+      g.moveTo(x + c, top);
+      g.lineTo(x + w, top);
+      g.lineTo(x + w, top + h - c);
+      g.lineTo(x + w - c, top + h);
+      g.lineTo(x, top + h);
+      g.lineTo(x, top + c);
+      g.closePath();
+      g.fillStyle = '#08080a';
+      g.fill();
+      g.globalAlpha = 0.55;
+      g.strokeStyle = col;
+      g.lineWidth = 1;
+      g.stroke();
+      g.globalAlpha = 1;
+      // the socket: a metal ring round a dark hole
+      const cx = x + h * 0.5;
+      const cy = top + h / 2;
+      g.beginPath();
+      g.arc(cx, cy, h * 0.2, 0, Math.PI * 2);
+      g.fillStyle = '#000';
+      g.fill();
+      g.strokeStyle = '#82828c';
+      g.lineWidth = Math.max(1, h * 0.07);
+      g.stroke();
+      g.beginPath();
+      g.arc(cx, cy, h * 0.08, 0, Math.PI * 2);
+      g.fillStyle = col;
+      g.fill();
+    },
+  },
+  plate(dc, x, y, w, h, role, col) {
+    const g = dc.g;
+    g.save();
+    platePath(g, x, y, w, h, role, 0);
+    g.fillStyle = '#0b0b0d';
+    g.fill();
+    g.clip();
+    ps2Grain(g, x - w / 2, y - h / 2, w, h, 0.6);
+    g.fillStyle = 'rgba(255,255,255,0.14)';
+    g.fillRect(x - w / 2, y - h / 2, w, 1);
+    g.restore();
+    platePath(g, x, y, w, h, role, 0);
+    g.strokeStyle = col;
+    g.lineWidth = 1.2;
+    g.stroke();
+    // the tips, lit like the console's light
+    const k = h * (role === 'ret' ? 0.3 : 0.42);
+    const d = Math.max(1.2, h * 0.08);
+    g.fillStyle = col;
+    for (const tx of role === 'ret' ? [x - w / 2 + k, x + w / 2 - k] : [x - w / 2, x + w / 2]) {
+      g.beginPath();
+      g.arc(tx, y, d, 0, Math.PI * 2);
+      g.fill();
+    }
+  },
+  dock: {
+    intake: 11,
+    headInk: '#c4c4cc',
+    frame(dc, r, s) {
+      const g = dc.g;
+      const z = dc.z;
+      g.fillStyle = '#0e0e10';
+      g.fillRect(r.x, r.y, r.w, r.h);
+      ps2Grain(g, r.x, r.y, r.w, r.h, 0.5);
+      g.lineWidth = 1;
+      g.strokeStyle = 'rgba(255,255,255,0.1)';
+      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      // the intake: a ridged column and a light at its head; the light alone carries the state
+      ridges(g, r.x + 1, r.y + 1, 9 * z, r.h - 2, Math.max(3, 3.5 * z));
+      const lit = s.hot || s.state === 'waiting';
+      const cx = r.x + 5.5 * z;
+      const cy = r.y + 9 * z;
+      if (lit) {
+        g.fillStyle = s.col;
+        g.globalAlpha = 0.22;
+        g.beginPath();
+        g.arc(cx, cy, 8 * z, 0, Math.PI * 2);
+        g.fill();
+        g.globalAlpha = 0.35;
+        g.beginPath();
+        g.arc(cx, cy, 5 * z, 0, Math.PI * 2);
+        g.fill();
+        g.globalAlpha = 1;
+      }
+      g.fillStyle = lit ? s.col : '#2a2a30';
+      g.beginPath();
+      g.arc(cx, cy, Math.max(1.5, 2.4 * z), 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fillRect(r.x + 10.5 * z, r.y + 4 * z, Math.max(1, 1.2 * z), r.h - 8 * z);
+    },
+    // where the cable plugs in: a dark slot lined with metal, a light in it
+    port(dc, x, y, col, hot) {
+      const g = dc.g;
+      const z = dc.z;
+      const w = Math.max(5, 7 * z);
+      const h = Math.max(8, 11 * z);
+      g.fillStyle = '#040405';
+      g.fillRect(x - w / 2, y - h / 2, w, h);
+      g.fillStyle = '#82828c';
+      const b = Math.max(1, 1.5 * z);
+      g.fillRect(x - w / 2, y - h / 2, w, b);
+      g.fillRect(x - w / 2, y + h / 2 - b, w, b);
+      g.fillStyle = col;
+      g.globalAlpha = hot ? 1 : 0.5;
+      g.fillRect(x - Math.max(1, z), y - h * 0.28, Math.max(2, 2 * z), h * 0.56);
+      g.globalAlpha = 1;
+    },
+  },
+};
+
 export const ps2Theme: Theme = {
   id: 'ps2', name: 'PlayStation 2', blurb: 'the black monolith and the boot screen: blue fog, glass cubes, sharp trails of light',
-  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
+  ptrTags: true, plateShapes: true, capacity: true, look: ps2Look,
   p: ps2P, ui: EXO, mono: MONO('"Share Tech Mono"'), radius: 0, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(63,107,255,0.9)',
   flow: '#3f6bff', // data in motion is the console's blue light

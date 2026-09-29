@@ -1,7 +1,7 @@
-import { backdrop, countBadge, makeSkin, type Palette, type Theme } from '../kit';
+import { backdrop, countBadge, makeSkin, type Look, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
 import { dockOf } from '../dock';
-import { hash, Walk } from '../util';
+import { hash, platePath, Walk } from '../util';
 import { MONO, ps2Still, SST, text } from './common';
 
 // PS4, from its system screens (Friends, Communities, Remote Play): a deep
@@ -41,11 +41,12 @@ const PS4_PLACES: number[][] = [
   [0.35, 1.02, 0.7, 0.95, 1.02, 0.75], // skimming the bottom right
   [0.12, -0.02, 0.04, 0.35, -0.02, 0.75], // down the left edge from the top
 ];
-function ps4Prism(dc: Dc): void {
-  const g = dc.g;
-  const W = dc.vw;
-  const H = dc.vh;
-  const t = ps2Still || !dc.time ? 40 : dc.time;
+// Where the prism is and how it turns at time t: the numbers both the canvas
+// drawing below and the GPU scene (gfx/scenes/ps4.ts) work from. Every point
+// of a ring lies on the arc's normal, so a pixel's place is its angle around
+// the arc's circle (s along the band) and its distance from the circle (the
+// offset r(s)·cos(tw(s) + j·120°) of edge j).
+export function ps4Geom(W: number, H: number, t: number) {
   const P = 16;
   const n = Math.floor(t / P);
   const p = t / P - n;
@@ -98,18 +99,26 @@ function ps4Prism(dc: Dc): void {
   const waveRate = w1.a * Math.PI * 2 * w1.f + w2.a * Math.PI * 2 * w2.f;
   const room = Math.max(0, MAXTURN - Math.abs(twist));
   const k = waveRate > room ? room / waveRate : 1;
+  const phase = t * 0.37 + n;
+  const rAt = (s: number) => (rmin + (1 - s) ** 2.2 * rHead + s ** 2.2 * rTail) * (1 + bulge * Math.sin(Math.PI * 2 * 1.3 * s + phase));
+  const twAt = (s: number) => spin + twist * s + k * (w1.a * Math.sin(Math.PI * 2 * w1.f * s + w1.v * t + w1.ph) + w2.a * Math.sin(Math.PI * 2 * w2.f * s + w2.v * t + w2.ph));
+  return { ox, oy, R, a0, sweep, slide, EXT, fade, rmin, rHead, rTail, bulge, phase, spin, twist, k, w1, w2, thAt, rAt, twAt };
+}
+function ps4Prism(dc: Dc): void {
+  const g = dc.g;
+  const W = dc.vw;
+  const H = dc.vh;
+  const t = ps2Still || !dc.time ? 40 : dc.time;
+  const { ox, oy, R, fade, thAt, rAt, twAt } = ps4Geom(W, H, t);
   const N = 72;
   const ring: { x: number; y: number }[][] = [];
-  const ang: number[] = [];
   for (let i = 0; i <= N; i++) {
     const s = i / N;
     const th = thAt(s);
     const cx = ox + Math.cos(th) * R, cy = oy + Math.sin(th) * R;
     const nx = -Math.cos(th), ny = -Math.sin(th);
-    const flare = (1 - s) ** 2.2 * rHead + s ** 2.2 * rTail;
-    const r = (rmin + flare) * (1 + bulge * Math.sin(Math.PI * 2 * 1.3 * s + t * 0.37 + n));
-    const tw = spin + twist * s + k * (w1.a * Math.sin(Math.PI * 2 * w1.f * s + w1.v * t + w1.ph) + w2.a * Math.sin(Math.PI * 2 * w2.f * s + w2.v * t + w2.ph));
-    ang.push(tw);
+    const r = rAt(s);
+    const tw = twAt(s);
     const tri: { x: number; y: number }[] = [];
     for (let j = 0; j < 3; j++) {
       const q = tw + (j * 2 * Math.PI) / 3;
@@ -256,9 +265,95 @@ function ps4Belt(dc: Dc, pts: [number, number][], o: { live: boolean; dir: numbe
   }
   g.restore();
 }
+// The newer pictures, flat and square as the system screens are
+// (docs/VISUALS.md): capacity as a download bar, a pointer's address as a
+// navy input field with a square marker, plates as navy fields with the
+// controller's light bar along the foot in the plate's colour, and the dock
+// as a card with the light bar across its top.
+const ps4Look: Look = {
+  cap: {
+    w: (s) => s * 3.6,
+    h: (s) => Math.max(3, s * 0.4),
+    draw(g, x, y, w, h, c, col) {
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.fillRect(x, y - h / 2, w, h);
+      g.fillStyle = col;
+      g.fillRect(x, y - h / 2, w * Math.min(1, c.used / c.max), h);
+    },
+  },
+  tag: {
+    padL: (h) => h * 0.95,
+    padR: (h) => h * 0.4,
+    draw(g, x, top, w, h, col) {
+      g.fillStyle = 'rgba(3,5,42,0.92)';
+      g.fillRect(x, top, w, h);
+      g.globalAlpha = 0.8;
+      g.strokeStyle = col;
+      g.lineWidth = 1;
+      g.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
+      g.globalAlpha = 1;
+      const m = Math.max(2, h * 0.26);
+      g.fillStyle = col;
+      g.fillRect(x + h * 0.42 - m / 2, top + h / 2 - m / 2, m, m);
+    },
+  },
+  plate(dc, x, y, w, h, role, col) {
+    const g = dc.g;
+    g.save();
+    platePath(g, x, y, w, h, role, 0);
+    g.fillStyle = 'rgba(3,5,42,0.92)';
+    g.fill();
+    g.clip();
+    const b = Math.max(2, h * 0.14);
+    g.fillStyle = col;
+    g.fillRect(x - w / 2, y + h / 2 - b, w, b);
+    g.restore();
+    platePath(g, x, y, w, h, role, 0);
+    g.strokeStyle = 'rgba(235,242,255,0.9)';
+    g.lineWidth = 1;
+    g.stroke();
+  },
+  dock: {
+    intake: 0,
+    top: 4,
+    frame(dc, r, s) {
+      const g = dc.g;
+      const z = dc.z;
+      g.fillStyle = ps4P.card;
+      g.fillRect(r.x, r.y, r.w, r.h);
+      // focus is a white border; the light bar is the state
+      g.strokeStyle = s.hot ? '#ffffff' : 'rgba(150,190,255,0.45)';
+      g.lineWidth = s.hot ? Math.max(2, 2 * z) : 1;
+      g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      const bh = Math.max(2, 3 * z);
+      if (s.hot || s.state === 'waiting') {
+        g.fillStyle = s.col;
+        g.globalAlpha = 0.3;
+        g.fillRect(r.x, r.y + bh, r.w, Math.max(3, 4 * z));
+        g.globalAlpha = 1;
+      }
+      g.fillStyle = s.col;
+      g.fillRect(r.x, r.y, r.w, bh);
+    },
+    rule(dc, x, y, w) {
+      dc.g.fillStyle = 'rgba(150,190,255,0.45)';
+      dc.g.fillRect(x, y, w, 1);
+    },
+    port(dc, x, y, col) {
+      const g = dc.g;
+      const m = Math.max(4, 6 * dc.z);
+      g.fillStyle = col;
+      g.fillRect(x - m / 2, y - m / 2, m, m);
+      g.strokeStyle = 'rgba(3,5,42,0.9)';
+      g.lineWidth = 1;
+      g.strokeRect(x - m / 2 + 0.5, y - m / 2 + 0.5, m - 1, m - 1);
+    },
+  },
+};
+
 export const ps4Theme: Theme = {
   id: 'ps4', name: 'PlayStation 4', blurb: 'the system screens: royal blue, lighter cards with pale edges, a white border on focus',
-  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
+  ptrTags: true, plateShapes: true, capacity: true, look: ps4Look,
   p: ps4P, ui: SST, mono: MONO('"JetBrains Mono"'), radius: 0, spotlight: 'rgba(0,10,60,0.5)',
   pulseColor: 'rgba(255,255,255,0.9)',
   belt(dc, pts, o, t) {
@@ -368,5 +463,5 @@ export const ps4Theme: Theme = {
   },
 };
 
-export const ps4 = { ...makeSkin(ps4Theme), dock: dockOf(ps4Theme) };
+export const ps4 = { ...makeSkin(ps4Theme), dock: dockOf(ps4Theme, { run: '#8fd0ff' }) };
 ps4.fullBleed = true; // the sky and its ribbons behind the whole page, as the PS3's

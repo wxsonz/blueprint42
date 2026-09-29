@@ -5,8 +5,9 @@
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
-import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import type { Dc, IconKind, NodeInfo, PlateKind, PlateRole, Pt, Rect, Skin } from './types';
+import type { DockLook } from './dock';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk, type CapLook, type TagLook } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -24,6 +25,17 @@ export interface Palette {
   param: string; // parameter names in frames
   cell: string; // a byte in memory
   track: string; // the memory strip's track
+}
+
+// A skin's own drawing of the engine's newer pictures (docs/VISUALS.md), so
+// each says the same thing in its own material: the capacity bar, the pointer
+// address tag, the plate shapes and the IN dock. Without one, the plain ones.
+export interface Look {
+  cap?: CapLook;
+  tag?: TagLook;
+  // an argument's or a return value's plate: its shape (hexagon, notched) filled and edged, in `col`
+  plate?: (dc: Dc, x: number, y: number, w: number, h: number, role: PlateRole, col: string, kind: PlateKind) => void;
+  dock?: DockLook;
 }
 
 export interface Theme {
@@ -55,6 +67,7 @@ export interface Theme {
   flow?: string; // data in motion (live belts, argument plates) when it isn't the accent
   // desktop themes: machines and files are windows
   window?: WindowStyle;
+  look?: Look;
 }
 
 export interface WindowStyle {
@@ -78,7 +91,7 @@ export function makeSkin(t: Theme): Skin {
   const sprite: SpritePalette = {
     get body() { return p.card; }, get edge() { return p.line; }, get track() { return p.track; }, get cell() { return p.cell; },
     get text() { return p.fg; }, get muted() { return p.dim; }, get accent() { return p.accent; }, get marker() { return p.ret; }, get selection() { return p.accent; },
-    font: (s) => t.mono(s), radius: t.radius, get full() { return p.wait; }, get over() { return p.err; }, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined,
+    font: (s) => t.mono(s), radius: t.radius, get full() { return p.wait; }, get over() { return p.err; }, get capLook() { return t.look?.cap; }, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined,
   };
   const cap = (s: string) => (t.upper ? s.toUpperCase() : s);
   const R = (dc: Dc) => px(dc, t.radius, t.radius ? 1 : 0);
@@ -152,7 +165,7 @@ export function makeSkin(t: Theme): Skin {
       g.textAlign = 'right';
       g.font = t.mono(px(dc, 10.5, 7), 600);
       // with capacity, the Norm's 5 definitions up here, and the depth goes with the state below
-      if (m.cap) drawCap(g, { ...m.cap, unit: cap('fns') }, r.x + r.w - pad, r.y + px(dc, 22), { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
+      if (m.cap) drawCap(g, { ...m.cap, unit: cap('fns') }, r.x + r.w - pad, r.y + px(dc, 22), { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap });
       else g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
       const rowH = 0.55 * dc.cs;
       const top = r.y + px(dc, 40);
@@ -205,7 +218,7 @@ export function makeSkin(t: Theme): Skin {
       g.textAlign = 'right';
       g.fillStyle = p.faint;
       g.font = t.mono(px(dc, 10, 6));
-      if (w.cap) drawCap(g, { ...w.cap, unit: cap('functions') }, h.x + h.w - px(dc, 12), h.y + h.h / 2, { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
+      if (w.cap) drawCap(g, { ...w.cap, unit: cap('functions') }, h.x + h.w - px(dc, 12), h.y + h.h / 2, { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap });
       else g.fillText(cap(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`), h.x + h.w - px(dc, 12), h.y + h.h / 2);
       if (w.selected || w.hovered) outline(dc, r, w.selected);
     },
@@ -343,7 +356,7 @@ export function makeSkin(t: Theme): Skin {
         g.font = t.ui(px(dc, 9.5, 7), 700);
         g.fillText(label, r.x + pad, f.head.y + f.head.h / 2 + 1);
       }
-      if (f.cap) drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: t.mono, size: px(dc, 9.5, 7), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
+      if (f.cap) drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: t.mono, size: px(dc, 9.5, 7), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap });
       for (const row of f.rows) {
         const rr = row.rect;
         if (row.recent || row.flash > 0) {
@@ -361,7 +374,7 @@ export function makeSkin(t: Theme): Skin {
         g.fillStyle = !row.value ? p.faint : row.kind === 'ptr' ? p.ptr : row.kind === 'dangling' ? p.err : row.kind === 'undef' || row.kind === 'null' ? p.faint : p.fg;
         g.textAlign = 'right';
         let vw: number;
-        if (row.tag && t.ptrTags) vw = drawTag(g, row.tag, r.x + r.w - pad, rr.y + rr.h / 2, r.w * 0.5 - pad, { font: (s) => t.mono(s, 700), size: px(dc, 11, 7), col: row.kind === 'dangling' ? p.err : p.ptr, fill: p.cell, h: rr.h - px(dc, 5, 2), radius: px(dc, t.radius, 0) });
+        if (row.tag && t.ptrTags) vw = drawTag(g, row.tag, r.x + r.w - pad, rr.y + rr.h / 2, r.w * 0.5 - pad, { font: (s) => t.mono(s, 700), size: px(dc, 11, 7), col: row.kind === 'dangling' ? p.err : p.ptr, fill: p.cell, h: rr.h - px(dc, 5, 2), radius: px(dc, t.radius, 0), look: t.look?.tag });
         else {
           const vt = fitText(g, v, (s) => t.mono(s, 700), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
           g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
@@ -438,12 +451,15 @@ export function makeSkin(t: Theme): Skin {
       const col = kind === 'ptr' ? p.ptr : kind === 'ret' ? p.ret : kind === 'void' ? p.faint : t.flow ?? p.accent;
       if (shaped) {
         // a belt's argument or return value: its role in its outline
-        platePath(g, x, y, w, h, role);
-        g.fillStyle = p.panel;
-        g.fill();
-        g.strokeStyle = col;
-        g.lineWidth = 1.3;
-        g.stroke();
+        if (t.look?.plate) t.look.plate(dc, x, y, w, h, role!, col, kind);
+        else {
+          platePath(g, x, y, w, h, role);
+          g.fillStyle = p.panel;
+          g.fill();
+          g.strokeStyle = col;
+          g.lineWidth = 1.3;
+          g.stroke();
+        }
       } else t.card(dc, snapR({ x: x - w / 2, y: y - h / 2, w, h }), { fill: p.panel, stroke: col, lw: 1.3, glow: kind === 'void' ? null : col, kind: 'plate' });
       g.fillStyle = kind === 'void' ? p.dim : p.fg;
       g.textAlign = 'center';

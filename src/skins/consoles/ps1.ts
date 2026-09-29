@@ -1,5 +1,5 @@
-import { backdrop, makeSkin, softShadow, type Palette, type Theme } from '../kit';
-import { hash, rrect } from '../util';
+import { backdrop, makeSkin, softShadow, type Look, type Palette, type Theme } from '../kit';
+import { hash, platePath, rrect } from '../util';
 import { dockOf } from '../dock';
 import { cardOf, client, MONO, plastic, PS_SYM, psSymbol, RUBIK, text } from './common';
 
@@ -44,9 +44,132 @@ const ps1P: Palette = {
   fg: '#1c1c20', dim: '#55555c', faint: '#8d8b85', accent: '#0072ce', ptr: '#c9337a', ret: '#00864a', wait: '#c77d00', err: '#d9303f',
   param: '#0063b3', cell: '#d2dcf0', track: '#ffffff',
 };
+// The newer pictures in the console's own plastic (docs/VISUALS.md):
+// capacity as a memory card's blocks, a pointer's address as a memory card
+// (its contacts in the pointer's colour), plates as bevelled labels, and the
+// dock as one of its windows: a dark title bar, a recessed slot for the call.
+const blocksOf = (c: { max: number }) => Math.min(10, c.max);
+const ps1Look: Look = {
+  cap: {
+    w: (s, c) => blocksOf(c) * Math.max(3, s * 0.5),
+    h: (s) => Math.max(4, s * 0.7),
+    draw(g, x, y, w, h, c, col) {
+      const n = blocksOf(c);
+      const step = w / n;
+      const lit = c.used >= c.max ? n : c.used === 0 ? 0 : Math.min(n - 1, Math.max(1, Math.round((c.used / c.max) * n)));
+      for (let k = 0; k < n; k++) {
+        const bx = x + k * step;
+        const on = k < lit;
+        g.fillStyle = on ? col : '#2f2f35';
+        g.fillRect(bx, y - h / 2, step - 1, h);
+        g.fillStyle = on ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
+        g.fillRect(bx, y - h / 2, step - 1, 1);
+        g.fillRect(bx, y - h / 2, 1, h);
+        g.fillStyle = on ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.25)';
+        g.fillRect(bx, y + h / 2 - 1, step - 1, 1);
+        g.fillRect(bx + step - 2, y - h / 2, 1, h);
+      }
+    },
+  },
+  tag: {
+    padL: (h) => h * 1.15,
+    padR: (h) => h * 0.4,
+    draw(g, x, top, w, h, col) {
+      const k = h * 0.32;
+      g.beginPath();
+      g.moveTo(x, top);
+      g.lineTo(x + w - k, top);
+      g.lineTo(x + w, top + k);
+      g.lineTo(x + w, top + h);
+      g.lineTo(x, top + h);
+      g.closePath();
+      g.fillStyle = '#34343b';
+      g.fill();
+      g.strokeStyle = '#6a6a72';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(x + 0.5, top + h - 0.5);
+      g.lineTo(x + 0.5, top + 0.5);
+      g.lineTo(x + w - k, top + 0.5);
+      g.stroke();
+      // the contacts
+      const cw = Math.max(1, h * 0.09);
+      g.fillStyle = col;
+      for (let i = 0; i < 3; i++) g.fillRect(x + h * 0.3 + i * cw * 2, top + h * 0.22, cw, h * 0.56);
+      return '#f2f2f2';
+    },
+  },
+  plate(dc, x, y, w, h, role, col) {
+    const g = dc.g;
+    const k = Math.max(1, h * 0.07);
+    g.save();
+    platePath(g, x, y, w, h, role);
+    g.fillStyle = '#e4e3de';
+    g.fill();
+    g.clip();
+    g.translate(k * 0.7, k * 0.7);
+    platePath(g, x, y, w, h, role);
+    g.strokeStyle = 'rgba(70,70,66,0.5)';
+    g.lineWidth = k * 1.6;
+    g.stroke();
+    g.translate(-k * 1.4, -k * 1.4);
+    platePath(g, x, y, w, h, role);
+    g.strokeStyle = 'rgba(255,255,255,0.9)';
+    g.stroke();
+    g.restore();
+    platePath(g, x, y, w, h, role);
+    g.strokeStyle = col;
+    g.lineWidth = 1.3;
+    g.stroke();
+  },
+  dock: {
+    intake: 9,
+    headInk: '#f2f2f2',
+    headBar: 3,
+    frame(dc, r, s) {
+      const g = dc.g;
+      const z = dc.z;
+      plastic(dc, r, Math.max(1, 3 * z), '#dcdbd6', '#f6f5f1', '#8f8e89');
+      // the title bar, the logo's colours under it while a call is served
+      const bar = { x: r.x + 2 * z, y: r.y + 2 * z, w: r.w - 4 * z, h: 20 * z };
+      g.fillStyle = s.hot ? '#26262b' : '#6f6e72';
+      g.fillRect(bar.x, bar.y, bar.w, bar.h);
+      const k = Math.max(1, 2.5 * z);
+      if (s.hot) logoStripe(g, bar.x, bar.y + bar.h - k, bar.w, k);
+      // the slot the call goes into: recessed, lit in the state's colour
+      const slot = { x: r.x + 4 * z, y: r.y + 27 * z, w: 6 * z, h: Math.max(6, r.h - 33 * z) };
+      g.fillStyle = '#2a2a2f';
+      g.fillRect(slot.x, slot.y, slot.w, slot.h);
+      g.fillStyle = 'rgba(0,0,0,0.6)';
+      g.fillRect(slot.x, slot.y, slot.w, 1);
+      g.fillRect(slot.x, slot.y, 1, slot.h);
+      g.fillStyle = 'rgba(255,255,255,0.6)';
+      g.fillRect(slot.x, slot.y + slot.h - 1, slot.w, 1);
+      g.fillRect(slot.x + slot.w - 1, slot.y, 1, slot.h);
+      g.fillStyle = s.hot || s.state === 'waiting' ? s.col : '#45454c';
+      g.fillRect(slot.x + 1.5 * z, slot.y + 1.5 * z, slot.w - 3 * z, slot.h - 3 * z);
+    },
+    port(dc, x, y, col) {
+      const g = dc.g;
+      const z = dc.z;
+      g.beginPath();
+      g.arc(x, y, Math.max(3, 4 * z), 0, Math.PI * 2);
+      g.fillStyle = '#26262b';
+      g.fill();
+      g.strokeStyle = '#f6f5f1';
+      g.lineWidth = Math.max(1, 1.2 * z);
+      g.stroke();
+      g.beginPath();
+      g.arc(x, y, Math.max(1.5, 1.8 * z), 0, Math.PI * 2);
+      g.fillStyle = col;
+      g.fill();
+    },
+  },
+};
+
 export const ps1Theme: Theme = {
   id: 'ps1', name: 'PlayStation', blurb: 'the grey console, the black boot screen, the four colours and △○✕□',
-  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
+  ptrTags: true, plateShapes: true, capacity: true, look: ps1Look,
   p: ps1P, ui: RUBIK, mono: MONO('"Share Tech Mono"'), radius: 3, spotlight: 'rgba(0,0,0,0.65)',
   pulseColor: 'rgba(106,168,255,0.85)',
   card: cardOf(3, PS_SYM.cross),

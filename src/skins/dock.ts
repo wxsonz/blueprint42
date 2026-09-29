@@ -1,11 +1,25 @@
 // The IN dock: where a call arrives, top left of a machine (docs/VISUALS.md,
-// "Machine anatomy"). One drawing, coloured by the skin that uses it
-// (prototyped in Minimal and Barebone). A strip down the left edge is the
-// intake, in the state's colour; the head says IN and the state; the body
-// holds the arguments as they arrived.
+// "Machine anatomy"). The layout is one drawing, so every skin's dock says
+// the same things: the head says IN and the state; the body holds the
+// arguments as they arrived. How it looks is the skin's: Minimal and
+// Barebone draw the plain one (a strip down the left edge is the intake, in
+// the state's colour); a skin with a `DockLook` draws its own body, intake
+// and port.
 import type { Theme } from './kit';
-import type { Dc, DockInfo, Rect, Skin } from './types';
-import { drawCap, drawTag, fitText, rrect } from './util';
+import type { Dc, DockInfo, Rect, RunState, Skin } from './types';
+import { drawCap, drawTag, fitText, rrect, type CapLook, type TagLook } from './util';
+
+// A skin's own way of drawing the dock: the body with its intake, the port
+// where a call plugs in, and the rule under the name.
+export interface DockLook {
+  frame: (dc: Dc, r: Rect, s: { col: string; hot: boolean; stale: boolean; state: RunState }) => void;
+  port: (dc: Dc, x: number, y: number, col: string, hot: boolean) => void;
+  rule?: (dc: Dc, x: number, y: number, w: number, hot: boolean) => void;
+  intake: number; // room the intake takes on the left, px at zoom 1
+  top?: number; // room taken along the top (a light bar), px at zoom 1
+  headInk?: string; // the head's text, where the frame paints the head a bar of its own
+  headBar?: number; // extra room under that bar, px at zoom 1
+}
 
 export interface DockPalette {
   body: string;
@@ -23,6 +37,9 @@ export interface DockPalette {
   mono: (px: number, w?: number) => string;
   radius: number;
   glow: boolean;
+  look?: DockLook;
+  cap?: CapLook;
+  tag?: TagLook;
 }
 
 const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
@@ -32,36 +49,41 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
   const rad = p.radius ? px(dc, p.radius, 2) : 0;
   const col = d.stale ? p.faint : d.state === 'running' ? p.run : d.state === 'waiting' ? p.wait : d.state === 'error' ? p.err : p.faint;
   const hot = d.state === 'running' || d.state === 'error';
-  g.save();
-  if (hot && p.glow) {
-    g.shadowColor = col;
-    g.shadowBlur = 14 * dc.z;
+  const look = p.look;
+  if (look) look.frame(dc, r, { col, hot, stale: d.stale, state: d.state });
+  else {
+    g.save();
+    if (hot && p.glow) {
+      g.shadowColor = col;
+      g.shadowBlur = 14 * dc.z;
+    }
+    rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
+    g.fillStyle = p.body;
+    g.fill();
+    g.shadowBlur = 0;
+    if (p.edge) {
+      g.strokeStyle = hot ? col : p.edge;
+      g.lineWidth = hot ? 1.5 : 1;
+      g.stroke();
+    }
+    // the intake: calls come in on the left
+    g.clip();
+    g.fillStyle = col;
+    g.fillRect(r.x, r.y, px(dc, d.state === 'idle' ? 2 : 4, 1.5), r.h);
+    g.restore();
   }
-  rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
-  g.fillStyle = p.body;
-  g.fill();
-  g.shadowBlur = 0;
-  if (p.edge) {
-    g.strokeStyle = hot ? col : p.edge;
-    g.lineWidth = hot ? 1.5 : 1;
-    g.stroke();
-  }
-  // the intake: calls come in on the left
-  g.clip();
-  g.fillStyle = col;
-  g.fillRect(r.x, r.y, px(dc, d.state === 'idle' ? 2 : 4, 1.5), r.h);
-  g.restore();
 
   if (d.stale) g.globalAlpha *= 0.5;
   const pad = px(dc, 10);
-  const x0 = r.x + pad + px(dc, 2);
-  const inner = r.w - pad * 2 - px(dc, 2);
+  const lead = look ? px(dc, look.intake, 0) : px(dc, 2);
+  const x0 = r.x + pad + lead;
+  const inner = r.w - pad * 2 - lead;
   // head: IN, and the state on the right
-  let y = r.y + px(dc, 7);
+  let y = r.y + px(dc, 7 + (look?.top ?? 0));
   g.textBaseline = 'top';
   g.textAlign = 'left';
   g.font = p.ui(px(dc, 12, 6), 700);
-  g.fillStyle = col;
+  g.fillStyle = look?.headInk ?? col;
   g.fillText('IN', x0, y);
   const inW = g.measureText('IN ').width;
   const state = d.stale ? 'stale' : d.state === 'waiting' ? `waiting on ${d.waitingOn ?? '…'}` : d.state === 'error' ? 'crashed' : d.state;
@@ -69,10 +91,11 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
   const st = fitText(g, `${state}${d.frames > 1 ? ` ×${d.frames}` : ''}`, (s) => p.ui(s, 600), px(dc, 12, 6), inner - inW, 5);
   g.fillText(st, r.x + r.w - pad, y);
   // the function it belongs to
-  y += px(dc, 17);
+  y += px(dc, 17) + px(dc, look?.headBar ?? 0);
   g.textAlign = 'left';
   g.fillStyle = p.text;
   g.fillText(fitText(g, d.copy > 1 ? `${d.name} #${d.copy}` : d.name, (s) => p.ui(s, 600), px(dc, 14, 7), inner, 6), x0, y);
+  look?.rule?.(dc, r.x + pad, y + px(dc, 20), r.w - pad * 2, hot);
   y += px(dc, 24);
 
   // body: what arrived
@@ -100,7 +123,7 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
       g.fillStyle = p.param;
       g.fillText(fitText(g, a.name, (s) => p.mono(s), px(dc, 12, 6), nameW - px(dc, 4), 5), x0, y);
       if (a.tag) {
-        drawTag(g, a.tag, x0 + nameW, y + rowH * 0.4, inner - nameW, { font: (s) => p.mono(s), size: px(dc, 12, 6), col: p.ptr, fill: p.edge ? null : p.tagFill, h: rowH - px(dc, 3, 1), radius: p.radius ? px(dc, 4, 2) : 0, left: true });
+        drawTag(g, a.tag, x0 + nameW, y + rowH * 0.4, inner - nameW, { font: (s) => p.mono(s), size: px(dc, 12, 6), col: p.ptr, fill: p.edge ? null : p.tagFill, h: rowH - px(dc, 3, 1), radius: p.radius ? px(dc, 4, 2) : 0, left: true, look: p.tag });
       } else {
         g.fillStyle = p.text;
         g.fillText(fitText(g, a.text, (s) => p.mono(s), px(dc, 12, 6), inner - nameW, 5), x0 + nameW, y);
@@ -117,21 +140,25 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
     g.globalAlpha = 1;
   }
   // the Norm's 4 parameters
-  if (d.cap) drawCap(g, d.cap, r.x + r.w - pad, r.y + r.h - px(dc, 9), { font: (s) => p.mono(s), size: px(dc, 9.5, 6), faint: p.faint, full: p.wait, over: p.err, track: p.edge ?? p.tagFill });
+  if (d.cap) drawCap(g, d.cap, r.x + r.w - pad, r.y + r.h - px(dc, 9), { font: (s) => p.mono(s), size: px(dc, 9.5, 6), faint: p.faint, full: p.wait, over: p.err, track: p.edge ?? p.tagFill, look: p.cap });
   // ports, one per incoming call, on the intake
-  g.fillStyle = col;
   for (const py of d.inPorts) {
+    if (look) {
+      look.port(dc, r.x, py, col, hot);
+      continue;
+    }
+    g.fillStyle = col;
     g.beginPath();
     g.arc(r.x, py, px(dc, 3, 2), 0, Math.PI * 2);
     g.fill();
   }
 }
 
-// The dock for a kit-based skin, coloured from its palette (the PlayStations
-// use it; Barebone builds its own). `edge` false: no border, shades only.
-export function dockOf(t: Theme, o: { edge?: boolean; glow?: boolean } = {}): Skin['dock'] {
+// The dock for a kit-based skin: the palette's colours and the skin's own
+// look (`Theme.look`). `run` is the colour of a call being served.
+export function dockOf(t: Theme, o: { edge?: boolean; glow?: boolean; run?: string } = {}): Skin['dock'] {
   return (dc, r, d) => {
     const q = t.p;
-    drawDock(dc, r, d, { body: q.card, edge: o.edge === false ? null : q.line, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.param, ptr: q.ptr, tagFill: q.cell, ui: t.ui, mono: t.mono, radius: t.radius, glow: !!o.glow });
+    drawDock(dc, r, d, { body: q.card, edge: o.edge === false ? null : q.line, text: q.fg, muted: q.dim, faint: q.faint, run: o.run ?? t.flow ?? q.accent, wait: q.wait, err: q.err, param: q.param, ptr: q.ptr, tagFill: q.cell, ui: t.ui, mono: t.mono, radius: t.radius, glow: !!o.glow, look: t.look?.dock, cap: t.look?.cap, tag: t.look?.tag });
   };
 }

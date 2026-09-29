@@ -1,6 +1,6 @@
 import type { SpriteKind } from '../blueprint';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, SpriteInfo, StripInfo } from './types';
-import { cutText, fitText, rrect, drawCap } from './util';
+import { cutText, fitText, rrect, drawCap, type CapLook } from './util';
 
 export interface SpritePalette {
   body: string;
@@ -16,6 +16,7 @@ export interface SpritePalette {
   radius: number;
   full?: string; // a Norm limit reached (capacity), and past it
   over?: string;
+  capLook?: CapLook;
   // a skin's own panel (body and titled head), used instead of the default look
   panel?: (dc: Dc, r: Rect, head: Rect, title: string, live: boolean) => void;
 }
@@ -239,7 +240,7 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
     g.fillStyle = i.mode === 'none' ? p.muted : p.text;
     g.fillText(cut(i.title, i.head.w - 12 * z), i.head.x + 6 * z, i.head.y + i.head.h / 2);
   }
-  if (i.cap) drawCap(g, i.cap, i.head.x + i.head.w - 6 * z, i.head.y + i.head.h / 2, { font: p.font, size: Math.max(7, 10 * z), faint: p.muted, full: p.full ?? p.muted, over: p.over ?? p.accent, track: p.edge });
+  if (i.cap) drawCap(g, i.cap, i.head.x + i.head.w - 6 * z, i.head.y + i.head.h / 2, { font: p.font, size: Math.max(7, 10 * z), faint: p.muted, full: p.full ?? p.muted, over: p.over ?? p.accent, track: p.edge, look: p.capLook });
   if (i.mode !== 'live') g.globalAlpha *= 0.75;
 
   // tracks: the way taken is lit

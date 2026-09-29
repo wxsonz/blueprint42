@@ -1,7 +1,7 @@
-import { backdrop, countBadge, makeSkin, type Palette, type Theme } from '../kit';
+import { backdrop, countBadge, makeSkin, type Look, type Palette, type Theme } from '../kit';
 import type { Dc, Rect } from '../types';
 import { dockOf } from '../dock';
-import { hash, rrect, strokeLine, Walk } from '../util';
+import { hash, platePath, rrect, strokeLine, Walk } from '../util';
 import { MONO, ps2Still, type Rgb, RODIN_R, text, toward } from './common';
 
 // PS3, the XrossMediaBar in its classic blue: teal at the top sinking to
@@ -19,7 +19,7 @@ const ps3P: Palette = {
 };
 // the sparkles: most gather around the ribbon, the rest anywhere; a few are
 // big soft bokeh
-const ps3Dust = Array.from({ length: 170 }, (_, i) => {
+export const ps3Dust = Array.from({ length: 170 }, (_, i) => {
   const near = hash(i * 17 + 2) < 0.6;
   const big = i % 23 === 0;
   return {
@@ -33,8 +33,13 @@ let ps3Rib: HTMLCanvasElement | null = null;
 let ps3RibSoft: HTMLCanvasElement | null = null;
 let ps3RibKey = '';
 let ps3RibT = 0;
+// how strongly ribbon line i (of 22) and sheet i (between lines i and i + 2)
+// are drawn; the GPU scene (gfx/scenes/ps3.ts) takes the same numbers
+export const ps3LineAlpha = (i: number) => 0.1 + 0.25 * hash(i * 11 + 3) + (i === 0 || i === 21 ? 0.2 : 0);
+export const ps3SheetAlpha = (i: number) => 0.06 + 0.09 * hash(i * 7 + 1);
 // the ribbon's shape at u (0..1 across the page) and time t, as fractions of
-// the page's height: its middle, and its half-width (negative where twisted)
+// the page's height: its middle, and its half-width (negative where twisted).
+// (The GPU scene's shaders repeat this; keep them in step.)
 function ps3Wave(u: number, t: number): { yc: number; a: number } {
   return {
     yc: 0.56 + 0.06 * Math.sin(6.28 * 0.55 * u + 0.9 + 0.11 * t) + 0.025 * Math.sin(6.28 * 1.3 * u + 2 - 0.19 * t),
@@ -100,7 +105,7 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
       rg.stroke();
     }
     for (let i = 0; i + 2 < N; i += 2) {
-      rg.globalAlpha = 0.06 + 0.09 * hash(i * 7 + 1);
+      rg.globalAlpha = ps3SheetAlpha(i);
       rg.beginPath();
       rows[i].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
       for (let k = xs.length - 1; k >= 0; k--) rg.lineTo(X(xs[k]), rows[i + 2][k]);
@@ -109,7 +114,7 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
     }
     rg.lineWidth = 0.8;
     for (let i = 0; i < N; i++) {
-      rg.globalAlpha = 0.1 + 0.25 * hash(i * 11 + 3) + (i === 0 || i === N - 1 ? 0.2 : 0);
+      rg.globalAlpha = ps3LineAlpha(i);
       rg.beginPath();
       rows[i].forEach((y, k) => (k ? rg.lineTo(X(xs[k]), y) : rg.moveTo(X(xs[k]), y)));
       rg.stroke();
@@ -257,7 +262,7 @@ export const PS3_TINTS = [
   { id: 'brown', name: 'Brown', colour: '#8a5a34' },
   { id: 'red', name: 'Red', colour: '#c22e2e' },
 ];
-type Sky = { top: Rgb; mid: Rgb; bot: Rgb };
+export type Sky = { top: Rgb; mid: Rgb; bot: Rgb };
 const rgbOf = (hex: string): Rgb => {
   const n = parseInt(hex.slice(1), 16);
   return [n >> 16, (n >> 8) & 255, n & 255];
@@ -277,6 +282,13 @@ function ps3Now(): { sky: Sky; busy: boolean } {
   const lerp = (a: Rgb, b: Rgb) => a.map((v, i) => v + (b[i] - v) * e) as Rgb;
   const { from, to } = ps3Fade;
   return { sky: { top: lerp(from.top, to.top), mid: lerp(from.mid, to.mid), bot: lerp(from.bot, to.bot) }, busy: true };
+}
+// the sky as it is now (mid-fade too), for the GPU scene; the frosted fills
+// follow it as they do when the canvas paints it
+export function ps3SkyNow(): Sky {
+  const { sky } = ps3Now();
+  ps3Fills(sky);
+  return sky;
 }
 // the frosted fills follow the colour: its dark end, see-through
 function ps3Fills(sky: Sky): void {
@@ -334,9 +346,161 @@ function ps3Light(g: CanvasRenderingContext2D, pts: [number, number][], z: numbe
   strokeLine(g, pts, Math.max(1, 1.2 * z), `rgba(255,255,255,${core})`);
   g.restore();
 }
+// The newer pictures as the XMB draws things (docs/VISUALS.md): capacity as
+// its install bar, a pointer's address as a jelly capsule with a bubble, plates
+// as glass with a gloss and a soft glow, and the dock as a glass pane with a
+// soft bar of light down its side and a halo while a call is served.
+const gloss = (g: CanvasRenderingContext2D, y0: number, y1: number, a: number) => {
+  const gl = g.createLinearGradient(0, y0, 0, y1);
+  gl.addColorStop(0, `rgba(255,255,255,${a})`);
+  gl.addColorStop(1, 'rgba(255,255,255,0.03)');
+  return gl;
+};
+const ps3Look: Look = {
+  cap: {
+    w: (s) => s * 3.6,
+    h: (s) => Math.max(4, s * 0.6),
+    draw(g, x, y, w, h, c, col) {
+      const top = y - h / 2;
+      g.save();
+      rrect(g, x, top, w, h, h / 2);
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 1;
+      g.stroke();
+      g.clip();
+      if (c.used > 0) {
+        const fw = Math.max(h, w * Math.min(1, c.used / c.max));
+        rrect(g, x, top, fw, h, h / 2);
+        g.fillStyle = col;
+        g.fill();
+        g.fillStyle = gloss(g, top, top + h / 2, 0.45);
+        g.fillRect(x, top, fw, h / 2);
+      }
+      g.restore();
+    },
+  },
+  tag: {
+    padL: (h) => h * 1.05,
+    padR: (h) => h * 0.5,
+    draw(g, x, top, w, h, col) {
+      g.save();
+      rrect(g, x, top, w, h, h / 2);
+      g.fillStyle = 'rgba(6,34,86,0.55)';
+      g.fill();
+      g.globalAlpha = 0.25;
+      g.fillStyle = col;
+      g.fill();
+      g.globalAlpha = 1;
+      g.clip();
+      g.fillStyle = gloss(g, top, top + h / 2, 0.35);
+      g.fillRect(x, top, w, h / 2);
+      g.restore();
+      rrect(g, x + 0.5, top + 0.5, w - 1, h - 1, h / 2 - 0.5);
+      g.strokeStyle = 'rgba(255,255,255,0.5)';
+      g.lineWidth = 1;
+      g.stroke();
+      // the bubble
+      const cx = x + h * 0.55;
+      const cy = top + h / 2;
+      const r = h * 0.22;
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.fillStyle = col;
+      g.fill();
+      g.beginPath();
+      g.arc(cx - r * 0.3, cy - r * 0.35, r * 0.32, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(255,255,255,0.8)';
+      g.fill();
+    },
+  },
+  plate(dc, x, y, w, h, role, col) {
+    const g = dc.g;
+    g.save();
+    g.lineJoin = 'round';
+    platePath(g, x, y, w, h, role);
+    g.fillStyle = 'rgba(6,34,86,0.6)';
+    g.fill();
+    g.clip();
+    const pool = g.createLinearGradient(0, y, 0, y + h / 2);
+    pool.addColorStop(0, 'rgba(255,255,255,0)');
+    pool.addColorStop(1, 'rgba(255,255,255,0.18)');
+    g.fillStyle = pool;
+    g.fillRect(x - w / 2, y, w, h / 2);
+    g.fillStyle = gloss(g, y - h / 2, y, 0.34);
+    g.fillRect(x - w / 2, y - h / 2, w, h / 2);
+    g.restore();
+    g.save();
+    g.lineJoin = 'round';
+    platePath(g, x, y, w, h, role);
+    g.globalAlpha = 0.22;
+    g.strokeStyle = col;
+    g.lineWidth = 4;
+    g.stroke();
+    g.globalAlpha = 1;
+    g.lineWidth = 1.3;
+    g.stroke();
+    g.restore();
+  },
+  dock: {
+    intake: 8,
+    frame(dc, r, s) {
+      const g = dc.g;
+      const z = dc.z;
+      const rad = Math.max(2, 6 * z);
+      if (s.hot) ps3Halo(dc, r, rad, 0.8);
+      g.save();
+      rrect(g, r.x, r.y, r.w, r.h, rad);
+      g.fillStyle = 'rgba(6,34,86,0.5)';
+      g.fill();
+      g.clip();
+      g.fillStyle = gloss(g, r.y, r.y + r.h * 0.35, 0.14);
+      g.fillRect(r.x, r.y, r.w, r.h * 0.35);
+      // the intake: a soft bar of light down the side, in the state's colour
+      const bw = Math.max(2, 3 * z);
+      const by = r.y + 8 * z;
+      const bh = Math.max(4, r.h - 16 * z);
+      g.fillStyle = s.col;
+      g.globalAlpha = s.hot ? 0.2 : 0.1;
+      rrect(g, r.x + 3 * z, by, bw * 2.6, bh, bw * 1.3);
+      g.fill();
+      g.globalAlpha = 1;
+      rrect(g, r.x + 4 * z, by, bw, bh, bw / 2);
+      g.fill();
+      g.restore();
+      rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
+      g.strokeStyle = `rgba(255,255,255,${s.hot ? 0.6 : 0.3})`;
+      g.lineWidth = 1;
+      g.stroke();
+    },
+    rule: (dc, x, y, w, hot) => ps3Rule(dc.g, x, y, w, hot ? 0.9 : 0.4, hot),
+    // a soft light where the call comes in
+    port(dc, x, y, col, hot) {
+      const g = dc.g;
+      const z = dc.z;
+      g.fillStyle = col;
+      g.globalAlpha = 0.25;
+      g.beginPath();
+      g.arc(x, y, Math.max(4, 6 * z), 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 1;
+      g.beginPath();
+      g.arc(x, y, Math.max(2, 2.6 * z), 0, Math.PI * 2);
+      g.fill();
+      if (hot) {
+        g.fillStyle = 'rgba(255,255,255,0.8)';
+        g.beginPath();
+        g.arc(x - z * 0.6, y - z * 0.7, Math.max(0.8, z), 0, Math.PI * 2);
+        g.fill();
+      }
+    },
+  },
+};
+
 export const ps3Theme: Theme = {
   id: 'ps3', name: 'PlayStation 3', blurb: 'the XMB: the wave, the sparkles, frosted panes, jelly icons; pick its colour on the top bar',
-  ptrTags: true, plateShapes: true, capacity: true, // the Minimal and Barebone pictures
+  ptrTags: true, plateShapes: true, capacity: true, look: ps3Look,
   p: ps3P, ui: RODIN_R, mono: MONO('"JetBrains Mono"'), radius: 3, spotlight: 'rgba(0,16,50,0.5)',
   pulseColor: 'rgba(255,255,255,0.95)', flow: '#ffffff',
   card(dc, r, o) {
@@ -564,7 +728,7 @@ function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a
   g.restore();
 }
 
-export const ps3 = { ...makeSkin(ps3Theme), dock: dockOf(ps3Theme, { glow: true }) };
+export const ps3 = { ...makeSkin(ps3Theme), dock: dockOf(ps3Theme) };
 {
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));

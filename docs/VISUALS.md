@@ -143,7 +143,7 @@ assigned).
 
 A pointer row shows an address tag, not a value: a socket dot and what
 lives at the address it holds (`bufs[0]`, `heap #1`, `main.n`). A `char *`'s
-text is in its byte strip, not on its row. Minimal and Barebone draw tags;
+text is in its byte strip, not on its row. Minimal, Barebone and PS1–PS4 draw tags (each in its own material);
 other skins still print the value until the design settles.
 
 A pointer's line goes to the address it holds, and nowhere else. Passing a
