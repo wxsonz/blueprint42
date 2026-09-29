@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -33,7 +33,7 @@ function minimalOf(dark: boolean): Skin {
   const CARD = C.card;
   const LINE = C.line;
   const dockPalette: DockPalette = { body: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, run: ACCENT, wait: WAIT, err: ERR, param: C.param, ptr: PTR, tagFill: C.plate, ui: UI, mono: MONO, radius: 6, glow: true };
-  const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
+  const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5, full: WAIT, over: ERR };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
   rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
@@ -56,6 +56,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
   name: 'Minimal',
   blurb: dark ? 'quiet cards and hairlines' : 'quiet cards and hairlines, on white',
   casing: C.bg,
+  capacity: true,
   spotlight: C.spot,
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },
@@ -132,7 +133,8 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.font = MONO(px(dc, 10.5, 7), 600);
     g.fillStyle = m.state === 'idle' ? FAINT : ACCENT;
     g.textAlign = 'right';
-    g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
+    if (m.cap) drawCap(g, { ...m.cap, unit: 'fns' }, r.x + r.w - pad, r.y + px(dc, 22), { font: (s) => MONO(s), size: px(dc, 10, 6), faint: FAINT, full: WAIT, over: ERR, track: LINE });
+    else g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
     const rowH = 0.55 * dc.cs;
     const top = r.y + px(dc, 40);
     g.textBaseline = 'middle';
@@ -156,7 +158,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
       g.fillStyle = m.state === 'error' ? ERR : m.state === 'waiting' ? WAIT : ACCENT;
       g.textAlign = 'left';
       g.textBaseline = 'alphabetic';
-      const t = m.state === 'error' ? 'crashed' : `${m.state === 'waiting' ? 'waiting in' : 'running'} ${m.running ?? ''}`;
+      const t = (m.state === 'error' ? 'crashed' : `${m.state === 'waiting' ? 'waiting in' : 'running'} ${m.running ?? ''}`) + (m.depth > 1 ? ` ×${m.depth}` : '');
       g.fillText(fitText(g, t, (s2) => UI(s2), px(dc, 11, 7), r.w - pad * 2, 6), r.x + pad, r.y + r.h - px(dc, 8));
     }
     g.fillStyle = border;
@@ -188,7 +190,8 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.font = MONO(px(dc, 10, 6));
     g.fillStyle = FAINT;
     g.textAlign = 'right';
-    g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
+    if (w.cap) drawCap(g, { ...w.cap, unit: 'functions' }, h.x + h.w - px(dc, 14), h.y + h.h / 2, { font: (s) => MONO(s), size: px(dc, 10, 6), faint: FAINT, full: WAIT, over: ERR, track: LINE });
+    else g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
     if (w.selected || w.hovered) outline(g, r, rad, w.selected);
   },
 
@@ -296,6 +299,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.textBaseline = 'middle';
     const pad = px(dc, 10);
     g.fillText(f.title ? (f.mode === 'returned' ? `${f.title} · last run` : f.title) : f.mode === 'live' ? 'FRAME' : f.mode === 'returned' ? 'RETURNED' : 'NO FRAME', r.x + pad, f.head.y + f.head.h / 2 + 1);
+    if (f.cap) drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: (s) => MONO(s), size: px(dc, 9.5, 7), faint: FAINT, full: WAIT, over: ERR, track: LINE });
     for (const row of f.rows) {
       const rr = row.rect;
       if (row.recent || row.flash > 0) {

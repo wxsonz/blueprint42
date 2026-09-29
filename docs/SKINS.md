@@ -20,8 +20,8 @@ skin by name.
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
-| Minimal | `minimal`, `minimal-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes |
-| Barebone | `barebone`, `barebone-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes |
+| Minimal | `minimal`, `minimal-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity |
+| Barebone | `barebone`, `barebone-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity |
 | Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
 | XP | `xp` | Windows | pending | scrollbars, toggles, belts, corners |
 | Seven | `seven` | Windows | pending | scrollbars, toggles, belts, corners |

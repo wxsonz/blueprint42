@@ -60,6 +60,15 @@ export interface DockInfo {
   last: boolean; // the arguments are the last call's (it returned)
   crash: { line: number; msg: string } | null; // where (1-based, as the editor numbers it) and how it died
   inPorts: number[]; // screen y of each incoming call's port (left side)
+  cap?: CapInfo; // parameters, of the Norm's 4
+}
+
+// A Norm limit as capacity (src/norm.ts): used of max. Sent only to skins
+// that set `capacity` (Minimal and Barebone prototype it).
+export interface CapInfo {
+  used: number;
+  max: number;
+  unit?: string; // 'lines'; none for the others (their panel says what)
 }
 
 export type ValueKind = 'int' | 'ptr' | 'null' | 'undef' | 'none' | 'dangling';
@@ -84,6 +93,7 @@ export interface FrameInfo {
   stacked: number; // extra frames of the same function underneath (recursion)
   rows: RowInfo[];
   head: Rect;
+  cap?: CapInfo; // LOCALS: variables, local statics included, of the Norm's 5
 }
 
 export interface ChestInfo {
@@ -152,6 +162,7 @@ export interface ModuleInfo {
   state: RunState; // running: the top frame is inside; waiting: a frame inside is waiting on a callee
   running: string | null; // the function whose frame is newest inside
   depth: number; // live frames inside
+  cap?: CapInfo; // function definitions, of the Norm's 5
   pinned: boolean;
   selected: boolean;
   hovered: boolean;
@@ -165,6 +176,7 @@ export interface WallInfo {
   fns: number;
   note?: string; // replaces the function count (a machine's wall: its state)
   kind?: 'module' | 'machine'; // a file's wall, or a machine (a function's inside)
+  cap?: CapInfo; // a module: function definitions, of the Norm's 5
   live: boolean; // a frame is running inside
   pinned: boolean;
   selected: boolean;
@@ -194,6 +206,7 @@ export interface InteriorInfo {
   token: Pt | null; // where the running line is
   row: number; // row height, px
   head: Rect;
+  cap?: CapInfo; // physical lines between the braces, of the Norm's 25
 }
 
 export interface Skin {
@@ -202,6 +215,7 @@ export interface Skin {
   blurb: string;
   casing: string; // canvas background colour, used to cut gaps where lines cross
   spotlight: string; // focus mode: the veil over everything but the sender and receiver
+  capacity?: boolean; // draws the Norm's limits (CapInfo on docks, panels, stations, modules)
   solidMachines?: boolean; // its wall paints a machine's whole body (rounded corners and all): no floor under it
   variantOf?: string; // the other mode (light/dark) of this skin: its id; the picker lists only the base
   mode?: 'light' | 'dark'; // set on skins that come in both modes

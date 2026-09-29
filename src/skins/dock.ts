@@ -4,7 +4,7 @@
 // intake, in the state's colour; the head says IN and the state; the body
 // holds the arguments as they arrived.
 import type { Dc, DockInfo, Rect } from './types';
-import { drawTag, fitText, rrect } from './util';
+import { drawCap, drawTag, fitText, rrect } from './util';
 
 export interface DockPalette {
   body: string;
@@ -115,6 +115,8 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
     g.fillRect(r.x + r.w - px(dc, 3, 2), r.y + rad, px(dc, 2, 1.5), r.h - rad * 2);
     g.globalAlpha = 1;
   }
+  // the Norm's 4 parameters
+  if (d.cap) drawCap(g, d.cap, r.x + r.w - pad, r.y + r.h - px(dc, 9), { font: (s) => p.mono(s), size: px(dc, 9.5, 6), faint: p.faint, full: p.wait, over: p.err, track: p.edge ?? p.tagFill });
   // ports, one per incoming call, on the intake
   g.fillStyle = col;
   for (const py of d.inPorts) {

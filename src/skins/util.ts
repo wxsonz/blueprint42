@@ -1,4 +1,4 @@
-import type { Dc, PlateRole, Pt, Rect } from './types';
+import type { CapInfo, Dc, PlateRole, Pt, Rect } from './types';
 
 export function rrect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | [number, number, number, number]): void {
   const [a, b, c, d] = typeof r === 'number' ? [r, r, r, r] : r;
@@ -261,6 +261,33 @@ export function pastText(g: CanvasRenderingContext2D, past: string[] | undefined
   }
   return text;
 }
+// A Norm limit: `3/5` (and its unit) with a small bar under it, right-
+// aligned at xRight, centred on y. Faint while there's room, `full` at the
+// limit, `over` past it (norminette would reject it). Returns its width.
+export function drawCap(g: CanvasRenderingContext2D, c: CapInfo, xRight: number, y: number, o: { font: (px: number) => string; size: number; faint: string; full: string; over: string; track: string }): number {
+  const col = c.used > c.max ? o.over : c.used === c.max ? o.full : o.faint;
+  g.font = o.font(o.size);
+  const text = `${c.used}/${c.max}${c.unit ? ` ${c.unit}` : ''}`;
+  const tw = g.measureText(text).width;
+  const bw = Math.max(14, o.size * 2.2);
+  const bh = Math.max(2, o.size * 0.22);
+  const gap = o.size * 0.5;
+  const align = g.textAlign;
+  const base = g.textBaseline;
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  g.fillStyle = col;
+  g.fillText(text, xRight, y);
+  const bx = xRight - tw - gap - bw;
+  g.fillStyle = o.track;
+  g.fillRect(bx, y - bh / 2, bw, bh);
+  g.fillStyle = col;
+  g.fillRect(bx, y - bh / 2, bw * Math.min(1, c.used / c.max), bh);
+  g.textAlign = align;
+  g.textBaseline = base;
+  return tw + gap + bw;
+}
+
 // A plate's outline by role: an argument is a hexagon (pointed ends), a
 // return value the reverse (notched ends), anything else a pill. Neither
 // points a way: a belt can run in any direction.

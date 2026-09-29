@@ -6,7 +6,7 @@ import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
 import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -35,6 +35,7 @@ export interface Theme {
   mono: (px: number, weight?: number) => string; // code and values
   radius: number; // corner radius at zoom 1 (0 = square)
   ptrTags?: boolean; // pointer rows show an address tag, not a value (prototyped in Barebone)
+  capacity?: boolean; // draws the Norm's limits (prototyped in Barebone)
   plateShapes?: boolean; // a belt's arguments and return values differ in shape (prototyped in Barebone)
   upper?: boolean; // titles in capitals
   spotlight: string;
@@ -77,7 +78,7 @@ export function makeSkin(t: Theme): Skin {
   const sprite: SpritePalette = {
     get body() { return p.card; }, get edge() { return p.line; }, get track() { return p.track; }, get cell() { return p.cell; },
     get text() { return p.fg; }, get muted() { return p.dim; }, get accent() { return p.accent; }, get marker() { return p.ret; }, get selection() { return p.accent; },
-    font: (s) => t.mono(s), radius: t.radius, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined,
+    font: (s) => t.mono(s), radius: t.radius, get full() { return p.wait; }, get over() { return p.err; }, panel: t.panel ? (dc, r, head, title, live) => t.panel!(dc, r, head, title, live) : undefined,
   };
   const cap = (s: string) => (t.upper ? s.toUpperCase() : s);
   const R = (dc: Dc) => px(dc, t.radius, t.radius ? 1 : 0);
@@ -106,6 +107,7 @@ export function makeSkin(t: Theme): Skin {
 
   const skin: Skin = {
     id: t.id,
+    capacity: t.capacity,
     name: t.name,
     blurb: t.blurb,
     get casing() { return p.bg; }, // live: a theme may change its colours
@@ -149,7 +151,9 @@ export function makeSkin(t: Theme): Skin {
       g.fillStyle = m.state === 'idle' ? p.faint : p.accent;
       g.textAlign = 'right';
       g.font = t.mono(px(dc, 10.5, 7), 600);
-      g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
+      // with capacity, the Norm's 5 definitions up here, and the depth goes with the state below
+      if (m.cap) drawCap(g, { ...m.cap, unit: cap('fns') }, r.x + r.w - pad, r.y + px(dc, 22), { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
+      else g.fillText(m.depth > 1 ? `×${m.depth}` : String(m.fns), r.x + r.w - pad, r.y + px(dc, 15));
       const rowH = 0.55 * dc.cs;
       const top = r.y + px(dc, 40);
       g.textBaseline = 'middle';
@@ -169,7 +173,7 @@ export function makeSkin(t: Theme): Skin {
       if (m.state !== 'idle') {
         g.fillStyle = stateCol(m.state);
         g.textBaseline = 'alphabetic';
-        const s = m.state === 'error' ? 'crashed' : `${m.state === 'waiting' ? 'waiting in' : 'running'} ${m.running ?? ''}`;
+        const s = (m.state === 'error' ? 'crashed' : `${m.state === 'waiting' ? 'waiting in' : 'running'} ${m.running ?? ''}`) + (m.cap && m.depth > 1 ? ` ×${m.depth}` : '');
         g.fillText(fitText(g, cap(s), (x) => t.ui(x), px(dc, 11, 7), r.w - pad * 2, 6), r.x + pad, r.y + r.h - px(dc, 8));
       }
       ports(dc, r, m.inPorts, m.outPorts, p.line);
@@ -201,7 +205,8 @@ export function makeSkin(t: Theme): Skin {
       g.textAlign = 'right';
       g.fillStyle = p.faint;
       g.font = t.mono(px(dc, 10, 6));
-      g.fillText(cap(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`), h.x + h.w - px(dc, 12), h.y + h.h / 2);
+      if (w.cap) drawCap(g, { ...w.cap, unit: cap('functions') }, h.x + h.w - px(dc, 12), h.y + h.h / 2, { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
+      else g.fillText(cap(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`), h.x + h.w - px(dc, 12), h.y + h.h / 2);
       if (w.selected || w.hovered) outline(dc, r, w.selected);
     },
 
@@ -338,6 +343,7 @@ export function makeSkin(t: Theme): Skin {
         g.font = t.ui(px(dc, 9.5, 7), 700);
         g.fillText(label, r.x + pad, f.head.y + f.head.h / 2 + 1);
       }
+      if (f.cap) drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: t.mono, size: px(dc, 9.5, 7), faint: p.faint, full: p.wait, over: p.err, track: p.cell });
       for (const row of f.rows) {
         const rr = row.rect;
         if (row.recent || row.flash > 0) {

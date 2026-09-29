@@ -53,9 +53,16 @@ Next, in this order:
    Neither shape points a way, since a belt can run in any direction.
    `plate(…, role)`, `platePath`; prototyped in Minimal and Barebone (the
    kit's `plateShapes`).
-5. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
-   4 ports, 5 storage rows including local statics, counted the way
-   norminette counts.
+5. [x] **Norm capacity** (M). Each limit shows where it applies, as
+   `used/max` with a small bar: faint while there's room, amber when full,
+   red past it. Parameters on the IN dock (`2/4`), variables on LOCALS
+   (`3/5`, local statics included; on KEPT if there are only statics),
+   lines on the stations (`22/25 lines`, the physical lines between the
+   braces), definitions on a module (`5/5 fns`, prototypes don't count).
+   Counted in `src/norm.ts`; `test/norm.test.ts` checks each limit against
+   norminette itself (25/26 lines, 5/6 vars, 4/5 args, 5/6 functions).
+   Prototyped in Minimal and Barebone (`Skin.capacity`). Not shown yet: a
+   single file's definitions (it has no module wall).
 
 Settled today: the dock shows all four of the engine's states. The anatomy
 is an engine change, so every skin gets all of it at once, in its existing

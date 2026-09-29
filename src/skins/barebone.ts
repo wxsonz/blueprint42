@@ -22,6 +22,7 @@ function barebone(dark: boolean): Theme {
     radius: 0,
     ptrTags: true,
     plateShapes: true,
+    capacity: true,
     spotlight: dark ? 'rgba(10,10,10,0.72)' : 'rgba(255,255,255,0.78)',
     ui: UI,
     mono: MONO,

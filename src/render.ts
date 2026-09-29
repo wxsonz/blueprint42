@@ -10,6 +10,7 @@ import type { Host } from './route';
 import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
+import { fileCap, fnCaps } from './norm';
 import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
 
 export { procPlace, type Belt };
@@ -383,6 +384,7 @@ export class GridView {
       g.save();
       skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), {
         name: w.file, fns: s.layout.nodesOf(w.file).length, kind: 'module', live: liveFiles.has(w.file), pinned: !!m?.pinned,
+        ...(skin.capacity && s.model ? { cap: fileCap(s.model, w.file) } : {}),
         selected: selKey === `m:${w.file}`, hovered: hovKey === `m:${w.file}`,
         head: this.rectW(w.rect.x, w.rect.y, w.rect.w, 1.2),
       });
@@ -525,6 +527,7 @@ export class GridView {
         pinned: !!s.layout.modules.get(h.module)?.pinned,
         selected: selKey === `m:${h.module}`, hovered: hovKey === `m:${h.module}`,
         ...portsOf(h.key),
+        ...(skin.capacity && s.model ? { cap: fileCap(s.model, h.module) } : {}),
       });
       g.restore();
     }
@@ -960,6 +963,7 @@ export class GridView {
         args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: fmtVal(a.val), ...ptrTag(a.val, trace!, on) })) : null,
         last: !frame && !!call,
         crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
+        ...(skin.capacity ? { cap: fnCaps(fn).params } : {}),
       });
     } else skin.node(dc, motorR, {
       name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn, state, waitingOn, frames: stacked, stale, pinned: false,
@@ -1045,11 +1049,15 @@ export class GridView {
         rect, depth: sl.depth, fold: sl.fold ?? null, past,
       };
     });
+    // the Norm's 5 variables count locals and local statics together: on
+    // LOCALS, or KEPT when there are only statics
+    const varsOn = geo.store.pools.find((pg) => pg.pool === 'local') ?? geo.store.pools.find((pg) => pg.pool === 'kept');
     geo.store.pools.forEach((pg, k) => {
       const PY = this.sy(h.y + pg.y);
       skin.frame(dc, { x: X, y: PY, w: W, h: pg.h * cs }, {
         title: pg.title, mode: liveMode, stacked: k === 0 ? Math.max(0, stacked - 1) : 0,
         rows: rows.slice(pg.first, pg.first + pg.rows), head: { x: X, y: PY, w: W, h: INV_HEAD_PX * z },
+        ...(skin.capacity && pg === varsOn ? { cap: fnCaps(fn).vars } : {}),
       });
     });
 
@@ -1143,6 +1151,7 @@ export class GridView {
       override: act && act.beat.kind === 'switch' ? { station: act.beat.station, text: `${compute} → ${act.landed >= 1 ? String(act.beat.result ?? '?') : '…'}`, result: act.landed >= 1 ? act.beat.result ?? null : null } : null,
       hot: act && act.beat.kind !== 'switch' && act.phase !== 'read' && compute ? { station: act.beat.station, text: compute } : null,
     });
+    if (skin.capacity) info.cap = { ...fnCaps(fn).lines, unit: 'lines' };
     skin.interior({ ...dc, z: zI, cs: CELL_PX * zI }, { x: SX, y: SY, w: plan.w * zI, h: plan.h * zI }, info);
 
     // ---- in flight: reads to the station, writes back to storage ----

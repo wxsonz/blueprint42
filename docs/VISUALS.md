@@ -100,7 +100,7 @@ reached the output after each step, and the buffer's real contents
 | A file, closed | ≤ 5 functions | A module block, with one door per public function | a frame inside is running or waiting | ✅ | Palette: new file |
 | A file, open | ≤ 5 functions | A wall around its machines, with a title tab | a frame inside is live | ✅ | — |
 | A public function | Prototype in a header | A door on the wall where a belt crosses it | a belt through it is live | ✅ | Toggle `static` on a machine |
-| Capacity | 5 definitions | Not shown | — | ⬜ | 5 slots in the wall, filled or empty |
+| Capacity | 5 definitions | `5/5 fns` on the module, with a bar (Minimal, Barebone) | an edit | ✅ | 5 slots in the wall, filled or empty |
 | A file-scope `static` | `static` or `const` only | A chest | written | ✅ | Drop a chest into the wall |
 
 ### 3. Machine (a function)
@@ -113,7 +113,7 @@ reached the output after each step, and the buffer's real contents
 | Locals | ≤ 5 (a local `static` counts), declared first | Storage rows (int, ptr, NULL, unset, dangling), struct fields folded under their row | a write lands (flash) | ✅ | Drop a row into storage |
 | A local `static` | Can initialise on its line | A chest | written | ✅ | — |
 | `static` function | — | The word `static` in the title's meta line, in the skins that draw one (the kit's and a few others) | — | 🟡 not in every skin | Toggle |
-| Line capacity | 25 physical lines | Not shown | — | ⬜ | A fill bar: lines used of 25, counted the way the checker counts |
+| Line capacity | 25 physical lines | `22/25 lines` on the stations, with a bar, counted as norminette counts (Minimal, Barebone) | an edit | ✅ | A fill bar: lines used of 25, counted the way the checker counts |
 | Recursion | — | One copy per level, stacked; a reserved slot for the next copy | a call to itself | ✅ | — |
 | Stale | — | Dimmed, keeps its place when the code stops parsing | a parse error | ✅ | — |
 
@@ -242,8 +242,7 @@ Unbound ones are dimmed and never animated. ✅
 
 The 🟡 and ⬜ rows, in the order they matter for editing later:
 
-1. **Capacity** (module 5 definitions, machine 25 physical lines, ports 4,
-   storage 5 including local statics).
+1. ~~Capacity~~: done (`src/norm.ts`, pinned against norminette), in Minimal and Barebone.
 2. ~~Return type~~: done, in the RETURN panel.
 3. ~~Argument vs return plates~~: done, hexagon vs notched (Minimal and Barebone).
 4. **The types shelf** (structs, typedefs, enums, macro constants).
