@@ -1,7 +1,47 @@
 import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import type { Dc } from '../types';
-import { arrowHead, hash, strokeLine, Walk } from '../util';
+import { hash, strokeLine, Walk } from '../util';
 import { EXO, F, MONO, ps2Still, text } from './common';
+
+// the AV lead's colours: rubber (edge, body, mid, sheen) idle, lit, and carrying data
+const CABLE = {
+  edge: '#040405',
+  idle: ['#242428', '#303036', '#484850'],
+  lit: ['#32323a', '#43434c', '#62626e'],
+  live: ['#1c2650', '#283a78', '#5878e0'],
+};
+
+// A cable end at p, pointing along (dx, dy): the far end (`start` false) is
+// the moulded plug with its metal tip, the near one a short ridged collar.
+function plug(g: CanvasRenderingContext2D, p: { x: number; y: number; dx: number; dy: number }, wd: number, room: number, tone: string[], live: boolean, start: boolean): void {
+  g.save();
+  g.translate(p.x, p.y);
+  g.rotate(Math.atan2(p.dy, p.dx));
+  const rect = (x: number, w: number, h: number, c: string) => {
+    g.fillStyle = c;
+    g.fillRect(x, -h / 2, w, h);
+  };
+  if (start) {
+    // collar: three ridges just past the start
+    const l = wd * 1.6 * room;
+    rect(-wd * 0.2, l + wd * 0.2, wd * 1.7 + 1.6, CABLE.edge);
+    rect(0, l, wd * 1.7, tone[0]);
+    for (let i = 1; i < 4; i++) rect((l * i) / 4 - 0.4, 0.8, wd * 1.7, CABLE.edge);
+    rect(0, l, Math.max(1, wd * 0.25), tone[2]);
+  } else {
+    // plug: the moulded body, then the metal nose (the arrow's tip at p)
+    const nose = wd * 1.6 * room;
+    const body = wd * 3.4 * room;
+    rect(-nose - body - 0.8, body + 0.8, wd * 2.5 + 1.6, CABLE.edge);
+    rect(-nose - body, body, wd * 2.5, tone[0]);
+    rect(-nose - body, body, wd * 2.5 * 0.5, tone[1]);
+    rect(-nose - body * 0.7, Math.max(1, body * 0.08), wd * 2.5, CABLE.edge); // a seam
+    rect(-nose - 0.8, nose + 0.8, wd * 1.5 + 1.6, CABLE.edge);
+    rect(-nose, nose, wd * 1.5, live ? '#8ea6ff' : '#82828c');
+    rect(-nose, nose, wd * 1.5 * 0.35, live ? '#d4ddff' : '#b8b8c2');
+  }
+  g.restore();
+}
 
 // The PlayStation 2 (2000), after Teiyu Goto's own account: "the thin blue
 // logo on the large black background" is the Earth, small in the vastness of
@@ -303,20 +343,31 @@ export const ps2Theme: Theme = {
     g.lineWidth = 1;
     g.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   },
-  // belts: a hairline; a live one carries lights running along it like the
-  // progress light (a hot core fading back over a soft glow), one every
-  // 360 px or so, in the direction the data goes
+  // belts: a cable, like the console's AV lead: a round black rubber cord
+  // shaded as a tube, a short strain-relief collar where it leaves, a moulded
+  // plug with a metal tip where it arrives (the tip is the arrow). A live one
+  // carries lights running along it like the progress light (a hot core
+  // fading back over a soft glow), one every 360 px or so, in the direction
+  // the data goes
   belt(dc, pts, o, t) {
     const g = dc.g;
     const z = dc.z;
     g.lineCap = 'round';
     g.lineJoin = 'round';
-    if (o.selected) strokeLine(g, pts, Math.max(5, 8 * z), 'rgba(255,255,255,0.06)');
-    const base = o.live ? 'rgba(63,107,255,0.4)' : o.hovered || o.selected ? ps2P.dim : ps2P.faint;
-    strokeLine(g, pts, Math.max(1, 1.4 * z), base);
+    const wd = Math.max(2.6, 4.4 * z); // the cord's thickness
+    if (o.selected) strokeLine(g, pts, wd + Math.max(5, 8 * z), 'rgba(255,255,255,0.06)');
+    const tone = o.live ? CABLE.live : o.hovered || o.selected ? CABLE.lit : CABLE.idle;
+    strokeLine(g, pts, wd + 1.6, CABLE.edge);
+    strokeLine(g, pts, wd, tone[0]);
+    strokeLine(g, pts, wd * 0.6, tone[1]);
+    strokeLine(g, pts, Math.max(1, wd * 0.2), tone[2]);
     const w = new Walk(pts);
-    const end = w.at(w.length);
-    arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 7 * z), o.live ? '#6a8cff' : base);
+    if (w.length > 4) {
+      // the plug's length follows the cord, but a short belt keeps room for its cord
+      const room = Math.min(1, w.length / (wd * 9));
+      plug(g, w.at(w.length), wd, room, tone, o.live, false);
+      plug(g, w.at(0), wd, room, tone, o.live, true);
+    }
     if (o.live && w.length > 4) {
       const gap = Math.max(120, 360 * z);
       const tail = Math.min(w.length * 0.6, Math.max(40, 150 * z));
