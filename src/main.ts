@@ -1,3 +1,4 @@
+import { setGlassTint } from './gfx/scenes/ps2';
 import { beatStarts } from './beats';
 import { machineSize } from './machine';
 import { connectLive } from './live';
@@ -1414,7 +1415,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS, glass: setGlassTint } });
 }
 
 boot().catch((err) => {
