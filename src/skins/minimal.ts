@@ -1,7 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
-import { ride } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -83,26 +82,8 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     if (o.selected) strokeLine(g, pts, px(dc, 8, 5), `${C.acc}0.18)`);
     const col = o.live ? ACCENT : o.hovered || o.selected ? C.beltHover : C.beltIdle;
     strokeLine(g, pts, px(dc, 1.6, 1.2), col);
+    if (o.live) strokeLine(g, pts, px(dc, 2.2, 1.6), ACCENT, [px(dc, 3), px(dc, 9)], -dc.time * 40 * dc.z * o.dir);
     const walk = new Walk(pts);
-    if (o.live) {
-      // restraint: a hairline, and small round lights gliding along it, each
-      // with a short fading tail behind (so the way they go is visible)
-      const tail = px(dc, 16, 8);
-      ride(dc, walk, o, 70 * dc.z, px(dc, 64, 40), (x, y, dx, dy) => {
-        for (let k = 0; k < 3; k++) {
-          g.beginPath();
-          g.moveTo(x - dx * tail * (k + 1) / 3, y - dy * tail * (k + 1) / 3);
-          g.lineTo(x - dx * tail * k / 3, y - dy * tail * k / 3);
-          g.strokeStyle = ACCENT;
-          g.globalAlpha = 0.25 + 0.2 * (3 - k);
-          g.lineWidth = px(dc, 2.2, 1.6);
-          g.stroke();
-        }
-        g.globalAlpha = 1;
-        g.fillStyle = ACCENT;
-        g.beginPath(); g.arc(x, y, px(dc, 2.6, 1.8), 0, Math.PI * 2); g.fill();
-      });
-    }
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, px(dc, 7, 5), col);
     if (o.count > 1) {

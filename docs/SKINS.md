@@ -20,8 +20,8 @@ skin by name.
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts |
-| Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles, belts |
-| Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles, belts |
+| Minimal | `minimal`, `minimal-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt) |
+| Barebone | `barebone`, `barebone-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt) |
 | Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
 | XP | `xp` | Windows | pending | scrollbars, toggles, belts |
 | Seven | `seven` | Windows | pending | scrollbars, toggles, belts |
@@ -41,6 +41,9 @@ skin by name.
 | Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
 | Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
 | Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
+
+Minimal and Barebone are the plain skins on purpose: a hairline belt with
+simple marching dashes. Don't decorate them.
 
 The scrollbar and toggle pass (2026-09-29, commit e5f3ef6) touched every
 skin's CSS, the reviewed ones included. The author hasn't looked at those
