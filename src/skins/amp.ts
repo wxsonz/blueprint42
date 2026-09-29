@@ -148,13 +148,39 @@ export const amp: Skin = {
     strokeLine(g, pts, w, '#07070b');
     strokeLine(g, pts, w - 2, o.hovered ? '#474766' : '#2c2c40');
     strokeLine(g, pts, 1, 'rgba(255,255,255,0.12)');
-    if (o.live) {
-      g.shadowColor = LCD;
-      g.shadowBlur = 6;
-      strokeLine(g, pts, Math.max(2, 2.5 * dc.z), LCD, [2 * dc.z + 1, 7 * dc.z], -dc.time * 60 * dc.z * o.dir);
-      g.shadowBlur = 0;
-    }
     const walk = new Walk(pts);
+    if (o.live) {
+      // the visualizer: LCD-green bars rising out of the groove, each with a
+      // lighter peak cap, scrolling the data's way (heights are fixed per bar,
+      // so a bar keeps its height as it travels)
+      const gap = Math.max(4, Math.round(5 * dc.z));
+      const bw = Math.max(2, Math.round(3 * dc.z));
+      const maxH = Math.max(4, w * 0.85);
+      const run = dc.time * 46 * dc.z;
+      const shift = ((run % gap) + gap) % gap;
+      const base = Math.floor(run / gap);
+      for (let k = 0, d = shift; d < walk.length; d += gap, k++) {
+        const q = walk.at(o.dir < 0 ? walk.length - d : d);
+        const idx = o.dir < 0 ? base - k : k - base;
+        const h = Math.max(1, Math.round(maxH * (0.25 + 0.75 * hash(idx + 3))));
+        const nx = -q.dy, ny = q.dx;
+        // the bar itself: a stroke across the groove, centred on the line
+        g.beginPath();
+        g.moveTo(q.x + nx * h, q.y + ny * h);
+        g.lineTo(q.x - nx * h, q.y - ny * h);
+        g.lineWidth = bw;
+        g.strokeStyle = LCD;
+        g.lineCap = 'butt';
+        g.stroke();
+        g.beginPath();
+        g.moveTo(q.x + nx * h, q.y + ny * h);
+        g.lineTo(q.x + nx * (h - 1.5), q.y + ny * (h - 1.5));
+        g.moveTo(q.x - nx * h, q.y - ny * h);
+        g.lineTo(q.x - nx * (h - 1.5), q.y - ny * (h - 1.5));
+        g.strokeStyle = '#d8ff70';
+        g.stroke();
+      }
+    }
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), o.live ? LCD : '#6c6c88');
     if (o.count > 1) {

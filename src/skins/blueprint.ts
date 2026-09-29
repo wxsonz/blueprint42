@@ -3,7 +3,7 @@
 // highlighter on whatever is running.
 import { makeSkin, countBadge, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { arrowHead, hash, rrect, strokeLine, Walk } from './util';
+import { hash, rrect, strokeLine, Walk } from './util';
 
 const INK = '#eef5ff';
 const HI = '#ffe066';
@@ -108,16 +108,44 @@ export const blueprintTheme: Theme = {
   belt(dc, pts, o, t) {
     const g = dc.g;
     const col = o.live ? HI : o.hovered || o.selected ? INK : 'rgba(238,245,255,0.55)';
-    g.lineCap = 'round';
-    strokeLine(g, pts, Math.max(1, 1.3 * dc.z), col);
-    if (o.live) strokeLine(g, pts, Math.max(1.5, 2.4 * dc.z), HI, [Math.max(3, 6 * dc.z), Math.max(4, 8 * dc.z)], -dc.time * 36 * dc.z * o.dir);
+    g.lineCap = 'butt';
+    g.lineJoin = 'miter';
+    // a dimension line: thin, an architect's slash where it starts, a slim
+    // arrow where it lands, a small ring at every bend. Live, it turns into a
+    // centre line (long dash, short dash) that runs the data's way in yellow.
+    const lw = Math.max(1, 1.2 * dc.z);
     const w = new Walk(pts);
+    if (o.selected) strokeLine(g, pts, Math.max(5, 8 * dc.z), 'rgba(238,245,255,0.14)');
+    if (o.live) {
+      const u = Math.max(3, 4 * dc.z);
+      const pat = [u * 4, u, u * 0.6, u];
+      const per = pat.reduce((a, b) => a + b, 0);
+      strokeLine(g, pts, lw * 1.5, HI, pat, -(((dc.time * 34 * dc.z * o.dir) % per) + per) % per);
+    } else {
+      strokeLine(g, pts, lw, col);
+    }
     const a = w.at(0);
     const L = Math.max(4, 6 * dc.z);
     g.strokeStyle = col;
-    g.beginPath(); g.moveTo(a.x - a.dy * L, a.y + a.dx * L); g.lineTo(a.x + a.dy * L, a.y - a.dx * L); g.stroke();
+    g.lineWidth = lw;
+    g.beginPath();
+    g.moveTo(a.x - a.dy * L - a.dx * L * 0.6, a.y + a.dx * L - a.dy * L * 0.6);
+    g.lineTo(a.x + a.dy * L + a.dx * L * 0.6, a.y - a.dx * L + a.dy * L * 0.6);
+    g.stroke();
+    for (let i = 1; i + 1 < pts.length; i++) {
+      g.beginPath();
+      g.arc(pts[i][0], pts[i][1], Math.max(1.6, 2.2 * dc.z), 0, Math.PI * 2);
+      g.stroke();
+    }
     const e = w.at(w.length);
-    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(5, 8 * dc.z), col);
+    g.fillStyle = col;
+    const al = Math.max(6, 9 * dc.z);
+    g.beginPath();
+    g.moveTo(e.x, e.y);
+    g.lineTo(e.x - e.dx * al - e.dy * al * 0.22, e.y - e.dy * al + e.dx * al * 0.22);
+    g.lineTo(e.x - e.dx * al + e.dy * al * 0.22, e.y - e.dy * al - e.dx * al * 0.22);
+    g.closePath();
+    g.fill();
     countBadge(dc, pts, o, t);
   },
 

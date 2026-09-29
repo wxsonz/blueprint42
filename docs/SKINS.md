@@ -37,10 +37,10 @@ skin by name.
 | GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
 | Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
 | Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
-| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles |
-| Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles |
-| Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles |
-| Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles |
+| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
+| Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
+| Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
+| Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
 
 The scrollbar and toggle pass (2026-09-29, commit e5f3ef6) touched every
 skin's CSS, the reviewed ones included. The author hasn't looked at those

@@ -1,5 +1,6 @@
 // "Synthwave" — neon on a night-purple horizon: a perspective grid under a
 // striped sunset, cyan and magenta glow, chrome-gradient title bars.
+import { span } from './belts';
 import { makeSkin, countBadge, type Theme } from './kit';
 import { arrowHead, rrect, strokeLine, Walk } from './util';
 
@@ -123,13 +124,49 @@ export const synthwaveTheme: Theme = {
     g.save();
     g.lineCap = 'round';
     g.lineJoin = 'round';
+    const z = dc.z;
     const col = o.live ? PINK : o.hovered || o.selected ? CYAN : 'rgba(45,226,230,0.45)';
-    g.globalAlpha = o.live ? 0.3 : 0.15;
-    strokeLine(g, pts, Math.max(4, (o.live ? 10 : 6) * dc.z), col);
+    // a neon tube: three widths of glow (no blur), a hot core; live it is pink,
+    // and comets of white light with a magenta-to-cyan tail run through it
+    const gw = Math.max(4, (o.live ? 12 : 8) * z);
+    g.globalAlpha = o.live ? 0.1 : 0.06;
+    strokeLine(g, pts, gw * 1.8, col);
+    g.globalAlpha = o.live ? 0.2 : 0.11;
+    strokeLine(g, pts, gw, col);
+    g.globalAlpha = o.live ? 0.35 : 0.2;
+    strokeLine(g, pts, gw * 0.5, col);
     g.globalAlpha = 1;
-    strokeLine(g, pts, Math.max(1.2, 2 * dc.z), col);
-    if (o.live) strokeLine(g, pts, Math.max(1.5, 2.6 * dc.z), '#fff', [Math.max(2, 3 * dc.z), Math.max(8, 16 * dc.z)], -dc.time * 60 * dc.z * o.dir);
+    if (o.selected) strokeLine(g, pts, gw * 2.4, 'rgba(45,226,230,0.12)');
+    strokeLine(g, pts, Math.max(1.4, 2.2 * z), col);
+    strokeLine(g, pts, Math.max(0.8, 1 * z), o.live ? '#ffd6ee' : 'rgba(220,255,255,0.7)');
     const w = new Walk(pts);
+    if (o.live && w.length > 4) {
+      const tail = Math.min(w.length * 0.5, Math.max(24, 60 * z)), N = 6;
+      const gap = Math.max(90, 200 * z);
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.lineCap = 'round';
+      const run = (dc.time * 130 * z) % gap;
+      for (let head = run; head < w.length + tail; head += gap) {
+        for (let k = 0; k < N; k++) {
+          const a = head - tail + (tail * k) / N, b = a + tail / N;
+          if (b < 0 || a > w.length) continue;
+          const [s0, s1] = o.dir < 0 ? [w.length - b, w.length - a] : [a, b];
+          const f = ((k + 1) / N) ** 1.5;
+          g.strokeStyle = k < 3 ? CYAN : PINK;
+          g.globalAlpha = f * 0.9;
+          g.lineWidth = Math.max(2, 3.4 * z) * (0.5 + f * 0.5);
+          span(g, w, s0, s1);
+        }
+        if (head <= w.length) {
+          const q = w.at(o.dir < 0 ? w.length - head : head);
+          g.globalAlpha = 1;
+          g.fillStyle = '#ffffff';
+          g.beginPath(); g.arc(q.x, q.y, Math.max(2, 3 * z), 0, Math.PI * 2); g.fill();
+        }
+      }
+      g.restore();
+    }
     const e = w.at(w.length);
     arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(5, 8 * dc.z), col);
     g.restore();
