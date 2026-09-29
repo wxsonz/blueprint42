@@ -4,7 +4,7 @@
 // intake, in the state's colour; the head says IN and the state; the body
 // holds the arguments as they arrived.
 import type { Dc, DockInfo, Rect } from './types';
-import { fitText, rrect } from './util';
+import { drawTag, fitText, rrect } from './util';
 
 export interface DockPalette {
   body: string;
@@ -16,6 +16,8 @@ export interface DockPalette {
   wait: string;
   err: string;
   param: string; // argument names
+  ptr: string; // a pointer's tag
+  tagFill: string; // its shade, for skins without borders
   ui: (px: number, w?: number) => string;
   mono: (px: number, w?: number) => string;
   radius: number;
@@ -96,8 +98,12 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
       g.font = p.mono(px(dc, 12, 6));
       g.fillStyle = p.param;
       g.fillText(fitText(g, a.name, (s) => p.mono(s), px(dc, 12, 6), nameW - px(dc, 4), 5), x0, y);
-      g.fillStyle = p.text;
-      g.fillText(fitText(g, a.text, (s) => p.mono(s), px(dc, 12, 6), inner - nameW, 5), x0 + nameW, y);
+      if (a.tag) {
+        drawTag(g, a.tag, x0 + nameW, y + rowH * 0.4, inner - nameW, { font: (s) => p.mono(s), size: px(dc, 12, 6), col: p.ptr, fill: p.edge ? null : p.tagFill, h: rowH - px(dc, 3, 1), radius: p.radius ? px(dc, 4, 2) : 0, left: true });
+      } else {
+        g.fillStyle = p.text;
+        g.fillText(fitText(g, a.text, (s) => p.mono(s), px(dc, 12, 6), inner - nameW, 5), x0 + nameW, y);
+      }
       y += rowH;
     }
     g.globalAlpha = 1;

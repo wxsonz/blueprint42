@@ -20,6 +20,7 @@ function barebone(dark: boolean): Theme {
     name: 'Barebone',
     blurb: dark ? 'black and white, colour only where it matters; the fastest to draw' : 'white paper, black ink, colour only where it matters',
     radius: 0,
+    ptrTags: true,
     spotlight: dark ? 'rgba(10,10,10,0.72)' : 'rgba(255,255,255,0.78)',
     ui: UI,
     mono: MONO,
@@ -68,7 +69,7 @@ function withDock(t: Theme): Skin {
   return {
     ...makeSkin(t),
     dock(dc, r, d) {
-      drawDock(dc, r, d, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.dim, ui: t.ui, mono: t.mono, radius: 0, glow: false });
+      drawDock(dc, r, d, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.dim, ptr: q.ptr, tagFill: q.cell, ui: t.ui, mono: t.mono, radius: 0, glow: false });
     },
   };
 }

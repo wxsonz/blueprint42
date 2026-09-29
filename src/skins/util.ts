@@ -261,6 +261,39 @@ export function pastText(g: CanvasRenderingContext2D, past: string[] | undefined
   }
   return text;
 }
+// A pointer's address tag, right-aligned at x (left-aligned with `left`), centred on y: a
+// small plate with a socket dot (an address, not a value) and what lives
+// there. Returns its width. `fill` null: an outline in `col`; else a shade.
+export function drawTag(g: CanvasRenderingContext2D, text: string, xAt: number, y: number, maxW: number, o: { font: (px: number) => string; size: number; col: string; fill: string | null; h: number; radius: number; left?: boolean }): number {
+  const padX = o.h * 0.35;
+  const dot = o.h * 0.16;
+  const t = fitText(g, text, o.font, o.size, maxW - padX * 3 - dot * 2, 6);
+  const w = g.measureText(t).width + padX * 3 + dot * 2;
+  const x = o.left ? xAt : xAt - w;
+  const top = y - o.h / 2;
+  rrect(g, x + 0.5, top + 0.5, w - 1, o.h - 1, Math.min(o.radius, o.h / 2));
+  if (o.fill) {
+    g.fillStyle = o.fill;
+    g.fill();
+  } else {
+    g.strokeStyle = o.col;
+    g.lineWidth = 1;
+    g.stroke();
+  }
+  g.fillStyle = o.col;
+  g.beginPath();
+  g.arc(x + padX + dot, y, dot, 0, Math.PI * 2);
+  g.fill();
+  const align = g.textAlign;
+  const base = g.textBaseline;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(t, x + padX * 2 + dot * 2, y + 1);
+  g.textAlign = align;
+  g.textBaseline = base;
+  return w;
+}
+
 export function drawPast(g: CanvasRenderingContext2D, past: string[] | undefined, xRight: number, y: number, maxW: number): void {
   const text = pastText(g, past, maxW);
   if (!text) return;

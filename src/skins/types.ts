@@ -55,7 +55,7 @@ export interface DockInfo {
   editing: boolean;
   // what arrived with the call on show: null when there is none (never
   // called), or when it arrived before the loaded window began (`before`)
-  args: { name: string; text: string }[] | null;
+  args: { name: string; text: string; tag?: string }[] | null; // tag: a pointer, named by what its address points at
   before: number | null; // the call began before step `before`: its arguments weren't traced
   last: boolean; // the arguments are the last call's (it returned)
   crash: { line: number; msg: string } | null; // where (1-based, as the editor numbers it) and how it died
@@ -75,6 +75,7 @@ export interface RowInfo {
   depth: number; // 1 = a struct field under the row above it
   fold: 'open' | 'closed' | null; // a struct row (its name already carries ▾/▸)
   past?: string[]; // what it held before, oldest first (a skin shows it dimmed before the value)
+  tag?: string; // a pointer: what its address points at; a skin that draws tags shows this in place of `value`
 }
 
 export interface FrameInfo {

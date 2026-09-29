@@ -6,7 +6,7 @@ import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
 import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -34,6 +34,7 @@ export interface Theme {
   ui: (px: number, weight?: number) => string; // labels
   mono: (px: number, weight?: number) => string; // code and values
   radius: number; // corner radius at zoom 1 (0 = square)
+  ptrTags?: boolean; // pointer rows show an address tag, not a value (prototyped in Barebone)
   upper?: boolean; // titles in capitals
   spotlight: string;
   pixel?: boolean; // snap every rect to whole pixels (Game Boy)
@@ -352,10 +353,14 @@ export function makeSkin(t: Theme): Skin {
         const v = row.value || '—';
         g.fillStyle = !row.value ? p.faint : row.kind === 'ptr' ? p.ptr : row.kind === 'dangling' ? p.err : row.kind === 'undef' || row.kind === 'null' ? p.faint : p.fg;
         g.textAlign = 'right';
-        const vt = fitText(g, v, (s) => t.mono(s, 700), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
-        g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+        let vw: number;
+        if (row.tag && t.ptrTags) vw = drawTag(g, row.tag, r.x + r.w - pad, rr.y + rr.h / 2, r.w * 0.5 - pad, { font: (s) => t.mono(s, 700), size: px(dc, 11, 7), col: row.kind === 'dangling' ? p.err : p.ptr, fill: p.cell, h: rr.h - px(dc, 5, 2), radius: px(dc, t.radius, 0) });
+        else {
+          const vt = fitText(g, v, (s) => t.mono(s, 700), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
+          g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+          vw = g.measureText(vt).width;
+        }
         if (row.past?.length) {
-          const vw = g.measureText(vt).width;
           g.font = t.mono(px(dc, 10, 6));
           g.fillStyle = p.faint;
           drawPast(g, row.past, r.x + r.w - pad - vw - px(dc, 4), rr.y + rr.h / 2 + 1, r.w * 0.5 - pad - vw - px(dc, 4));

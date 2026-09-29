@@ -30,13 +30,15 @@ Next, in this order:
    Prototyped in Minimal and Barebone (`Skin.dock`, `skins/dock.ts`); other
    skins keep their motor until the design settles. Still to do: mark the
    station that died inside the stations, not only in the dock.
-2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
-   its line leads to what it points at in REACHED. The tag and the line say
-   only what the pointer holds (the origin), never where it was handed down
-   from. Done so far: every
-   pointer always has its line (quieter outside the running frame, never
-   hidden); one whose target isn't drawn gets a stub with its arrow; a
-   `char *` gets a line to its byte strip.
+2. [x] **Pointer address tag** (S). A pointer row shows a tag, not a value:
+   a socket dot and what its address points at (`bufs[0]`, `heap #1`),
+   in PARAMETERS, LOCALS, REACHED and the IN dock. The tag says only what
+   the pointer holds (the origin), never where it was handed down from.
+   Every pointer always has its line (quieter outside the running frame,
+   never hidden); one whose target isn't drawn gets a stub with its arrow;
+   a `char *` gets a line to its byte strip, where its text now lives.
+   Prototyped in Minimal and Barebone (`RowInfo.tag`, `drawTag`; the kit's
+   `ptrTags`); other skins still print the value.
 3. [ ] **Byte strips inside REACHED** (S). They're reached memory too, and
    today sit on their own below the stations. Their label says where the
    bytes live (heap, stack, static) and who allocated them.

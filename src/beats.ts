@@ -8,11 +8,11 @@
 // statement uses, valued from the snapshot at its stop; writes are the
 // differences between that snapshot and the one once the statement is done.
 import { interiorAt, planOf, type Leaf, type Plan, type Station } from './interior';
-import type { Ev, Snap, SnapFrame, Trace } from './interp';
+import type { Ev, Snap, SnapFrame, Trace, V } from './interp';
 import { slotsOf, type Slot } from './machine';
 import type { FnInfo, Model } from './parse';
 import type { ValueKind } from './skins/types';
-import { fieldValue, staticCellId, valueOf } from './values';
+import { fieldValue, pointeeName, staticCellId, valueOf } from './values';
 
 export interface Beat {
   kind: 'stmt' | 'switch';
@@ -53,6 +53,7 @@ export interface SlotValue {
   kind: ValueKind;
   bytes: number[] | null; // a char * with sampled memory: its bytes
   marks: { label: string; index: number }[]; // sibling index fields (pos, len…) on that memory
+  tag?: string; // a pointer to something: what its address points at (`bufs[0]`, `#2`)
 }
 
 const INDEX_NAMES = new Set(['pos', 'len', 'cap', 'size', 'start', 'end', 'idx', 'index', 'head', 'tail', 'count', 'i', 'j', 'n']);
@@ -73,7 +74,7 @@ export function slotValue(slot: Slot, fnName: string, frame: SnapFrame | null, s
   if (slot.kind === 'cell') {
     const c = frame?.cells.find((x) => x.name === slot.name);
     if (!c) return none;
-    return { ...valueOf(c, frame, trace, live), bytes: c.val.k === 'ptr' ? heapBytes(snap, c.val.to, c.type) : null, marks: [] };
+    return { ...valueOf(c, frame, trace, live), bytes: c.val.k === 'ptr' ? heapBytes(snap, c.val.to, c.type) : null, marks: [], ...ptrTag(c.val, trace, frame) };
   }
   const [parent, field] = slot.key.slice(2).split('.');
   const pc = frame?.cells.find((x) => x.name === parent);
@@ -83,7 +84,15 @@ export function slotValue(slot: Slot, fnName: string, frame: SnapFrame | null, s
   const marks = bytes
     ? (pc!.fields ?? []).filter((x) => x !== f && x.val.k === 'int' && INDEX_NAMES.has(x.name) && x.val.v >= 0 && x.val.v <= bytes.length).map((x) => ({ label: x.name, index: (x.val as { v: number }).v }))
     : [];
-  return { ...fieldValue(f, trace), bytes, marks };
+  return { ...fieldValue(f, trace), bytes, marks, ...ptrTag(f.val, trace, frame) };
+}
+
+// A pointer's tag says only what it holds: the address, named by what lives
+// there. Never where the pointer was handed down from.
+export function ptrTag(v: V, trace: Trace, frame: SnapFrame | null): { tag?: string } {
+  if (v.k !== 'ptr' || (v.to === null && !v.label)) return {};
+  if (v.label) return { tag: v.label };
+  return { tag: `${trace.cells.get(v.to!)?.owner === 'heap' ? 'heap ' : ''}${pointeeName(trace, v.to!, frame)}` };
 }
 
 // What a slot held before, oldest first: each change the running frame saw,

@@ -141,6 +141,11 @@ output printed before it already in the terminal. A frame that began before
 the window shows its locals' memory as it is (the trace didn't see which were
 assigned).
 
+A pointer row shows an address tag, not a value: a socket dot and what
+lives at the address it holds (`bufs[0]`, `heap #1`, `main.n`). A `char *`'s
+text is in its byte strip, not on its row. Minimal and Barebone draw tags;
+other skins still print the value until the design settles.
+
 A pointer's line goes to the address it holds, and nowhere else. Passing a
 pointer down a call chain copies the address, so every copy's line goes
 straight to the origin (`lr_grow`'s `buf` → `bufs[0]`), never through the

@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, drawTag, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
@@ -32,7 +32,7 @@ function minimalOf(dark: boolean): Skin {
   const FAINT = C.faint;
   const CARD = C.card;
   const LINE = C.line;
-  const dockPalette: DockPalette = { body: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, run: ACCENT, wait: WAIT, err: ERR, param: C.param, ui: UI, mono: MONO, radius: 6, glow: true };
+  const dockPalette: DockPalette = { body: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, run: ACCENT, wait: WAIT, err: ERR, param: C.param, ptr: PTR, tagFill: C.plate, ui: UI, mono: MONO, radius: 6, glow: true };
   const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
@@ -315,10 +315,14 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
         !row.value ? FAINT : row.kind === 'ptr' ? PTR : row.kind === 'dangling' ? ERR : row.kind === 'undef' || row.kind === 'null' ? FAINT : FG;
       g.textAlign = 'right';
       g.font = MONO(px(dc, 11.5, 7), 600);
-      const vt = fitText(g, v, (s) => MONO(s, 600), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
-      g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+      let vw: number;
+      if (row.tag) vw = drawTag(g, row.tag, r.x + r.w - pad, rr.y + rr.h / 2, r.w * 0.5 - pad, { font: (s) => MONO(s, 600), size: px(dc, 11, 7), col: row.kind === 'dangling' ? ERR : PTR, fill: null, h: rr.h - px(dc, 5, 2), radius: px(dc, 4, 2) });
+      else {
+        const vt = fitText(g, v, (s) => MONO(s, 600), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
+        g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+        vw = g.measureText(vt).width;
+      }
       if (row.past?.length) {
-        const vw = g.measureText(vt).width;
         g.font = MONO(px(dc, 10, 6));
         g.fillStyle = FAINT;
         drawPast(g, row.past, r.x + r.w - pad - vw - px(dc, 4), rr.y + rr.h / 2 + 1, r.w * 0.5 - pad - vw - px(dc, 4));

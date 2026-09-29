@@ -3,7 +3,7 @@
 // pixel is delegated to the active skin (skins/*.ts).
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
-import { beatNow, computeText, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
+import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
 import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
@@ -944,7 +944,7 @@ export class GridView {
       const before = on && !call && trace?.window && trace.window.from > 0 ? trace.window.from : null;
       skin.dock(dc, motorR, {
         name: h.fn, state, waitingOn, frames: stacked, stale, copy: h.copy, editing, inPorts, before,
-        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: a.text })) : null,
+        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: a.text, ...ptrTag(a.val, trace!, on) })) : null,
         last: !frame && !!call,
         crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
       });
@@ -1028,7 +1028,7 @@ export class GridView {
       // what it held before, while its frame runs (the value it holds now is `value`)
       const past = frame && sl.kind !== 'static' ? slotHistory(sl, fn.name, frame.id, trace, arrived.has(sl.key) ? act!.beat.after : act ? act.beat.before : snapIdx) : undefined;
       return {
-        name: label, value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
+        name: label, value: v.text, kind: v.kind, param: sl.param, tag: v.tag, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
         rect, depth: sl.depth, fold: sl.fold ?? null, past,
       };
     });
