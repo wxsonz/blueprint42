@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -291,7 +291,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.textAlign = 'left';
     g.textBaseline = 'middle';
     const pad = px(dc, 10);
-    g.fillText(f.mode === 'live' ? 'FRAME' : f.mode === 'returned' ? 'RETURNED' : 'NO FRAME', r.x + pad, f.head.y + f.head.h / 2 + 1);
+    g.fillText(f.title ? (f.mode === 'returned' ? `${f.title} · last run` : f.title) : f.mode === 'live' ? 'FRAME' : f.mode === 'returned' ? 'RETURNED' : 'NO FRAME', r.x + pad, f.head.y + f.head.h / 2 + 1);
     for (const row of f.rows) {
       const rr = row.rect;
       if (row.recent || row.flash > 0) {
@@ -311,7 +311,14 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
         !row.value ? FAINT : row.kind === 'ptr' ? PTR : row.kind === 'dangling' ? ERR : row.kind === 'undef' || row.kind === 'null' ? FAINT : FG;
       g.textAlign = 'right';
       g.font = MONO(px(dc, 11.5, 7), 600);
-      g.fillText(fitText(g, v, (s) => MONO(s, 600), px(dc, 11.5, 7), r.w * 0.5 - pad, 6), r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+      const vt = fitText(g, v, (s) => MONO(s, 600), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
+      g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+      if (row.past?.length) {
+        const vw = g.measureText(vt).width;
+        g.font = MONO(px(dc, 10, 6));
+        g.fillStyle = FAINT;
+        drawPast(g, row.past, r.x + r.w - pad - vw - px(dc, 4), rr.y + rr.h / 2 + 1, r.w * 0.5 - pad - vw - px(dc, 4));
+      }
     }
     g.globalAlpha = 1;
   },

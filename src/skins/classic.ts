@@ -401,7 +401,7 @@ export const classic: Skin = {
     g.textBaseline = 'middle';
     g.textAlign = 'left';
     g.fillStyle = f.mode === 'none' ? SHADOW : DARK;
-    g.fillText('Name', head.x + 5, head.y + head.h / 2 + 0.5);
+    g.fillText(f.title ? f.title.toLowerCase().replace(/^./, (c) => c.toUpperCase()) : 'Name', head.x + 5, head.y + head.h / 2 + 0.5);
     g.fillText(fitText(g, f.mode === 'returned' ? 'Last value' : 'Value', (s) => UI(s), fs, head.w - c1 - 8), head.x + c1 + 5, head.y + head.h / 2 + 0.5);
 
     for (const row of f.rows) {

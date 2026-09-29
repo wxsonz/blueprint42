@@ -87,13 +87,33 @@ Each section below is one level. The columns are:
 | --- | --- | --- | --- | --- | --- |
 | The function | ≤ 25 lines, a tab before its name | A machine: title (its name), storage, stations, memory floor | its frame is running, waiting, returned | ✅ | Palette: new machine |
 | Parameters | ≤ 4, named | Input ports on the left; parameter rows in storage | a call arrives | ✅ | Drag a belt end onto an empty port |
-| Return type | — | Not drawn: the parser reads it (`ret`) but `NodeInfo` doesn't carry it | a return | ⬜ | Pick from the types shelf |
+| Return type | — | In the RETURN panel, with the value once it leaves | a return | ✅ | Pick from the types shelf |
 | Locals | ≤ 5 (a local `static` counts), declared first | Storage rows (int, ptr, NULL, unset, dangling), struct fields folded under their row | a write lands (flash) | ✅ | Drop a row into storage |
 | A local `static` | Can initialise on its line | A chest | written | ✅ | — |
 | `static` function | — | The word `static` in the title's meta line, in the skins that draw one (the kit's and a few others) | — | 🟡 not in every skin | Toggle |
 | Line capacity | 25 physical lines | Not shown | — | ⬜ | A fill bar: lines used of 25, counted the way the checker counts |
 | Recursion | — | One copy per level, stacked; a reserved slot for the next copy | a call to itself | ✅ | — |
 | Stale | — | Dimmed, keeps its place when the code stops parsing | a parse error | ✅ | — |
+
+### Machine anatomy
+
+Top to bottom, the life of one call:
+
+| Part | What it holds | Status |
+| --- | --- | --- |
+| **IN dock** (the motor, top left) | Where a call arrives. *Idle*: dim, waiting to be called. *Running*: the call's arguments are here. A machine waiting on a callee says so on its body; a crash shows on the station that died. | ✅ as the motor; its own dock look is to do |
+| **PARAMETERS** | The function's own copies of its arguments. C passes by value: a plain value is copied in. A pointer's *address* is copied, and what it points at stays where it was (see REACHED). | ✅ |
+| **LOCALS** | Its own variables, at most 5, declared first (Norm). They start unset (`?`): the Norm forbids initialising where you declare. | ✅ |
+| **KEPT (static)** | Its statics, which outlive the call. Another machine that reaches them sees them under REACHED. | ✅ |
+| **REACHED (through pointers)** | Memory it only reaches through a pointer, written as the C that gets there (`buf->len`). It belongs to someone else: writing it changes the caller's data. | ✅ struct fields; byte strips below the stations |
+| Stations | One per line of code (section 4). | ✅ |
+| **RETURN** | The return type, and the value once it leaves (`void`: done). | ✅ |
+
+Every row in a pool shows what it held before, dimmed, newest nearest:
+`cap   ? → 0 → 8 → 16`. That's how the data changes over time.
+
+Labels write C's `->` with a non-breaking hyphen, so code fonts don't join it
+into one arrow glyph: a plain arrow means "points to", never "field of".
 
 ### 4. Station (a statement)
 
@@ -178,13 +198,14 @@ The 🟡 and ⬜ rows, in the order they matter for editing later:
 
 1. **Capacity** (module 5 definitions, machine 25 physical lines, ports 4,
    storage 5 including local statics).
-2. **Return type** drawn in the title (it's parsed already).
+2. ~~Return type~~: done, in the RETURN panel.
 3. **Argument vs return plates**: different in shape, not just in colour.
 4. **The types shelf** (structs, typedefs, enums, macro constants).
 5. **Dereference**: where a `*p` or `p->f` value came from.
 6. **Ownership** of heap blocks.
 7. **Aliasing**: pointer arrows from rows to the memory they point at.
-8. **Loop history**: past rounds' values.
+8. **Loop history**: past values are shown per row now; past rounds of a
+   loop as a whole are not.
 9. **Output as it happens**, not only at exit.
 10. **`static` functions** marked the same way in every skin.
 

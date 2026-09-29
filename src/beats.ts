@@ -86,6 +86,29 @@ export function slotValue(slot: Slot, fnName: string, frame: SnapFrame | null, s
   return { ...fieldValue(f, trace), bytes, marks };
 }
 
+// What a slot held before, oldest first: each change the running frame saw,
+// up to snapshot `upto`, without the value it holds now. Scanned once per
+// frame and slot, extended as playback moves on.
+const histCache = new WeakMap<Trace, Map<string, { scanned: number; changes: { si: number; text: string }[] }>>();
+export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: Trace, upto: number, n = 3): string[] {
+  if (slot.kind === 'more') return [];
+  let byKey = histCache.get(trace);
+  if (!byKey) histCache.set(trace, (byKey = new Map()));
+  const k = `${frameId}|${slot.key}`;
+  let h = byKey.get(k);
+  if (!h) byKey.set(k, (h = { scanned: -1, changes: [] }));
+  for (let si = h.scanned + 1; si <= upto && si < trace.snaps.length; si++) {
+    const snap = trace.snaps[si];
+    const f = snap.stack.find((x) => x.id === frameId);
+    if (!f) continue;
+    const text = slotValue(slot, fnName, f, snap, trace).text || '?';
+    if (h.changes.at(-1)?.text !== text) h.changes.push({ si, text });
+    h.scanned = si;
+  }
+  const seen = h.changes.filter((c) => c.si <= upto);
+  return seen.slice(Math.max(0, seen.length - 1 - n), -1).map((c) => c.text);
+}
+
 // The slot a read names: `x` (a local, param or static) or `a->b`.
 function slotKeyOf(leaf: Leaf, slots: Slot[]): string | null {
   const key = leaf.path.length === 2 ? `f:${leaf.path[0]}.${leaf.path[1]}` : `c:${leaf.path[0]}`;

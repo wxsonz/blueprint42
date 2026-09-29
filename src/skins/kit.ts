@@ -6,7 +6,7 @@ import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 import type { BeltOpts } from './kit-types';
 import type { Dc, IconKind, NodeInfo, Pt, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -322,7 +322,7 @@ export function makeSkin(t: Theme): Skin {
         const o = px(dc, 4) * k;
         t.card(dc, { x: r.x + o, y: r.y + o, w: r.w, h: r.h }, { fill: p.panel, stroke: p.line, lw: 1, glow: null, kind: 'frame' });
       }
-      const label = f.mode === 'live' ? 'STORAGE' : f.mode === 'returned' ? 'LAST RUN' : 'NOT RUNNING';
+      const label = f.title ? (f.mode === 'returned' ? `${f.title} · LAST RUN` : f.title) : f.mode === 'live' ? 'STORAGE' : f.mode === 'returned' ? 'LAST RUN' : 'NOT RUNNING';
       const pad = px(dc, 9);
       if (t.panel) {
         t.panel(dc, r, f.head, label, f.mode === 'live');
@@ -352,7 +352,14 @@ export function makeSkin(t: Theme): Skin {
         const v = row.value || '—';
         g.fillStyle = !row.value ? p.faint : row.kind === 'ptr' ? p.ptr : row.kind === 'dangling' ? p.err : row.kind === 'undef' || row.kind === 'null' ? p.faint : p.fg;
         g.textAlign = 'right';
-        g.fillText(fitText(g, v, (s) => t.mono(s, 700), px(dc, 11.5, 7), r.w * 0.5 - pad, 6), r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+        const vt = fitText(g, v, (s) => t.mono(s, 700), px(dc, 11.5, 7), r.w * 0.5 - pad, 6);
+        g.fillText(vt, r.x + r.w - pad, rr.y + rr.h / 2 + 1);
+        if (row.past?.length) {
+          const vw = g.measureText(vt).width;
+          g.font = t.mono(px(dc, 10, 6));
+          g.fillStyle = p.faint;
+          drawPast(g, row.past, r.x + r.w - pad - vw - px(dc, 4), rr.y + rr.h / 2 + 1, r.w * 0.5 - pad - vw - px(dc, 4));
+        }
       }
       g.globalAlpha = 1;
     },

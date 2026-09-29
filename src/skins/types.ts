@@ -54,9 +54,11 @@ export interface RowInfo {
   rect: Rect;
   depth: number; // 1 = a struct field under the row above it
   fold: 'open' | 'closed' | null; // a struct row (its name already carries ▾/▸)
+  past?: string[]; // what it held before, oldest first (a skin shows it dimmed before the value)
 }
 
 export interface FrameInfo {
+  title?: string; // which storage pool this panel is (PARAMETERS, LOCALS, …, RETURN); skins show it in place of their own label
   mode: 'live' | 'returned' | 'none';
   stacked: number; // extra frames of the same function underneath (recursion)
   rows: RowInfo[];

@@ -3,7 +3,7 @@
 // pixel is delegated to the active skin (skins/*.ts).
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
-import { beatNow, computeText, readsOf, READ_END, slotValue, writesOf, type BeatNow } from './beats';
+import { beatNow, computeText, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
 import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
@@ -14,8 +14,13 @@ import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, St
 
 export { procPlace, type Belt };
 export { clip, pointeeName } from './values';
-import { MODE, argLabel, beltHandle, clipCode, entKey, eventPair, frameAt, frameHosts, lastReturned, liveHostPairs, readoutOf, retLabel, returnCard, sceneAt, spriteStripInfo, spriteWorldRect, staged, switchAt, type Duel, type DuelEnd, type ViewState } from './playback';
+import { MODE, argLabel, beltHandle, clipCode, entKey, eventPair, frameAt, frameHosts, lastReturned, returnOf, liveHostPairs, readoutOf, retLabel, returnCard, sceneAt, spriteStripInfo, spriteWorldRect, staged, switchAt, type Duel, type DuelEnd, type ViewState } from './playback';
+
 import { heapSlotRect, wallCrossings } from './hit';
+
+// C's `->`, with a non-breaking hyphen (U+2011): code fonts join an ASCII
+// `->` into one arrow glyph, which reads as "points to", not as a field
+const ARROW = '\u2011>';
 function interiorInfo(
   plan: Plan, state: InteriorState | null,
   o: {
@@ -911,7 +916,7 @@ export class GridView {
     }
 
     // ---- storage ----
-    const snapNow = frameAt(trace, s.pos).snap;
+    const { snap: snapNow, si: snapIdx } = frameAt(trace, s.pos);
     const before = act ? trace.snaps[act.beat.before] : snapNow;
     const after = act ? trace.snaps[Math.min(act.beat.after, trace.snaps.length - 1)] : snapNow;
     const fB = act ? before.stack.find((f) => f.id === act.beat.frame) ?? shown : shown;
@@ -932,7 +937,7 @@ export class GridView {
     };
     const rows: RowInfo[] = slots.map((sl, i) => {
       const v = valueAt(sl.key);
-      const rect: Rect = { x: X, y: Y + (INV_HEAD_PX + i * SLOT_PX) * z, w: W, h: SLOT_PX * z };
+      const rect: Rect = { x: X, y: this.sy(h.y + geo.store.slotTop[i]), w: W, h: SLOT_PX * z };
       slotAt.set(sl.key, [X + W, rect.y + rect.h / 2]);
       const anchor = { y: rect.y + rect.h / 2, left: X, right: X + W };
       if (frame && sl.kind === 'cell') {
@@ -944,13 +949,38 @@ export class GridView {
         if (id !== null) anchors.set(id, anchor);
       }
       const hit = arrived.has(sl.key) && writes.some((w) => w.key === sl.key);
+      // reached fields read as the C that gets there (`buf->len`); own fields as `.len`
+      const reached = sl.pool === 'reached';
+      const label = sl.kind === 'field' ? (reached ? `${sl.parent}${ARROW}${sl.name}` : `  .${sl.name}`)
+        : sl.kind === 'more' ? (reached ? `${sl.parent}: ${sl.name}` : `  ${sl.name}`)
+        : sl.fold ? `${sl.fold === 'open' ? '▾' : '▸'} ${sl.name}` : sl.name;
+      // what it held before, while its frame runs (the value it holds now is `value`)
+      const past = frame && sl.kind !== 'static' ? slotHistory(sl, fn.name, frame.id, trace, arrived.has(sl.key) ? act!.beat.after : act ? act.beat.before : snapIdx) : undefined;
       return {
-        name: sl.kind === 'field' ? `  .${sl.name}` : sl.kind === 'more' ? `  ${sl.name}` : sl.kind === 'static' ? `${sl.name} (static)` : sl.fold ? `${sl.fold === 'open' ? '▾' : '▸'} ${sl.name}` : sl.name,
-        value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
-        rect, depth: sl.depth, fold: sl.fold ?? null,
+        name: label, value: v.text, kind: v.kind, param: sl.param, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
+        rect, depth: sl.depth, fold: sl.fold ?? null, past,
       };
     });
-    skin.frame(dc, { x: X, y: Y, w: W, h: (INV_HEAD_PX + slots.length * SLOT_PX + 8) * z }, { mode: liveMode, stacked: Math.max(0, stacked - 1), rows, head: { x: X, y: Y, w: W, h: INV_HEAD_PX * z } });
+    geo.store.pools.forEach((pg, k) => {
+      const PY = this.sy(h.y + pg.y);
+      skin.frame(dc, { x: X, y: PY, w: W, h: pg.h * cs }, {
+        title: pg.title, mode: liveMode, stacked: k === 0 ? Math.max(0, stacked - 1) : 0,
+        rows: rows.slice(pg.first, pg.first + pg.rows), head: { x: X, y: PY, w: W, h: INV_HEAD_PX * z },
+      });
+    });
+
+    // ---- return: the type, and the value once it leaves ----
+    {
+      const RY = this.sy(h.y + geo.ret.y);
+      const RW = geo.ret.w * cs;
+      const ret = returnOf(trace, shown?.id ?? null, s.pos);
+      const value = fn.ret === 'void' ? (ret ? 'done' : '') : ret ? retLabel(ret.val, trace) : frame ? '…' : '';
+      skin.frame(dc, { x: X, y: RY, w: RW, h: geo.ret.h * cs }, {
+        title: 'RETURN', mode: liveMode, stacked: 0, head: { x: X, y: RY, w: RW, h: INV_HEAD_PX * z },
+        rows: [{ name: fn.ret, value, kind: ret ? 'int' : 'none', param: false, recent: !!ret && s.pos - ret.at < 1, flash: 0,
+          rect: { x: X, y: RY + INV_HEAD_PX * z, w: RW, h: SLOT_PX * z }, depth: 0, fold: null }],
+      });
+    }
 
     // ---- memory floor ----
     const mem = new Map<string, { r: Rect; len: number }>();
@@ -961,7 +991,7 @@ export class GridView {
       const bytes = v.bytes ?? [];
       mem.set(key, { r, len: bytes.length });
       const wrote = writes.filter((w) => w.key === key && w.index !== undefined && arrived.has(key));
-      const label = sl.kind === 'field' ? `${key.slice(2).split('.')[0]}->${sl.name}` : sl.name;
+      const label = sl.kind === 'field' ? `${key.slice(2).split('.')[0]}${ARROW}${sl.name}` : sl.name;
       if (!v.bytes) {
         // nothing to show yet (NULL, not set, or not in memory the trace saw)
         g.save();
@@ -971,7 +1001,7 @@ export class GridView {
         return;
       }
       skin.strip(dc, r, {
-        label: `${label} → memory`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
+        label: `${label} · ${sl.type.replace(/\s+\*/g, ' *')}`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
         markers: [...v.marks.map((mk) => ({ label: mk.label, index: mk.index, sampledIndex: mk.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
         selected: false, hovered: false,
       });

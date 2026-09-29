@@ -450,7 +450,7 @@ export const aqua: Skin = {
     g.fillStyle = f.mode === 'none' ? '#999' : '#333';
     g.textBaseline = 'middle';
     g.textAlign = 'left';
-    g.fillText('Variable', head.x + 6, head.y + head.h / 2);
+    g.fillText(f.title ? f.title.toLowerCase().replace(/^./, (c) => c.toUpperCase()) : 'Variable', head.x + 6, head.y + head.h / 2);
     g.fillText(f.mode === 'returned' ? 'Last value' : 'Value', c1 + 6, head.y + head.h / 2);
     f.rows.forEach((row, i) => {
       const rr = row.rect;

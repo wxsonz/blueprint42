@@ -294,6 +294,21 @@ export function frameAt(trace: Trace, pos: number): { snap: Snap; ev: Ev | null;
 
 // The last frame a function had before snapshot `si`, if it has returned.
 const retCache = new WeakMap<Trace, { at: number; fn: string; frame: SnapFrame }[]>();
+// The return a frame made, once playback has reached it: its value, and the
+// event index (so the panel can light up while it leaves).
+const retByFrame = new WeakMap<Trace, Map<number, { at: number; val: V }>>();
+export function returnOf(trace: Trace, frameId: number | null, pos: number): { at: number; val: V } | null {
+  if (frameId === null) return null;
+  let m = retByFrame.get(trace);
+  if (!m) {
+    m = new Map();
+    trace.evs.forEach((e, j) => { if (e.k === 'ret' && e.frame != null) m!.set(e.frame, { at: j, val: e.val }); });
+    retByFrame.set(trace, m);
+  }
+  const r = m.get(frameId);
+  return r && r.at < pos ? r : null;
+}
+
 export function lastReturned(trace: Trace, fn: string, si: number): SnapFrame | null {
   let list = retCache.get(trace);
   if (!list) {

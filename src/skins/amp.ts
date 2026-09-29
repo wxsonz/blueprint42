@@ -430,7 +430,7 @@ export const amp: Skin = {
     }
     metal(g, r);
     const head = { x: r.x + 2, y: r.y + 2, w: r.w - 4, h: Math.round(f.head.h) - 4 };
-    strip(dc, head, f.mode === 'live' ? 'STACK FRAME' : f.mode === 'returned' ? 'RETURNED' : 'NO FRAME', f.mode === 'live');
+    strip(dc, head, f.title ? (f.mode === 'returned' ? `${f.title} · LAST RUN` : f.title) : f.mode === 'live' ? 'STACK FRAME' : f.mode === 'returned' ? 'RETURNED' : 'NO FRAME', f.mode === 'live');
     const body = { x: r.x + 3, y: r.y + Math.round(f.head.h) - 1, w: r.w - 6, h: r.h - Math.round(f.head.h) - 2 };
     g.fillStyle = LCD_BG;
     g.fillRect(body.x, body.y, body.w, body.h);

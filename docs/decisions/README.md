@@ -48,3 +48,4 @@ and a line here. When a later decision replaces one, the old one's
 | [038](038-repo-layout.md) | 2026-09-29 | Accepted | the app at the repo root, docs in docs/ |
 | [039](039-smaller-files.md) | 2026-09-29 | Accepted | the three biggest files split along their seams |
 | [040](040-visual-grammar.md) | 2026-09-29 | Accepted | toward a visual code editor, scoped to Norm C |
+| [041](041-machine-pools.md) | 2026-09-29 | Accepted | a machine's storage in pools, with each row's past values |

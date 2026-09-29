@@ -192,3 +192,21 @@ export function cutText(g: CanvasRenderingContext2D, text: string, maxW: number)
   cutMemo.set(key, t);
   return t;
 }
+
+// A storage row's past values, right-aligned so they end just before its
+// current value (at xRight), newest nearest: "? → 4 → " then the value. Drops
+// the oldest ones that don't fit in maxW. The caller sets the colour.
+export function drawPast(g: CanvasRenderingContext2D, past: string[] | undefined, xRight: number, y: number, maxW: number): void {
+  if (!past?.length || maxW < 16) return;
+  let text = '';
+  for (let k = past.length - 1; k >= 0; k--) {
+    const next = `${past[k]} → ${text}`;
+    if (g.measureText(next).width > maxW) break;
+    text = next;
+  }
+  if (!text) return;
+  g.save();
+  g.textAlign = 'right';
+  g.fillText(text, xRight, y);
+  g.restore();
+}

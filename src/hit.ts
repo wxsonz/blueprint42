@@ -1,7 +1,7 @@
 // Hit-testing and rects: what's under the pointer, and where things are.
-import { CELL_PX, INV_HEAD_PX, MW, SLOT_PX, frameRows, type Layout } from './layout';
+import { CELL_PX, MW, SLOT_PX, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, type Station } from './interior';
-import { geomOf, procH, shut } from './machine';
+import { geomOf, procH, shut, slotsOf } from './machine';
 import { buildScene, procPlace, type Belt } from './route';
 import type { Pt, Rect } from './skins/types';
 import { eventPair, frameAt, frameHosts, sceneAt, spriteWorldRect, type Entity, type ViewState } from './playback';
@@ -152,10 +152,9 @@ export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name
     if (!fn || fn.broken || shut.has(fn.name)) continue;
     const g = geomOf(fn);
     if (wx < h.x + g.store.x || wx >= h.x + g.store.x + g.store.w) continue;
-    const rows = frameRows(fn);
-    const top = h.y + g.store.y + INV_HEAD_PX / CELL_PX;
-    const i = Math.floor((wy - top) / (SLOT_PX / CELL_PX));
-    if (i >= 0 && i < rows.length && rows[i].fold) return { fn: h.fn, name: rows[i].name };
+    const slots = slotsOf(fn);
+    const i = slots.findIndex((sl, k) => wy >= h.y + g.store.slotTop[k] && wy < h.y + g.store.slotTop[k] + SLOT_PX / CELL_PX);
+    if (i >= 0 && slots[i].fold) return { fn: h.fn, name: slots[i].name };
   }
   return null;
 }
