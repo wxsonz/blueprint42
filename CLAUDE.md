@@ -24,8 +24,9 @@ limits); read the part you need.
   (middle-drag pan, wheel zoom, drag to move/re-route, double-click,
   right-click menu), plus conventional player keys (Space, ←/→, Home/End).
   Don't add vim-style bindings to the canvas.
-- Skin review status is in `docs/SKINS.md`: never redesign a skin marked
-  reviewed there unless the author names it; log every skin pass there.
+- Skin review status is in `docs/SKINS.md`. Reviewed means it meets the
+  author's design standard, not frozen: change it when the author asks,
+  never restyle it unasked. Log every skin pass there.
   Prototype new pictures in Minimal and Barebone only; don't edit other
   skins' code for them until the design settles.
 - **Hard rule: the picture obeys how C really works** (SPEC principle 4).

@@ -1,13 +1,15 @@
 # Skins: review status
 
 Who may change what. The author reviews skins one at a time and guides each
-one. An agent working on skins reads this first, updates it when done, and
-never redesigns a skin marked **reviewed** unless the author asks for that
-skin by name.
+one. An agent working on skins reads this first and updates it when done.
+**Reviewed** means the author has guided a skin to their design standard,
+not that it's frozen: it changes whenever the author asks for a change to
+it. What an agent doesn't do is restyle a reviewed skin on its own
+initiative (a sweep across skins, a "while I'm here" tweak).
 
 | Status | Meaning |
 | --- | --- |
-| **reviewed** | The author has guided and approved it. Don't redesign. Engine-wide changes (a new picture every skin draws) still apply, drawn in its style. |
+| **reviewed** | The author has guided it to their design standard. Change it when the author asks; don't restyle it unasked. Engine-wide changes (a new picture every skin draws) still apply, drawn in its style. |
 | **pending** | Not reviewed yet. Agents may improve it, staying true to the skin's era and palette, and log what they changed below. |
 | **WIP ⚠** | Pending, and also marked work-in-progress in the picker (`WIP` in `src/skins/index.ts`). |
 
