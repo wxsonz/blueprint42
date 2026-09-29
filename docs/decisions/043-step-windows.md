@@ -40,3 +40,9 @@
 - **Also:** a caller whose bytes didn't change is no longer re-read or
   re-sent, memory is read in bulk per stop, and snapshots share unchanged
   frames. files-1024 went from 87 s / 82 MB to 40 s / 4.7 MB.
+- **Decision (author):** A long run plays to its end. A limit is a warning,
+  never a stop. While a window plays, the page already traces the next one
+  in the background, and playback runs straight on into it. It pauses at an
+  edge only while the next steps catch up (gdb traces about 1,000 steps a
+  second). The banner says it is a long run, and whether the next steps are
+  ready.

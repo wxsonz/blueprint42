@@ -18,7 +18,7 @@ import { DRIVER } from './workspace';
 import { drawIcon, gotoCode, placeSprite, removeSprite, toggleModule } from './main';
 import { bindingsChanged, loadSample, saveSoon } from './sample-ui';
 import { reanchorStats, statsOpen } from './stats-ui';
-import { loading } from './session';
+import { loading, prefetching, session, windowSize } from './session';
 
 let loadingTick = 0;
 
@@ -143,7 +143,10 @@ export function renderAlerts(): void {
     // a gdb session: this trace is one window of the run
     const n = (x: number) => x.toLocaleString('en-US');
     const of = win.total !== null ? `of ${n(win.total)}` : win.more ? `of at least ${n(win.to)}` : `of ${n(win.to)}`;
-    if (win.from > 0 || win.more) al('info', `<b>Steps ${n(win.from)}–${n(win.to)}</b> ${of}
+    // a long run never stops at a window's edge: say so, and whether the
+    // next steps are traced yet
+    const next = !win.more ? '' : session.windows.has(win.to) ? 'the next steps are ready' : prefetching(win.to) ? 'gdb is tracing the next steps now' : 'the next steps are traced when playback gets there';
+    if (win.from > 0 || win.more) al(win.more ? 'warn' : 'info', `<b>Steps ${n(win.from)}–${n(win.to)}</b> ${of}${win.more ? `<br><span class="c">A long run: playback carries on to the end, ${windowSize().toLocaleString('en-US')} steps at a time (${next}). gdb traces about 1,000 steps a second, so it may pause at an edge while the next steps catch up.</span>` : ''}
       <span class="winnav"><button class="btn sm" data-win="prev" ${win.from > 0 ? '' : 'disabled'}>◂ Previous</button><button class="btn sm" data-win="next" ${win.more ? '' : 'disabled'}>Next ▸</button><input data-goto type="number" min="0" step="1" placeholder="go to step" aria-label="go to step"><button class="btn sm" data-win="stats" aria-expanded="${statsOpen()}">${statsOpen() ? 'Stats ▴' : 'Stats ▾'}</button></span>`);
   } else if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
   const leaks = S.trace?.leaks ?? [];

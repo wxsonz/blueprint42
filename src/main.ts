@@ -7,7 +7,7 @@ import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp'
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
 import { convertGdb, type GResult } from './gdb';
-import { closeSession, onLoading, session, traceWindow, WINDOW_MAX, windowSize } from './session';
+import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
 import { animMode, prepareStage, computeBelts, durationAt, frameAt, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity } from './playback';
@@ -130,6 +130,13 @@ export function analyze(src: string, fresh: boolean): void {
   }
 }
 
+// The run goes on past this window: start tracing the next one now, so
+// playback carries on into it instead of stopping at the edge.
+function prefetchNext(): void {
+  const w = S.trace?.window;
+  if (w?.more) prefetch(w.to);
+}
+
 // Another stretch of the run (gdb sessions): fetch the window that holds step
 // `step` (from the page's cache, or the session), and put playback on it.
 let windowLoading = false;
@@ -160,6 +167,7 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
     }
     const p = S.project;
     applyTrace(convertGdb(r, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
+    prefetchNext();
     // the event where step `target` is: each 'step' event is one step of the run
     let n = from;
     const evs = S.trace!.evs;
@@ -242,6 +250,7 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
     } else {
       S.gdb = { status: 'done', ms: r.ms };
       applyTrace(convertGdb(r, model, files ?? src), fresh);
+      prefetchNext();
       if (fresh) {
         autoSpeed(S.trace!);
         view.home(S); // close enough to see the machines work

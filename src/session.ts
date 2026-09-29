@@ -76,13 +76,55 @@ export function closeSession(): void {
   session.info = null;
 }
 
+// Windows on their way, so a prefetch and a later request for the same
+// window share one fetch.
+const inflight = new Map<number, Promise<GResult | 'unavailable'>>();
+
+// Fetch the next window while the current one plays, so playback runs on
+// into it instead of stopping at the edge. Quiet: no loading banner.
+export function prefetch(from: number): void {
+  if (!session.id || session.windows.has(from) || inflight.has(from)) return;
+  void traceWindow(JSON.parse(session.key), from, undefined, true).then(() => onLoading.fn());
+  onLoading.fn(); // the banner says the next steps are on their way
+}
+
+export function prefetching(from: number): boolean {
+  return inflight.has(from);
+}
+
 // The window of steps [from, from + size] of the program `req` describes:
 // from the page's cache, or the session (opened, or reopened, as needed).
-export async function traceWindow(req: GdbRequest, from: number, signal?: AbortSignal): Promise<GResult | 'unavailable'> {
+export async function traceWindow(req: GdbRequest, from: number, signal?: AbortSignal, quiet = false): Promise<GResult | 'unavailable'> {
   const key = JSON.stringify(req);
-  if (key !== session.key) closeSession();
+  if (key !== session.key) {
+    closeSession();
+    inflight.clear();
+  }
   const hit = session.windows.get(from);
   if (hit) return hit.result;
+  const going = inflight.get(from);
+  if (going) {
+    if (!quiet) {
+      Object.assign(loading, { from, to: from + windowSize(), since: Date.now(), reached: -1 });
+      onLoading.fn();
+      try {
+        return await going;
+      } finally {
+        loading.since = 0;
+      }
+    }
+    return going;
+  }
+  const job = fetchWindow(req, key, from, signal, quiet);
+  inflight.set(from, job);
+  try {
+    return await job;
+  } finally {
+    inflight.delete(from);
+  }
+}
+
+async function fetchWindow(req: GdbRequest, key: string, from: number, signal: AbortSignal | undefined, quiet: boolean): Promise<GResult | 'unavailable'> {
   for (let attempt = 0; attempt < 2; attempt++) {
     if (!session.id) {
       const t0 = performance.now();
@@ -96,8 +138,10 @@ export async function traceWindow(req: GdbRequest, from: number, signal?: AbortS
     }
     const size = windowSize();
     const t0 = performance.now();
-    Object.assign(loading, { from, to: from + size, since: Date.now(), reached: -1 });
-    onLoading.fn();
+    if (!quiet) {
+      Object.assign(loading, { from, to: from + size, since: Date.now(), reached: -1 });
+      onLoading.fn();
+    }
     let r: (GResult & { bytes?: number; gone?: boolean }) | 'unavailable';
     try {
       for (;;) {
@@ -106,11 +150,13 @@ export async function traceWindow(req: GdbRequest, from: number, signal?: AbortS
         // stops partway with no steps recorded, leaving savepoints behind
         // it. Ask again: it goes on from the furthest one.
         if (r === 'unavailable' || !r.ok || r.stops?.length || !r.truncated || (r.window?.to ?? from) >= from) break;
-        loading.reached = r.window!.to;
-        onLoading.fn();
+        if (!quiet) {
+          loading.reached = r.window!.to;
+          onLoading.fn();
+        }
       }
     } finally {
-      loading.since = 0;
+      if (!quiet) loading.since = 0;
     }
     if (r === 'unavailable') return 'unavailable';
     if (!r.ok && r.gone) {
