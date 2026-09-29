@@ -13,9 +13,9 @@ import { EXO, F, MONO, ps2Still, text } from './common';
 const PS2_SILVER = '#d6d6dc';
 const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
-  bg: '#171717', card: '#202023', panel: '#1d1d1e', line: '#37373c',
-  fg: '#dcdce0', dim: '#a6a6af', faint: '#6d6d76', accent: PS2_SILVER, ptr: '#b3a8c4', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
-  param: '#c4c4cc', cell: '#28282c', track: '#1b1b1c',
+  bg: '#121212', card: '#1c1c1e', panel: '#181819', line: '#333338',
+  fg: '#dedee2', dim: '#a1a1aa', faint: '#686871', accent: PS2_SILVER, ptr: '#b3a8c4', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
+  param: '#c4c4cc', cell: '#232327', track: '#161617',
 };
 // the console's matte plastic: a fine, dense grain of light and dark
 // specks, pre-rendered once as a tile and laid over a surface anchored to
@@ -294,9 +294,9 @@ export const ps2Theme: Theme = {
   card(dc, r, o) {
     const g = dc.g;
     if (o.fill !== 'transparent') {
-      g.fillStyle = o.kind === 'wall' ? 'rgba(0,0,0,0.35)' : o.kind === 'frame' || o.kind === 'plate' ? ps2P.panel : ps2P.card;
+      g.fillStyle = o.kind === 'wall' ? 'rgba(22,22,25,0.55)' : o.kind === 'frame' || o.kind === 'plate' ? ps2P.panel : ps2P.card;
       g.fillRect(r.x, r.y, r.w, r.h);
-      if (o.kind !== 'wall') ps2Grain(g, r.x, r.y, r.w, r.h, 0.8);
+      if (o.kind !== 'wall') ps2Grain(g, r.x, r.y, r.w, r.h, 0.45);
     }
     // no glowing borders: plates keep their colour, everything else a hairline
     g.strokeStyle = o.kind === 'plate' ? o.stroke : 'rgba(255,255,255,0.1)';
@@ -361,16 +361,16 @@ export const ps2Theme: Theme = {
   // a hairline edge, a short ridged head with a small grey title
   panel(dc, r, head, title, live) {
     const g = dc.g;
-    g.fillStyle = 'rgba(31,31,33,0.92)';
+    g.fillStyle = 'rgba(31,31,35,0.96)';
     g.fillRect(r.x, r.y, r.w, r.h);
-    ps2Grain(g, r.x, r.y, r.w, r.h);
+    ps2Grain(g, r.x, r.y, r.w, r.h, 0.5);
     ridges(g, r.x, r.y, r.w, head.h, Math.max(3, 6 * dc.z));
     g.strokeStyle = 'rgba(255,255,255,0.07)';
     g.lineWidth = 1;
     g.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
     g.fillStyle = 'rgba(255,255,255,0.06)';
     g.fillRect(r.x, r.y + head.h, r.w, 1);
-    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#94949d', { w: 500, x: r.x + 8 * dc.z });
+    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#8f8f98', { w: 500, x: r.x + 8 * dc.z });
   },
   // data in flight leaves the boot lights' trail: a hairline fading toward
   // the tail over a faint glow, a glowing head under the data
@@ -408,22 +408,22 @@ export const ps2Theme: Theme = {
   // the boot screen: black space, the fog, the cubes and the lights
   background(dc, camX, camY) {
     backdrop(dc, 'ps2-space', (g, W, H) => {
-      g.fillStyle = '#10121c';
+      g.fillStyle = '#131520';
       g.fillRect(0, 0, W, H);
     });
     ps2Boot(dc, camX, camY);
   },
   window: {
-    border: 2, corner: 0, titleH: 26, face: 'rgba(4,5,9,0.25)', workspace: 'rgba(255,255,255,0.02)',
+    border: 2, corner: 0, titleH: 26, face: 'rgba(0,0,0,0.06)', workspace: 'rgba(255,255,255,0.02)',
     // a black slab: stacked ridges along the head, thin lines turning at the corners
     frame(dc, r, active, face, kind) {
       const g = dc.g;
       ps2Kind = kind;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
       // smoked, not solid: the dancing lights glow through between the panels
-      g.fillStyle = 'rgba(29,29,32,0.82)';
+      g.fillStyle = 'rgba(26,26,29,0.95)';
       g.fillRect(r.x, r.y, r.w, r.h);
-      ps2Grain(g, r.x, r.y, r.w, r.h);
+      ps2Grain(g, r.x, r.y, r.w, r.h, 0.5);
       ridges(g, r.x, r.y, r.w, 26 * dc.z, Math.max(3, 5 * dc.z));
       g.fillStyle = face;
       g.fillRect(r.x + 2 * dc.z, r.y + 26 * dc.z, r.w - 4 * dc.z, Math.max(0, r.h - 28 * dc.z));
@@ -439,7 +439,7 @@ export const ps2Theme: Theme = {
         const x = r.x + r.w - 4 * z - bw;
         const top = r.y + 32 * z;
         const bottom = r.y + r.h - 10 * z;
-        g.fillStyle = '#27272a';
+        g.fillStyle = '#222225';
         g.fillRect(x, top, bw, bottom - top);
         g.fillStyle = 'rgba(255,255,255,0.12)';
         g.fillRect(x, top, 1, bottom - top);
@@ -450,7 +450,7 @@ export const ps2Theme: Theme = {
         const step = sh + Math.max(1.5, 3 * z);
         for (let y = top + 4 * z; y + sh < bottom - 3 * z; y += step)
           for (const cx of [x + bw * 0.32, x + bw * 0.68]) {
-            g.fillStyle = '#171717';
+            g.fillStyle = '#121212';
             g.fillRect(cx - sw / 2, y, sw, sh);
             g.fillStyle = 'rgba(255,255,255,0.16)';
             g.fillRect(cx - sw / 2, y + sh, sw, Math.max(0.5, 0.6 * z));
@@ -458,7 +458,7 @@ export const ps2Theme: Theme = {
       }
     },
     titleBar(dc, r, title, active, buttons) {
-      text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#e8e8eb' : '#94949d', { w: 500, x: r.x + 10 * dc.z });
+      text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#eaeaed' : '#8f8f98', { w: 500, x: r.x + 10 * dc.z });
       // one light, the power light. Idle: standby (dim red). Active: green,
       // flashing quickly when the window becomes active; on a function box
       // it also flares each time the progress trail reaches the right end,

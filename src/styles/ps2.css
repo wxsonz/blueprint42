@@ -3,95 +3,95 @@ html[data-skin='ps2'] {
   --font-ui: 'Exo 2', 'Open Sans', sans-serif;
   --font-mono: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
   --ui-size: 13px;
-  --bg: #1b1b1b;
-  --fg: #dcdce0;
-  --fg-dim: #a6a6af;
+  --bg: #161616;
+  --fg: #dedee2;
+  --fg-dim: #a1a1aa;
   --accent: #cfcfd6;
   --ok: #58e0c0;
   --bad: #ff5a6e;
   --warn: #ffcc55;
   --run: #58e0c0;
   --wait: #ffcc55;
-  --bar-bg: linear-gradient(#252528, #1d1d1e);
-  --bar-fg: #dcdce0;
-  --bar-border: 1px solid #303034;
+  --bar-bg: linear-gradient(#212123, #181819);
+  --bar-fg: #dedee2;
+  --bar-border: 1px solid #2c2c30;
   --brand-font: 700 15px 'Exo 2', 'Open Sans', sans-serif;
   --logo: #2d5bff;
   --btn-bg: rgba(255,255,255,0.04);
   --btn-bg-hover: rgba(255,255,255,0.1);
-  --btn-fg: #dcdce0;
+  --btn-fg: #dedee2;
   --btn-border: 1px solid rgba(255,255,255,0.16);
   --btn-radius: 4px;
-  --btn-bg-on: #38383c;
+  --btn-bg-on: #343438;
   --btn-fg-on: #ffffff;
   --btn-shadow-on: none;
   --primary-bg: #3a3a41;
   --primary-fg: #ffffff;
-  --sw-off: #8f8f8f;
+  --sw-off: #8a8a8a;
   --sw-on: #9a9aa3;
   --sw-knob: #ffffff;
-  --panes-bg: #1b1b1b;
-  --pane-bg: #1e1e20;
-  --pane-border: #303034;
+  --panes-bg: #161616;
+  --pane-bg: #19191b;
+  --pane-border: #2c2c30;
   --pane-radius: 6px;
   --head-h: 34px;
-  --head-bg: linear-gradient(#28282b, #202022);
-  --head-fg: #a6a6af;
-  --head-fg-active: #e8e8eb;
+  --head-bg: linear-gradient(#242427, #1b1b1d);
+  --head-fg: #a1a1aa;
+  --head-fg-active: #eaeaed;
   --head-font: 600 12.5px 'Exo 2', 'Open Sans', sans-serif;
-  --panel-bg: #1f1f21;
-  --panel-fg: #dcdce0;
-  --panel-dim: #a6a6af;
+  --panel-bg: #1a1a1c;
+  --panel-fg: #dedee2;
+  --panel-dim: #a1a1aa;
   --panel-border: 1px solid rgba(255,255,255,0.08);
   --panel-radius: 6px;
   --panel-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.7);
-  --ptitle-bg: repeating-linear-gradient(#252528 0 3px, #1f1f20 3px 6px);
-  --ptitle-fg: #dcdce0;
+  --ptitle-bg: repeating-linear-gradient(#212124 0 3px, #1a1a1c 3px 6px);
+  --ptitle-fg: #dedee2;
   --ptitle-border: none;
   --ptitle-pad: 8px 12px;
-  --field-bg: #1c1c1d;
-  --field-fg: #dcdce0;
+  --field-bg: #171719;
+  --field-fg: #dedee2;
   --field-border: 1px solid rgba(255,255,255,0.07);
   --field-radius: 4px;
-  --rule: 1px solid #2b2b2f;
-  --pb-bg: linear-gradient(#252527, #1b1b1c);
-  --pb-border: 1px solid #303034;
+  --rule: 1px solid #27272a;
+  --pb-bg: linear-gradient(#202022, #161617);
+  --pb-border: 1px solid #2c2c30;
   --lcd-bg: transparent;
-  --lcd-fg: #dcdce0;
+  --lcd-fg: #dedee2;
   --lcd-font: 'Exo 2', 'Open Sans', sans-serif;
   --lcd-small: 11.5px;
   --lcd-big: 13.5px;
-  --lcd-fn: #dcdce0;
+  --lcd-fn: #dedee2;
   --lcd-ptr: #b3a8c4;
   --lcd-ret: #58e0c0;
-  --tl-bg: #1c1c1d;
+  --tl-bg: #171719;
   --tl-border: none;
   --tl-call: #b9b9c2;
   --tl-ret: #58e0c0;
   --tl-ptr: #b3a8c4;
-  --tl-write: #6d6d6d;
-  --tl-eval: #3c3c3c;
+  --tl-write: #686868;
+  --tl-eval: #383838;
   --tl-err: #ff5a6e;
-  --tl-head: #dcdce0;
-  --st-bg: #1c1c1d;
-  --st-fg: #a6a6af;
+  --tl-head: #dedee2;
+  --st-bg: #171719;
+  --st-fg: #a1a1aa;
   --st-border: none;
   --st-font: 12px 'Exo 2', 'Open Sans', sans-serif;
   --mode-fg: #ffffff;
-  --mode-normal-bg: #62626a;
+  --mode-normal-bg: #5d5d65;
   --mode-insert-bg: #58e0c0;
   --mode-visual-bg: #ffcc55;
   --menu-hover-bg: #34343b;
   --menu-hover-fg: #ffffff;
   --scrim: rgba(0,0,0,0.55);
-  --ed-bg: #1d1d1e;
-  --ed-fg: #dcdce0;
+  --ed-bg: #181819;
+  --ed-fg: #dedee2;
   --ed-font: 'Share Tech Mono', 'DejaVu Sans Mono', monospace;
   --ed-size: 13.5px;
-  --ed-cursor: #e8e8eb;
-  --ed-gutter: #1d1d1e;
-  --ed-gutter-fg: #6d6d76;
-  --ed-gutter-active: #dcdce0;
+  --ed-cursor: #eaeaed;
+  --ed-gutter: #181819;
+  --ed-gutter-fg: #686871;
+  --ed-gutter-active: #dedee2;
   --ed-active: rgba(255,255,255,0.05);
   --ed-sel: color-mix(in srgb, #ffffff 18%, transparent);
   --ed-exec: color-mix(in srgb, #ffffff 9%, transparent);
@@ -102,10 +102,10 @@ html[data-skin='ps2'] {
   --syn-type: #5ad1c0;
   --syn-def: #f0e3a0;
   --syn-fn: #f0e3a0;
-  --syn-var: #dcdce0;
+  --syn-var: #dedee2;
   --syn-num: #b9e39a;
   --syn-str: #f0a07a;
-  --syn-com: #868690;
+  --syn-com: #81818b;
   --syn-macro: #d59ae8;
   --syn-op: #cfcfd6;
   --syn-punct: #9d9da6;
@@ -115,20 +115,20 @@ html[data-skin='ps2'] {
    silver for what's pressed, the console's matte grain (dark pits) on the
    plastic; blue only for real lights (and the printed logo): the eject
    light on an active window, the play button's light while playing */
-html[data-skin='ps2'] body { background: #171717; }
+html[data-skin='ps2'] body { background: #121212; }
 html[data-skin='ps2'] #app, html[data-skin='ps2'] #panes { background: transparent; }
-html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#252528 0 3px, #1d1d1e 3px 5px); }
-html[data-skin='ps2'] #top { border-bottom: 1px solid #323236; }
-html[data-skin='ps2'] #playbar { border-top: 1px solid #323236; }
-html[data-skin='ps2'] #status { background: #171717; color: #94949d; }
-html[data-skin='ps2'] .brand .name, html[data-skin='ps2'] .pane-head .title { font-family: Orbitron, 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: #dcdce0; }
-html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='ps2'] .pb-buttons button { border-radius: 1px; background: linear-gradient(#35353a, #29292c); border: 1px solid #1b1b1b; color: #d6d6dc; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.5), 0 1px 0 rgba(0,0,0,0.8); }
-html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { background: linear-gradient(#323239, #2d2d30); color: #ffffff; }
-html[data-skin='ps2'] .btn:active, html[data-skin='ps2'] .seg button:active, html[data-skin='ps2'] .pb-buttons button:active { background: linear-gradient(#252528, #2b2b2e); box-shadow: inset 0 1px 2px rgba(0,0,0,0.8); }
-html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#242426, #2c2c2f); border-color: #1b1b1b; color: #ffffff; box-shadow: inset 0 1px 3px rgba(0,0,0,0.85), 0 1px 0 rgba(255,255,255,0.06); }
-html[data-skin='ps2'] .pane { background: #1b1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
-html[data-skin='ps2'] .pane-head { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#252528 0 3px, #1d1d1e 3px 5px); border-bottom: 1px solid #2d2d31; }
-html[data-skin='ps2'] .pane.focused { border-color: #62626a; }
+html[data-skin='ps2'] #top, html[data-skin='ps2'] #playbar { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#212124 0 3px, #181819 3px 5px); }
+html[data-skin='ps2'] #top { border-bottom: 1px solid #2e2e32; }
+html[data-skin='ps2'] #playbar { border-top: 1px solid #2e2e32; }
+html[data-skin='ps2'] #status { background: #121212; color: #8f8f98; }
+html[data-skin='ps2'] .brand .name, html[data-skin='ps2'] .pane-head .title { font-family: Orbitron, 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: #dedee2; }
+html[data-skin='ps2'] .btn, html[data-skin='ps2'] .seg button, html[data-skin='ps2'] .pb-buttons button { border-radius: 1px; background: linear-gradient(#313136, #242427); border: 1px solid #161616; color: #d6d6dc; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.5), 0 1px 0 rgba(0,0,0,0.8); }
+html[data-skin='ps2'] .btn:hover, html[data-skin='ps2'] .seg button:hover, html[data-skin='ps2'] .pb-buttons button:hover { background: linear-gradient(#323239, #28282c); color: #ffffff; }
+html[data-skin='ps2'] .btn:active, html[data-skin='ps2'] .seg button:active, html[data-skin='ps2'] .pb-buttons button:active { background: linear-gradient(#212123, #27272a); box-shadow: inset 0 1px 2px rgba(0,0,0,0.8); }
+html[data-skin='ps2'] .seg button[aria-pressed='true'], html[data-skin='ps2'] .pb-buttons button.primary { background: linear-gradient(#1f1f22, #27272a); border-color: #161616; color: #ffffff; box-shadow: inset 0 1px 3px rgba(0,0,0,0.85), 0 1px 0 rgba(255,255,255,0.06); }
+html[data-skin='ps2'] .pane { background: #161719; border: 1px solid rgba(255,255,255,0.06); border-radius: 0; box-shadow: none; }
+html[data-skin='ps2'] .pane-head { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 180px 180px, repeating-linear-gradient(#212124 0 3px, #181819 3px 5px); border-bottom: 1px solid #29292d; }
+html[data-skin='ps2'] .pane.focused { border-color: #5d5d65; }
 html[data-skin='ps2'] #status { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }
 html[data-skin='ps2'] #duel::before, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }
 html[data-skin='ps2'] .pb-buttons button.primary { position: relative; }
@@ -136,34 +136,34 @@ html[data-skin='ps2'] .pb-buttons button.primary.playing::after { content: ''; p
 /* the duel, return card and inspector: the window, pared down (ridged
    title, hairlines, no glow) */
 html[data-skin='ps2'] #duel { border-radius: 0; border: 1px solid rgba(255,255,255,0.08); }
-html[data-skin='ps2'] #duel .d-say { position: relative; text-align: left; padding: 8px 34px 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); font: 500 11px Orbitron, 'Exo 2', sans-serif; letter-spacing: 0.06em; color: #a6a6af; }
-html[data-skin='ps2'] #duel .d-say b { color: #dcdce0; font-weight: 700; }
-html[data-skin='ps2'] #duel .d-say b.v { font: 12px 'Share Tech Mono', monospace; letter-spacing: 0; background: #1b1b1c; border: 1px solid #37373c; border-radius: 1px; color: #dcdce0; }
+html[data-skin='ps2'] #duel .d-say { position: relative; text-align: left; padding: 8px 34px 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); font: 500 11px Orbitron, 'Exo 2', sans-serif; letter-spacing: 0.06em; color: #a1a1aa; }
+html[data-skin='ps2'] #duel .d-say b { color: #dedee2; font-weight: 700; }
+html[data-skin='ps2'] #duel .d-say b.v { font: 12px 'Share Tech Mono', monospace; letter-spacing: 0; background: #161617; border: 1px solid #333338; border-radius: 1px; color: #dedee2; }
 /* the window's one power light: flashes when a new exchange comes up */
 html[data-skin='ps2'] #duel .d-say::after { content: ''; position: absolute; right: 14px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 1px; background: #2ee048; box-shadow: 0 0 4px 1px rgba(30,208,58,0.85), 0 0 12px 3px rgba(30,208,58,0.35); animation: ps2-led 0.72s steps(1) 1; }
 @keyframes ps2-led { 0%, 18%, 36%, 54%, 72%, 90% { opacity: 1; background: #b8ffc0; } 9%, 27%, 45%, 63%, 81% { opacity: 0.15; } }
-html[data-skin='ps2'] #duel .d-card { border-radius: 0; border: 1px solid rgba(255,255,255,0.07); background: #1d1d1f; }
-html[data-skin='ps2'] #duel .d-role { background: repeating-linear-gradient(#252528 0 3px, #1f1f20 3px 6px); border-bottom: 1px solid #2b2b2f; font: 10px 'Exo 2', sans-serif; letter-spacing: 0.04em; }
+html[data-skin='ps2'] #duel .d-card { border-radius: 0; border: 1px solid rgba(255,255,255,0.07); background: #19191a; }
+html[data-skin='ps2'] #duel .d-role { background: repeating-linear-gradient(#212124 0 3px, #1a1a1c 3px 6px); border-bottom: 1px solid #27272a; font: 10px 'Exo 2', sans-serif; letter-spacing: 0.04em; }
 html[data-skin='ps2'] #duel .d-role b { font-family: Orbitron, 'Exo 2', sans-serif; font-weight: 500; }
-html[data-skin='ps2'] #duel .d-head { background: #202023; font-family: Orbitron, 'Exo 2', sans-serif; font-weight: 500; font-size: 11.5px; letter-spacing: 0.03em; }
+html[data-skin='ps2'] #duel .d-head { background: #1c1c1e; font-family: Orbitron, 'Exo 2', sans-serif; font-weight: 500; font-size: 11.5px; letter-spacing: 0.03em; }
 html[data-skin='ps2'] #duel .d-head .ico { border-radius: 1px; }
 html[data-skin='ps2'] #duel .d-verb { font: 500 11px Orbitron, 'Exo 2', sans-serif; letter-spacing: 0.2em; }
 /* the track is a hairline and the data rides it as the progress light does */
-html[data-skin='ps2'] #duel .d-track { --lt: #4f78ff; --lg: rgba(47,107,255,0.55); height: 34px; border-top: 1px solid #37373c; }
+html[data-skin='ps2'] #duel .d-track { --lt: #4f78ff; --lg: rgba(47,107,255,0.55); height: 34px; border-top: 1px solid #333338; }
 html[data-skin='ps2'] #duel.ret .d-track { --lt: #58e0c0; --lg: rgba(60,220,190,0.5); }
 html[data-skin='ps2'] #duel .d-track::before, html[data-skin='ps2'] #duel .d-track::after { content: ''; position: absolute; left: 0; width: calc(var(--p, 0) * 100%); pointer-events: none; }
 html[data-skin='ps2'] #duel .d-track::before { top: -3px; height: 5px; background: linear-gradient(to left, var(--lg), transparent 140px); filter: blur(2px); }
 html[data-skin='ps2'] #duel .d-track::after { top: -1px; height: 1px; background: linear-gradient(to left, #eef2ff, var(--lt) 14px, transparent 140px); box-shadow: 1px 0 6px 1px var(--lg); }
-html[data-skin='ps2'] #duel .chip { top: 9px; border-radius: 1px; background: #1f1f21; color: #d6d6dc; border: 1px solid #37373c; box-shadow: none; font-weight: 400; }
+html[data-skin='ps2'] #duel .chip { top: 9px; border-radius: 1px; background: #1a1a1c; color: #d6d6dc; border: 1px solid #333338; box-shadow: none; font-weight: 400; }
 html[data-skin='ps2'] #duel, html[data-skin='ps2'] #stage-card, html[data-skin='ps2'] #inspector { box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
 
 /* ---- scrollbars and toggles: PS2 ---- */
-html[data-skin='ps2'] { --sb-size:9px; --sb-thumb-c:#a2a2b0; --sb-track-c:#1e1e20; --sb-track:#1e1e20; --sb-radius:5px; }
-html[data-skin='ps2'] ::-webkit-scrollbar-track { border-left:1px solid #303034; }
-html[data-skin='ps2'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#dedee6,#a2a2b0 50%,#62626e); border:1px solid #27272a; }
-html[data-skin='ps2'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#dedee6,#a2a2b0 50%,#62626e); }
+html[data-skin='ps2'] { --sb-size:9px; --sb-thumb-c:#9d9dab; --sb-track-c:#19191b; --sb-track:#19191b; --sb-radius:5px; }
+html[data-skin='ps2'] ::-webkit-scrollbar-track { border-left:1px solid #2c2c30; }
+html[data-skin='ps2'] ::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#e0e0e8,#9d9dab 50%,#5d5d69); border:1px solid #222225; }
+html[data-skin='ps2'] ::-webkit-scrollbar-thumb:horizontal { background:linear-gradient(#e0e0e8,#9d9dab 50%,#5d5d69); }
 html[data-skin='ps2'] ::-webkit-scrollbar-thumb:hover { filter:brightness(1.2) hue-rotate(200deg); }
-html[data-skin='ps2'] .toggle .sw { width:24px; height:11px; border-radius:6px; background:#202023; border:1px solid #7e7e7e; box-shadow:inset 0 1px 3px #171717; }
+html[data-skin='ps2'] .toggle .sw { width:24px; height:11px; border-radius:6px; background:#1b1b1e; border:1px solid #797979; box-shadow:inset 0 1px 3px #121212; }
 html[data-skin='ps2'] .toggle .sw::after { top:1px; left:1px; width:7px; height:7px; background:radial-gradient(circle at 35% 30%,#fff,#9a9aa8 55%,#44444e); }
-html[data-skin='ps2'] .toggle[aria-pressed='true'] .sw { border-color:#5a7cff; box-shadow:inset 0 1px 3px #171717,0 0 6px rgba(90,124,255,0.6); }
+html[data-skin='ps2'] .toggle[aria-pressed='true'] .sw { border-color:#5a7cff; box-shadow:inset 0 1px 3px #121212,0 0 6px rgba(90,124,255,0.6); }
 html[data-skin='ps2'] .toggle[aria-pressed='true'] .sw::after { left:14px; background:radial-gradient(circle at 35% 30%,#fff,#6a8cff 55%,#2a3cb0); box-shadow:0 0 5px #5a7cff; }
