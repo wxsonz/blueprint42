@@ -18,7 +18,7 @@ initiative (a sweep across skins, a "while I'm here" tweak).
 | Skin | Ids | Group | Status | Agent passes (newest last) |
 | --- | --- | --- | --- | --- |
 | PS1 | `ps1` | PlayStation | **reviewed** | |
-| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): blacks lifted to charcoal, dim and faint text raised, near-white softened; accents and the boot scene kept |
+| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): surfaces around `#101010` instead of black, dim and faint text raised, near-white softened; the viewer's windows and panels solid, matching the editor; the viewport's space stays the deepest black; accents and the boot scene kept |
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
