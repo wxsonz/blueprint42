@@ -20,8 +20,8 @@ skin by name.
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles |
-| Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles |
-| Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles |
+| Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles, belts |
+| Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles, belts |
 | Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
 | XP | `xp` | Windows | pending | scrollbars, toggles, belts |
 | Seven | `seven` | Windows | pending | scrollbars, toggles, belts |
