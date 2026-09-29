@@ -65,16 +65,22 @@ Pipeline in `src/`: `parse.ts` (tree-sitter → symbol model) →
 `layout.ts` (positions by stable id, pinning, belt waypoints, rename
 heuristic) → `route.ts` (scene: recursive-copy slots, per-call ports,
 channel/corridor routing, crossings) → `interp.ts` (runs `main`, emits events plus a snapshot before
-and after each one) → `render.ts` (engine: camera, routing, hit-testing;
-`frameAt(trace, pos)` picks the snapshot and in-flight event for a
-fractional playback position; all drawing is delegated to the active skin) →
-`main.ts` (state, playback loop, mouse and keys, DOM panels).
+and after each one) → `playback.ts` (timing and hosts; `frameAt(trace, pos)`
+picks the snapshot and in-flight event for a fractional playback position)
+and `hit.ts` (hit-testing, rects) → `render.ts` (`GridView`: camera and
+drawing, all of it delegated to the active skin) → `main.ts` (playback
+loop, mouse and keys, skins, boot). `main.ts`'s shared state is in
+`state.ts` (reassigned values have setters); the UI around it is split into
+`panels.ts`, `playbar.ts`, `project-ui.ts` (projects, live edits, polling,
+dialogs), `sample-ui.ts`, `feed.ts` (kill feed, duel, focus card) and
+`page.ts` (clock, zoom, page background).
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
 editor via CSS variables on `html[data-skin]`. Twenty-six skins: amp, classic,
 aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in
 `skins/macos.ts` (system7, platinum, leopard, yosemite, bigsur, tahoe), barebone (the
 fastest to paint), blueprint, factory, gameboy, synthwave, and the consoles in
-`skins/consoles.ts` (ps1–ps5, wii, gamecube, switch; their CSS was
+`skins/consoles/` (one file each: ps1–ps5, wii, gamecube, switch, plus
+`common.ts`; their CSS was
 generated from short specs, edit it by hand now). Skins with both
 modes (metro, bigsur, tahoe, minimal, barebone, wii, switch) have a second skin with
 `variantOf`/`mode`; the picker lists base skins with a canvas-drawn preview
@@ -109,7 +115,7 @@ out). `src/machine.ts` is machine geometry and storage slots;
 
 Live edits (M6): `server/live.mjs` (`/api/live/push`, `/api/live/stream`,
 newline-separated JSON) relays editors' unsaved text and cursor to pages
-and grid double-clicks back to editors; `src/live.ts` + `main.ts` `onLive`
+and grid double-clicks back to editors; `src/live.ts` + `project-ui.ts` `onLive`
 apply them. It never touches the disk.
 
 In dev builds `window.__ftb` exposes `{ S, view, layout, editor,

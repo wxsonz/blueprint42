@@ -46,3 +46,4 @@ and a line here. When a later decision replaces one, the old one's
 | [036](036-ps4-frame.md) | 2026-09-28 | Accepted | PS4 takes the PS3's window frame |
 | [037](037-rename-blueprint42.md) | 2026-09-28 | Accepted | renamed blueprint42, examples, a fixture of our own |
 | [038](038-repo-layout.md) | 2026-09-29 | Accepted | the app at the repo root, docs in docs/ |
+| [039](039-smaller-files.md) | 2026-09-29 | Accepted | the three biggest files split along their seams |

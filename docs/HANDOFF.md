@@ -43,10 +43,16 @@ npx vitest run -t "M3 acceptance"    # one test by name
 | `route.ts` | `buildScene`: recursion copy slots (`fn#2…`), per-call ports, channel and corridor routing, `crossings`. |
 | `interp.ts` | In-browser interpreter (C subset) → `Trace`. Also owns the shared `Trace`/`Snap`/`Ev`/`V` types and `fmtVal`. |
 | `gdb.ts` | Client for the trace server + `convertGdb` (gdb timeline → `Trace`). |
-| `render.ts` | Engine: camera, hosts (frame → home node or copy), hit-testing, playback timing (`evDuration`, `switchAt`, `frameAt`), heap shelf, wires. **Draws nothing itself; calls the skin.** |
-| `skins/*.ts` | `Skin` interface (`skins/types.ts`) + amp, classic, aqua, minimal. |
+| `playback.ts` | Playback timing (`evDuration`, `switchAt`, `frameAt`), hosts (frame → home node or copy), the return card, M5.5 readouts and labels. No drawing. |
+| `hit.ts` | Hit-testing (`entityAt`, `stationAt`, `foldAt`) and rects (`heapSlotRect`, `stageRect`, `activeHostRect`). |
+| `render.ts` | `GridView`: camera, heap shelf, wires. **Draws nothing itself; calls the skin.** |
+| `skins/*.ts` | `Skin` interface (`skins/types.ts`) + every skin; the consoles are in `skins/consoles/`, one file each. |
 | `styles/*.css` | Chrome and editor restyled via CSS variables on `html[data-skin]`. |
-| `main.ts` | App state, playback, sprite authoring, inspector, blueprint import/export, and per-sample localStorage. |
+| `main.ts` | Playback loop, mouse and keys, skins, boot. |
+| `state.ts`, `dom.ts` | Shared app state (`S`, DOM handles; setters for reassigned values) and DOM helpers. |
+| `panels.ts`, `playbar.ts` | Inspector, sample tabs, dock, alerts, status line, violations; the playbar. |
+| `project-ui.ts`, `sample-ui.ts` | Projects (M5), live edits (M6), polling, dialogs; per-sample localStorage and blueprint import/export. |
+| `feed.ts`, `page.ts` | Kill feed, duel, focus card; clock, app zoom, page background. |
 | `blueprint.ts` | Validated, source-free author layer (`*.blueprint.json`) and read-only binding grammar. |
 | `samples.ts` | Bundled samples (`?raw`), with optional `stdin`, `defines`, `files`; plus the gnl_v3 sample *project*. |
 | `workspace.ts` | M5: the open project (buffers vs disk, run settings, driver rule, save, diffs), `/api/fs` client. |
@@ -121,7 +127,7 @@ marker has no attachment to a strip; strip markers provide that motion.
 ## M4: truth checks (done)
 
 `src/invariants.ts` holds the grammar, evaluation over sampled values, and
-episode detection (`findViolations`), plus `surpriseCalls`. In `main.ts`,
+episode detection (`findViolations`), plus `surpriseCalls`. In `panels.ts`,
 `violations()` caches results per trace and sprite set; the playback loop
 freezes on each episode's first step. See `decisions/` for semantics.
 Acceptance is automated: with `buf->pos = line_end + 1` injected into
@@ -171,13 +177,13 @@ running statement animates in place (see SPEC).
   first 48 bytes, from `gdb.ts`).
 - `src/interior.ts` builds the stations (`planOf`: reads, calls, `keep`
   leaves such as `i++`) and infers switch results (`interiorAt`).
-- `render.ts`:
+- `render.ts` (and `playback.ts`, `hit.ts`):
   - `GridView.drawMachine` draws a machine with the existing skin hooks:
     wall, node (the motor), frame (storage), interior (stations), strip
     (memory), plate/pulse (values in flight), door (ports). Below 20 px a
     cell it draws only the name and current line.
-  - `durationAt(trace, model, i)` feeds playback; `stationAt` and `foldAt`
-    hit-test inside machines; `activeHostRect` frames the running
+  - `durationAt(trace, model, i)` (`playback.ts`) feeds playback;
+    `stationAt` and `foldAt` (`hit.ts`) hit-test inside machines; `activeHostRect` frames the running
     statement for the follow camera; `home()` is the starting view (main,
     readable).
 - `main.ts`: the playback loop spends a frame's time across many events;
@@ -220,7 +226,7 @@ pushes a file's text and cursor; the page applies it like typing.
   touches the disk. Absolute paths map to `{ root, rel }` only inside a
   folder the page opened (`project.mjs` `openedRootOf`).
 - `src/live.ts` (the page's stream and `liveReveal`/`liveReplay`) and
-  `main.ts` `onLive`: an edit becomes a minimal change in the in-app editor
+  `project-ui.ts` `onLive`: an edit becomes a minimal change in the in-app editor
   (or the file's text if it isn't open), the page follows the editor's
   cursor and file, a `close` puts the file back to its disk text, and
   `openAt` asks the editors to jump too. Files showing an editor's unsaved
