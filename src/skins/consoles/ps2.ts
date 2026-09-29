@@ -13,9 +13,9 @@ import { EXO, F, MONO, ps2Still, text } from './common';
 const PS2_SILVER = '#d6d6dc';
 const ORBITRON = F('Orbitron, "Exo 2", sans-serif');
 const ps2P: Palette = {
-  bg: '#000000', card: '#0d0d10', panel: '#08080a', line: '#2c2c33',
-  fg: '#e4e4e8', dim: '#8e8e97', faint: '#55555e', accent: PS2_SILVER, ptr: '#b3a8c4', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
-  param: '#c4c4cc', cell: '#17171d', track: '#060607',
+  bg: '#171717', card: '#202023', panel: '#1d1d1e', line: '#37373c',
+  fg: '#dcdce0', dim: '#a6a6af', faint: '#6d6d76', accent: PS2_SILVER, ptr: '#b3a8c4', ret: '#5fd0c8', wait: '#ffcc55', err: '#ff5a6e',
+  param: '#c4c4cc', cell: '#28282c', track: '#1b1b1c',
 };
 // the console's matte plastic: a fine, dense grain of light and dark
 // specks, pre-rendered once as a tile and laid over a surface anchored to
@@ -361,7 +361,7 @@ export const ps2Theme: Theme = {
   // a hairline edge, a short ridged head with a small grey title
   panel(dc, r, head, title, live) {
     const g = dc.g;
-    g.fillStyle = 'rgba(11,11,14,0.92)';
+    g.fillStyle = 'rgba(31,31,33,0.92)';
     g.fillRect(r.x, r.y, r.w, r.h);
     ps2Grain(g, r.x, r.y, r.w, r.h);
     ridges(g, r.x, r.y, r.w, head.h, Math.max(3, 6 * dc.z));
@@ -370,7 +370,7 @@ export const ps2Theme: Theme = {
     g.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
     g.fillStyle = 'rgba(255,255,255,0.06)';
     g.fillRect(r.x, r.y + head.h, r.w, 1);
-    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#7c7c85', { w: 500, x: r.x + 8 * dc.z });
+    text(dc, { ...head, x: r.x, w: r.w }, title.toUpperCase(), ORBITRON, 8.5, live ? '#d6d6dc' : '#94949d', { w: 500, x: r.x + 8 * dc.z });
   },
   // data in flight leaves the boot lights' trail: a hairline fading toward
   // the tail over a faint glow, a glowing head under the data
@@ -408,7 +408,7 @@ export const ps2Theme: Theme = {
   // the boot screen: black space, the fog, the cubes and the lights
   background(dc, camX, camY) {
     backdrop(dc, 'ps2-space', (g, W, H) => {
-      g.fillStyle = '#000003';
+      g.fillStyle = '#10121c';
       g.fillRect(0, 0, W, H);
     });
     ps2Boot(dc, camX, camY);
@@ -421,7 +421,7 @@ export const ps2Theme: Theme = {
       ps2Kind = kind;
       softShadow(dc, r, 1, 10, 'rgba(0,0,0,0.8)', 3 * dc.z);
       // smoked, not solid: the dancing lights glow through between the panels
-      g.fillStyle = 'rgba(8,9,12,0.82)';
+      g.fillStyle = 'rgba(29,29,32,0.82)';
       g.fillRect(r.x, r.y, r.w, r.h);
       ps2Grain(g, r.x, r.y, r.w, r.h);
       ridges(g, r.x, r.y, r.w, 26 * dc.z, Math.max(3, 5 * dc.z));
@@ -439,7 +439,7 @@ export const ps2Theme: Theme = {
         const x = r.x + r.w - 4 * z - bw;
         const top = r.y + 32 * z;
         const bottom = r.y + r.h - 10 * z;
-        g.fillStyle = '#16161a';
+        g.fillStyle = '#27272a';
         g.fillRect(x, top, bw, bottom - top);
         g.fillStyle = 'rgba(255,255,255,0.12)';
         g.fillRect(x, top, 1, bottom - top);
@@ -450,7 +450,7 @@ export const ps2Theme: Theme = {
         const step = sh + Math.max(1.5, 3 * z);
         for (let y = top + 4 * z; y + sh < bottom - 3 * z; y += step)
           for (const cx of [x + bw * 0.32, x + bw * 0.68]) {
-            g.fillStyle = '#000000';
+            g.fillStyle = '#171717';
             g.fillRect(cx - sw / 2, y, sw, sh);
             g.fillStyle = 'rgba(255,255,255,0.16)';
             g.fillRect(cx - sw / 2, y + sh, sw, Math.max(0.5, 0.6 * z));
@@ -458,7 +458,7 @@ export const ps2Theme: Theme = {
       }
     },
     titleBar(dc, r, title, active, buttons) {
-      text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#f0f0f3' : '#7c7c85', { w: 500, x: r.x + 10 * dc.z });
+      text(dc, r, title.toUpperCase(), ORBITRON, 11, active ? '#e8e8eb' : '#94949d', { w: 500, x: r.x + 10 * dc.z });
       // one light, the power light. Idle: standby (dim red). Active: green,
       // flashing quickly when the window becomes active; on a function box
       // it also flares each time the progress trail reaches the right end,

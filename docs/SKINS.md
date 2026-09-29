@@ -16,7 +16,7 @@ skin by name.
 | Skin | Ids | Group | Status | Agent passes (newest last) |
 | --- | --- | --- | --- | --- |
 | PS1 | `ps1` | PlayStation | **reviewed** | |
-| PS2 | `ps2` | PlayStation | **reviewed** | |
+| PS2 | `ps2` | PlayStation | **reviewed** | brightened at the author's request (2026-09-29): blacks lifted to charcoal, dim and faint text raised, near-white softened; accents and the boot scene kept |
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
