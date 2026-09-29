@@ -1,4 +1,4 @@
-import { ride } from '../belts';
+import { ride, smooth } from '../belts';
 import { backdrop, countBadge, makeSkin, type Palette, type Theme } from '../kit';
 import type { Pt } from '../types';
 import { arrowHead, rrect, strokeLine, Walk } from '../util';
@@ -16,7 +16,7 @@ export const gamecubeTheme: Theme = {
   // The IPL menu's glass: a translucent violet tube with a lavender rim; live,
   // little glass cubes (the logo's, turned on a corner) drift through it the
   // data's way, each a lit lavender diamond with a bright edge.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(5, 7 * z);

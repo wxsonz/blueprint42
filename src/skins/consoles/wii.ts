@@ -1,4 +1,4 @@
-import { ride } from '../belts';
+import { ride, smooth } from '../belts';
 import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import type { Pt } from '../types';
 import { arrowHead, rrect, strokeLine, Walk } from '../util';
@@ -30,7 +30,7 @@ function wiiOf(dark: boolean): Theme {
     pulseColor: 'rgba(53,180,229,0.9)',
     // The Wii Menu's fine blue line, with a glossy white lower lip; live, glossy
     // blue pearls (the pointer's blue) roll along it the data's way.
-    belt(dc, pts, o, t) {
+    belt(dc, pts, o, t) { pts = smooth(dc, pts);
       const g = dc.g;
       const z = dc.z;
       const w = Math.max(3, 4 * z);

@@ -3,7 +3,7 @@
 // machines that are working.
 import { makeSkin, countBadge, type Theme } from './kit';
 import type { Dc, Rect } from './types';
-import { chevron, ride } from './belts';
+import { chevron, ride, smooth } from './belts';
 import { arrowHead, rrect, strokeLine, Walk } from './util';
 
 const AMBER = '#ffb000';
@@ -122,7 +122,7 @@ export const factoryTheme: Theme = {
   // A roller conveyor: steel side rails, a dark bed, rollers set across it that
   // turn the data's way when live, with lit amber chevrons; selected wears a
   // hazard rail of yellow and black stripes.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const W = Math.max(6, 10 * z);

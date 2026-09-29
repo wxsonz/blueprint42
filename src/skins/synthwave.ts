@@ -1,6 +1,6 @@
 // "Synthwave" — neon on a night-purple horizon: a perspective grid under a
 // striped sunset, cyan and magenta glow, chrome-gradient title bars.
-import { span } from './belts';
+import { smooth, span } from './belts';
 import { makeSkin, countBadge, type Theme } from './kit';
 import { arrowHead, rrect, strokeLine, Walk } from './util';
 
@@ -119,7 +119,7 @@ export const synthwaveTheme: Theme = {
   },
 
   // Belts are neon tubes; a live one carries light.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     g.save();
     g.lineCap = 'round';

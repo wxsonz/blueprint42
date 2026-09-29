@@ -1,4 +1,4 @@
-import { ride } from '../belts';
+import { ride, smooth } from '../belts';
 import { backdrop, countBadge, makeSkin, softShadow, type Palette, type Theme } from '../kit';
 import { arrowHead, rrect, strokeLine, Walk } from '../util';
 import { bar, MONO, ps2Still, psSymbol, SST, text } from './common';
@@ -20,7 +20,7 @@ export const ps5Theme: Theme = {
   // live, white pills fill it, one after another, the data's way, and the
   // whole bar breathes softly like the controller's light; hovered and
   // selected lift the track and give it the ring's crisp white edge.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const z = dc.z;
     const w = Math.max(3, 4 * z);

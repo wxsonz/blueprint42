@@ -4,7 +4,7 @@
 // Belts are gel tubes: blue while carrying a call, graphite otherwise.
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
-import { barberPole } from './belts';
+import { barberPole, smooth } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -207,7 +207,7 @@ export const aqua: Skin = {
     }
   },
 
-  belt(dc, pts, o) {
+  belt(dc, pts, o) { pts = smooth(dc, pts);
     const g = dc.g;
     const w = Math.max(4, 9 * dc.z);
     const blue = o.live;

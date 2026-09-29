@@ -3,6 +3,7 @@
 // highlighter on whatever is running.
 import { makeSkin, countBadge, type Theme } from './kit';
 import type { Dc, Rect } from './types';
+import { smooth } from './belts';
 import { hash, rrect, strokeLine, Walk } from './util';
 
 const INK = '#eef5ff';
@@ -105,7 +106,7 @@ export const blueprintTheme: Theme = {
   },
 
   // A dimension line: a tick where it starts, an arrow where it lands.
-  belt(dc, pts, o, t) {
+  belt(dc, pts, o, t) { pts = smooth(dc, pts);
     const g = dc.g;
     const col = o.live ? HI : o.hovered || o.selected ? INK : 'rgba(238,245,255,0.55)';
     g.lineCap = 'butt';

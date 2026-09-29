@@ -2,7 +2,7 @@
 // direction, stroking part of it, small sprites riding it. Nothing here has
 // a look of its own.
 import type { Dc, Pt } from './types';
-import { Walk } from './util';
+import { Walk, roundPts } from './util';
 
 export interface Flow {
   live: boolean;
@@ -93,4 +93,11 @@ export function barberPole(dc: Dc, w: Walk, o: Flow, h: number, sw: number, gap:
     g.closePath();
     g.fill();
   }, 0, margin);
+}
+
+// The belt's corners as fillets, for skins whose riders (and strokes) should
+// turn smoothly instead of snapping 90 degrees at a bend. Use the result for
+// both the strokes and the Walk. Cached per pts array; cheap.
+export function smooth(dc: Dc, pts: Pt[]): Pt[] {
+  return roundPts(pts, 10 * dc.z);
 }

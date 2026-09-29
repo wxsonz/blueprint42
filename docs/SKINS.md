@@ -19,28 +19,28 @@ skin by name.
 | PS2 | `ps2` | PlayStation | **reviewed** | |
 | PS3 | `ps3` | PlayStation | **reviewed** | |
 | PS4 | `ps4` | PlayStation | **reviewed** | |
-| PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts |
+| PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles, belts |
 | Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles, belts |
 | Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
-| XP | `xp` | Windows | pending | scrollbars, toggles, belts |
-| Seven | `seven` | Windows | pending | scrollbars, toggles, belts |
+| XP | `xp` | Windows | pending | scrollbars, toggles, belts, corners |
+| Seven | `seven` | Windows | pending | scrollbars, toggles, belts, corners |
 | Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles, belts |
 | System 7 | `system7` | Mac | pending | scrollbars, toggles, belts |
-| Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles, belts |
-| Aqua | `aqua` | Mac | pending | scrollbars, toggles, belts |
-| Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles, belts |
-| Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts |
-| Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
-| Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
+| Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles, belts, corners |
+| Aqua | `aqua` | Mac | pending | scrollbars, toggles, belts, corners |
+| Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
-| GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
-| Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
-| Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts |
-| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
-| Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
-| Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
-| Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles, belts |
+| GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
 
 The scrollbar and toggle pass (2026-09-29, commit e5f3ef6) touched every
 skin's CSS, the reviewed ones included. The author hasn't looked at those
