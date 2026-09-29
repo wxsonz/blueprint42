@@ -5,6 +5,8 @@
 // that just changed. The fastest skin to paint.
 import { countBadge, makeSkin, type Theme } from './kit';
 import { arrowHead, strokeLine, Walk } from './util';
+import { drawDock } from './dock';
+import type { Skin } from './types';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
 const MONO = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
@@ -60,5 +62,16 @@ function barebone(dark: boolean): Theme {
   };
 }
 
-export const bareboneDark = { ...makeSkin(barebone(true)), mode: 'dark' as const };
-export const bareboneLight = { ...makeSkin(barebone(false)), variantOf: 'barebone', mode: 'light' as const };
+// the IN dock: a shade, no border; the intake strip is the only colour
+function withDock(t: Theme): Skin {
+  const q = t.p;
+  return {
+    ...makeSkin(t),
+    dock(dc, r, d) {
+      drawDock(dc, r, d, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, run: q.accent, wait: q.wait, err: q.err, param: q.dim, ui: t.ui, mono: t.mono, radius: 0, glow: false });
+    },
+  };
+}
+
+export const bareboneDark = { ...withDock(barebone(true)), mode: 'dark' as const };
+export const bareboneLight = { ...withDock(barebone(false)), variantOf: 'barebone', mode: 'light' as const };

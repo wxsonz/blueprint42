@@ -2,6 +2,7 @@
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawPast, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
 import { genericIcon } from './icons';
+import { drawDock, type DockPalette } from './dock';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
@@ -31,6 +32,7 @@ function minimalOf(dark: boolean): Skin {
   const FAINT = C.faint;
   const CARD = C.card;
   const LINE = C.line;
+  const dockPalette: DockPalette = { body: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, run: ACCENT, wait: WAIT, err: ERR, param: C.param, ui: UI, mono: MONO, radius: 6, glow: true };
   const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5 };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
@@ -221,6 +223,8 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     else (g.moveTo(x - L / 2, y), g.lineTo(x + L / 2, y));
     g.stroke();
   },
+
+  dock(dc, r, d) { drawDock(dc, r, d, dockPalette); },
 
   node(dc, r, n) {
     const g = dc.g;

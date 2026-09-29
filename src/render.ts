@@ -123,6 +123,22 @@ class PathWalk {
 
 // ---------------- the view ----------------
 
+// Each frame's call event and the error it died of, found once per trace.
+const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]> }>();
+function callsOf(trace: Trace) {
+  let m = callMemo.get(trace);
+  if (!m) {
+    m = { calls: new Map(), errs: new Map() };
+    trace.evs.forEach((e, i) => {
+      if (e.frame === null) return;
+      if (e.k === 'call') m!.calls.set(e.frame, i);
+      else if (e.k === 'error') m!.errs.set(e.frame, e);
+    });
+    callMemo.set(trace, m);
+  }
+  return m;
+}
+
 export class GridView {
   private g: CanvasRenderingContext2D;
   // pointer cells whose line already goes to a byte strip in their machine
@@ -916,11 +932,26 @@ export class GridView {
       const st = frameAt(trace, s.pos).snap.stack;
       waitingOn = st[st.findIndex((f) => f.id === frame.id) + 1]?.fn ?? null;
     }
-    skin.node(dc, this.rectW(h.x + m.x, h.y + m.y, MW, MH), {
+    const motorR = this.rectW(h.x + m.x, h.y + m.y, MW, MH);
+    const inPorts = ports.in.map((y) => this.sy(y));
+    const editing = h.copy === 1 && s.editorFn === h.fn;
+    if (skin.dock) {
+      // the IN dock: the arguments as they arrived with the call on show
+      const on = frame ?? returned;
+      const ci = on && trace ? callsOf(trace).calls.get(on.id) : undefined;
+      const call = ci !== undefined ? trace!.evs[ci] : null;
+      const err = frame && trace ? callsOf(trace).errs.get(frame.id) ?? null : null;
+      const before = on && !call && trace?.window && trace.window.from > 0 ? trace.window.from : null;
+      skin.dock(dc, motorR, {
+        name: h.fn, state, waitingOn, frames: stacked, stale, copy: h.copy, editing, inPorts, before,
+        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: a.text })) : null,
+        last: !frame && !!call,
+        crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
+      });
+    } else skin.node(dc, motorR, {
       name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn, state, waitingOn, frames: stacked, stale, pinned: false,
       isStatic: fn.isStatic, params: fn.params.length, selected: false, hovered: false,
-      editing: h.copy === 1 && s.editorFn === h.fn, hasFrame: false, copy: h.copy,
-      inPorts: ports.in.map((y) => this.sy(y)), outPorts: [],
+      editing, hasFrame: false, copy: h.copy, inPorts, outPorts: [],
     });
     for (const y of ports.out) skin.door(dc, [R.x + R.w, this.sy(y)], true, state === 'running');
     if (!geo || !trace) return;

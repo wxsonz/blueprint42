@@ -123,7 +123,7 @@ Top to bottom, the life of one call:
 
 | Part | What it holds | Status |
 | --- | --- | --- |
-| **IN dock** (the motor, top left) | Where a call arrives, in four states: *idle* (dim, not called), *running* (the call's arguments are here), *waiting* (it called another function and is paused until that returns), *crashed* (it died; the station that died is marked too). | ✅ as the motor, which already has the four states; its own dock look is to do |
+| **IN dock** (the motor, top left) | Where a call arrives, in four states: *idle* (dim, not called), *running* (the call's arguments are here), *waiting* (it called another function and is paused until that returns), *crashed* (it died; the station that died is marked too). | ✅ Minimal and Barebone draw the dock (`skins/dock.ts`): the intake strip in the state's colour, IN and the state, the arguments *as they arrived* (PARAMETERS holds the copies as they are now), the last call's dimmed once it returned, "arguments not traced" for a call that began before the loaded window, the line and signal it died of. Other skins still draw their motor. |
 | **PARAMETERS** | The function's own copies of its arguments. C passes by value: a plain value is copied in. A pointer's *address* is copied, and what it points at stays where it was (see REACHED). | ✅ |
 | **LOCALS** | Its own variables, at most 5, declared first (Norm). They start unset (`?`): the Norm forbids initialising where you declare. | ✅ |
 | **KEPT (static)** | Its statics, which outlive the call. Another machine that reaches them sees them under REACHED. | ✅ |

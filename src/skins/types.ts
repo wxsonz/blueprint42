@@ -42,6 +42,26 @@ export interface NodeInfo {
   outPorts: number[]; // screen y of each outgoing call's port (right side)
 }
 
+// The IN dock (top left of a machine): where a call arrives. The engine's
+// four states; while it runs (or waits) it holds the arguments that arrived,
+// as they arrived (the PARAMETERS pool holds the copies as they are now).
+export interface DockInfo {
+  name: string;
+  state: RunState;
+  waitingOn: string | null;
+  frames: number; // live frames of this function (recursion)
+  stale: boolean;
+  copy: number;
+  editing: boolean;
+  // what arrived with the call on show: null when there is none (never
+  // called), or when it arrived before the loaded window began (`before`)
+  args: { name: string; text: string }[] | null;
+  before: number | null; // the call began before step `before`: its arguments weren't traced
+  last: boolean; // the arguments are the last call's (it returned)
+  crash: { line: number; msg: string } | null; // where (1-based, as the editor numbers it) and how it died
+  inPorts: number[]; // screen y of each incoming call's port (left side)
+}
+
 export type ValueKind = 'int' | 'ptr' | 'null' | 'undef' | 'none' | 'dangling';
 
 export interface RowInfo {
@@ -189,6 +209,9 @@ export interface Skin {
   fullBleed?: boolean;
   belt(dc: Dc, pts: Pt[], o: { live: boolean; dir: number; selected: boolean; hovered: boolean; custom: boolean; count: number }): void;
   node(dc: Dc, r: Rect, n: NodeInfo): void;
+  // optional: a machine's IN dock, drawn in the motor's place; skins without
+  // it draw their node sprite there (Minimal and Barebone prototype it)
+  dock?(dc: Dc, r: Rect, d: DockInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
   strip(dc: Dc, r: Rect, info: StripInfo): void;

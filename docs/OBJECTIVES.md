@@ -23,10 +23,13 @@ Done:
 - [x] `->` in labels no longer drawn as one arrow glyph.
 
 Next, in this order:
-1. [ ] **IN dock** (S). Its own look at the top left, in the engine's four
+1. [x] **IN dock** (S). Its own look at the top left, in the engine's four
    states: *idle* (dim, not called), *running* (holding the arguments that
    arrived), *waiting* (it called another function and is paused until that
-   returns) and *crashed* (it died; the station that died is marked too).
+   returns) and *crashed* (it died; it says the line and the signal).
+   Prototyped in Minimal and Barebone (`Skin.dock`, `skins/dock.ts`); other
+   skins keep their motor until the design settles. Still to do: mark the
+   station that died inside the stations, not only in the dock.
 2. [ ] **Pointer address tag** (S). A pointer row shows a tag, not a value;
    its line leads to what it points at in REACHED. The tag and the line say
    only what the pointer holds (the origin), never where it was handed down
