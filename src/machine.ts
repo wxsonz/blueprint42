@@ -118,6 +118,7 @@ const GAP = 1.6; // between storage and stations: room for values in flight
 const STATION_ZOOM = 1.15; // stations draw a little larger than the grid
 const MEM_H = 1.6;
 const MEM_GAP = 0.25;
+const MEM_INSET = 0.15; // a strip's margin inside the REACHED panel
 const POOL_GAP = 0.2;
 const RET_H = (INV_HEAD_PX + SLOT_PX + 8) / CELL_PX;
 
@@ -138,7 +139,7 @@ export interface Geom {
   store: { x: number; y: number; w: number; rows: number; pools: PoolGeom[]; slotTop: number[] }; // left column: one panel per non-empty pool; slotTop[i] = slot i's top, cells from the machine's top
   ret: { x: number; y: number; w: number; h: number }; // the RETURN panel, at the bottom
   stations: { x: number; y: number; w: number; h: number; zoom: number };
-  memory: { x: number; y: number; w: number; keys: string[] }; // one strip per key
+  memory: { x: number; y: number; w: number; keys: string[] }; // one strip per key, inside the REACHED panel
   memH: number;
   memGap: number;
   entryY: number; // where calls come in (left side)
@@ -159,28 +160,33 @@ export function geomOf(fn: FnInfo): Geom {
   const storeTop = motor.y + MH + 0.3;
   const pools: PoolGeom[] = [];
   const slotTop: number[] = [];
+  // the bytes behind each char *: reached memory, drawn inside REACHED under its rows
+  const keys = slots.filter((s) => s.kind !== 'more' && s.kind !== 'static' && isText(s.type)).map((s) => s.key);
+  let memY = 0;
   let y = storeTop;
   for (const { pool, title } of POOLS) {
-    const first = slots.findIndex((sl) => sl.pool === pool);
-    if (first < 0) continue;
+    let first = slots.findIndex((sl) => sl.pool === pool);
+    const strips = pool === 'reached' ? keys.length : 0;
+    if (first < 0 && !strips) continue;
+    if (first < 0) first = slots.length;
     const rows = slots.filter((sl) => sl.pool === pool).length;
-    const h = (INV_HEAD_PX + rows * SLOT_PX + 8) / CELL_PX;
+    const rowsH = (INV_HEAD_PX + rows * SLOT_PX + 8) / CELL_PX;
     for (let k = 0; k < rows; k++) slotTop[first + k] = y + (INV_HEAD_PX + k * SLOT_PX) / CELL_PX;
+    if (strips) memY = y + rowsH - (rows ? 0 : 4 / CELL_PX);
+    const h = rowsH + strips * (MEM_H + MEM_GAP);
     pools.push({ pool, title, y, h, first, rows });
     y += h + POOL_GAP;
   }
   const storeH = Math.max(0, y - POOL_GAP - storeTop);
   const st = { x: PAD + STORE_W + GAP, y: HEAD + 0.2, w: (plan.w * STATION_ZOOM) / CELL_PX, h: (plan.h * STATION_ZOOM) / CELL_PX, zoom: STATION_ZOOM };
-  const keys = slots.filter((s) => s.kind !== 'more' && s.kind !== 'static' && isText(s.type)).map((s) => s.key);
-  const memTop = Math.max(storeTop + storeH, st.y + st.h) + 0.4;
   const w = st.x + st.w + PAD;
-  const retY = memTop + keys.length * (MEM_H + MEM_GAP) + (keys.length ? 0.1 : -0.2);
+  const retY = Math.max(storeTop + storeH, st.y + st.h) + 0.2;
   const g: Geom = {
     w, h: retY + RET_H + PAD, head: HEAD, motor,
     store: { x: PAD, y: storeTop, w: STORE_W, rows: slots.length, pools, slotTop },
     ret: { x: PAD, y: retY, w: STORE_W, h: RET_H },
     stations: st,
-    memory: { x: PAD, y: memTop, w: w - PAD * 2, keys },
+    memory: { x: PAD + MEM_INSET, y: memY, w: STORE_W - MEM_INSET * 2, keys },
     memH: MEM_H, memGap: MEM_GAP,
     entryY: motor.y + MH * 0.5,
   };

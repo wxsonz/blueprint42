@@ -39,9 +39,14 @@ Next, in this order:
    a `char *` gets a line to its byte strip, where its text now lives.
    Prototyped in Minimal and Barebone (`RowInfo.tag`, `drawTag`; the kit's
    `ptrTags`); other skins still print the value.
-3. [ ] **Byte strips inside REACHED** (S). They're reached memory too, and
-   today sit on their own below the stations. Their label says where the
-   bytes live (heap, stack, static) and who allocated them.
+3. [x] **Byte strips inside REACHED** (S). The bytes behind each `char *`
+   are drawn inside the REACHED panel, under its rows, in every skin (an
+   engine change). Each strip's label says what the pointer reaches and
+   where it came from: `data → heap #1 · malloc lr_grow:172` (or "malloc
+   before step N" in a window that began later). A pointer with no bytes
+   to show says where it points (`(stack)`, `(static)`) or `NULL`. Only heap
+   bytes are drawn so far: a stack array or a string literal gets the line
+   and the label, not its bytes.
 4. [ ] **Argument vs return plates** (S). Different in shape, not just colour.
 5. [ ] **Norm capacity** (M). Module 5 definitions, machine 25 physical lines,
    4 ports, 5 storage rows including local statics, counted the way

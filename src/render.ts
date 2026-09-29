@@ -124,15 +124,21 @@ class PathWalk {
 // ---------------- the view ----------------
 
 // Each frame's call event and the error it died of, found once per trace.
-const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]> }>();
+// …and each heap block's malloc: the line, and the function that called it.
+const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]>; allocs: Map<number, { line: number; fn: string | null }> }>();
 function callsOf(trace: Trace) {
   let m = callMemo.get(trace);
   if (!m) {
-    m = { calls: new Map(), errs: new Map() };
+    m = { calls: new Map(), errs: new Map(), allocs: new Map() };
     trace.evs.forEach((e, i) => {
       if (e.frame === null) return;
       if (e.k === 'call') m!.calls.set(e.frame, i);
       else if (e.k === 'error') m!.errs.set(e.frame, e);
+      else if (e.k === 'alloc') {
+        const ci = m!.calls.get(e.frame);
+        const call = ci !== undefined ? trace.evs[ci] : null;
+        m!.allocs.set(e.cell, { line: e.line + 1, fn: call?.k === 'call' ? call.fn : null });
+      }
     });
     callMemo.set(trace, m);
   }
@@ -1053,7 +1059,26 @@ export class GridView {
       });
     }
 
-    // ---- memory floor ----
+    // ---- reached memory: the bytes behind each char * ----
+    // where they live, and who allocated them (a heap block's malloc)
+    const targetOf = (key: string): number | null => {
+      const [parent, field] = key.slice(2).split('.');
+      const c = shown?.cells.find((x) => x.name === parent);
+      const val = field === undefined ? c?.val : c?.fields?.find((f) => f.name === field)?.val;
+      return val?.k === 'ptr' ? val.to : null;
+    };
+    const allocText = (key: string): string => {
+      const id = targetOf(key);
+      if (id === null) return '';
+      const a = callsOf(trace).allocs.get(id);
+      if (a) return ` · malloc ${a.fn ?? '?'}:${a.line}`;
+      return trace.window && trace.window.from > 0 ? ` · malloc before step ${trace.window.from}` : '';
+    };
+    const whereOf = (key: string): string => {
+      const id = targetOf(key);
+      const owner = id !== null ? trace.cells.get(id)?.owner : undefined;
+      return owner === undefined || owner === 'heap' ? '' : owner === '' ? ' (static)' : ' (stack)';
+    };
     const mem = new Map<string, { r: Rect; len: number }>();
     geo.memory.keys.forEach((key, k) => {
       const r = this.rectW(h.x + geo.memory.x, h.y + geo.memory.y + k * (geo.memH + geo.memGap), geo.memory.w, geo.memH);
@@ -1064,15 +1089,16 @@ export class GridView {
       const wrote = writes.filter((w) => w.key === key && w.index !== undefined && arrived.has(key));
       const label = sl.kind === 'field' ? `${key.slice(2).split('.')[0]}${ARROW}${sl.name}` : sl.name;
       if (!v.bytes) {
-        // nothing to show yet (NULL, not set, or not in memory the trace saw)
+        // nothing to show yet (NULL, not set, or not in memory the trace
+        // saw): say where it points, if anywhere
         g.save();
         g.globalAlpha *= 0.6;
-        skin.plate(dc, r.x + Math.min(r.w / 2, 120 * z), r.y + r.h / 2, `${label} → ${v.text || '?'}`, 'void');
+        skin.plate(dc, r.x + r.w / 2, r.y + r.h / 2, clipCode(`${label} → ${v.tag ? `${v.tag}${whereOf(key)}` : v.text || '?'}`, 34), 'void');
         g.restore();
         return;
       }
       skin.strip(dc, r, {
-        label: `${label} · ${sl.type.replace(/\s+\*/g, ' *')}`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
+        label: `${label} → ${v.tag ?? '?'}${allocText(key)}`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
         markers: [...v.marks.map((mk) => ({ label: mk.label, index: mk.index, sampledIndex: mk.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
         selected: false, hovered: false,
       });

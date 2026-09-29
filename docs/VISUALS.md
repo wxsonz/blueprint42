@@ -127,7 +127,7 @@ Top to bottom, the life of one call:
 | **PARAMETERS** | The function's own copies of its arguments. C passes by value: a plain value is copied in. A pointer's *address* is copied, and what it points at stays where it was (see REACHED). | ✅ |
 | **LOCALS** | Its own variables, at most 5, declared first (Norm). They start unset (`?`): the Norm forbids initialising where you declare. | ✅ |
 | **KEPT (static)** | Its statics, which outlive the call. Another machine that reaches them sees them under REACHED. | ✅ |
-| **REACHED (through pointers)** | Memory it only reaches through a pointer, written as the C that gets there (`buf->len`). It belongs to someone else: writing it changes the caller's data. | ✅ struct fields; byte strips below the stations |
+| **REACHED (through pointers)** | Memory it only reaches through a pointer, written as the C that gets there (`buf->len`). It belongs to someone else: writing it changes the caller's data. | ✅ struct fields, and the bytes behind each `char *` inside the panel, labelled with what they are and who allocated them (`data → heap #1 · malloc lr_grow:172`); only heap bytes are drawn so far |
 | Stations | One per line of code (section 4). | ✅ |
 | **RETURN** | The return type, and the value once it leaves (`void`: done). | ✅ |
 
