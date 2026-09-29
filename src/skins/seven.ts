@@ -1,9 +1,10 @@
 // "Windows 7" — Aero: glass frames over the Harmony wallpaper, dark title
 // text with a soft white glow, glossy caption buttons with the wide red
 // close, the green shine-sweep progress bar.
-import { backdrop, glassBehind, makeSkin, plainCard, softShadow, type Theme } from './kit';
-import type { Dc, Rect } from './types';
-import { fitText, hash, rrect } from './util';
+import { span } from './belts';
+import { backdrop, countBadge, glassBehind, makeSkin, plainCard, softShadow, type Theme } from './kit';
+import type { Dc, Pt, Rect } from './types';
+import { arrowHead, fitText, hash, rrect, strokeLine, Walk } from './util';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px "Segoe UI", "Open Sans", "DejaVu Sans", sans-serif`;
 
@@ -102,6 +103,47 @@ export const sevenTheme: Theme = {
     param: '#1d5aa8', cell: '#cce4f7', track: '#ffffff',
   },
   pulseColor: 'rgba(51,153,255,0.85)',
+
+  // An Aero glass tube: a translucent pipe with a white rim and a bright
+  // gloss line; live, it fills with the green progress bar and a soft shimmer
+  // sweeps through it the data's way; hovered, the rim glows; selected, halo.
+  belt(dc, pts, o, t) {
+    const g = dc.g;
+    const z = dc.z;
+    const w = Math.max(6, 9 * z);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    if (o.selected) strokeLine(g, pts, w + 10 * z, 'rgba(120,200,255,0.4)');
+    if (o.hovered) strokeLine(g, pts, w + 5 * z, 'rgba(160,220,255,0.35)');
+    strokeLine(g, pts, w + 2, 'rgba(10,30,60,0.55)');
+    strokeLine(g, pts, w, o.live ? 'rgba(40,150,40,0.85)' : 'rgba(215,235,255,0.55)');
+    strokeLine(g, pts, w - 3, o.live ? '#3fd23f' : 'rgba(150,190,230,0.55)');
+    const walk = new Walk(pts);
+    if (o.live) {
+      g.save();
+      g.lineCap = 'butt';
+      const L = walk.length;
+      const sh = Math.max(24, 60 * z), gap = Math.max(70, 150 * z);
+      const run = (dc.time * 90 * z) % gap;
+      g.globalCompositeOperation = 'lighter';
+      for (let head = run; head < L + sh; head += gap) {
+        for (let k = 0; k < 6; k++) {
+          const a = head - sh + (sh * k) / 6, b = a + sh / 6;
+          const f = Math.sin(((k + 0.5) / 6) * Math.PI);
+          g.strokeStyle = `rgba(255,255,255,${0.75 * f})`;
+          g.lineWidth = w - 4;
+          const [s0, s1] = o.dir < 0 ? [L - b, L - a] : [a, b];
+          span(g, walk, s0, s1);
+        }
+      }
+      g.restore();
+    }
+    g.lineCap = 'round';
+    strokeLine(g, pts.map(([x, y]) => [x, y - w * 0.2] as Pt), Math.max(1, w * 0.2), 'rgba(255,255,255,0.75)');
+    const e = walk.at(walk.length);
+    arrowHead(g, e.x, e.y, e.dx, e.dy, Math.max(6, 9 * z), o.live ? '#2fae2f' : 'rgba(230,242,255,0.95)');
+    countBadge(dc, pts, o, t);
+  },
 
   card(dc, r, o) {
     plainCard(dc, r, 3, { ...o, glow: null, fill: o.fill === 'transparent' ? 'transparent' : o.kind === 'frame' || o.kind === 'plate' ? '#ffffff' : '#f0f0f0' });

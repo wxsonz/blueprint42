@@ -22,10 +22,10 @@ skin by name.
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles |
 | Minimal | `minimal`, `minimal-light` | Simple | pending | scrollbars, toggles |
 | Barebone | `barebone`, `barebone-light` | Simple | pending | scrollbars, toggles |
-| Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles |
-| XP | `xp` | Windows | pending | scrollbars, toggles |
-| Seven | `seven` | Windows | pending | scrollbars, toggles |
-| Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles |
+| Classic (Windows 3.1) | `classic` | Windows | pending | scrollbars, toggles, belts |
+| XP | `xp` | Windows | pending | scrollbars, toggles, belts |
+| Seven | `seven` | Windows | pending | scrollbars, toggles, belts |
+| Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles, belts |
 | System 7 | `system7` | Mac | pending | scrollbars, toggles |
 | Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles |
 | Aqua | `aqua` | Mac | pending | scrollbars, toggles |

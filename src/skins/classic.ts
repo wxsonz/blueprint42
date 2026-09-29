@@ -3,6 +3,7 @@
 // floppy disks, pointers are links, stale code is "(Not Responding)".
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, bevel, brackets, fitText, hiddenLines, snapRect, strokeLine, tailLines, Walk } from './util';
+import { layers } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -173,16 +174,28 @@ export const classic: Skin = {
   },
 
   belt(dc, pts, o) {
+    // Windows 3.1: a raised grey bar (white edge up-left, dark edge
+    // down-right, like a button pressed out of the desktop); live, navy blocks
+    // run along it like the progress gauge; selected wears the dotted focus
+    // rectangle.
     const g = dc.g;
-    const w = Math.max(2, 2.5 * dc.z);
-    if (o.selected) strokeLine(g, pts, w + 6, 'rgba(0,0,128,0.35)');
-    const shadow = pts.map(([x, y]) => [x + 1, y + 1] as Pt);
-    strokeLine(g, shadow, w, '#004040');
-    strokeLine(g, pts, w, o.hovered || o.selected ? '#ffffe1' : HI);
-    if (o.live) strokeLine(g, pts, w, DARK, [4, 4], -dc.time * 24 * o.dir);
+    const w = Math.max(4, Math.round(5 * dc.z));
+    g.lineCap = 'butt';
+    g.lineJoin = 'miter';
+    if (o.selected) layers(g, pts, [[w + 8, NAVY]]);
+    layers(g, pts, [[w + 2, '#404040']], [1, 1]);
+    layers(g, pts, [[w + 2, HI]], [-1, -1]);
+    layers(g, pts, [[w + 2, '#808080']], [0, 0]);
+    layers(g, pts, [[w, o.hovered || o.selected ? '#dcdcdc' : '#c0c0c0']]);
     const walk = new Walk(pts);
+    if (o.live) {
+      const blk = Math.max(4, Math.round(6 * dc.z)), gap = Math.max(2, Math.round(2 * dc.z));
+      const per = blk + gap;
+      const off = (((dc.time * 30 * dc.z * o.dir) % per) + per) % per;
+      strokeLine(g, pts, Math.max(2, w - 2), NAVY, [blk, gap], -off);
+    }
     const end = walk.at(walk.length);
-    arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), DARK);
+    arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(6, 9 * dc.z), o.live ? NAVY : DARK);
     if (o.count > 1) {
       // a tooltip: how many calls this trunk carries
       const [mx, my] = beltMid(pts);
