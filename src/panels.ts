@@ -127,7 +127,14 @@ export function renderAlerts(): void {
       : `<b>Compile failed.</b> <code>${esc(g.compile.text.split('\n').find((l) => /error/i.test(l)) ?? g.compile.text.split('\n')[0] ?? '')}</code>`);
   } else if (g.status === 'error') al('err', `<b>Can't run it:</b> ${esc(g.error ?? 'unknown error')}`);
   if (S.trace?.error) al('err', `<b>Stopped</b> at ${at(S.trace.error.line, S.trace.error.file)}: ${esc(S.trace.error.msg)}`);
-  if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
+  const win = S.trace?.window;
+  if (win) {
+    // a gdb session: this trace is one window of the run
+    const n = (x: number) => x.toLocaleString('en-US');
+    const of = win.total !== null ? `of ${n(win.total)}` : win.more ? `of at least ${n(win.to)}` : `of ${n(win.to)}`;
+    if (win.from > 0 || win.more) al('info', `<b>Steps ${n(win.from)}–${n(win.to)}</b> ${of}
+      <span class="winnav"><button class="btn sm" data-win="prev" ${win.from > 0 ? '' : 'disabled'}>◂ Previous</button><button class="btn sm" data-win="next" ${win.more ? '' : 'disabled'}>Next ▸</button><input data-goto type="number" min="0" step="1" placeholder="go to step" aria-label="go to step"><button class="btn sm" data-win="stats">Stats</button></span>`);
+  } else if (S.trace?.truncated) al('warn', `<b>Trace truncated</b> at ${S.trace.evs.length} steps.`);
   const leaks = S.trace?.leaks ?? [];
   if (leaks.length) {
     const bytes = leaks.reduce((a, l) => a + l.size, 0);

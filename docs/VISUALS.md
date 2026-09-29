@@ -134,6 +134,13 @@ Top to bottom, the life of one call:
 Every row in a pool shows what it held before, dimmed, newest nearest:
 `cap   ? → 0 → 8 → 16`. That's how the data changes over time.
 
+A long run is shown a window of steps at a time (decision 043). A window's
+first stop holds what already existed when it began: frames and heap blocks
+drawn as present, never as a call or an allocation happening then, and the
+output printed before it already in the terminal. A frame that began before
+the window shows its locals' memory as it is (the trace didn't see which were
+assigned).
+
 A pointer's line goes to the address it holds, and nowhere else. Passing a
 pointer down a call chain copies the address, so every copy's line goes
 straight to the origin (`lr_grow`'s `buf` → `bufs[0]`), never through the

@@ -69,6 +69,7 @@
             <div class="run-row" id="run-row" hidden>
               <label>args <input id="run-args" spellcheck="false" autocomplete="off" placeholder="./prog arguments"></label>
               <label>-D <input id="run-defs" spellcheck="false" autocomplete="off" placeholder="BUFFER_SIZE=42"></label>
+              <label title="How many steps of a long run the page loads at a time (gdb). Recording runs at about 1,000 steps a second.">window <input id="run-window" type="number" min="1000" max="100000" step="1000"></label>
               <button class="toggle" id="run-tty" aria-pressed="true" title="Where stdout goes decides printf's buffering: a terminal flushes at each newline, a pipe (./a.out | cat -e) only when the buffer fills or at exit"><span class="sw"></span><span id="run-tty-label">stdout: terminal</span></button>
             </div>
           </div>

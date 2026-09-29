@@ -93,6 +93,9 @@ export interface Trace {
   stdout?: string;
   outText?: string; // stdout's bytes in the order they left (gdb engine)
   outMode?: 'terminal' | 'pipe'; // what stdout was, which decides printf's buffering
+  // gdb sessions: the steps of the run this trace covers ([from, to]), the
+  // run's length once seen, and whether it goes on past `to`
+  window?: { from: number; to: number; total: number | null; more: boolean };
   args?: string[]; // the command-line arguments it ran with (gdb engine)
   heapSlots?: Map<number, number>; // heap cell -> shelf slot, stable for the block's life
   leaks?: { cell: number; size: number; line: number | null; file?: string }[];

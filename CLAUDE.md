@@ -83,7 +83,10 @@ loop, mouse and keys, skins, boot). `main.ts`'s shared state is in
 `state.ts` (reassigned values have setters); the UI around it is split into
 `panels.ts`, `playbar.ts`, `project-ui.ts` (projects, live edits, polling,
 dialogs), `sample-ui.ts`, `feed.ts` (kill feed, duel, focus card) and
-`page.ts` (clock, zoom, page background).
+`page.ts` (clock, zoom, page background). Long gdb runs are windows of steps
+(decision 043): `session.ts` talks to the trace server's sessions
+(`/api/trace/open|window|stats|close`, `tracer.py` serve mode with gdb
+checkpoints as savepoints); `stats-ui.ts` is the nerd stats panel.
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
 editor via CSS variables on `html[data-skin]`. Twenty-six skins: amp, classic,
 aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in

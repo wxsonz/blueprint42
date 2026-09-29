@@ -614,9 +614,9 @@ kbd {
 
 /* the examples: one dropdown on the top bar */
 .examples { position: relative; }
-#examples { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-#examples .cur { opacity: 0.7; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
-#examples .caret { font-size: 0.8em; opacity: 0.7; }
+#examples, #tests { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+#examples .cur, #tests .cur { opacity: 0.7; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+#examples .caret, #tests .caret { font-size: 0.8em; opacity: 0.7; }
 .example-list { position: absolute; left: 0; top: calc(100% + 6px); z-index: 60; width: min(560px, 92vw); max-height: 76vh; overflow: auto; padding: 8px;
   font-family: var(--label-font, var(--font-ui)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
 .example-list[hidden] { display: none; }
@@ -628,3 +628,23 @@ kbd {
 .example-list button[aria-checked='true'] { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .example-list button b { font-weight: 600; }
 .example-list button .tag { display: block; font-size: 0.86em; color: var(--panel-dim); }
+
+/* ---------- trace stats (gdb sessions): the nerd panel ---------- */
+.winnav { display: inline-flex; gap: 4px; align-items: center; margin-left: 8px; flex-wrap: wrap; }
+.winnav input { width: 9em; font: inherit; padding: 1px 4px; background: var(--input-bg, transparent); color: inherit; border: var(--panel-border, 1px solid rgba(128,128,128,0.4)); border-radius: 3px; }
+.stats-panel { position: fixed; right: 16px; top: 64px; z-index: 70; width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 96px); overflow: auto; padding: 10px 12px;
+  font: 12px/1.45 var(--label-font, var(--font-ui)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 6px); box-shadow: var(--panel-shadow, 0 10px 30px rgba(0,0,0,0.4)); }
+.stats-panel[hidden] { display: none; }
+.stats-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.stats-panel h4 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.stats-panel h4 .dim, .stats-panel .dim { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--panel-dim); }
+.stats-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; }
+.stats-panel dt { color: var(--panel-dim); }
+.stats-panel dd { margin: 0; font-family: var(--font-mono, monospace); }
+.stats-panel p { margin: 2px 0 6px; }
+.stats-panel .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.stats-panel .chip { font-family: var(--font-mono, monospace); padding: 1px 6px; border-radius: 3px; background: color-mix(in srgb, var(--panel-fg) 10%, transparent); }
+.stats-panel table { width: 100%; border-collapse: collapse; font-family: var(--font-mono, monospace); font-size: 11px; }
+.stats-panel th { text-align: left; font-weight: 600; color: var(--panel-dim); padding: 2px 6px 2px 0; }
+.stats-panel td { padding: 2px 6px 2px 0; vertical-align: top; }
+.stats-panel tr.cur td { background: color-mix(in srgb, var(--accent) 18%, transparent); }

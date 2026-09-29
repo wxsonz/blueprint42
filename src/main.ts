@@ -6,7 +6,9 @@ import { createEditor, setVim, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp';
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
-import { convertGdb, requestTrace, type GResult } from './gdb';
+import { convertGdb, type GResult } from './gdb';
+import { closeSession, session, traceWindow, windowSize } from './session';
+import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
 import { animMode, prepareStage, computeBelts, durationAt, frameAt, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity } from './playback';
 import { activeHostRect, entityAt, foldAt, stationAt, machineHeadAt, stageRect } from './hit';
@@ -128,6 +130,44 @@ export function analyze(src: string, fresh: boolean): void {
   }
 }
 
+// Another stretch of the run (gdb sessions): fetch the window that holds step
+// `step` (from the page's cache, or the session), and put playback on it.
+let windowLoading = false;
+export async function loadWindow(step: number, play_ = false): Promise<void> {
+  const model = S.model;
+  if (!model || !session.id || windowLoading) return;
+  const size = windowSize();
+  const total = S.trace?.window?.total ?? null;
+  const target = Math.max(0, total !== null ? Math.min(step, total) : step);
+  const from = Math.floor(target / size) * size;
+  windowLoading = true;
+  S.gdb = { status: 'running' };
+  renderAlerts();
+  try {
+    const r = await traceWindow(JSON.parse(session.key), from);
+    if (S.model !== model) return;
+    if (r === 'unavailable' || !r.ok) {
+      toast(r === 'unavailable' ? 'the trace server is not running' : `window ${from}: ${r.error ?? 'failed'}`);
+      S.gdb = { status: 'done' };
+      return;
+    }
+    S.gdb = { status: 'done', ms: r.ms };
+    const p = S.project;
+    applyTrace(convertGdb(r, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
+    // the event where step `target` is: each 'step' event is one step of the run
+    let n = from;
+    const evs = S.trace!.evs;
+    let i = 0;
+    for (; i < evs.length && n < target; i++) if (evs[i].k === 'step') n++;
+    S.pos = i;
+    if (play_) S.playing = true;
+  } finally {
+    windowLoading = false;
+    renderAlerts();
+    renderStatus();
+  }
+}
+
 export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
@@ -167,7 +207,7 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
     const p = S.project;
     const files = p ? buildFiles(p) : null;
     try {
-      r = await requestTrace(
+      r = await traceWindow(
         p
           ? {
             project: { files: files! }, defines: p.run.defines, stdin: p.run.stdin, args: p.run.args,
@@ -179,6 +219,7 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
             }),
           }
           : { src, files: S.sample.files, defines: S.defines, args: S.args, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites, terminal: store.get('stdout') !== 'pipe' },
+        0,
         ac.signal,
       );
     } catch {
@@ -1004,6 +1045,8 @@ function frame(now: number): void {
       if (S.pos >= n) {
         S.pos = n;
         S.playing = false;
+        // the run goes on past this window: fetch the next and keep playing
+        if (t.window?.more && S.stepTarget === null) void loadWindow(t.window.to, true);
       }
     }
   }
@@ -1066,6 +1109,21 @@ async function boot(): Promise<void> {
     if (a.dataset.openFile !== undefined) switchFile(a.dataset.openFile);
   };
   alerts.addEventListener('click', lineLinks);
+  // window navigation (gdb sessions)
+  alerts.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-win]');
+    const w = S.trace?.window;
+    if (!b || !w) return;
+    if (b.dataset.win === 'prev') void loadWindow(Math.max(0, w.from - windowSize()));
+    else if (b.dataset.win === 'next') void loadWindow(w.to);
+    else if (b.dataset.win === 'stats') toggleStats();
+  });
+  alerts.addEventListener('keydown', (e) => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>('input[data-goto]');
+    if (!input || e.key !== 'Enter') return;
+    const step = Number(input.value);
+    if (Number.isInteger(step) && step >= 0) void loadWindow(step);
+  });
   inspector.addEventListener('click', lineLinks);
   $('btn-open').addEventListener('click', () => void openFolderDialog());
   $('btn-files').addEventListener('click', toggleExplorer);
@@ -1074,6 +1132,18 @@ async function boot(): Promise<void> {
     const args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
     if (!S.project) return sampleRunChanged(() => (S.args = args));
     S.project.run.args = args;
+    runChanged();
+  });
+  // steps per window (gdb sessions): a new size starts the session again
+  const winInput = $<HTMLInputElement>('run-window');
+  winInput.value = String(windowSize());
+  winInput.addEventListener('change', () => {
+    const v = Math.round(Number(winInput.value) / 1000) * 1000;
+    if (!(v >= 1000 && v <= 100000)) return void (winInput.value = String(windowSize()));
+    store.set('windowSteps', String(v));
+    winInput.value = String(v);
+    closeSession();
+    if (!S.project) return sampleRunChanged(() => {});
     runChanged();
   });
   // stdout as a terminal (line-buffered) or a pipe (fully buffered): the run

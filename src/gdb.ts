@@ -29,10 +29,12 @@ interface GVar extends GVal {
   ownerFile?: string | null;
 }
 // `file` is project-relative (the sandbox buffer is "sandbox.c").
+// `pre` (a window's first stop): the frame or block already existed when the
+// window began; it is there, not being called or allocated now.
 type GEv =
-  | { k: 'call'; id: number; fn: string; file?: string | null }
+  | { k: 'call'; id: number; fn: string; file?: string | null; pre?: boolean }
   | { k: 'ret'; id: number; value: GVal | null }
-  | { k: 'alloc'; id: number; addr: number; size: number; line: number | null; file?: string | null }
+  | { k: 'alloc'; id: number; addr: number; size: number; line: number | null; file?: string | null; pre?: boolean }
   | { k: 'free'; id: number }
   | { k: 'badfree'; addr: number; line: number | null; file?: string | null }
   | { k: 'out'; fd: number; n: number; text: string; via: 'printf' | 'write'; line?: number | null; file?: string | null };
@@ -49,6 +51,18 @@ interface GStop {
   exited?: boolean;
   stdbuf?: StdBuf | null; // printf's buffer after this stop, when it changed
 }
+// How a window was fetched (the tracer's session, for the nerd stats).
+export interface WindowStats {
+  start: number | 'here' | 'rerun'; // the savepoint it started from, or where the program already was
+  silentSteps: number;
+  silentMs: number;
+  recordMs: number;
+  recorded: number;
+  savepoints: number[];
+  every: number;
+  total: number | null; // the run's length, once it has been seen to end
+}
+
 export interface GResult {
   ok: boolean;
   error?: string;
@@ -61,6 +75,10 @@ export interface GResult {
   outMode?: 'terminal' | 'pipe';
   args?: string[];
   stderr?: string;
+  window?: { from: number | null; to: number }; // the steps this trace covers
+  outBefore?: string; // stdout written before the window began
+  steps?: number; // steps the run reached
+  stats?: WindowStats;
   ms?: number;
   flags?: string[];
   bindingScopes?: Record<string, { scope: 'fn' | 'global'; fn?: string; file?: string }>;
@@ -220,7 +238,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   // What the picture shows through a cell: a string, a struct's fields.
   const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[] }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
-  let outText = '';
+  let outText = r.outBefore ?? '';
   let buf: StdBuf | null = null;
   // Snapshots share what didn't change: a list of cells is reused while every
   // cell in it holds the same value and extras (both are replaced, never
@@ -382,10 +400,14 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
         const params = fnInfo(fn)?.params ?? [];
         for (const v of data?.vars ?? []) {
           const c = f.cells.get(v.name)!;
+          // a frame that began before the window: the trace didn't see which
+          // locals were assigned, so it shows their memory as it is
+          if (e.pre) defined.add(c);
           raw.set(c, JSON.stringify(v));
           vals.set(c, defined.has(c) ? toV(v) : { k: 'undef' });
           if (defined.has(c)) setExtra(c, v);
         }
+        if (e.pre) continue; // already running: no call happens now
         emit({
           k: 'call', line: data?.line ? data.line - 1 : lastLine, file: fileOf(data?.line ? file : lastFile), frame: e.id, fn, caller: caller?.fn ?? null,
           args: params.map((p) => {
@@ -420,6 +442,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
         usedSlots.add(slot);
         heapSlots.set(c, slot);
         vals.set(c, { k: 'raw', text: 'uninitialised' });
+        if (e.pre) continue; // allocated before the window: its bytes come with the stop
         emit({ k: 'alloc', line: e.line ? e.line - 1 : lastLine, file: fileOf(e.line ? e.file : lastFile), frame: top?.id ?? null, cell: c, size: e.size });
       } else if (e.k === 'free') {
         const c = heapCell.get(e.id);
@@ -535,6 +558,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     truncated: !!r.truncated,
     stdout: r.stdout,
     ...(r.outMode ? { outText, outMode: r.outMode } : {}),
+    ...(r.window ? { window: { from: r.window.from ?? 0, to: r.window.to, total: r.stats?.total ?? null, more: !!r.truncated } } : {}),
     args: r.args,
     heapSlots,
     leaks,
