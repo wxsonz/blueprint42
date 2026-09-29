@@ -5,7 +5,7 @@ import { convertGdb } from '../src/gdb';
 import { folded, frameRows } from '../src/layout';
 import { machineSize } from '../src/machine';
 import { parse } from '../src/parse';
-import { returnCard } from '../src/render';
+import { returnCard } from '../src/playback';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);

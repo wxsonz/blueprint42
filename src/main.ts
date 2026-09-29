@@ -12,7 +12,9 @@ import { doorsOf, folded, footprint, Layout, shut } from './layout';
 import { convertGdb, requestTrace, type GResult } from './gdb';
 import { findViolations, parseInvariant, surpriseCalls, type Violation } from './invariants';
 import { bufferShapes, initParser, parse, validateBindingExpr, type Model, type Var } from './parse';
-import { GridView, activeHostRect, animMode, clip, prepareStage, returnCard, computeBelts, entKey, durationAt, entityAt, foldAt, frameAt, pointeeName, argLabel, retLabel, setAnimMode, stationAt, machineHeadAt, spriteWorldRect, stageRect, staged, type AnimMode, type Entity, type ViewState } from './render';
+import { GridView, clip, pointeeName } from './render';
+import { animMode, prepareStage, returnCard, computeBelts, entKey, durationAt, frameAt, argLabel, retLabel, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity, type ViewState } from './playback';
+import { activeHostRect, entityAt, foldAt, stationAt, machineHeadAt, stageRect } from './hit';
 import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample, type SampleProject } from './samples';
 import {
