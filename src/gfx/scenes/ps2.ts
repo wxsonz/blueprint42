@@ -158,22 +158,9 @@ fn fogAt(p: vec2f) -> vec3f {
   }
   return c.rgb;
 }
-// What the glass shows, reflected and seen through: a room of frosted
-// blocks like the boot screen's towers, their ends facing in (a grid, each
-// block its own shade, grain on it, dark gaps between). A room close by:
-// where on screen (at, in blocks) as well as which way, so the blocks slide
-// across a face and jump between faces.
-fn envAt(r: vec3f, at: vec2f) -> vec3f {
-  let uv = at + r.xy / (abs(r.z) + 0.55) * 1.6 + vec2f(select(0.0, 17.0, r.z < 0.0));
-  let cell = floor(uv);
-  let f = fract(uv);
-  let shade = 0.42 + 0.45 * h21(cell, 5.0);
-  // each block's end, and its sides darker toward the gap
-  let side = smoothstep(0.78, 0.9, max(f.x, f.y));
-  let gap = smoothstep(0.9, 0.97, max(f.x, f.y));
-  let grain = 0.85 + 0.3 * vnoise(uv * 24.0, 7.0);
-  let block = vec3f(0.74, 0.79, 0.95) * shade * grain * (1.0 - 0.45 * side);
-  return mix(block, vec3f(0.02, 0.025, 0.06), gap);
+// what the glass catches at a grazing angle: a faint dim-blue sky, nothing baked in
+fn envAt(r: vec3f) -> vec3f {
+  return mix(vec3f(0.01, 0.012, 0.03), vec3f(0.12, 0.15, 0.3), smoothstep(-0.4, 0.9, -r.y));
 }
 // near an edge of the cube: the second-largest coordinate of the hit point near 1
 fn edgeOf(h: vec3f, w: f32) -> f32 {
@@ -213,15 +200,15 @@ fn scene(p: vec2f) -> vec4f {
     let inside = refract(v, nf, 1.0 / 1.5);
     var outd = refract(inside, -nb, 1.5);
     if (dot(outd, outd) < 1e-4) { outd = reflect(inside, -nb); } // total internal reflection
-    let through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6) * 0.8 + envAt(outd, p / 70.0) * 0.55;
-    // and on it, the room reflected: faint face-on, strong edge-on (Fresnel)
+    let through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6);
+    // and on it, a faint reflection, stronger edge-on (Fresnel)
     let cosv = clamp(nf.z, 0.0, 1.0);
-    let F = 0.08 + 0.72 * pow(1.0 - cosv, 3.0);
-    let refl = envAt(reflect(v, nf), p / 70.0);
+    let F = 0.04 + 0.4 * pow(1.0 - cosv, 4.0);
+    let refl = envAt(reflect(v, nf));
     let spec = pow(max(dot(nf, H), 0.0), 80.0) * 0.7;
     // glass edges catch the light: thin and bright, the far ones fainter
     let ew = max(px * 1.6, 0.02);
-    let edges = edgeOf(ol + dl * tn, ew) * 0.55 + edgeOf(ol + dl * tf, ew) * 0.2;
+    let edges = edgeOf(ol + dl * tn, ew) * 0.35 + edgeOf(ol + dl * tf, ew) * 0.12;
     let col = mix(through, refl, F) + vec3f(1.0, 0.98, 0.95) * spec + vec3f(0.8, 0.86, 1.0) * edges;
     c = mix(c, col, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
@@ -281,16 +268,8 @@ vec3 fogAt(vec2 p) {
   }
   return c.rgb;
 }
-vec3 envAt(vec3 r, vec2 at) {
-  vec2 uv = at + r.xy / (abs(r.z) + 0.55) * 1.6 + vec2(r.z < 0.0 ? 17.0 : 0.0);
-  vec2 cell = floor(uv);
-  vec2 f = fract(uv);
-  float shade = 0.42 + 0.45 * h21(cell, 5.0);
-  float side = smoothstep(0.78, 0.9, max(f.x, f.y));
-  float gap = smoothstep(0.9, 0.97, max(f.x, f.y));
-  float grain = 0.85 + 0.3 * vnoise(uv * 24.0, 7.0);
-  vec3 block = vec3(0.74, 0.79, 0.95) * shade * grain * (1.0 - 0.45 * side);
-  return mix(block, vec3(0.02, 0.025, 0.06), gap);
+vec3 envAt(vec3 r) {
+  return mix(vec3(0.01, 0.012, 0.03), vec3(0.12, 0.15, 0.3), smoothstep(-0.4, 0.9, -r.y));
 }
 float edgeOf(vec3 h, float w) {
   vec3 a = abs(h);
@@ -328,13 +307,13 @@ vec4 scene(vec2 p) {
     vec3 inside = refract(v, nf, 1.0 / 1.5);
     vec3 outd = refract(inside, -nb, 1.5);
     if (dot(outd, outd) < 1e-4) outd = reflect(inside, -nb);
-    vec3 through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6) * 0.8 + envAt(outd, p / 70.0) * 0.55;
+    vec3 through = fogAt(p + (outd.xy - v.xy) * cc.z * 0.6);
     float cosv = clamp(nf.z, 0.0, 1.0);
-    float F = 0.08 + 0.72 * pow(1.0 - cosv, 3.0);
-    vec3 refl = envAt(reflect(v, nf), p / 70.0);
+    float F = 0.04 + 0.4 * pow(1.0 - cosv, 4.0);
+    vec3 refl = envAt(reflect(v, nf));
     float spec = pow(max(dot(nf, H), 0.0), 80.0) * 0.7;
     float ew = max(px * 1.6, 0.02);
-    float edges = edgeOf(ol + dl * tn, ew) * 0.55 + edgeOf(ol + dl * tf, ew) * 0.2;
+    float edges = edgeOf(ol + dl * tn, ew) * 0.35 + edgeOf(ol + dl * tf, ew) * 0.12;
     vec3 col = mix(through, refl, F) + vec3(1.0, 0.98, 0.95) * spec + vec3(0.8, 0.86, 1.0) * edges;
     c = mix(c, col, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
