@@ -60,7 +60,9 @@ struct Uni { v: array<vec4f, ${s.vec4s}> };
 ${s.wgsl}
 @fragment fn fs_full(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let c = scene(fc.xy / R.z);
-  return vec4f(c.rgb, 1.0);
+  // a half-step of noise: dark gradients don't band into rings at 8 bits
+  let n = fract(sin(dot(fc.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5;
+  return vec4f(c.rgb + vec3f(n / 255.0), 1.0);
 }
 `;
 
@@ -77,7 +79,8 @@ out vec4 outColor;
 ${s.glsl}
 void main() {
   vec2 p = vec2(gl_FragCoord.x, R.w - gl_FragCoord.y) / R.z;
-  outColor = vec4(scene(p).rgb, 1.0);
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  outColor = vec4(scene(p).rgb + vec3(n / 255.0), 1.0);
 }`;
 const GL_LINE_VS = `#version 300 es
 layout(location = 0) in vec2 p;

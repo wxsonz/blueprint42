@@ -158,11 +158,11 @@ fn fogAt(p: vec2f) -> vec3f {
   }
   return c.rgb;
 }
-// what a glass face reflects: a dark blue room with a soft light strip
+// what a cube's face reflects: a pale blue-white room, a soft light strip
 fn envAt(r: vec3f) -> vec3f {
-  let sky = mix(vec3f(0.01, 0.02, 0.07), vec3f(0.16, 0.26, 0.62), smoothstep(-0.3, 0.9, -r.y));
-  let strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
-  return sky + vec3f(0.55, 0.72, 1.0) * strip;
+  let sky = mix(vec3f(0.16, 0.18, 0.28), vec3f(0.7, 0.76, 0.92), smoothstep(-0.6, 0.8, -r.y));
+  let strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 4.0, 2.0)) * 0.25;
+  return sky + vec3f(0.85, 0.9, 1.0) * strip;
 }
 // near an edge of the cube: the second-largest coordinate of the hit point near 1
 fn edgeOf(h: vec3f, w: f32) -> f32 {
@@ -194,27 +194,23 @@ fn scene(p: vec2f) -> vec4f {
     if (tn > tf) { continue; }
     let toView = mat3x3f(r0, r1, r2);
     let nf = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x) * -sign(dl));
-    let nb = toView * (select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tf == tf3.y), vec3f(1.0, 0.0, 0.0), tf == tf3.x) * sign(dl));
-    let thick = tf - tn; // the glass the ray crosses, in half-sides
+    let thick = tf - tn; // how much cube the ray crosses, in half-sides
     let px = 1.0 / cc.z; // one screen pixel, in half-sides
-    // through: the fog bent by the way in and the way out, tinted by the thickness
-    let bent = fogAt(p + (nf.xy - nb.xy) * cc.z * 0.45);
-    let through = bent * exp(-thick * vec3f(0.42, 0.3, 0.12)) + vec3f(0.012, 0.018, 0.045) * thick;
-    // off it: Fresnel reflection of the room, and the light's highlight
-    let cosv = clamp(nf.z, 0.0, 1.0);
-    let F = 0.05 + 0.45 * pow(1.0 - cosv, 3.0);
+    // where the ray meets the face, in the cube's own coordinates, and the
+    // face's 2D coordinates on it (so its grain turns with the cube)
+    let h = ol + dl * tn;
+    let an = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), tn == tn3.y), vec3f(1.0, 0.0, 0.0), tn == tn3.x);
+    let uv = select(select(h.xy, h.xz, an.y > 0.5), h.yz, an.x > 0.5);
+    let face = f32(i) * 13.0 + dot(an * sign(h), vec3f(1.0, 2.0, 3.0));
+    // a mirror, solid: the pale room it reflects, brighter where it turns to the light
     let refl = envAt(reflect(vec3f(0.0, 0.0, -1.0), nf));
-    let spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
-    // edges: bright on the near side, faint through the glass on the far side
     let lit = max(0.0, dot(nf, L));
-    let ew = max(px * 2.2, 0.035);
-    let front = (edgeOf(ol + dl * tn, ew) + 0.3 * edgeOf(ol + dl * tn, 0.35)) * (0.5 + 0.7 * lit);
-    let back = edgeOf(ol + dl * tf, ew) * 0.3;
-    let g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    let body = vec3f(0.07, 0.12, 0.3) * (0.45 + lit) * (1.15 - 0.6 * g) * (0.55 + 0.3 * thick);
-    let glass = mix(through + body, refl, F) + vec3f(1.0, 0.97, 0.92) * spec + vec3f(0.72, 0.84, 1.0) * (front * 0.85 + back);
-    // soft silhouette: coverage from how much glass the ray crossed
-    c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
+    let grain = 0.78 + 0.34 * vnoise(uv * 38.0, face) + 0.2 * (vnoise(uv * 150.0, face + 50.0) - 0.5);
+    let spec = pow(max(dot(nf, H), 0.0), 60.0) * 0.5;
+    var col = refl * (0.42 + 0.58 * lit) * grain + vec3f(1.0, 0.98, 0.95) * spec;
+    // the seams between faces a touch darker, as on the boot screen's blocks
+    col = col * (1.0 - 0.45 * edgeOf(h, max(px * 1.6, 0.02)));
+    c = mix(c, col * 0.9, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (var i = 0; i < 4; i++) {
     let h = U.v[${V_HEAD} + i];
@@ -273,9 +269,9 @@ vec3 fogAt(vec2 p) {
   return c.rgb;
 }
 vec3 envAt(vec3 r) {
-  vec3 sky = mix(vec3(0.01, 0.02, 0.07), vec3(0.16, 0.26, 0.62), smoothstep(-0.3, 0.9, -r.y));
-  float strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 5.0, 2.0)) * 0.55;
-  return sky + vec3(0.55, 0.72, 1.0) * strip;
+  vec3 sky = mix(vec3(0.16, 0.18, 0.28), vec3(0.7, 0.76, 0.92), smoothstep(-0.6, 0.8, -r.y));
+  float strip = exp(-pow((r.x * 0.8 - r.y * 0.6 - 0.25) * 4.0, 2.0)) * 0.25;
+  return sky + vec3(0.85, 0.9, 1.0) * strip;
 }
 float edgeOf(vec3 h, float w) {
   vec3 a = abs(h);
@@ -306,23 +302,19 @@ vec4 scene(vec2 p) {
     if (tn > tf) continue;
     mat3 toView = mat3(r0, r1, r2);
     vec3 nf = toView * (axisOf(tn, tn3) * -sign(dl));
-    vec3 nb = toView * (axisOf(tf, tf3) * sign(dl));
     float thick = tf - tn;
     float px = 1.0 / cc.z;
-    vec3 bent = fogAt(p + (nf.xy - nb.xy) * cc.z * 0.45);
-    vec3 through = bent * exp(-thick * vec3(0.42, 0.3, 0.12)) + vec3(0.012, 0.018, 0.045) * thick;
-    float cosv = clamp(nf.z, 0.0, 1.0);
-    float F = 0.05 + 0.45 * pow(1.0 - cosv, 3.0);
+    vec3 h = ol + dl * tn;
+    vec3 an = axisOf(tn, tn3);
+    vec2 uv = an.x > 0.5 ? h.yz : an.y > 0.5 ? h.xz : h.xy;
+    float face = float(i) * 13.0 + dot(an * sign(h), vec3(1.0, 2.0, 3.0));
     vec3 refl = envAt(reflect(vec3(0.0, 0.0, -1.0), nf));
-    float spec = pow(max(dot(nf, H), 0.0), 90.0) * 1.1;
     float lit = max(0.0, dot(nf, L));
-    float ew = max(px * 2.2, 0.035);
-    float front = (edgeOf(ol + dl * tn, ew) + 0.3 * edgeOf(ol + dl * tn, 0.35)) * (0.5 + 0.7 * lit);
-    float back = edgeOf(ol + dl * tf, ew) * 0.3;
-    float g = clamp((q.x + q.y) * 0.3 + 0.5, 0.0, 1.0);
-    vec3 body = vec3(0.07, 0.12, 0.3) * (0.45 + lit) * (1.15 - 0.6 * g) * (0.55 + 0.3 * thick);
-    vec3 glass = mix(through + body, refl, F) + vec3(1.0, 0.97, 0.92) * spec + vec3(0.72, 0.84, 1.0) * (front * 0.85 + back);
-    c = mix(c, glass, clamp(thick / (px * 1.5), 0.0, 1.0));
+    float grain = 0.78 + 0.34 * vnoise(uv * 38.0, face) + 0.2 * (vnoise(uv * 150.0, face + 50.0) - 0.5);
+    float spec = pow(max(dot(nf, H), 0.0), 60.0) * 0.5;
+    vec3 col = refl * (0.42 + 0.58 * lit) * grain + vec3(1.0, 0.98, 0.95) * spec;
+    col *= 1.0 - 0.45 * edgeOf(h, max(px * 1.6, 0.02));
+    c = mix(c, col * 0.9, clamp(thick / (px * 1.5), 0.0, 1.0));
   }
   for (int i = 0; i < 4; i++) {
     vec4 h = v[${V_HEAD} + i];
