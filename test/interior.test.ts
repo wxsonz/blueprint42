@@ -8,7 +8,7 @@ import { interiorAt, planOf } from '../src/interior';
 import { Layout } from '../src/layout';
 import { run } from '../src/interp';
 import { parse } from '../src/parse';
-import { readoutOf } from '../src/render';
+import { readoutOf } from '../src/playback';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);

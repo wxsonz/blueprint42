@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Sprite } from '../src/blueprint';
 import type { Snap, Trace } from '../src/interp';
-import { spriteStripInfo, spriteWorldRect } from '../src/render';
+import { spriteStripInfo, spriteWorldRect } from '../src/playback';
 
 const sprite: Sprite = { id: 'buf', kind: 'strip', x: 2, y: 3, label: 'buf->data' };
 const snapshot = (pointer: number, length: number, index: number, byte: number): Snap => ({
