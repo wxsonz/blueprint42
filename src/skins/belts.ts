@@ -78,3 +78,19 @@ export function tri(g: CanvasRenderingContext2D, x: number, y: number, dx: numbe
   g.lineTo(x - dx * len + dy * half, y - dy * len - dx * half);
   g.closePath();
 }
+
+// A barber pole: slanted stripes of half-height `h`, `sw` wide every `gap`,
+// running the data's way (the Mac progress bar). Fill style is the caller's.
+export function barberPole(dc: Dc, w: Walk, o: Flow, h: number, sw: number, gap: number, speed: number, margin = 0): void {
+  const g = dc.g;
+  ride(dc, w, o, speed, gap, (x, y, dx, dy) => {
+    const nx = -dy, ny = dx, k = h * 0.9;
+    g.beginPath();
+    g.moveTo(x + nx * h + dx * k, y + ny * h + dy * k);
+    g.lineTo(x + nx * h + dx * (k + sw), y + ny * h + dy * (k + sw));
+    g.lineTo(x - nx * h + dx * (sw - k), y - ny * h + dy * (sw - k));
+    g.lineTo(x - nx * h - dx * k, y - ny * h - dy * k);
+    g.closePath();
+    g.fill();
+  }, 0, margin);
+}

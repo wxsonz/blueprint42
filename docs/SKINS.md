@@ -26,13 +26,13 @@ skin by name.
 | XP | `xp` | Windows | pending | scrollbars, toggles, belts |
 | Seven | `seven` | Windows | pending | scrollbars, toggles, belts |
 | Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles, belts |
-| System 7 | `system7` | Mac | pending | scrollbars, toggles |
-| Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles |
-| Aqua | `aqua` | Mac | pending | scrollbars, toggles |
-| Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles |
-| Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles |
-| Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles |
-| Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles |
+| System 7 | `system7` | Mac | pending | scrollbars, toggles, belts |
+| Platinum (OS 8/9) | `platinum` | Mac | pending | scrollbars, toggles, belts |
+| Aqua | `aqua` | Mac | pending | scrollbars, toggles, belts |
+| Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles, belts |
+| Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts |
+| Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
+| Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts |
 | Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles |
 | GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles |
 | Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles |

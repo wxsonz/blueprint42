@@ -4,6 +4,7 @@
 // Belts are gel tubes: blue while carrying a call, graphite otherwise.
 import type { Dc, IconKind, Pt, Rect, Skin } from './types';
 import { argLine, arrowHead, baseName, beltMid, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { barberPole } from './belts';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
@@ -218,13 +219,10 @@ export const aqua: Skin = {
     strokeLine(g, pts.map(([x, y]) => [x, y - w * 0.18] as Pt), Math.max(1, w * 0.22), 'rgba(255,255,255,0.75)');
     const walk = new Walk(pts);
     if (o.live) {
-      g.fillStyle = 'rgba(255,255,255,0.8)';
-      const gap = 18 * dc.z + 6;
-      const off = ((dc.time * 50 * dc.z * o.dir) % gap + gap) % gap;
-      for (let d = off; d < walk.length; d += gap) {
-        const p = walk.at(d);
-        g.beginPath(); g.arc(p.x, p.y - w * 0.05, w * 0.18, 0, Math.PI * 2); g.fill();
-      }
+      // the Aqua barber pole: pale slanted stripes turning through the blue gel
+      g.fillStyle = 'rgba(255,255,255,0.55)';
+      barberPole(dc, walk, o, (w - 2) / 2, Math.max(4, 6 * dc.z), Math.max(10, 16 * dc.z), 26 * dc.z, w);
+      strokeLine(g, pts.map(([x, y]) => [x, y - w * 0.22] as Pt), Math.max(1, w * 0.2), 'rgba(255,255,255,0.7)');
     }
     const end = walk.at(walk.length);
     arrowHead(g, end.x, end.y, end.dx, end.dy, Math.max(5, 8 * dc.z), blue ? '#1d4f9e' : '#6b737c');
