@@ -1,6 +1,6 @@
 # M4 truth checks
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** Invariants live on sprites (`invariants` in the blueprint,
   one per line in the sprite form) and are checked **client-side** over the

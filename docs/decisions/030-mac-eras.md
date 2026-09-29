@@ -1,6 +1,6 @@
 # the Mac eras
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** Mac skins alongside the Windows ones: System 7,
   Mac OS 9 (Platinum), Mac OS X Leopard, OS X Yosemite, macOS Big Sur and

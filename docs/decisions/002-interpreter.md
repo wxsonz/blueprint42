@@ -1,8 +1,7 @@
 # in-browser interpreter instead of the gdb trace server (prototype only; kept)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted; continued by [013-trace-server](013-trace-server.md)
 
-> Continued by [013-trace-server](013-trace-server.md).
 
 - **Decision:** `proto/src/interp.ts` walks the tree-sitter AST for a
   Norminette-shaped C subset (int/char/long, pointers to variables, `if`,

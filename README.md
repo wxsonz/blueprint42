@@ -39,9 +39,11 @@ up.
   crossing between them, headers linked the way the compiler does. It builds
   with the project's own Makefile (sub-makes for libft included), or with a
   driver `main` kept in `.blueprint42/` for a library.
-- **Live edits from any editor.** The Neovim plugin streams your unsaved
-  buffers and cursor to the page; double-click a machine and nvim jumps to
-  it. Nothing is ever written to disk without an explicit, confirmed Save.
+- **Any editor.** Open a folder and keep working in VS Code, vim, Emacs or
+  anything else: each time you save, the page picks the change up within a
+  couple of seconds. The optional Neovim plugin goes further: it streams
+  unsaved buffers and the cursor, and double-clicking a machine jumps nvim
+  to it. The page never writes to disk without an explicit, confirmed Save.
 - **Twenty-six skins.** From Classic Mac and Windows XP to the PlayStation
   line (the PS3's XMB with its wave, the PS4's twisting ribbon), each
   drawing the same factory its own way. Some are still works in progress
@@ -77,9 +79,11 @@ recursion, statics), so it also works in the static build (`npm run build`,
 no server). Everything else needs the local server, which compiles and traces
 the program.
 
-### Neovim
+### Neovim (optional)
 
-Add the plugin from `nvim/` (for lazy.nvim:
+You don't need it: any editor works once you save. The plugin adds live,
+unsaved edits and cursor sync. It's used from a local clone; add it from
+`nvim/` (for lazy.nvim:
 `{ dir = '<repo>/nvim', opts = { port = 5173 } }`), start the page with
 `npm run dev`, then `:B42Connect` in nvim. `:B42Open` opens the current
 project in the page.

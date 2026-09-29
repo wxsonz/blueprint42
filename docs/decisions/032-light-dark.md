@@ -1,6 +1,6 @@
 # light and dark modes
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** Skins whose originals had both looks get both:
   Barebone (dark ↔ light), Windows 8 (dark ↔ light), macOS Big Sur and

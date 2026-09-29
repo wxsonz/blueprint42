@@ -1,6 +1,6 @@
 # Real data on belts, struct fields in frames
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision (author):** What rides a belt is the real data, not the
   argument's name:

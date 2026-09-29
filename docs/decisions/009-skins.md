@@ -1,6 +1,6 @@
 # skins instead of one Factorio-style look
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** The whole app is skinnable, like old media-player skins. A
   skin (`proto/src/skins/<id>.ts` + `proto/src/styles/<id>.css`) draws every

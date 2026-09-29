@@ -1,6 +1,6 @@
 # M6 live edits from any editor
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** The web app doesn't care where a change is made;
   it applies it to the view. So the bridge is editor-agnostic: a local

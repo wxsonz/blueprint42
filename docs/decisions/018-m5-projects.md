@@ -1,6 +1,6 @@
 # M5 open a real project
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision (author):** Saving is allowed but never automatic. Every save
   goes through a dialog that lists each file, whether it's new, `+/−`

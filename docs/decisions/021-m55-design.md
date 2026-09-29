@@ -1,6 +1,6 @@
 # M5.5 inside a machine (the author's design)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Superseded by [025-enter-machine](025-enter-machine.md)
 
 - **Decision (author):** The canvas pane is renamed "Blueprint".
 - **Decision (author):** A function's interior opens in place: the machine

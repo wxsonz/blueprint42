@@ -1,6 +1,6 @@
 # SPEC §6 trace granularity (measured)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Answer:** Per-line stepping under gdb is fast enough for sandbox-sized
   inputs. gnl_v3 with `BUFFER_SIZE=4` on a 3-line input is about 600 stops

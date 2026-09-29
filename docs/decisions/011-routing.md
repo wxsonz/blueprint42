@@ -1,6 +1,6 @@
 # routing, and SPEC §6 automatic placement
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:**
   - Initial placement is Sugiyama-style: columns by the longest call path

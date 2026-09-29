@@ -1,6 +1,6 @@
 # recursion spawns copies (amends the SPEC §2 metaphor)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** A recursive call spawns a copy of the function (`fact #2`,
   `fact #3`, …) next to its parent. The argument rides the belt into the new

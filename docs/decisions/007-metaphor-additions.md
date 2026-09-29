@@ -1,6 +1,6 @@
 # metaphor additions (not in SPEC §2)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Stack frame** is an inventory panel under its machine. Parameters are
   copper slots and locals are steel. The frame appears on call and dims to

@@ -1,6 +1,6 @@
 # Fast and Focus playback
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision (author):** Two ways to play, switched in the playbar (or
   `M` on the canvas) and remembered:

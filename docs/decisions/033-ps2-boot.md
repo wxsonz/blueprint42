@@ -1,6 +1,6 @@
 # the PS2 boot screen, animated
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 - **Decision (author: make the PS2 dramatic with the menu's dancing lights,
   light trails, the era's stacked-frame blur; then: sharp trails as in the
   "Sony Computer Entertainment" screen, low-res fog, glass cubes):** The PS2

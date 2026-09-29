@@ -1,6 +1,6 @@
 # the trace server (M3) and the two engines
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:**
   - The tracer (`proto/server/tracer.py`) runs inside gdb's Python API and

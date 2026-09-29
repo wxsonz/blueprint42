@@ -5,12 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Working on blueprint42 (formerly ft_blueprint)
 
 Read `docs/SPEC.md` first. Principles in §1 override convenience.
+`docs/HANDOFF.md` has longer working notes (architecture map, known
+limits); read the part you need.
 
 - M0–M6 are implemented at the repo root (M6: live edits from any editor, nvim
   plugin in `nvim/`). Nothing further is planned; ask the author. M3 came before M2 by the author's decision in `docs/decisions/`.
 - Record every deviation from the recommended stack, and every answer to an
   open question from SPEC §6, as a new numbered file in `docs/decisions/`
-  (`NNN-short-name.md`: title, date, decision, why) with a line in its
+  (`NNN-short-name.md`: title, date, status, decision, why) with a line in its
   `README.md` index.
 - `samples/line_reader/` is the acceptance-test fixture for M1–M5.5 (a
   get_next_line-style reader written for this repo; its tests pin exact

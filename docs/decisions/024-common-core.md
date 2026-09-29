@@ -1,6 +1,6 @@
 # the Common Core this tool targets
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** The reference for "the 42 Common Core" is the
   current curriculum the author downloaded to `~/42cc/42cc-new`

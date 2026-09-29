@@ -1,6 +1,6 @@
 # renamed blueprint42, examples, a fixture of our own
 
-*2026-10-02*
+*2026-09-28* · **Status:** Accepted
 
 - The project is **blueprint42** (the name, the page title, the package, the
   nvim plugin: `:B42Connect`/`:B42Open`/`:B42Disconnect`, with the old

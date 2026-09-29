@@ -1,6 +1,6 @@
 # kill feed, the duel, Barebone
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** Transfers between functions get a kill feed
   (top-right of the Blueprint pane). Each call, return, and write into

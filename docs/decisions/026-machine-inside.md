@@ -1,6 +1,6 @@
 # the machine is its inside (replaces "enter the machine")
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** No separate viewer. Every machine on the grid *is*
   its inside, always: storage on the left, stations on the right, memory

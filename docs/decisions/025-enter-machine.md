@@ -1,6 +1,6 @@
 # Enter the machine (replaces M5.5's in-place interior)
 
-*2026-09-28*
+*2026-09-28* · **Status:** Superseded by [026-machine-inside](026-machine-inside.md)
 
 - **Decision (author):** The inside of a function is a main feature, not a
   side panel. Double-click enters the machine: it becomes a room filling

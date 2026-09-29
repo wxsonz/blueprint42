@@ -1,6 +1,6 @@
 # PS4 takes the PS3's window frame
 
-*2026-10-02*
+*2026-09-28* · **Status:** Accepted
 
 - Files and machines have no pane: a faint outline (brighter when active)
   and the title over a thin white rule; their storage, stations and

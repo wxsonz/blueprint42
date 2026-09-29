@@ -1,6 +1,6 @@
 # visual prototype in `proto/`, ahead of M0
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** Build a throwaway-able prototype in `proto/` that runs tiny
   pointer programs end to end (edit → parse → factory → animated playback),

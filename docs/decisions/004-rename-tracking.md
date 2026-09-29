@@ -1,6 +1,6 @@
 # SPEC §6 rename tracking (prototype answer)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** If exactly one function vanishes and exactly one appears in
   the same re-parse, treat it as a rename: the machine keeps its position and

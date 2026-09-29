@@ -1,6 +1,6 @@
 # M2 author layer and binding limits
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** Place strip, marker, chest, drill, inserter (copy), stack,
   and train sprites by dragging from the dock. The inserter was added in

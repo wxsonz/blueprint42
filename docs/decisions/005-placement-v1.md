@@ -1,8 +1,7 @@
-# SPEC §6 automatic placement (superseded)
+# SPEC §6 automatic placement
 
-*2026-09-27*
+*2026-09-27* · **Status:** Superseded by [011-routing](011-routing.md)
 
-> Superseded by [011-routing](011-routing.md).
 
 - **Decision:** For first placement, use columns by BFS call depth from
   `main` (or from uncalled roots), 7 cells apart. A symbol added

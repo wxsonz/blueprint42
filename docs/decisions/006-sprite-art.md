@@ -1,8 +1,7 @@
-# SPEC §6 sprite art direction (superseded)
+# SPEC §6 sprite art direction
 
-*2026-09-27*
+*2026-09-27* · **Status:** Superseded by [009-skins](009-skins.md)
 
-> Superseded by [009-skins](009-skins.md).
 
 - **Decision:** Procedural vector art on Canvas 2D in a Factorio palette:
   bevelled steel machines with a gear window and status light, yellow-railed

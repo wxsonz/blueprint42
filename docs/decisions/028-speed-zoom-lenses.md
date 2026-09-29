@@ -1,6 +1,6 @@
 # speed, zoom out, lenses
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Finding:** under load, most frame time is the browser painting canvas
   pixels, not JavaScript (measured: 7.5 fps at 4× CPU throttle on a 2×

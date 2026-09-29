@@ -1,6 +1,6 @@
 # Tidy, closed machines, four more themes
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** A button puts the layout back to the auto layout
   (**Tidy**: unpins everything, drops hand-routed belts; Undo in the toast).

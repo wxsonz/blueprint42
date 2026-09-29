@@ -1,6 +1,6 @@
 # the PS3 skin is the blue XMB
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - The PS3 skin drops the month-by-month colour (and `xmbColour`) for the
   classic blue: teal at the top sinking to navy. The author picked the blue

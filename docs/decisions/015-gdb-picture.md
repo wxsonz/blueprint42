@@ -1,6 +1,6 @@
 # what the gdb picture shows (principle 4 details)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - Uninitialised locals show `?`, not stack garbage, until a value changes
   or the executed line assigns them (a regex over the source line). Params

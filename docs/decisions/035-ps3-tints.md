@@ -1,6 +1,6 @@
 # PS3, second pass: XMB lines and focus, theme colours
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - No parallax on the PS3 background: the wave and sparkles stay put while
   the grid pans and zooms (parallax is the PS2's thing).

@@ -1,6 +1,6 @@
 # vim only in the editor; the canvas is mouse-first (amends SPEC principle 2)
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** Vim keybindings are an editor option (the "Vim" toggle, on by
   default, remembered per browser). The canvas works like a normal node

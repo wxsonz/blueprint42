@@ -1,6 +1,6 @@
 # real windows, and XP / 7 / 8 skins
 
-*2026-09-28*
+*2026-09-28* · **Status:** Accepted
 
 - **Decision (author):** Classic's machines and files are real windows:
   a title bar across the whole top with caption buttons, a gray client

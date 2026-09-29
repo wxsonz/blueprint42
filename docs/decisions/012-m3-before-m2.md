@@ -1,6 +1,6 @@
 # M3 before M2
 
-*2026-09-27*
+*2026-09-27* · **Status:** Accepted
 
 - **Decision:** Build real execution (the gdb trace server) before the
   toolbox and bindings. SPEC §4 is amended. M3's acceptance check keeps

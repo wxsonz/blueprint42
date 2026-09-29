@@ -1,6 +1,6 @@
 # M5.5 as built
 
-*2026-09-28*
+*2026-09-28* · **Status:** Superseded in part by [025-enter-machine](025-enter-machine.md) (the interior stopped hanging under the frame)
 
 - **Decision:** The interior hangs under the frame panel, as wide as its
   code needs (at most 12 cells). Auto-placed machines move aside: the
