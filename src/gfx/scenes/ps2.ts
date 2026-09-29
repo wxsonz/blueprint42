@@ -38,18 +38,23 @@ const V_ROT = 10; // 6 × 3 rows of the view-to-cube rotation
 const V_HEAD = 28; // 4: x, y, radius
 const V_COL = 32; // 4: r, g, b
 const V_TINT = 36; // the glass's colour (r, g, b) and how deep it goes
-const VEC4S = 37;
+const V_MILK = 37; // how much of the colour the glass scatters (x)
+const VEC4S = 38;
 
-// A developer tool (`__ftb.glass('#6aa0ff', 1)` in a dev build): the glass
+// A developer tool (`__ftb.glass('#6aa0ff', 1, 0)` in a dev build): the glass
 // as a coloured filter. The colour is what light keeps per half-side of glass
 // it crosses, so thicker glass is deeper, and it only shows where there is
-// light behind it (fog, trails). Strength 0 is clear glass, the default.
-export const glassTint = { rgb: [1, 1, 1], strength: 0 };
-export function setGlassTint(colour: string | number[], strength = 1): void {
+// light behind it (fog, trails); white does nothing to a filter. `milk` is
+// the other kind: the glass scatters light of that colour itself (milky or
+// frosted glass), more the thicker it is, so it shows over black and white
+// works. Both 0 is clear glass, the default.
+export const glassTint = { rgb: [1, 1, 1], strength: 0, milk: 0 };
+export function setGlassTint(colour: string | number[], strength = 1, milk = 0): void {
   const hex = typeof colour === 'string' ? /^#?([0-9a-f]{6})$/i.exec(colour)?.[1] : undefined;
   if (typeof colour === 'string' && !hex) throw new Error('a colour like "#6aa0ff", or [r, g, b] from 0 to 1');
   glassTint.rgb = hex ? [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) : colour as number[];
   glassTint.strength = strength;
+  glassTint.milk = milk;
 }
 
 // how far the grid has moved on screen, added up frame by frame (as the
@@ -130,6 +135,7 @@ function frame(u: Float32Array, v: GfxView): Float32Array {
     set(V_COL + i, r, g, b);
   });
   set(V_TINT, glassTint.rgb[0], glassTint.rgb[1], glassTint.rgb[2], glassTint.strength);
+  set(V_MILK, glassTint.milk);
   return verts;
 }
 
@@ -276,7 +282,8 @@ fn scene(p: vec2f) -> vec4f {
   // on it: what the face reflects (the other cubes, the wall at a slant), faint
   // face-on, stronger edge-on (Fresnel)
   let F = 0.04 + 0.4 * pow(1.0 - clamp(h.nIn.z, 0.0, 1.0), 4.0);
-  let col = mix(through, seen(x0, reflect(v, h.nIn), i), F);
+  var col = mix(through, seen(x0, reflect(v, h.nIn), i), F);
+  col = mix(col, tint.rgb, U.v[${V_MILK}].x * (1.0 - exp(-(h.tf - h.tn) / hs)));
   // soft silhouette: coverage from how much glass the ray crossed
   return vec4f(mix(wall, col, clamp((h.tf - h.tn) / 1.5, 0.0, 1.0)), 1.0);
 }
@@ -401,6 +408,7 @@ vec4 scene(vec2 p) {
   vec3 through = seen(x0 + dir * ((h.tf - h.tn) / max(-dir.z, 0.2)), vd, i) * pow(max(tint.rgb, vec3(0.001)), vec3(tint.w * (h.tf - h.tn) / hs));
   float F = 0.04 + 0.4 * pow(1.0 - clamp(h.nIn.z, 0.0, 1.0), 4.0);
   vec3 col = mix(through, seen(x0, reflect(vd, h.nIn), i), F);
+  col = mix(col, tint.rgb, v[${V_MILK}].x * (1.0 - exp(-(h.tf - h.tn) / hs)));
   return vec4(mix(wall, col, clamp((h.tf - h.tn) / 1.5, 0.0, 1.0)), 1.0);
 }
 `;

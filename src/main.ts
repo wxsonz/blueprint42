@@ -9,7 +9,6 @@ import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
 import { convertGdb, type GResult } from './gdb';
 import { initGfxButton } from './gfx/ui';
-import { initGlassPanel } from './gfx/dev';
 import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
@@ -1400,7 +1399,6 @@ async function boot(): Promise<void> {
   renderTestsMenu();
   renderSkinPicker();
   initGfxButton(view, () => S.skin);
-  if (import.meta.env.DEV) initGlassPanel(() => S.skin);
   showSpeed();
   $('file-name').textContent = S.sample.file;
   await applySkin(S.skin);
