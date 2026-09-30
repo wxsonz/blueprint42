@@ -66,6 +66,13 @@ export function drawHeapCard(dc: Dc, r: Rect, c: HeapCardInfo, p: HeapBarPalette
   const e = c.t * c.t * (3 - 2 * c.t);
   if (c.state === 'new') (g.globalAlpha *= e), g.translate(0, -(1 - e) * 18);
   if (c.state === 'freeing') (g.globalAlpha *= 1 - e), g.translate(0, e * 18);
+  if (c.state === 'leak' && c.t < 1) {
+    // it falls: a drop that bounces once, tipped, and settles
+    const drop = Math.sin(c.t * Math.PI) * 14 * (1 - c.t * 0.5);
+    g.translate(r.x + r.w / 2, r.y + drop);
+    g.rotate(Math.sin(c.t * Math.PI) * 0.05);
+    g.translate(-(r.x + r.w / 2), -r.y);
+  }
   const col = c.state === 'leak' || c.state === 'lost' ? p.err : c.state === 'new' || c.recent ? p.flow : p.edge;
   rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, p.radius);
   g.fillStyle = p.card;

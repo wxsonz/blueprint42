@@ -91,8 +91,11 @@ Next, in this order:
     the grid's Legend button (Esc closes); each tile drawn by the active
     skin's own hooks with example values (`src/legend.ts`), so it is 1:1
     with the canvas in every skin.
-14. [ ] **Real events as effects** (S each). A leak falls off the shelf at
-    exit, `free` takes the block away, a segfault jams the machine.
+14. [x] **Real events as effects** (S each). A leak falls off the shelf at
+    exit, `free` takes the block away, a segfault jams the machine: at the
+    run's end a leaked card drops, bounces once and settles red (heap bar);
+    `free` takes its card down and away; the machine that crashed shakes
+    hard and stops (every skin).
 
 Rough edges: the kill feed covers the stations of machines under it; the
 IN dock is mostly empty with one argument or none.

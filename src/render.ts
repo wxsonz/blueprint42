@@ -434,7 +434,7 @@ export class GridView {
 
   // The camera has arrived where it was going.
   settled(): boolean {
-    return Math.abs(this.cam.x - this.target.x) < 0.01 && Math.abs(this.cam.y - this.target.y) < 0.01 && Math.abs(this.cam.zoom - this.target.zoom) < 0.001;
+    return !this.ending && Math.abs(this.cam.x - this.target.x) < 0.01 && Math.abs(this.cam.y - this.target.y) < 0.01 && Math.abs(this.cam.zoom - this.target.zoom) < 0.001;
   }
 
   // Whether a world rect shows at all (with a margin for labels and glows).
@@ -444,6 +444,8 @@ export class GridView {
   }
 
   private skinNow: Skin | null = null; // the skin last drawn (fit includes what it draws)
+  private endedAt: number | null = null; // when playback reached the run's end (ms)
+  ending = false; // an end effect is playing: keep drawing
   draw(s: ViewState, skin: Skin, now: number): void {
     this.skinNow = skin;
     const dt = Math.min(0.1, (now - this.last) / 1000);
@@ -471,6 +473,11 @@ export class GridView {
     const t = fr?.t ?? 0;
     const ph = fr?.ph ?? null;
     const finished = !!trace && s.pos >= trace.evs.length;
+    // the run's end as an event: a leak falls off, a crash jams its machine
+    if (!finished) this.endedAt = null;
+    else if (this.endedAt === null) this.endedAt = now;
+    const sinceEnd = this.endedAt === null ? Infinity : (now - this.endedAt) / 1000;
+    this.ending = sinceEnd < 0.9;
     const selKey = entKey(s.selected);
     const hovKey = entKey(s.hovered);
     const scene = sceneAt(s);
@@ -822,6 +829,11 @@ export class GridView {
       const hovered = hovKey === `n:${node.id}` && ((s.hovered as { copy?: number }).copy ?? 1) === h.copy;
       g.save();
       if (fading?.host === h.key) g.globalAlpha = fading.alpha;
+      // a segfault jams the machine it happened in: a hard shake that dies down
+      if (h.key === errHost && sinceEnd < 0.7) {
+        const k = 1 - sinceEnd / 0.7;
+        g.translate(Math.sin(sinceEnd * 70) * 5 * k * z, Math.cos(sinceEnd * 55) * 2 * k * z);
+      }
       this.drawMachine(skin, dc, s, h, fn, node.stale, node.place.pinned, frame, returned, stateOf(h), selected, hovered, now_, frames.length, anchors, live, scene.ports.get(h.key) ?? { in: [], out: [] }, !!scenePair && !scenePair.has(h.key));
       g.restore();
     }
@@ -1158,7 +1170,8 @@ export class GridView {
     // lost before exit: nothing points at it since some event at or before now
     const happened = (i: number) => finished || (!!fr && (i < fr.i || (i === fr.i && fr.t >= switchAt(trace.evs[i]))));
     const lost = new Map(lostBlocks(trace).filter((l) => happened(l.at)).map((l) => [l.cell, l]));
-    for (const b of blocks.values()) if (leaked.has(b.c.id)) b.state = 'leak';
+    // a leak falls off at exit, then stays where it was, in red
+    for (const b of blocks.values()) if (leaked.has(b.c.id)) (b.state = 'leak'), (b.t = Math.min(1, this.endedAt === null ? 1 : (performance.now() - this.endedAt) / 800));
     for (const b of blocks.values()) if (b.state === 'live' && lost.has(b.c.id)) b.state = 'lost';
     // watched structs: where each lives right now (the running copy's frame
     // when it recurses), or that its frame is gone
