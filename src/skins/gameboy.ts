@@ -10,13 +10,21 @@ const C1 = '#306230';
 const C2 = '#8bac0f';
 const C3 = '#9bbc0f';
 
-// a 50% checker, for shadows
-function dither(dc: Dc, r: Rect, color: string): void {
+// a 50% checker, for shadows. `cover`: an opaque box drawn over it next,
+// whose inside is skipped (the squares a card hides were thousands a frame);
+// squares within a pixel of its edge are kept, for its antialiased border.
+function dither(dc: Dc, r: Rect, color: string, cover?: Rect): void {
   const g = dc.g;
   const s = Math.max(1, Math.round(2 * Math.min(1.5, dc.z)));
   g.fillStyle = color;
-  for (let y = Math.round(r.y); y < r.y + r.h; y += s) {
-    for (let x = Math.round(r.x) + (((y - Math.round(r.y)) / s) % 2 ? s : 0); x < r.x + r.w; x += s * 2) g.fillRect(x, y, s, s);
+  const x0 = Math.round(r.x);
+  const y0 = Math.round(r.y);
+  for (let y = y0; y < r.y + r.h; y += s) {
+    const row = !!cover && y >= cover.y + 1 && y + s <= cover.y + cover.h - 1;
+    for (let x = x0 + (((y - y0) / s) % 2 ? s : 0); x < r.x + r.w; x += s * 2) {
+      if (row && x >= cover!.x + 1 && x + s <= cover!.x + cover!.w - 1) continue; // under the box
+      g.fillRect(x, y, s, s);
+    }
   }
 }
 
@@ -49,8 +57,9 @@ export const gameboyTheme: Theme = {
       for (let y = r.y; y < r.y + r.h; y += b * 3) (g.fillRect(r.x, y, b, b), g.fillRect(r.x + r.w - b, y, b, b));
       return;
     }
-    if (o.kind !== 'plate' && r.h > 8) dither(dc, { x: r.x + b * 2, y: r.y + b * 2, w: r.w, h: r.h }, C1);
-    g.fillStyle = o.fill === 'transparent' ? C3 : o.glow ? C2 : o.fill;
+    const fill = o.fill === 'transparent' ? C3 : o.glow ? C2 : o.fill;
+    if (o.kind !== 'plate' && r.h > 8) dither(dc, { x: r.x + b * 2, y: r.y + b * 2, w: r.w, h: r.h }, C1, /^#[0-9a-f]{6}$/i.test(fill) ? r : undefined);
+    g.fillStyle = fill;
     g.fillRect(r.x, r.y, r.w, r.h);
     g.fillStyle = o.stroke;
     g.fillRect(r.x, r.y, r.w, b);

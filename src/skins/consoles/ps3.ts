@@ -153,6 +153,38 @@ function ps3Xmb(dc: Dc, tint: Rgb): void {
 // the colours of the glossy things (data tiles, icons) follow the theme
 // colour (set with the sky, in ps3Fills)
 const ps3Jel = { hi: [170, 232, 250], lo: [55, 135, 195], shade: [0, 24, 70], icon: ['#d2f1fb', '#63b4d8'] };
+// Gradients made once and kept: a unit gradient (0 to 1, down or across),
+// filled through a transform that maps 0..1 onto the span it covers. A path
+// is fixed as it's built, so only the gradient moves: the same pixels as a
+// fresh gradient every frame, which Firefox pays for (a new gradient each
+// time was most of PS3's cost there).
+const ps3Grads = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasGradient>>();
+// With `rect`, a fillRect (as the drawing had: a rect and a path antialias
+// differently), else the current path.
+function ps3Fill(g: CanvasRenderingContext2D, down: boolean, from: number, to: number, stops: [number, string][], rect?: Rect): void {
+  if (!(to > from)) return; // (a gradient of no length paints nothing)
+  let m = ps3Grads.get(g);
+  if (!m) ps3Grads.set(g, (m = new Map()));
+  const key = `${down ? 'v' : 'h'}|${stops.join('|')}`;
+  let grad = m.get(key);
+  if (!grad) {
+    grad = down ? g.createLinearGradient(0, 0, 0, 1) : g.createLinearGradient(0, 0, 1, 0);
+    for (const [at, c] of stops) grad.addColorStop(at, c);
+    if (m.size > 256) m.clear();
+    m.set(key, grad);
+  }
+  g.save();
+  // (scaled the same both ways: a gradient only reads the one axis, and a
+  // stretched transform is evaluated less precisely)
+  const k = to - from;
+  if (down) g.transform(k, 0, 0, k, 0, from);
+  else g.transform(k, 0, 0, k, from, 0);
+  g.fillStyle = grad;
+  if (!rect) g.fill();
+  else if (down) g.fillRect(rect.x / k, (rect.y - from) / k, rect.w / k, rect.h / k);
+  else g.fillRect((rect.x - from) / k, rect.y / k, rect.w / k, rect.h / k);
+  g.restore();
+}
 // The XMB's item tile (as behind a package's icon): dark glass in the theme
 // colour, corners well rounded but not a pill, a thin light rim, a gloss
 // over the top half that ends in a soft curve, and light pooling at the bottom.
@@ -166,19 +198,11 @@ function ps3Tile(g: CanvasRenderingContext2D, x: number, y: number, w: number, h
   g.shadowColor = c(ps3Jel.shade, 0.5);
   g.shadowBlur = Math.min(6, h * 0.3);
   g.shadowOffsetY = 1;
-  const body = g.createLinearGradient(0, y, 0, y + h);
-  body.addColorStop(0, c(dark, 0.82));
-  body.addColorStop(1, c(mid, 0.88));
-  g.fillStyle = body;
-  g.fill();
+  ps3Fill(g, true, y, y + h, [[0, c(dark, 0.82)], [1, c(mid, 0.88)]]);
   g.shadowColor = 'transparent';
   g.clip();
   // light pooling along the bottom
-  const pool = g.createLinearGradient(0, y + h * 0.55, 0, y + h);
-  pool.addColorStop(0, 'rgba(255,255,255,0)');
-  pool.addColorStop(1, 'rgba(255,255,255,0.16)');
-  g.fillStyle = pool;
-  g.fillRect(x, y + h * 0.55, w, h * 0.45);
+  ps3Fill(g, true, y + h * 0.55, y + h, [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.16)']], { x, y: y + h * 0.55, w, h: h * 0.45 });
   // the gloss: the top half, its lower edge a shallow curve
   const gy = y + h * 0.5;
   g.beginPath();
@@ -187,11 +211,7 @@ function ps3Tile(g: CanvasRenderingContext2D, x: number, y: number, w: number, h
   g.lineTo(x + w, gy - h * 0.12);
   g.quadraticCurveTo(x + w / 2, gy + h * 0.08, x, gy - h * 0.12);
   g.closePath();
-  const gl = g.createLinearGradient(0, y, 0, gy);
-  gl.addColorStop(0, 'rgba(255,255,255,0.32)');
-  gl.addColorStop(1, 'rgba(255,255,255,0.05)');
-  g.fillStyle = gl;
-  g.fill();
+  ps3Fill(g, true, y, gy, [[0, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0.05)']]);
   g.restore();
   // the rim: a thin light edge, brighter when lit
   g.save();
@@ -369,11 +389,7 @@ const ps3Look: Look = {
         rrect(g, x, top, fw, h, h / 2);
         g.fillStyle = c.used > c.max ? ps3P.err : c.used === c.max ? ps3P.wait : 'rgba(255,255,255,0.85)';
         g.fill();
-        const gl = g.createLinearGradient(0, top, 0, top + h / 2);
-        gl.addColorStop(0, 'rgba(255,255,255,0.6)');
-        gl.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = gl;
-        g.fillRect(x, top, fw, h / 2);
+        ps3Fill(g, true, top, top + h / 2, [[0, 'rgba(255,255,255,0.6)'], [1, 'rgba(255,255,255,0)']], { x, y: top, w: fw, h: h / 2 });
       }
       g.restore();
     },
@@ -566,28 +582,15 @@ export const ps3Theme: Theme = {
       g.clip();
       const bar = (x0: number, x1: number, a: number) => {
         if (x1 - x0 < 1) return;
-        const body = g.createLinearGradient(0, y, 0, y + h);
-        body.addColorStop(0, `rgba(255,255,255,${a})`);
-        body.addColorStop(1, `rgba(150,215,245,${a})`);
-        g.fillStyle = body;
         rrect(g, x0, y, x1 - x0, h, h / 2);
-        g.fill();
+        ps3Fill(g, true, y, y + h, [[0, `rgba(255,255,255,${a})`], [1, `rgba(150,215,245,${a})`]]);
       };
       if (anim) {
         const seg = r.w * 0.3;
         const x = r.x - seg + ((dc.time * 0.45) % 1) * (r.w + seg);
-        const grad = g.createLinearGradient(x, 0, x + seg, 0);
-        grad.addColorStop(0, 'rgba(200,235,255,0)');
-        grad.addColorStop(0.7, 'rgba(230,246,255,0.85)');
-        grad.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = grad;
-        g.fillRect(x, y, seg, h);
+        ps3Fill(g, false, x, x + seg, [[0, 'rgba(200,235,255,0)'], [0.7, 'rgba(230,246,255,0.85)'], [1, 'rgba(255,255,255,0)']], { x, y, w: seg, h });
       } else bar(r.x, r.x + r.w * fill, 0.9);
-      const gl = g.createLinearGradient(0, y, 0, y + h / 2);
-      gl.addColorStop(0, 'rgba(255,255,255,0.35)');
-      gl.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = gl;
-      g.fillRect(r.x, y, r.w, h / 2);
+      ps3Fill(g, true, y, y + h / 2, [[0, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']], { x: r.x, y, w: r.w, h: h / 2 });
       g.restore();
     },
   },
@@ -663,19 +666,14 @@ function ps3Edge(dc: Dc, r: Rect, active: boolean): void {
 // a white rule that fades out at both ends; lit, a faint band around it
 // (no shadow blur: too costly)
 function ps3Rule(g: CanvasRenderingContext2D, x: number, y: number, w: number, a: number, glow: boolean): void {
-  const grad = g.createLinearGradient(x, 0, x + w, 0);
-  grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.06, `rgba(255,255,255,${a})`);
-  grad.addColorStop(0.7, `rgba(255,255,255,${a * 0.8})`);
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  const stops: [number, string][] = [[0, 'rgba(255,255,255,0)'], [0.06, `rgba(255,255,255,${a})`], [0.7, `rgba(255,255,255,${a * 0.8})`], [1, 'rgba(255,255,255,0)']];
   g.save();
-  g.fillStyle = grad;
   if (glow) {
     g.globalAlpha = 0.15;
-    g.fillRect(x, y - 1.5, w, 4);
+    ps3Fill(g, false, x, x + w, stops, { x, y: y - 1.5, w, h: 4 });
     g.globalAlpha = 1;
   }
-  g.fillRect(x, y, w, 1);
+  ps3Fill(g, false, x, x + w, stops, { x, y, w, h: 1 });
   g.restore();
 }
 
