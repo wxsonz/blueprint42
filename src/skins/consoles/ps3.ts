@@ -666,6 +666,9 @@ export const ps3 = makeSkin(ps3Theme);
   const flat = ps3.icon;
   ps3.icon = (g, kind, s) => jellyIcon(g, s, (h) => flat(h, kind, s));
   ps3.fullBleed = true;
+  // focus mode's veil: the sky's own dark end, so dimming keeps the theme
+  // colour (a fixed navy turned every other colour purple)
+  Object.defineProperty(ps3, 'spotlight', { configurable: true, enumerable: true, get: () => css(toward(ps3Now().sky.bot, 0, 0.45), 0.55) });
   ps3.tints = PS3_TINTS;
   ps3.tint = (id, instant) => {
     const to = skyOf(id);
