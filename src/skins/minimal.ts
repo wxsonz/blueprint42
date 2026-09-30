@@ -4,6 +4,7 @@ import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, draw
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawStdBuf, drawStdin } from './stdbuf';
+import { drawHeapBar, drawHeapCard, type HeapBarPalette } from './heapbar';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
@@ -34,6 +35,7 @@ function minimalOf(dark: boolean): Skin {
   const CARD = C.card;
   const LINE = C.line;
   const dockPalette: DockPalette = { body: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, run: ACCENT, wait: WAIT, err: ERR, param: C.param, ptr: PTR, tagFill: C.plate, ui: UI, mono: MONO, radius: 6, glow: true };
+  const heapPalette: HeapBarPalette = { bar: C.proc, card: CARD, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, ptr: PTR, err: ERR, cell: C.cell, ui: UI, mono: MONO, radius: 6 };
   const spritePalette: SpritePalette = { body: CARD, edge: LINE, track: C.track, cell: C.cell, text: FG, muted: DIM, accent: ACCENT, marker: RET, selection: ACCENT, font: (s) => MONO(s), radius: 5, full: WAIT, over: ERR };
 
 function card(g: CanvasRenderingContext2D, r: Rect, rad: number, fill: string, stroke: string, lw = 1): void {
@@ -230,6 +232,8 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
 
   dock(dc, r, d) { drawDock(dc, r, d, dockPalette); },
   stdbuf(dc, r, b) { drawStdBuf(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
+  heapBar(dc, r, b) { drawHeapBar(dc, r, b, heapPalette); },
+  heapCard(dc, r, c) { drawHeapCard(dc, r, c, heapPalette); },
   stdin(dc, r, b) { drawStdin(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
 
   node(dc, r, n) {

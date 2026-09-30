@@ -586,7 +586,7 @@ kbd {
 
 /* ---------- the duel: who sends what to whom, spelled out ---------- */
 #duel[hidden] { display: none; }
-#duel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 10px 14px;
+#duel { position: absolute; left: 50%; bottom: max(74px, calc(var(--heapbar-h, 0px) + 22px)); /* above the heap bar */ transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 10px 14px;
   width: min(94%, 980px); padding: 0 12px 12px; overflow: hidden; pointer-events: none; transition: opacity 0.25s;
   /* the skin's own panel (::before), laid over its floor colour so a translucent panel still hides the canvas */
   background: var(--bg, #000); color: var(--panel-fg);

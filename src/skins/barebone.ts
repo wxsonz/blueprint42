@@ -7,6 +7,7 @@ import { countBadge, makeSkin, type Theme } from './kit';
 import { arrowHead, strokeLine, Walk } from './util';
 import { drawDock } from './dock';
 import { drawStdBuf, drawStdin } from './stdbuf';
+import { drawHeapBar, drawHeapCard, type HeapBarPalette } from './heapbar';
 import type { Skin } from './types';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
@@ -70,6 +71,7 @@ function barebone(dark: boolean): Theme {
 // the IN dock: a shade, no border; the intake strip is the only colour
 function withDock(t: Theme): Skin {
   const q = t.p;
+  const heap: HeapBarPalette = { bar: q.panel, card: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, flow: q.accent, ptr: q.ptr, err: q.err, cell: q.cell, ui: t.ui, mono: t.mono, radius: 0 };
   return {
     ...makeSkin(t),
     dock(dc, r, d) {
@@ -77,6 +79,12 @@ function withDock(t: Theme): Skin {
     },
     stdbuf(dc, r, b) {
       drawStdBuf(dc, r, b, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, flow: q.accent, wait: q.wait, err: q.err, track: q.cell, ui: t.ui, mono: t.mono, radius: 0 });
+    },
+    heapBar(dc, r, b) {
+      drawHeapBar(dc, r, b, heap);
+    },
+    heapCard(dc, r, c) {
+      drawHeapCard(dc, r, c, heap);
     },
     stdin(dc, r, b) {
       drawStdin(dc, r, b, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, flow: q.accent, wait: q.wait, err: q.err, track: q.cell, ui: t.ui, mono: t.mono, radius: 0 });

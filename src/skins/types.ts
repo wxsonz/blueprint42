@@ -235,6 +235,33 @@ export interface StdinInfo {
   taken: string | null; // what this step took, or null
 }
 
+// The heap bar (docs/VISUALS.md, "The heap bar"): fixed to the screen, bottom
+// left, one card per live malloc block. The heap belongs to no function and
+// outlives every call, so it stays with you wherever you look.
+export interface HeapBarInfo {
+  count: number; // live blocks
+  bytes: number; // their total size
+  more: number; // blocks with no card (no room)
+  folded: boolean; // down to its header line
+  leaks: number; // blocks still there at exit
+  empty: 'none' | 'yet' | 'now'; // with no blocks: the run never mallocs, hasn't yet, or freed them all
+}
+export interface HeapCardInfo {
+  name: string; // #1
+  size: number;
+  site: string; // where it was malloc'd: "lr_grow:42"
+  preview: string; // its first bytes as text, or hex
+  bytes: number[];
+  fields?: { name: string; value: string }[]; // a struct's fields, as read through a typed pointer to it
+  refs: { name: string; top: boolean }[]; // the pointers holding its address (top: in the running frame)
+  state: 'live' | 'new' | 'freeing' | 'leak';
+  recent: boolean; // written this step
+  t: number; // how far a drop-in (new) or take-out (freeing) has gone, 0..1
+  // a struct being watched, not a heap block: where it really lives, or that
+  // its frame is gone (it stays in its frame; the card only shows it)
+  watch?: { where: string; gone: boolean };
+}
+
 export interface Skin {
   id: string;
   name: string;
@@ -258,6 +285,11 @@ export interface Skin {
   stdbuf?(dc: Dc, r: Rect, b: StdBufInfo): void;
   // optional: stdin under the process box (Minimal and Barebone prototype it)
   stdin?(dc: Dc, r: Rect, b: StdinInfo): void;
+  // optional, both or neither: the heap bar in screen space, and its cards;
+  // skins without them keep the heap shelf under the process box (Minimal and
+  // Barebone prototype it)
+  heapBar?(dc: Dc, r: Rect, b: HeapBarInfo): void;
+  heapCard?(dc: Dc, r: Rect, c: HeapCardInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
   strip(dc: Dc, r: Rect, info: StripInfo): void;

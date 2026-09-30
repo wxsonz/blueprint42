@@ -107,6 +107,33 @@ from its right side ("hell" → program). Once all of it is taken, it says so:
 a read now returns 0. Truth: fd 0's real offset after each step, read from
 `/proc/<pid>/fdinfo/0`, so nothing runs in the program to find out.
 
+#### The heap bar (built; drawn in Minimal and Barebone, others keep the shelf)
+
+The heap belongs to no function and outlives every call, so it's drawn as a
+bar fixed to the screen, bottom left, with you wherever you look. It replaces
+the heap shelf under the process box (one thing, one picture).
+
+- One **card per live block**: its name and size, where it was malloc'd
+  (`malloc push:13`), its first bytes (hex when not printable), or its fields
+  when a typed pointer holds its start (`value 7 · next →#2`, as gdb read
+  them through that pointer), and **who holds its address** (`← list (main),
+  head (push)`; the running frame's at full strength). A block no stack or
+  static pointer holds says so. Pointers inside other heap blocks aren't
+  read yet, so a list's middle nodes can say that too.
+- `malloc` drops a card in from above; `free` takes it out, down and away.
+  Blocks still there at exit stay, in red, `LEAK`, and the header counts them.
+- Pointer lines run from rows down to the bar's edge above their card: full
+  from the running frame, quieter otherwise. A row that's off screen gets a
+  stub down into its card.
+- When more blocks exist than fit, the header counts the rest (`3 without a
+  card`). What's happening now, then what the running frame holds, get cards
+  first.
+- Its header folds it down to a line; lines then end on the header.
+- A struct can be **watched** there (right-click its row): "watching
+  `main.a` (on main's stack)", its fields as they are, and "gone: its frame
+  returned" once it has. It's never moved: a local lives in its frame, and its
+  pointer lines still go to its row there.
+
 ### 2. Module (a `.c` file)
 
 | Construct | Norm | Picture | Moves when | Status | Edit later |

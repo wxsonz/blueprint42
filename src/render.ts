@@ -2,20 +2,21 @@
 // playback.ts, hit-testing and rects in hit.ts, routing in route.ts; every
 // pixel is delegated to the active skin (skins/*.ts).
 import { cLiteral } from './skins/stdbuf';
+import { HEAP_CARD } from './skins/heapbar';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
 import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
-import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
+import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
 import { fileCap, fnCaps } from './norm';
 import { gfxMode } from './gfx/gfx';
 import { GfxLayer, type GfxView } from './gfx/layer';
 import { sceneFor } from './gfx/scenes';
-import type { CrateInfo, Dc, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
+import type { CrateInfo, Dc, HeapBarInfo, HeapCardInfo, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
 
 export { procPlace, type Belt };
 export { clip, pointeeName } from './values';
@@ -103,6 +104,7 @@ interface Anchor {
   y: number;
   left: number;
   right: number;
+  top?: number; // enter from above at this x (a heap bar card), not from the left
 }
 
 class PathWalk {
@@ -681,8 +683,11 @@ export class GridView {
     for (const f of st) for (const c of f.cells) live.add(c.id);
     for (const c of snap?.statics ?? []) live.add(c.id);
 
+    // ---- heap bar (gdb engine; skins that draw it): laid out now so pointer
+    // lines know where its cards are, drawn over everything further down ----
+    const drawHeapBar = trace?.heapSlots && skin.heapBar && skin.heapCard ? this.heapBarLayout(skin, dc, trace, fr, snap, ev, t, finished, anchors, live, recent, st) : this.noHeapBar();
     // ---- heap shelf (gdb engine): live blocks, the one being freed, leaks ----
-    if (trace?.heapSlots && pp) {
+    if (trace?.heapSlots && pp && !drawHeapBar) {
       const shown = new Map<number, SnapCell>();
       for (const c of snap?.heap ?? []) shown.set(c.id, c);
       let freeing: number | null = null;
@@ -794,7 +799,14 @@ export class GridView {
       if (focus) g.globalAlpha = 0.55;
       if (owner?.id !== topId && !focused && !travelling) g.globalAlpha *= 0.4;
       if (!live.has(c.val.to)) skin.dangling(dc, [a.right, a.y]); // the skin draws it pointing right
-      else if (!b) {
+      else if (b?.top !== undefined && (a.y < 0 || a.y > this.h || a.left < 0 || a.left > this.w)) {
+        // a heap card whose pointer's row is off screen: a stub down into it
+        // (the card names who holds it)
+        const L = this.cs * 0.9;
+        const pts: Pt[] = [];
+        for (let i = 0; i <= 8; i++) pts.push([b.top, b.y - L + (L * i) / 8]);
+        skin.wire(dc, pts, true);
+      } else if (!b) {
         // points at something not drawn here (heap, a collapsed module, off
         // screen): a short stub with its arrow, so it still reads as a pointer
         const L = this.cs * 0.9;
@@ -953,6 +965,8 @@ export class GridView {
     }
     g.restore();
 
+    drawHeapBar?.();
+
     // ---- selected belt handle ----
     const sel = s.selected;
     if (sel?.k === 'belt') {
@@ -1025,6 +1039,148 @@ export class GridView {
   // bottom. The statement running now animates: what it reads flies in, it
   // shows its values, what it changes flies out. Zoomed out, only the shell,
   // its motor and the line it's on.
+  // The heap bar: fixed to the screen, bottom left. Its header folds it
+  // down to a line (heapBarAt / toggleHeapBar, for the page's clicks).
+  heapFolded = (() => { try { return localStorage.getItem('ftb.heapbar') === 'folded'; } catch { return false; } })();
+  private heapRect: Rect | null = null;
+  private heapHead: Rect | null = null;
+  // structs watched on the bar ("fnKey|var"): shown there, never moved there
+  watches = new Set<string>();
+  heapBarAt(x: number, y: number): 'head' | 'body' | null {
+    const inR = (r: Rect | null) => !!r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    return inR(this.heapHead) ? 'head' : inR(this.heapRect) ? 'body' : null;
+  }
+  toggleHeapBar(): void {
+    this.heapFolded = !this.heapFolded;
+    try { localStorage.setItem('ftb.heapbar', this.heapFolded ? 'folded' : 'open'); } catch { /* private window */ }
+  }
+
+  // the page lifts what sits at the grid's bottom (the duel) above the bar
+  private barH = -1;
+  private setBarH(h: number): void {
+    if (h === this.barH) return;
+    this.barH = h;
+    this.canvas.parentElement?.style.setProperty('--heapbar-h', `${h}px`);
+  }
+
+  private noHeapBar(): null {
+    this.heapRect = this.heapHead = null;
+    this.setBarH(0);
+    return null;
+  }
+
+  private heapBarLayout(
+    skin: Skin, dc: Dc, trace: Trace, fr: ReturnType<typeof frameAt> | null, snap: Snap | null, ev: Ev | null, t: number,
+    finished: boolean, anchors: Map<number, Anchor>, live: Set<number>, recent: number | null, st: SnapFrame[],
+  ): (() => void) | null {
+    this.heapRect = this.heapHead = null;
+    this.setBarH(0);
+    const allocs = callsOf(trace).allocs;
+    const blocks = new Map<number, { c: SnapCell; state: HeapCardInfo['state']; t: number }>();
+    for (const c of snap?.heap ?? []) blocks.set(c.id, { c, state: 'live', t: 1 });
+    if (ev?.k === 'alloc' && blocks.has(ev.cell) && t >= switchAt(ev)) blocks.get(ev.cell)!.state = 'new', blocks.get(ev.cell)!.t = Math.min(1, (t - switchAt(ev)) / (1 - switchAt(ev)) * 1.6);
+    if (ev?.k === 'free' && t < switchAt(ev)) {
+      const c = trace.snaps[fr!.i].heap.find((x) => x.id === ev.cell);
+      if (c) blocks.set(c.id, { c, state: 'freeing', t: t / switchAt(ev) });
+    }
+    const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
+    for (const b of blocks.values()) if (leaked.has(b.c.id)) b.state = 'leak';
+    // watched structs: where each lives right now (the running copy's frame
+    // when it recurses), or that its frame is gone
+    const watched = [...this.watches].map((key) => {
+      const [fn, name] = key.split('|');
+      const f = [...st].reverse().find((x) => x.fn === fn);
+      const c = f?.cells.find((x) => x.name === name);
+      const ever = callsOf(trace).calls.size > 0 && trace.evs.some((e) => e.k === 'call' && e.fn === fn);
+      const where = c ? `watching ${fn}.${name} (on ${fn}'s stack)` : ever ? `watching ${fn}.${name}` : `watching ${fn}.${name} (${fn} not called yet)`;
+      return { key, fn, name, c: c ?? null, where, gone: !c && ever };
+    });
+    if (!blocks.size && !allocs.size && !watched.length && !(trace.window && trace.window.from > 0)) return null; // a run with no malloc: no bar
+    // who holds each block's address: pointers in frames and statics (and the
+    // fields they show), named by where they live
+    const topId = st[st.length - 1]?.id ?? null;
+    const refs = new Map<number, { name: string; top: boolean }[]>();
+    const add = (to: number, name: string, top: boolean) => (refs.get(to) ?? refs.set(to, []).get(to)!).push({ name, top });
+    const watchIds = new Set(watched.flatMap((w) => (w.c ? [w.c.id] : [])));
+    for (const f of st) for (const c of f.cells) {
+      if (c.val.k === 'ptr' && c.val.to !== null && (blocks.has(c.val.to) || watchIds.has(c.val.to))) add(c.val.to, `${c.name} (${f.fn})`, f.id === topId);
+      for (const fl of c.fields ?? []) if (fl.val.k === 'ptr' && fl.val.to !== null && blocks.has(fl.val.to)) add(fl.val.to, `${c.name}${c.val.k === 'ptr' ? '->' : '.'}${fl.name} (${f.fn})`, f.id === topId);
+    }
+    for (const c of snap?.statics ?? []) if (c.val.k === 'ptr' && c.val.to !== null && blocks.has(c.val.to)) add(c.val.to, `${c.name} (static)`, false);
+    // a block a typed pointer holds (at its start) shows the fields gdb read
+    // through that pointer: the struct as it is in the block
+    const fieldsOf = new Map<number, { name: string; value: string }[]>();
+    for (const f of st) for (const c of f.cells) {
+      if (c.val.k !== 'ptr' || c.val.to === null || c.val.label || !c.fields?.length || !blocks.has(c.val.to) || fieldsOf.has(c.val.to)) continue;
+      fieldsOf.set(c.val.to, c.fields.map((fl) => ({ name: fl.name, value: fl.str ?? (fl.val.k === 'ptr' && fl.val.to !== null && !fl.val.label ? `→${trace.cells.get(fl.val.to)?.name ?? ''}` : fmtVal(fl.val, fl.type)) })));
+    }
+    // room: as many cards as fit in 62% of the width; the rest are counted
+    const K = HEAP_CARD;
+    const x0 = 12;
+    const maxW = Math.max(K.w + 16, this.w * 0.62);
+    const fit = Math.max(1, Math.floor((maxW - 16 + K.gap) / (K.w + K.gap)));
+    const bySlot = [...blocks.values()].sort((a, b) => (trace.heapSlots!.get(a.c.id) ?? 0) - (trace.heapSlots!.get(b.c.id) ?? 0));
+    // when they don't all fit: what's happening now, then what the running
+    // frame holds, then the oldest
+    const rank = (b: { c: SnapCell; state: string }) => (b.state !== 'live' ? 0 : b.c.id === recent ? 1 : refs.get(b.c.id)?.some((r) => r.top) ? 2 : 3);
+    const room = Math.max(1, fit - watched.length);
+    const pick = bySlot.length > room ? new Set([...bySlot].sort((a, b) => rank(a) - rank(b)).slice(0, room).map((b) => b.c.id)) : null;
+    const cards = pick ? bySlot.filter((b) => pick.has(b.c.id)) : bySlot;
+    const more = bySlot.length - cards.length;
+    const folded = this.heapFolded;
+    const n = cards.length + watched.length;
+    const w = folded ? Math.min(maxW, 360) : Math.max(260, 16 + n * (K.w + K.gap) - K.gap);
+    const h = folded ? K.head : K.head + K.h + 10;
+    const bar: Rect = { x: x0, y: this.h - 12 - h, w, h };
+    this.heapRect = bar;
+    this.setBarH(h + 12);
+    this.heapHead = { x: bar.x, y: bar.y, w: bar.w, h: K.head };
+    const rects = new Map<number, Rect>();
+    cards.forEach((b, k) => rects.set(b.c.id, { x: bar.x + 8 + k * (K.w + K.gap), y: bar.y + K.head + 2, w: K.w, h: K.h }));
+    const watchRect = (k: number): Rect => ({ x: bar.x + 8 + (cards.length + k) * (K.w + K.gap), y: bar.y + K.head + 2, w: K.w, h: K.h });
+    for (const b of bySlot) {
+      const r = rects.get(b.c.id);
+      // folded, or no card: lines end on the header
+      const at = r && !folded ? { y: bar.y, left: r.x, right: r.x + r.w, top: r.x + r.w / 2 } : { y: bar.y, left: bar.x, right: bar.x + bar.w, top: bar.x + 40 };
+      anchors.set(b.c.id, at);
+      live.add(b.c.id);
+    }
+    const site = (id: number) => {
+      const a = allocs.get(id);
+      if (a) return `${a.fn ?? '?'}:${a.line}`;
+      return trace.window && trace.window.from > 0 ? `before step ${trace.window.from}` : '';
+    };
+    const info: HeapBarInfo = {
+      count: [...blocks.values()].filter((b) => b.state !== 'freeing').length,
+      bytes: [...blocks.values()].filter((b) => b.state !== 'freeing').reduce((a, b) => a + Number((b.c.type.match(/\d+/) ?? ['0'])[0]), 0),
+      more, folded, leaks: [...blocks.values()].filter((b) => b.state === 'leak').length,
+      empty: trace.window && trace.window.from > 0 ? 'now' : !allocs.size ? 'none' : trace.evs.findIndex((e) => e.k === 'alloc') < (fr?.i ?? 0) ? 'now' : 'yet',
+    };
+    return () => {
+      const d1: Dc = { ...dc, z: 1 };
+      skin.heapBar!(d1, bar, info);
+      if (folded) return;
+      for (const b of cards) {
+        const r = rects.get(b.c.id)!;
+        skin.heapCard!(d1, r, {
+          name: b.c.name, size: Number((b.c.type.match(/\d+/) ?? ['0'])[0]), site: site(b.c.id),
+          preview: b.c.val.k === 'raw' ? b.c.val.text : '', bytes: b.c.bytes ?? [],
+          refs: refs.get(b.c.id) ?? [], state: b.state, recent: b.c.id === recent, t: b.t,
+          ...(fieldsOf.has(b.c.id) ? { fields: fieldsOf.get(b.c.id) } : {}),
+        });
+      }
+      watched.forEach((w, k) => {
+        const c = w.c;
+        skin.heapCard!(d1, watchRect(k), {
+          name: w.name, size: 0, site: '', preview: '', bytes: [],
+          fields: c?.fields?.map((fl) => ({ name: fl.name, value: fl.str ?? (fl.val.k === 'ptr' && fl.val.to !== null && !fl.val.label ? `→${trace.cells.get(fl.val.to)?.name ?? ''}` : fmtVal(fl.val, fl.type)) })) ?? [],
+          refs: c ? refs.get(c.id) ?? [] : [], state: 'live', recent: c?.id === recent, t: 1,
+          watch: { where: w.where, gone: w.gone },
+        });
+      });
+    };
+  }
+
   // Anchors for a host's variables without drawing it: its storage rows, or
   // its right edge when its storage isn't shown (closed, broken, zoomed out).
   private rowAnchors(s: ViewState, h: Host, frames: SnapFrame[], anchors: Map<number, Anchor>, trace: Trace): void {
@@ -1364,6 +1520,12 @@ export class GridView {
   private wireCurve(a: Anchor, b: Anchor): [Pt, Pt, Pt, Pt] {
     const cs = this.cs;
     const p0: Pt = [a.left, a.y];
+    if (b.top !== undefined) {
+      // down into a card from above: out of the row's left, then drop
+      const p3: Pt = [b.top, b.y];
+      const out = Math.max(cs * 0.8, Math.min(cs * 2.4, Math.abs(p3[1] - p0[1]) * 0.4));
+      return [p0, [Math.min(p0[0], p3[0]) - cs * 0.8, p0[1]], [p3[0], p3[1] - out], p3];
+    }
     const p3: Pt = [b.left, b.y];
     const dist = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
     const out = Math.min(cs * 2.4, Math.max(cs * 0.8, dist * 0.3));

@@ -539,6 +539,10 @@ function bindMouse(): void {
       return setCursorStyle();
     }
     if (e.button !== 0) return;
+    // the heap bar sits over the grid: its header folds it, its cards are its own
+    const onBar = view.heapBarAt(x, y);
+    if (onBar === 'head') return view.toggleHeapBar();
+    if (onBar) return;
     canvas.setPointerCapture(e.pointerId);
     const [wx, wy] = view.toWorld(x, y);
     const hit = entityAt(S, wx, wy);
@@ -676,6 +680,14 @@ function bindMouse(): void {
     const items: [string, () => void][] = [];
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
+      // a struct's row: watch it on the heap bar (it stays in its frame; the
+      // bar only shows it), in skins that draw the bar
+      const row = foldAt(S, wx, wy);
+      const skin = S.skin;
+      if (row && skin.heapBar) {
+        const key = `${row.fn}|${row.name}`;
+        items.push([view.watches.has(key) ? `Stop watching ${row.name}` : `Watch ${row.name} on the heap bar`, () => void (view.watches.has(key) ? view.watches.delete(key) : view.watches.add(key))]);
+      }
       const nm = layout.nodes.get(hit.id)?.name;
       if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);

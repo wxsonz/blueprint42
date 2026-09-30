@@ -36,7 +36,8 @@ Next, in this order:
    stdin node under the process box, fd 0's real offset), and output to fd 2
    flying into the terminal, its text in the error colour (Minimal,
    Barebone).
-3. [ ] **The heap bar** (M). The heap belongs to no function and outlives
+3. [x] **The heap bar** (M). Built in Minimal and Barebone (docs/VISUALS.md,
+   "The heap bar"); other skins keep the shelf until it settles. The heap belongs to no function and outlives
    every call, so it's drawn as a bar fixed to the screen (bottom left),
    with you wherever you go, replacing the heap shelf (one thing, one
    picture). One card per live block: its size, where it was malloc'd, its
