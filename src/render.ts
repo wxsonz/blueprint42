@@ -463,9 +463,11 @@ export class GridView {
 
   private skinNow: Skin | null = null; // the skin last drawn (fit includes what it draws)
   private endedAt: number | null = null; // when playback reached the run's end (ms)
+  private frameNow = 0; // this frame's time (ms): every animation reads it, never the wall clock, so a frame redraws the same
   ending = false; // an end effect is playing: keep drawing
   draw(s: ViewState, skin: Skin, now: number): void {
     this.skinNow = skin;
+    this.frameNow = now;
     this.drawn++;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
@@ -1189,7 +1191,7 @@ export class GridView {
     const happened = (i: number) => finished || (!!fr && (i < fr.i || (i === fr.i && fr.t >= switchAt(trace.evs[i]))));
     const lost = new Map(lostBlocks(trace).filter((l) => happened(l.at)).map((l) => [l.cell, l]));
     // a leak falls off at exit, then stays where it was, in red
-    for (const b of blocks.values()) if (leaked.has(b.c.id)) (b.state = 'leak'), (b.t = Math.min(1, this.endedAt === null ? 1 : (performance.now() - this.endedAt) / 800));
+    for (const b of blocks.values()) if (leaked.has(b.c.id)) (b.state = 'leak'), (b.t = Math.min(1, this.endedAt === null ? 1 : (this.frameNow - this.endedAt) / 800));
     for (const b of blocks.values()) if (b.state === 'live' && lost.has(b.c.id)) b.state = 'lost';
     // watched structs: where each lives right now (the running copy's frame
     // when it recurses), or that its frame is gone

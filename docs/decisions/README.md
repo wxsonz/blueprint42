@@ -53,3 +53,4 @@ and a line here. When a later decision replaces one, the old one's
 | [043](043-step-windows.md) | 2026-09-29 | Accepted | long runs in windows of steps, from savepoints |
 | [044](044-gfx-gpu-backgrounds.md) | 2026-09-29 | Accepted | GFX: backgrounds on the GPU (WebGPU, WebGL2), Full / Simple / Off |
 | [046](046-nothing-hidden.md) | 2026-09-30 | Accepted | nothing hidden: printf buffer, the statement that died, `*p` read from its memory, counted overflow |
+| [047](047-dev-tools.md) | 2026-10-01 | Accepted | dev tools: `tools/pixcmp` compares two versions' pictures; `playwright-core` drives the system Chromium |

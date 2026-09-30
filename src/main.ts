@@ -1097,8 +1097,10 @@ function adaptQuality(now: number): void {
 // A frame that throws (a skin that can't draw some state) is logged once and
 // skipped: the loop, and so playback, keeps going.
 let lastFrameError = '';
+let frozen = false; // dev tools (tools/pixcmp): the loop stops drawing, so only the tool's frames reach the grid
 function frame(now: number): void {
   requestAnimationFrame(frame);
+  if (frozen) return;
   try {
     tick(now);
   } catch (e) {
@@ -1470,7 +1472,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS, glass: setGlassTint } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS, glass: setGlassTint, freeze: (on = true) => void (frozen = on) } });
 }
 
 boot().catch((err) => {

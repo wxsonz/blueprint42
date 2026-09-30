@@ -38,7 +38,8 @@ Where the risk sits (sizes today):
   code: `test/skins.test.ts` checks the picker's groups only.
 
 Steps, in this order:
-1. [ ] **Pictures you can diff** (M). Rendering takes its clock from the
+1. [x] **Pictures you can diff** (M). Done 2026-10-01 (decision 047): the
+   working tree against itself, 0 of 90 frames differ at 1 and 1.25. Rendering takes its clock from the
    frame, never `performance.now()` (the leak fall and the crash jam read it
    now, so two runs of the same frame differ). Then `tools/pixcmp`: draws
    fixed frames (samples × positions × zooms × skins × 1, 1.25, 2 scaling)
