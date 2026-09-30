@@ -1,5 +1,6 @@
 // The panels around the grid: the Examples menu, the dock, alerts, the
 // status bar, and the inspector (with M4's invariant checks it reports).
+import { NORM } from './norm';
 import { lostBlocks, lostText } from './ownership';
 import { isSafeBindingExpr } from './blueprint';
 import { $, esc } from './dom';
@@ -203,7 +204,12 @@ export function renderStatus(): void {
     : t.error
       ? `<span class="bad">runtime error</span> · ${span} · ${num(t.evs.length)} events`
       : `${t.engine === 'gdb' ? `gdb${S.gdb.ms ? ` ${secs(S.gdb.ms)}` : ''} · ` : ''}${span} · ${num(t.evs.length)} events · ${end}`;
-  $('grid-info').textContent = S.project ? `${S.project.name}${S.project.root ? '' : ' (sample)'}` : m ? `${S.sample.file}` : '';
+  // one buffer is one file, with no module wall to show its capacity on: the
+  // Norm's 5 function definitions per file, next to its name
+  const defs = m && !S.project ? m.fns.length : 0;
+  $('grid-info').innerHTML = S.project ? esc(`${S.project.name}${S.project.root ? '' : ' (sample)'}`) : m
+    ? `${esc(S.sample.file)} <span class="cap${defs > NORM.fns ? ' bad' : ''}" title="function definitions in this file (the Norm allows ${NORM.fns})">· ${defs}/${NORM.fns} functions</span>`
+    : '';
 }
 
 let lastStatusKey = '';

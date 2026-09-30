@@ -79,8 +79,10 @@ Next, in this order:
 10. [x] **`static` functions** marked the same way in every skin (S): as C
     writes it, in the machine's title every skin draws (`static
     lr_append(fd, buf, nl)`); skins with a dock showed nothing before.
-11. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
-    wall to show them on.
+11. [x] **Capacity for a single file** (S). Its 5 definitions, with no module
+    wall to show them on: next to its name in the grid's head (`sort.c ·
+    4/5 functions`, in the bad colour past 5; the line reader's combined
+    buffer says 11/5, true of it as one file).
 12. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants
     from headers, on the grid.
 13. [ ] **Legend overlay** (M). The real drawings and what each one means.

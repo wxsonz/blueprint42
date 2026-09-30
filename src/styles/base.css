@@ -358,6 +358,8 @@ kbd {
 #status .mode.replace { background: var(--bad); }
 #status .ok { color: var(--ok); }
 #status .bad { color: var(--bad); }
+.pane-head .cap { opacity: 0.8; }
+.pane-head .cap.bad { color: var(--bad); opacity: 1; }
 
 /* ---------- dialogs & menus ---------- */
 #overlay { position: fixed; inset: 0; display: grid; place-items: center; background: var(--scrim, rgba(0,0,0,0.45)); z-index: 10; }
