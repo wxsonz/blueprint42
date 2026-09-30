@@ -46,7 +46,11 @@ Steps, in this order:
    from two git refs and reports what differs, composited over the page
    colour. Done when the same ref against itself differs in 0 pixels, and a
    refactor step can say "identical" from one command.
-2. [ ] **A skin can't stop the frame** (S). Every skin hook runs inside a
+2. [x] **A skin can't stop the frame** (S). Done 2026-10-01: `src/skins/guard.ts`,
+   errors in `src/diag.ts`; nothing added when a hook succeeds (several skins
+   leave style that later drawing relies on: a save/restore around each
+   changed 11 skins' pictures), 0 of 495 frames differ; a forced throw in
+   PS2's dock leaves the grid drawn and playback running. Every skin hook runs inside a
    guard: a throw is logged once (skin, hook, the info it got), the item is
    skipped or drawn as a plain marked box, and the frame goes on. Replaces
    the single try/catch around the whole frame (`main.ts` `frame`). Done

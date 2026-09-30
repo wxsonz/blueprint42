@@ -1,3 +1,4 @@
+import { reportHookError } from './diag';
 import { setGlassTint } from './gfx/scenes/ps2';
 import { renderLegend } from './legend';
 import { beatStarts } from './beats';
@@ -1094,9 +1095,9 @@ function adaptQuality(now: number): void {
   qSlow = qFast = 0;
 }
 
-// A frame that throws (a skin that can't draw some state) is logged once and
-// skipped: the loop, and so playback, keeps going.
-let lastFrameError = '';
+// A frame that throws is reported once (src/diag.ts) and skipped: the loop,
+// and so playback, keeps going. Skin hooks have their own guard
+// (src/skins/guard.ts), so what lands here is the engine's.
 let frozen = false; // dev tools (tools/pixcmp): the loop stops drawing, so only the tool's frames reach the grid
 function frame(now: number): void {
   requestAnimationFrame(frame);
@@ -1104,8 +1105,8 @@ function frame(now: number): void {
   try {
     tick(now);
   } catch (e) {
-    const msg = String((e as Error)?.stack ?? e);
-    if (msg !== lastFrameError) (lastFrameError = msg), console.error(e);
+    // skin hooks are guarded one by one (src/skins/guard.ts); this catches the engine's own
+    reportHookError('engine', 'frame', e, []);
   }
 }
 

@@ -1,6 +1,7 @@
 // Grid engine: camera and drawing. Playback timing and hosts live in
 // playback.ts, hit-testing and rects in hit.ts, routing in route.ts; every
 // pixel is delegated to the active skin (skins/*.ts).
+import { guardSkin } from './skins/guard';
 import { cLiteral } from './skins/stdbuf';
 import { HEAP_CARD } from './skins/heapbar';
 import { TYPE_CARD, typeCardH } from './skins/typeshelf';
@@ -466,6 +467,7 @@ export class GridView {
   private frameNow = 0; // this frame's time (ms): every animation reads it, never the wall clock, so a frame redraws the same
   ending = false; // an end effect is playing: keep drawing
   draw(s: ViewState, skin: Skin, now: number): void {
+    skin = guardSkin(skin); // a hook that throws can't stop the frame (src/skins/guard.ts)
     this.skinNow = skin;
     this.frameNow = now;
     this.drawn++;

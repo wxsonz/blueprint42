@@ -58,7 +58,8 @@ const DIFF = async ({ png, threshold }) => {
   // pixels, so a PNG against a live canvas would differ where nothing did)
   const dec = async (src) => { const i = new Image(); i.src = src; await i.decode(); return i; };
   const img = await dec(png);
-  const mine = await dec(c.toDataURL('image/png'));
+  const minePng = c.toDataURL('image/png');
+  const mine = await dec(minePng);
   const w = c.width, h = c.height;
   const mk = () => Object.assign(document.createElement('canvas'), { width: w, height: h });
   const over = (src) => { const k = mk(); const g = k.getContext('2d'); g.fillStyle = '#143c6e'; g.fillRect(0, 0, w, h); g.drawImage(src, 0, 0); return g.getImageData(0, 0, w, h).data; };
@@ -77,7 +78,7 @@ const DIFF = async ({ png, threshold }) => {
     md.data.set([255, 0, 0, d > threshold ? 255 : d ? 90 : 0], i);
   }
   mg.putImageData(md, 0, 0);
-  return { max, n, box: n ? [x0, y0, x1, y1] : null, map: map.toDataURL('image/png') };
+  return { max, n, box: n ? [x0, y0, x1, y1] : null, map: map.toDataURL('image/png'), png: minePng };
 };
 
 // One run of each program for both versions: the trace server's answers to A
@@ -132,15 +133,16 @@ try {
           const [ha, hb] = [await pa.page.evaluate(DRAW, fr), await pb.page.evaluate(DRAW, fr)];
           total++;
           if (ha.hash === hb.hash) { same++; continue; }
-          const d = await pb.page.evaluate(DIFF, { png: await pa.page.evaluate(PNG), threshold });
+          const aPng = await pa.page.evaluate(PNG);
+          const d = await pb.page.evaluate(DIFF, { png: aPng, threshold });
           if (d.size) { bad.push(`${sample} z${zoom} p${pos}: size ${d.size}`); continue; }
           worst = Math.max(worst, d.max);
           if (d.n === 0) { same++; continue; } // within the threshold
           const tag = `${skin}-${sample}-s${scale}-z${zoom}-p${pos}`;
           mkdirSync(out, { recursive: true });
           const png = (u) => Buffer.from(u.split(',')[1], 'base64');
-          writeFileSync(join(out, `${tag}-a.png`), png(await pa.page.evaluate(PNG)));
-          writeFileSync(join(out, `${tag}-b.png`), png(await pb.page.evaluate(PNG)));
+          writeFileSync(join(out, `${tag}-a.png`), png(aPng)); // the pair that was compared
+          writeFileSync(join(out, `${tag}-b.png`), png(d.png));
           writeFileSync(join(out, `${tag}-diff.png`), png(d.map));
           bad.push(`${sample} z${zoom} p${pos}: ${d.n} px over ${threshold}, max ${d.max}, box ${d.box.join(',')}`);
         }
