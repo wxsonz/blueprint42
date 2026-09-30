@@ -595,9 +595,29 @@ export const ps3Theme: Theme = {
 // A file's or machine's frame: its outline, barely there, lit by the wave:
 // brighter where the ribbon passes near or behind it. The wave is drawn on
 // the page, so the grid canvas's place on the page (read once a frame) maps
-// the frame into the wave's coordinates. Each edge is one stroke with a
-// gradient sampled along it.
+// the frame into the wave's coordinates. Each edge's light is sampled at 11
+// points along it into a strip of 11 pixels, stretched along the edge (with
+// smoothing that's a gradient through those 11 stops). A gradient per edge,
+// new every frame, was Firefox's costliest drawing: Zen spent more on PS3's
+// edges than on everything else in the frame.
 const ps3Off = { t: NaN, x: 0, y: 0 };
+const ps3Strips: HTMLCanvasElement[] = []; // reused frame to frame
+let ps3StripAt = 0;
+let ps3StripFrame = NaN;
+function ps3Strip(vals: number[], vert: boolean): HTMLCanvasElement {
+  // (a strip already drawn can be reused: drawImage copies it when called)
+  if (ps3StripAt >= 256) ps3StripAt = 0;
+  let c = ps3Strips[ps3StripAt];
+  if (!c) c = ps3Strips[ps3StripAt] = document.createElement('canvas');
+  ps3StripAt++;
+  const w = vert ? 1 : vals.length;
+  if (c.width !== w) (c.width = w), (c.height = vert ? vals.length : 1);
+  const cg = c.getContext('2d')!;
+  const im = cg.createImageData(c.width, c.height);
+  vals.forEach((a, k) => im.data.set([255, 255, 255, Math.round(Math.min(1, a) * 255)], k * 4));
+  cg.putImageData(im, 0, 0);
+  return c;
+}
 function ps3Edge(dc: Dc, r: Rect, active: boolean): void {
   const g = dc.g;
   const t = ps2Still ? 30 : dc.time || 0;
@@ -605,6 +625,7 @@ function ps3Edge(dc: Dc, r: Rect, active: boolean): void {
     const b = g.canvas.getBoundingClientRect();
     Object.assign(ps3Off, { t, x: b.left, y: b.top });
   }
+  if (ps3StripFrame !== dc.time) (ps3StripFrame = dc.time), (ps3StripAt = 0);
   const W = window.innerWidth || dc.vw;
   const H = window.innerHeight || dc.vh;
   const lit = (x: number, y: number) => {
@@ -614,27 +635,24 @@ function ps3Edge(dc: Dc, r: Rect, active: boolean): void {
     return near * near;
   };
   const base = active ? 0.1 : 0.06;
+  const glowW = Math.max(3, 4 * dc.z);
   const edge = (x0: number, y0: number, x1: number, y1: number) => {
-    const grad = g.createLinearGradient(x0, y0, x1, y1);
-    const glow = g.createLinearGradient(x0, y0, x1, y1);
+    const vert = x0 === x1;
     const n = 10;
-    for (let k = 0; k <= n; k++) {
-      const f = lit(x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n);
-      grad.addColorStop(k / n, `rgba(255,255,255,${base + 0.7 * f})`);
-      glow.addColorStop(k / n, `rgba(255,255,255,${0.12 * f})`);
-    }
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.lineTo(x1, y1);
-    g.strokeStyle = glow;
-    g.lineWidth = Math.max(3, 4 * dc.z);
-    g.stroke();
-    g.strokeStyle = grad;
-    g.lineWidth = 1;
-    g.stroke();
+    const f = Array.from({ length: n + 1 }, (_, k) => lit(x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n));
+    const len = vert ? y1 - y0 : x1 - x0;
+    // as a stroke of width w with square caps: w across, w / 2 past each end
+    // (where the end colours carry on, as a gradient's do)
+    const put = (c: HTMLCanvasElement, w: number) => {
+      const e = ((w / 2) * n) / len;
+      if (vert) g.drawImage(c, 0, 0.5 - e, 1, n + 2 * e, x0 - w / 2, y0 - w / 2, w, len + w);
+      else g.drawImage(c, 0.5 - e, 0, n + 2 * e, 1, x0 - w / 2, y0 - w / 2, len + w, w);
+    };
+    put(ps3Strip(f.map((v) => 0.12 * v), vert), glowW);
+    put(ps3Strip(f.map((v) => base + 0.7 * v), vert), 1);
   };
   g.save();
-  g.lineCap = 'square';
+  g.imageSmoothingEnabled = true;
   const x0 = r.x + 0.5, y0 = r.y + 0.5, x1 = r.x + r.w - 0.5, y1 = r.y + r.h - 0.5;
   edge(x0, y0, x1, y0);
   edge(x1, y0, x1, y1);

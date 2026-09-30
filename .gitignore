@@ -4,3 +4,4 @@ dist/
 
 # the author's own get_next_line: private, kept locally only
 samples/gnl_v3/
+profiling/
