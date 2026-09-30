@@ -19,12 +19,19 @@ function dither(dc: Dc, r: Rect, color: string, cover?: Rect): void {
   g.fillStyle = color;
   const x0 = Math.round(r.x);
   const y0 = Math.round(r.y);
-  for (let y = y0; y < r.y + r.h; y += s) {
-    const row = !!cover && y >= cover.y + 1 && y + s <= cover.y + cover.h - 1;
-    for (let x = x0 + (((y - y0) / s) % 2 ? s : 0); x < r.x + r.w; x += s * 2) {
-      if (row && x >= cover!.x + 1 && x + s <= cover!.x + cover!.w - 1) continue; // under the box
-      g.fillRect(x, y, s, s);
+  // whole-pixel squares, one path per every other row: within one no two
+  // touch, so it's the same pixels as a fill each (neighbouring rows meet at
+  // corners, which one path would antialias differently)
+  for (let odd = 0; odd < 2; odd++) {
+    g.beginPath();
+    for (let y = y0 + odd * s; y < r.y + r.h; y += s * 2) {
+      const row = !!cover && y >= cover.y + 1 && y + s <= cover.y + cover.h - 1;
+      for (let x = x0 + (odd ? s : 0); x < r.x + r.w; x += s * 2) {
+        if (row && x >= cover!.x + 1 && x + s <= cover!.x + cover!.w - 1) continue; // under the box
+        g.rect(x, y, s, s);
+      }
     }
+    g.fill();
   }
 }
 
@@ -77,9 +84,13 @@ export const gameboyTheme: Theme = {
     if (dc.cs < 12) return;
     g.fillStyle = C2;
     const s = Math.max(1, Math.round(dc.z * 1.5));
+    // one path, one fill: the dots never overlap, so it's the same pixels as
+    // a fill each (thousands a frame)
+    g.beginPath();
     for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
-      for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) g.fillRect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), s, s);
+      for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) g.rect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), s, s);
     }
+    g.fill();
   },
 
   // Belts are dotted paths; the dots march when a call is live.

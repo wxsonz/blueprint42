@@ -166,11 +166,15 @@ export const classic: Skin = {
     g.fillStyle = 'rgba(0,0,0,0.28)';
     const x0 = Math.floor(camX);
     const y0 = Math.floor(camY);
+    // one path, one fill: the dots never overlap, so it's the same pixels as
+    // a fill each (thousands a frame)
+    g.beginPath();
     for (let x = x0; x < camX + dc.vw / dc.cs + 1; x++) {
       for (let y = y0; y < camY + dc.vh / dc.cs + 1; y++) {
-        g.fillRect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), 1, 1);
+        g.rect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), 1, 1);
       }
     }
+    g.fill();
   },
 
   belt(dc, pts, o) {

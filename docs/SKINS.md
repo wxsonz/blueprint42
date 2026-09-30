@@ -24,22 +24,22 @@ initiative (a sweep across skins, a "while I'm here" tweak).
 | PS5 | `ps5` | PlayStation | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Minimal | `minimal`, `minimal-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; the author's reviewed skins; all others are WIP (2026-09-30), while PS1–PS4 adopt their pictures; nothing hidden (2026-09-30, decision 046): printf buffer node (`Skin.stdbuf`, `skins/stdbuf.ts`), `+n more arguments` on the dock; stdin node and stderr in the terminal (2026-09-30); the heap bar (2026-09-30, `skins/heapbar.ts`): heap cards replacing the shelf, struct watches, LOST blocks; the dot grid in one path and one fill, not a fill per dot; the same pixels (2026-10-01) |
 | Barebone | `barebone`, `barebone-light` | Simple | **reviewed** | scrollbars, toggles; belts (reverted: the author wants its original simple belt); IN dock prototype (`skins/dock.ts`); pointer address tags; argument/return plate shapes; Norm capacity; the author's reviewed skins; all others are WIP (2026-09-30), while PS1–PS4 adopt their pictures; nothing hidden (2026-09-30, decision 046): printf buffer node (`Skin.stdbuf`, `skins/stdbuf.ts`), `+n more arguments` on the dock; stdin node and stderr in the terminal (2026-09-30); the heap bar (2026-09-30, `skins/heapbar.ts`): heap cards replacing the shelf, struct watches, LOST blocks |
-| Classic (Windows 3.1) | `classic` | Windows | WIP ⚠ | scrollbars, toggles, belts |
+| Classic (Windows 3.1) | `classic` | Windows | WIP ⚠ | scrollbars, toggles, belts; the form-designer dot grid in one path, not a fillRect per dot; the same pixels (2026-10-01) |
 | XP | `xp` | Windows | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Seven | `seven` | Windows | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Metro (8) | `metro`, `metro-light` | Windows | WIP ⚠ | scrollbars, toggles, belts |
 | System 7 | `system7` | Mac | WIP ⚠ | scrollbars, toggles, belts |
 | Platinum (OS 8/9) | `platinum` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
-| Aqua | `aqua` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Aqua | `aqua` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners; the dot grid in one path, not a fillRect per dot; the same pixels at 100%, within 3/255 on its 1.5 px dots at fractional scaling (2026-10-01) |
 | Leopard | `leopard` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Yosemite | `yosemite` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Big Sur | `bigsur`, `bigsur-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Tahoe | `tahoe`, `tahoe-dark` | Mac | WIP ⚠ | scrollbars, toggles, belts, corners |
-| Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles, belts; the dithered card shadow skips the squares its opaque card covers (tens of thousands a frame); the same pixels (2026-10-01) |
+| Game Boy | `gameboy` | Nintendo | WIP ⚠ | scrollbars, toggles, belts; the dithered card shadow skips the squares its opaque card covers (tens of thousands a frame); the same pixels (2026-10-01); its dot grid and the dither squares as a few paths, not a fillRect each (every other dither row per path, so no two squares touch); the same pixels (2026-10-01) |
 | GameCube | `gamecube` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Wii | `wii`, `wii-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Switch | `switch`, `switch-dark` | Nintendo | WIP ⚠ | scrollbars, toggles, belts, corners |
-| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
+| Amp | `amp` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners; the dot grid in one path, not a fillRect per dot; the same pixels (2026-10-01) |
 | Blueprint | `blueprint` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Factory | `factory` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |
 | Synthwave | `synthwave` | Just for fun | WIP ⚠ | scrollbars, toggles, belts, corners |

@@ -134,11 +134,15 @@ export const amp: Skin = {
     g.fillRect(0, 0, dc.vw, dc.vh);
     if (dc.cs < 14) return;
     g.fillStyle = 'rgba(110,130,255,0.09)';
+    // one path, one fill: the dots never overlap, so it's the same pixels as
+    // a fill each (thousands a frame)
+    g.beginPath();
     for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
       for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
-        g.fillRect(Math.round((x - camX) * dc.cs) - 1, Math.round((y - camY) * dc.cs) - 1, 2, 2);
+        g.rect(Math.round((x - camX) * dc.cs) - 1, Math.round((y - camY) * dc.cs) - 1, 2, 2);
       }
     }
+    g.fill();
   },
 
   belt(dc, pts, o) { pts = smooth(dc, pts);

@@ -200,11 +200,15 @@ export const aqua: Skin = {
     pinstripe(g, { x: 0, y: 0, w: dc.vw, h: dc.vh }, '#f0f0f0', '#e6e6e6', Math.round(camY * dc.cs));
     if (dc.cs < 16) return;
     g.fillStyle = 'rgba(0,0,0,0.09)';
+    // one path, one fill: the dots never overlap, so it's the same pixels as
+    // a fill each (thousands a frame)
+    g.beginPath();
     for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
       for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
-        g.fillRect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), 1.5, 1.5);
+        g.rect(Math.round((x - camX) * dc.cs), Math.round((y - camY) * dc.cs), 1.5, 1.5);
       }
     }
+    g.fill();
   },
 
   belt(dc, pts, o) { pts = smooth(dc, pts);
