@@ -78,7 +78,15 @@ export function drawDock(dc: Dc, r: Rect, d: DockInfo, p: DockPalette): void {
   g.textAlign = 'left';
   g.fillStyle = p.text;
   g.fillText(fitText(g, d.copy > 1 ? `${d.name} #${d.copy}` : d.name, (s) => p.ui(s, 600), px(dc, 14, 7), inner, 6), x0, y);
-  y += px(dc, 24);
+  y += px(dc, 18);
+  // where the call on show came from, and which call it is
+  if (d.from) {
+    g.font = p.ui(px(dc, 10.5, 6));
+    g.fillStyle = p.faint;
+    const from = `from ${d.from.fn}${d.from.line !== null ? `:${d.from.line}` : ''}${d.from.nth[1] > 1 ? ` · call ${d.from.nth[0]} of ${d.from.nth[1]}` : ''}`;
+    g.fillText(fitText(g, from, (s) => p.ui(s), px(dc, 10.5, 6), inner, 5), x0, y);
+    y += px(dc, 16);
+  } else y += px(dc, 6);
 
   // body: what arrived
   const rowH = px(dc, 17, 7);

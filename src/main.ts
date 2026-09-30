@@ -1161,8 +1161,11 @@ function frame(now: number): void {
       }
     }
   }
-  // Follow the running function, but never fight the author's own panning.
+  // Follow the running function, but never fight the author's own panning
+  // (nor frame it under the kill feed).
   if (S.follow && t && S.playing && !drag && now - lastPanAt > 2500) {
+    const feed = document.getElementById('feed');
+    view.insetRight = feed && feed.childElementCount ? feed.offsetWidth + 16 : 0;
     const i = Math.floor(S.pos);
     // Focus: the camera follows the scene — the sender while its data is
     // read, both while it travels, the receiver while it's held there.

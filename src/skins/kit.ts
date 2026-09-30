@@ -593,7 +593,15 @@ export function makeSkin(t: Theme): Skin {
       if (d.before !== null) row(`called before step ${d.before.toLocaleString('en-US')}`, 'not traced', 'none');
       else if (!d.args) row('not called', ' ', 'none');
       else if (!d.args.length) row('no arguments', ' ', 'none');
-      else for (const a of d.args) row(a.name, a.text, a.tag ? 'ptr' : 'int', { param: true, tag: a.tag });
+      else {
+        // no room for the rest: say how many, never drop them silently
+        const room = Math.floor((r.y + r.h - top) / rowH) - rows.length;
+        const fit = d.args.length > room ? Math.max(0, room - 1) : d.args.length;
+        for (const a of d.args.slice(0, fit)) row(a.name, a.text, a.tag ? 'ptr' : 'int', { param: true, tag: a.tag });
+        if (fit < d.args.length) row(`+${d.args.length - fit} more`, 'arguments', 'none');
+      }
+      // where the call came from, and which call it is, where there's room
+      if (d.from) row('from', `${d.from.fn}${d.from.line !== null ? `:${d.from.line}` : ''}${d.from.nth[1] > 1 ? ` · ${d.from.nth[0]} of ${d.from.nth[1]}` : ''}`, 'none');
       if (d.stale) g.globalAlpha *= 0.5;
       const inset = px(dc, L.inset ?? 0, 0);
       skin.frame(dc, r, { title, mode: d.stale ? 'none' : live ? 'live' : d.last ? 'returned' : 'none', stacked: 0, rows, head: { x: r.x + inset, y: r.y, w: r.w - inset, h: INV_HEAD_PX * dc.z }, cap: d.cap });

@@ -61,6 +61,9 @@ export interface DockInfo {
   crash: { line: number; msg: string } | null; // where (1-based, as the editor numbers it) and how it died
   inPorts: number[]; // screen y of each incoming call's port (left side)
   cap?: CapInfo; // parameters, of the Norm's 4
+  // where the call on show came from (the caller and its line) and which call
+  // of this function it is (2 of 3 in this trace)
+  from?: { fn: string; line: number | null; nth: [number, number] };
 }
 
 // A Norm limit as capacity (src/norm.ts): used of max. Sent only to skins

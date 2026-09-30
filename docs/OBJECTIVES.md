@@ -97,8 +97,11 @@ Next, in this order:
     `free` takes its card down and away; the machine that crashed shakes
     hard and stops (every skin).
 
-Rough edges: the kill feed covers the stations of machines under it; the
-IN dock is mostly empty with one argument or none.
+Rough edges, fixed: the kill feed covered the stations of machines under it
+(following now frames clear of it); the IN dock was mostly empty with one
+argument or none (it now says where the call came from and which call it
+is: `from main:10 · call 1 of 9`; the PS docks count arguments that don't
+fit instead of dropping them).
 
 The toolbelt (the legend strip at the bottom left) is hidden for now, the
 author's call: its icons aren't 1:1 with what the canvas draws. Its right half

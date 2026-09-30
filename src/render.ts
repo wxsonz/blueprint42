@@ -165,13 +165,24 @@ function quantizeFonts(g: CanvasRenderingContext2D): void {
 
 // Each frame's call event and the error it died of, found once per trace.
 // …and each heap block's malloc: the line, and the function that called it.
-const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]>; allocs: Map<number, { line: number; fn: string | null }> }>();
+// …and, for the dock, where each call came from (the caller's line) and
+// which call of its function it is.
+const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]>; allocs: Map<number, { line: number; fn: string | null }>; site: Map<number, number>; nth: Map<number, [number, number]> }>();
 function callsOf(trace: Trace) {
   let m = callMemo.get(trace);
   if (!m) {
-    m = { calls: new Map(), errs: new Map(), allocs: new Map() };
+    m = { calls: new Map(), errs: new Map(), allocs: new Map(), site: new Map(), nth: new Map() };
+    const lastLine = new Map<number, number>(); // frame -> the line it last ran
+    const byFn = new Map<string, number[]>();
     trace.evs.forEach((e, i) => {
       if (e.frame === null) return;
+      if (e.k === 'call') {
+        // the caller's line: the interpreter's call event carries it; under gdb, the caller's last stop
+        const caller = trace.snaps[i]?.stack.at(-1)?.id;
+        const at = trace.engine === 'interp' ? e.line : caller !== undefined ? lastLine.get(caller) : undefined;
+        if (at !== undefined) m!.site.set(e.frame, at + 1);
+        (byFn.get(e.fn) ?? byFn.set(e.fn, []).get(e.fn)!).push(e.frame);
+      } else lastLine.set(e.frame, e.line);
       if (e.k === 'call') m!.calls.set(e.frame, i);
       else if (e.k === 'error') m!.errs.set(e.frame, e);
       else if (e.k === 'alloc') {
@@ -180,6 +191,7 @@ function callsOf(trace: Trace) {
         m!.allocs.set(e.cell, { line: e.line + 1, fn: call?.k === 'call' ? call.fn : null });
       }
     });
+    for (const frames of byFn.values()) frames.forEach((f, k) => m!.nth.set(f, [k + 1, frames.length]));
     callMemo.set(trace, m);
   }
   return m;
@@ -351,9 +363,13 @@ export class GridView {
     this.cam.y = this.target.y = wy - py / (CELL_PX * z);
   }
 
+  // px along the right edge that a panel covers (the kill feed): following
+  // keeps what it frames clear of it
+  insetRight = 0;
+
   ensureVisible(x: number, y: number, w: number, h: number, margin = 1.5): void {
     const cs = CELL_PX * this.target.zoom;
-    const vw = this.w / cs;
+    const vw = Math.max(this.w * 0.4, this.w - this.insetRight) / cs;
     const vh = this.h / cs;
     if (x - margin < this.target.x) this.target.x = x - margin;
     else if (x + w + margin > this.target.x + vw) this.target.x = x + w + margin - vw;
@@ -365,11 +381,12 @@ export class GridView {
   focusOn(r: Rect, pad = 1.6): void {
     const top = 64;
     const bottom = 64;
-    const zx = this.w / ((r.w + pad * 2) * CELL_PX);
+    const W = Math.max(this.w * 0.5, this.w - this.insetRight);
+    const zx = W / ((r.w + pad * 2) * CELL_PX);
     const zy = (this.h - top - bottom) / ((r.h + pad * 2) * CELL_PX);
     this.target.zoom = Math.max(0.55, Math.min(1.35, zx, zy));
     const cs = CELL_PX * this.target.zoom;
-    this.target.x = r.x + r.w / 2 - this.w / (2 * cs);
+    this.target.x = r.x + r.w / 2 - W / (2 * cs);
     this.target.y = r.y + r.h / 2 - (top + (this.h - top - bottom) / 2) / cs;
   }
 
@@ -1355,6 +1372,7 @@ export class GridView {
         last: !frame && !!call,
         crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
         ...(skin.capacity ? { cap: fnCaps(fn).params } : {}),
+        ...(call?.k === 'call' && on ? { from: { fn: call.caller ?? 'the process', line: call.caller ? callsOf(trace!).site.get(on.id) ?? null : null, nth: callsOf(trace!).nth.get(on.id) ?? [1, 1] } } : {}),
       });
     } else skin.node(dc, motorR, {
       name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn, state, waitingOn, frames: stacked, stale, pinned: false,
