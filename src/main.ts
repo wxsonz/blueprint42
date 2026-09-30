@@ -1199,8 +1199,9 @@ function tick(now: number): void {
     }
   }
   S.violations = violations();
-  paintPage(now, S, view);
-  lastPageAt = now;
+  // a page-wide background (PS3, PS4) is the whole window of GPU work: it
+  // moves slowly, so 30 fps while playing too, as when idle
+  if (!S.skin.fullBleed || now - lastPageAt >= 30) (lastPageAt = now), paintPage(now, S, view);
   view.draw(S, S.skin, now);
   renderStageCard(S, traceRevision);
   renderPlaybar();
