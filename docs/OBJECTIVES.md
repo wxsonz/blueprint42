@@ -110,7 +110,16 @@ Steps, in this order:
    actions in `state.ts` (`seek`, `play`, `loadTrace`, `setSkin`, …); dev
    builds keep the last 200 with their arguments, attached to every error
    report. Done when nothing outside `state.ts` assigns to `S`.
-7. [ ] **A trace that checks itself** (M). `validateTrace(trace)`: every
+7. [x] **A trace that checks itself** (M). Done 2026-10-01: `src/validate.ts`
+   (shape, frame and cell ids, pointers, calls push and returns pop, malloc
+   and free, heap slots, output and stdin only forward), on every trace in
+   dev builds (failures in the diagnostics panel) and in
+   `test/validate.test.ts` for every sample under both engines (all pass;
+   broken traces fail with the check named). The engines report their own
+   failures by stage (`EngineError`: gdb setup / stops, at which stop /
+   finish; the interpreter's statics / execute / finish). Not split into
+   separate functions: `convertGdb` is one state machine over shared tables,
+   and its stages are marked in place. `validateTrace(trace)`: every
    event's cells, frames and heap blocks exist in the snapshots around it;
    snapshots only change where an event says; ids stay stable; output only
    grows. Run on every trace in dev and in the tests, for both engines

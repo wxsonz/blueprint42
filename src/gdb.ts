@@ -1,7 +1,7 @@
 // Real execution (M3): send the buffer to the trace server, then turn gdb's
 // timeline into the same Trace the renderer plays for the interpreter.
 import type { Model } from './parse';
-import { fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type StdBuf, type Trace, type V } from './interp';
+import { EngineError, fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type StdBuf, type Trace, type V } from './interp';
 import type { BoundValue, Sprite } from './blueprint';
 
 // ---------------- wire format (server/tracer.py) ----------------
@@ -188,7 +188,19 @@ interface Region {
 }
 
 // `sources`: the sandbox buffer, or a project's files by path.
+// The tracer's stops into a Trace, in stages: setup (the tables), stops (one
+// gdb stop at a time), finish (leaks, a crash's signal, the Trace). A failure
+// says which stage, and at which stop (EngineError).
 export function convertGdb(r: GResult, model: Model, sources: string | Record<string, string>): Trace {
+  const mark: { stage: string; at: number | null } = { stage: 'setup', at: null };
+  try {
+    return convertStages(r, model, sources, mark);
+  } catch (e) {
+    throw new EngineError('gdb', mark.stage, mark.at, e);
+  }
+}
+
+function convertStages(r: GResult, model: Model, sources: string | Record<string, string>, mark: { stage: string; at: number | null }): Trace {
   const split = new Map<string, string[]>();
   const linesOf = (file: string | null | undefined): string[] => {
     const k = typeof sources === 'string' ? '' : file ?? '';
@@ -389,7 +401,9 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     return { caller, data, fn };
   };
 
-  for (const stop of stops) {
+  mark.stage = 'stops';
+  for (const [k, stop] of stops.entries()) {
+    mark.at = k;
     const nextBound = stop.bound;
     for (const id of Object.keys(nextBound ?? {})) boundIds.add(id);
     for (const e of stop.events) {
@@ -578,6 +592,8 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     }
   }
 
+  mark.stage = 'finish';
+  mark.at = null;
   // Only a program that exited can leak: a truncated or crashed run just
   // stopped with blocks still in use.
   const exited = !r.truncated && !r.signal;

@@ -1,4 +1,5 @@
-import { diagReport } from './diag';
+import { diagReport, reportCheck } from './diag';
+import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
 import { setGlassTint } from './gfx/scenes/ps2';
@@ -229,6 +230,8 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
   update('applyTrace', { trace });
+  // dev: does the trace hold together? (src/validate.ts; failures in the diagnostics panel)
+  if (import.meta.env.DEV && trace) setTimeout(() => { if (S.trace === trace) for (const p of validateTrace(trace)) reportCheck(p); }, 0);
   prepareStage(trace); // focus mode sizes each return's card before playing it
   setTraceRevision(traceRevision + 1);
   setLastInspectorKey('');

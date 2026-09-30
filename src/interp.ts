@@ -224,7 +224,17 @@ const NORM_FORBIDDEN: Record<string, string> = {
   do_statement: 'do … while',
 };
 
+// An engine's own failure (not the program's: that's a Trace's error), named
+// by where it happened, so a report points at the stage to look in.
+export class EngineError extends Error {
+  constructor(readonly engine: 'interp' | 'gdb', readonly stage: string, readonly at: number | null, readonly cause: unknown) {
+    super(`${engine} engine, ${stage}${at !== null ? ` (at ${engine === 'gdb' ? 'stop' : 'event'} ${at})` : ''}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'EngineError';
+  }
+}
+
 export function run(model: Model): Trace {
+  let stage = 'setup'; // statics → execute → finish
   const cells = new Map<number, Cell>();
   const info = new Map<number, CellInfo>();
   const statics: number[] = [];
@@ -566,6 +576,7 @@ export function run(model: Model): Trace {
   let error: Trace['error'] = null;
   let truncated = false;
   try {
+    stage = 'statics';
     // Statics and globals exist before main starts (zero-initialised or constant).
     for (const g of model.globals) {
       const id = newCell(g.name, g.type, -1, '', isPtrType(g.type) ? { k: 'ptr', to: null } : { k: 'int', v: 0 });
@@ -585,6 +596,7 @@ export function run(model: Model): Trace {
     const main = model.byName.get('main');
     if (!main) throw new RtErr('no main()', 0);
     snaps.push(snapshot());
+    stage = 'execute';
     exit = callFn(main, [], main.nameLine);
   } catch (e) {
     if (e instanceof Truncate) truncated = true;
@@ -593,8 +605,9 @@ export function run(model: Model): Trace {
       if (evs.length < MAX_EVENTS) emit({ k: 'error', line: e.line, frame: top()?.id ?? null, msg: e.message });
     } else if (e instanceof BreakSig || e instanceof ContSig) {
       error = { msg: 'break/continue outside a loop', line: 0 };
-    } else throw e;
+    } else throw new EngineError('interp', stage, evs.length, e);
   }
+  stage = 'finish';
   if (!snaps.length) snaps.push(snapshot());
   return { engine: 'interp', evs, snaps, cells: info, exit, error, truncated };
 }
