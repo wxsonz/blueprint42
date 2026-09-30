@@ -73,7 +73,7 @@ function widthIn(g: CanvasRenderingContext2D, font: string, text: string): numbe
 }
 
 // a font that finishes loading changes every width: measure again
-if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', () => (fitMemo.clear(), widthMemo.clear()));
+if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', () => (fitMemo.clear(), widthMemo.clear(), cutMemo.clear()));
 
 function fitTextSlow(g: CanvasRenderingContext2D, text: string, font: (px: number) => string, px: number, maxW: number, minPx: number): string {
   let size = px;

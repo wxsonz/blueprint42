@@ -23,6 +23,7 @@ export class Rec2D {
   private style: Record<string, unknown> = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, globalAlpha: 1, font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', lineCap: 'butt', lineJoin: 'miter', miterLimit: 10, lineDashOffset: 0, shadowBlur: 0, shadowColor: 'rgba(0,0,0,0)', shadowOffsetX: 0, shadowOffsetY: 0, globalCompositeOperation: 'source-over', filter: 'none', imageSmoothingEnabled: true, imageSmoothingQuality: 'low', direction: 'inherit', letterSpacing: '0px', fontKerning: 'auto' };
   private dash: number[] = [];
   track: boolean;
+  styles = new Map<string, Set<string>>(); // every string a style property was set to (colours, fonts)
   watch: { x: number; y: number; w: number; h: number; pad: number } | null = null; // log what's drawn outside this
   outside: string[] = [];
   private op = '';
@@ -34,7 +35,11 @@ export class Rec2D {
     for (const k of Object.keys(this.style)) {
       Object.defineProperty(this, k, {
         get: () => this.style[k],
-        set: (v: unknown) => { this.check(`${k} =`, [v]); this.style[k] = v; },
+        set: (v: unknown) => {
+          this.check(`${k} =`, [v]);
+          this.style[k] = v;
+          if (typeof v === 'string') (this.styles.get(k) ?? this.styles.set(k, new Set()).get(k)!).add(v);
+        },
         enumerable: true,
       });
     }

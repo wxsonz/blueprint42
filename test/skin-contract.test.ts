@@ -164,4 +164,36 @@ describe('skin contract', () => {
     }
     expect(all.map((p) => `${p.skin}.${p.hook} (${p.case}): ${p.what}`)).toEqual([]);
   });
+
+  // State a skin depends on is followed, not copied once (step 8): a tinted
+  // skin's veil and the colours it fills its panels and plates with move with
+  // the picked tint.
+  it('a tinted skin follows its tint (veil, panels, plates)', () => {
+    const tinted = SKINS.filter((sk) => (sk.tints?.length ?? 0) > 1 && sk.tint);
+    expect(tinted.length).toBeGreaterThan(0);
+    const colours = (skin: Skin, hook: string): string => {
+      const canvas = new FakeCanvas(true);
+      canvas.width = 1400;
+      canvas.height = 900;
+      const g = canvas.getContext('2d')!;
+      const { z, args } = CALLS[hook][0];
+      (skin as unknown as Record<string, (...a: unknown[]) => void>)[hook](({ g, z, cs: 40 * z, time: 1.5, vw: 1400, vh: 900 }), ...args);
+      return [...(g.styles.get('fillStyle') ?? [])].sort().join(' ');
+    };
+    for (const skin of tinted) {
+      const ids = skin.tints!.map((t) => t.id);
+      const seen = new Map<string, { veil: string; frame: string; plate: string }>();
+      for (const id of ids) {
+        skin.tint!(id, true);
+        seen.set(id, { veil: skin.spotlight, frame: colours(skin, 'frame'), plate: colours(skin, 'plate') });
+      }
+      skin.tint!(ids[0], true);
+      const [a, b] = [seen.get(ids[0])!, seen.get(ids.find((x) => x !== ids[0] && x !== 'black') ?? ids[1])!];
+      expect(b.veil, `${skin.id}: the veil follows the tint`).not.toBe(a.veil);
+      expect(b.frame, `${skin.id}: panel fills follow the tint`).not.toBe(a.frame);
+      // every tint gives its own veil (none left over from another)
+      expect(new Set([...seen.values()].map((v) => v.veil)).size, `${skin.id}: one veil per tint`).toBe(ids.length);
+    }
+  });
 });
+

@@ -126,7 +126,12 @@ Steps, in this order:
    (the interpreter and gdb), so a converter bug fails where it happens,
    not as a wrong picture later. Split `convertGdb` and `run` into stages
    with typed outputs so a failure names its stage.
-8. [ ] **State a skin depends on, followed** (S). Colours and sizes that
+8. [x] **State a skin depends on, followed** (S). Done 2026-10-01: PS3's
+   veil is computed when read (the one tinted skin); its gradient and
+   backdrop caches key on the colours; the three text memos (fits, widths,
+   cuts) clear when a font finishes loading (cuts didn't). The contract
+   tests switch every tint and check the veil and panel fills follow, one
+   veil per tint. Colours and sizes that
    depend on a tint, a mode or a font are computed when read (as PS3's veil
    now is), never copied once; memos key on everything they depend on, or
    clear on the event that changes it (as text fitting now clears on font
