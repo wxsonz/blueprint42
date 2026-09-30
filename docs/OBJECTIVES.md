@@ -54,6 +54,12 @@ Next, in this order:
 Rough edges: the kill feed covers the stations of machines under it; the
 IN dock is mostly empty with one argument or none.
 
+The toolbelt (the legend strip at the bottom left) is hidden for now, the
+author's call: its icons aren't 1:1 with what the canvas draws. Its right half
+was the only way to drag author sprites onto the grid; strips still come from
+the inspector. It comes back as the Legend overlay (12), drawn with the real
+pictures.
+
 ## 2026-09-29: the machine, redesigned
 
 The main objective: a machine reads as the life of one call, top to bottom
