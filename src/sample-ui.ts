@@ -9,7 +9,7 @@ import { analyze, applyTrace, cancelGdb, engineFor, play, startGdb } from './mai
 import { renderAlerts, renderSampleTabs } from './panels';
 import { leaveProject, openSampleProject, projectSaveSoon, renderProjectChrome, renderRunFields } from './project-ui';
 import { SAMPLES, SAMPLE_PROJECTS } from './samples';
-import { S, debounce, editor, layout, setLastInspectorKey, setLoadingSample, toast, view } from './state';
+import { S, debounce, editor, layout, setLastInspectorKey, setLoadingSample, toast, view, update } from './state';
 
 // ---------------- per-sample work, kept in this browser ----------------
 interface Saved {
@@ -161,8 +161,8 @@ export async function importBlueprint(file: File): Promise<void> {
       layout.waypoints.clear();
       for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
     }
-    S.sprites = bp.sprites;
-    S.selected = null;
+    update('importBlueprint', { sprites: bp.sprites });
+    update('importBlueprint', { selected: null });
     bindingsChanged();
     saveSoon();
     view.fit(S);
@@ -191,15 +191,15 @@ export function loadSample(key: string | undefined, pristine = false): void {
   const s = SAMPLES.find((x) => x.key === key || x.title === key) ?? (key ? SAMPLES[Number(key) - 1] : undefined);
   if (!s) return toast(`no sample “${key}” — try ${SAMPLES.map((x) => x.key).join(', ')}`);
   if (S.project) leaveProject();
-  S.sample = s;
-  S.selected = null;
+  update('loadSample', { sample: s });
+  update('loadSample', { selected: null });
   store.set('lastSample', s.key);
   const saved = pristine ? null : readSaved(s.key);
-  S.sprites = saved?.sprites ? parseSavedSprites(saved.sprites) : [];
+  update('loadSample', { sprites: saved?.sprites ? parseSavedSprites(saved.sprites) : [] });
   const src = saved?.src ?? s.src;
-  S.stdin = saved?.stdin ?? s.stdin ?? '';
-  S.args = saved?.args ?? [];
-  S.defines = saved?.defines ?? s.defines ?? [];
+  update('loadSample', { stdin: saved?.stdin ?? s.stdin ?? '' });
+  update('loadSample', { args: saved?.args ?? [] });
+  update('loadSample', { defines: saved?.defines ?? s.defines ?? [] });
   $<HTMLTextAreaElement>('stdin').value = S.stdin;
   renderRunFields();
   $('file-name').textContent = s.file;

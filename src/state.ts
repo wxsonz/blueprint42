@@ -12,10 +12,11 @@ import type { IconKind, Skin } from './skins/types';
 import type { Sprite } from './blueprint';
 import type { Project } from './workspace';
 import { $, store } from './dom';
+import { setRecentActions } from './diag';
 
 // ---------------- state ----------------
 export const layout = new Layout();
-export const S: ViewState & {
+export type AppState = ViewState & {
   playing: boolean;
   speed: number;
   stepTarget: number | null;
@@ -33,7 +34,8 @@ export const S: ViewState & {
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
   sprites: Sprite[];
   project: Project | null; // M5: an open folder (or a bundled sample project)
-} = {
+};
+const state: AppState = {
   layout,
   model: null,
   trace: null,
@@ -59,6 +61,44 @@ export const S: ViewState & {
   sprites: [],
   project: null,
 };
+
+// S is read everywhere and changed only through update(), by name: dev
+// builds keep the last 200 changes (what, when, the new values), and every
+// error report carries the latest (src/diag.ts). Read-only to the compiler,
+// so a direct `S.x = …` outside this file doesn't build.
+export const S: Readonly<AppState> = state;
+
+export interface Action { name: string; patch: Record<string, unknown>; t: number; n: number }
+export const actions: Action[] = [];
+const summary = (v: unknown): unknown =>
+  v === null || typeof v !== 'object' ? v : Array.isArray(v) ? `[${v.length}]` : 'k' in (v as object) ? v : `{${Object.keys(v as object).slice(0, 4).join(',')}}`;
+export function update(name: string, patch: Partial<AppState>): void {
+  Object.assign(state, patch);
+  if (!import.meta.env.DEV) return;
+  const t = performance.now();
+  const keys = Object.keys(patch).sort().join(',');
+  // the same change again and again (playback advancing, the pointer
+  // moving, each frame's checks between): one entry, counted, with its
+  // latest values, moved to the end
+  for (let k = actions.length - 1; k >= Math.max(0, actions.length - 4); k--) {
+    const a = actions[k];
+    if (a.name !== name || Object.keys(a.patch).sort().join(',') !== keys) continue;
+    a.n++;
+    a.t = t;
+    for (const [key, v] of Object.entries(patch)) a.patch[key] = summary(v);
+    actions.push(...actions.splice(k, 1));
+    return;
+  }
+  actions.push({ name, patch: Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, summary(v)])), t, n: 1 });
+  if (actions.length > 200) actions.shift();
+}
+setRecentActions(() => actions.slice(-30));
+// an open project's run settings (its run.json), by name too
+export function updateRun(name: string, patch: Partial<Project['run']>): void {
+  if (!state.project) return;
+  Object.assign(state.project.run, patch);
+  if (import.meta.env.DEV) actions.push({ name, patch: { run: Object.keys(patch).join(',') }, t: performance.now(), n: 1 }), actions.length > 200 && actions.shift();
+}
 
 export const LEGEND: { kind: IconKind; name: string; c: string; live: boolean; text: string }[] = [
   { kind: 'node', name: 'Function', c: 'function definition', live: true, text: 'One per function. Shows whether it is running, waiting on a callee, or idle.' },

@@ -3,6 +3,13 @@
 // distinct failure is one entry with a count, so a hook that throws every
 // frame is one line, not thousands.
 
+// the latest named state changes (src/state.ts hands them over: this file
+// can't import it), attached to errors so a report says what led up to it
+let recentActions: () => unknown[] = () => [];
+export function setRecentActions(f: () => unknown[]): void {
+  recentActions = f;
+}
+
 export interface HookError {
   skin: string;
   hook: string;
@@ -12,6 +19,7 @@ export interface HookError {
   count: number;
   first: number; // ms, performance.now()
   last: number;
+  actions: unknown[]; // the state changes before it first happened
 }
 
 const MAX = 100;
@@ -31,7 +39,7 @@ export function reportHookError(skin: string, hook: string, err: unknown, args: 
   if (e) (e.count++, (e.last = now));
   else {
     if (hookErrors.size >= MAX) hookErrors.delete(hookErrors.keys().next().value!);
-    e = { skin, hook, message, args: summarize(args), stack: err instanceof Error ? err.stack ?? '' : '', count: 1, first: now, last: now };
+    e = { skin, hook, message, args: summarize(args), stack: err instanceof Error ? err.stack ?? '' : '', count: 1, first: now, last: now, actions: recentActions() };
     hookErrors.set(key, e);
     console.error(`[blueprint42] skin ${skin}: ${hook}() threw: ${message}\n  given: ${e.args}`, err);
   }
@@ -123,11 +131,11 @@ export function countCalls(g: CanvasRenderingContext2D | null): void {
 }
 
 // Checks a trace fails (src/validate.ts): where the data is wrong, before it's drawn.
-export interface CheckFailure { check: string; detail: string; at: number | null }
+export interface CheckFailure { check: string; detail: string; at: number | null; actions?: unknown[] }
 export const checkFailures: CheckFailure[] = [];
 export function reportCheck(f: CheckFailure): void {
   if (checkFailures.length >= 200) checkFailures.shift();
-  checkFailures.push(f);
+  checkFailures.push({ ...f, actions: recentActions() });
   console.warn(`[blueprint42] trace check "${f.check}" failed${f.at !== null ? ` at event ${f.at}` : ''}: ${f.detail}`);
 }
 
@@ -147,6 +155,7 @@ export function diagReport(extra: Record<string, unknown> = {}) {
     memo: { fitText: rate(memo.fitHit, memo.fitMiss), widths: rate(memo.widthHit, memo.widthMiss) },
     errors: [...hookErrors.values()].map((e) => ({ where: `${e.skin}.${e.hook}`, message: e.message, count: e.count, given: e.args })),
     checks: checkFailures.slice(-20),
+    actions: recentActions(),
     ...extra,
   };
 }

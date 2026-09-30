@@ -8,7 +8,7 @@ import { type LiveMsg, liveReplay, liveReveal } from './live';
 import { renderAlerts, renderSampleTabs, renderStatus } from './panels';
 import { SAMPLES, SAMPLE_PROJECTS, type SampleProject } from './samples';
 import { baseName } from './skins/util';
-import { S, debounce, editor, layout, overlay, setDebounce, setLastExec, setLoadingSample, toast, view } from './state';
+import { S, debounce, editor, layout, overlay, setDebounce, setLastExec, setLoadingSample, toast, view, update } from './state';
 import { BP_JSON, DRIVER, type Listing, META, type Opened, type PFile, type Project, RUN_JSON, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, runEmpty, save, serializeRun } from './workspace';
 import { analyze, cancelGdb, closeOverlay, currentSrc, engineFor, hooks, startGdb } from './main';
 import { bindingsChanged, loadSample, renderInsides, saveSoon, settle } from './sample-ui';
@@ -84,7 +84,7 @@ export function leaveProject(): void {
   clearTimeout(projectSaveTimer);
   writeProjectBackup(p);
   stopPolling();
-  S.project = null;
+  update('leaveProject', { project: null });
   cancelGdb();
   layout.reset();
   // a fresh state: the sample must not share the project file's undo history
@@ -128,9 +128,9 @@ export function openSampleProject(sp: SampleProject): void {
 
 function loadProject(p: Project): void {
   if (S.project) leaveProject();
-  S.project = p;
-  S.selected = null;
-  S.sprites = [];
+  update('loadProject', { project: p });
+  update('loadProject', { selected: null });
+  update('loadProject', { sprites: [] });
   store.set('lastProject', p.root ? `folder:${p.root}` : `sample:${SAMPLE_PROJECTS.find((x) => x.name === p.name)?.key ?? ''}`);
   // Hot exit: unsaved buffers come back only over the disk text they were edited from.
   const saved = readProjectSaved(p);
@@ -157,7 +157,7 @@ function loadProject(p: Project): void {
     try {
       const bp = parseBlueprint(bpDisk);
       layout.applyBlueprint(bp, S.model, false);
-      S.sprites = bp.sprites;
+      update('loadProject', { sprites: bp.sprites });
     } catch (e) {
       toast(`${BP_JSON}: ${(e as Error).message} — ignored`);
     }
@@ -166,7 +166,7 @@ function loadProject(p: Project): void {
     try {
       const bp = parseBlueprint(saved.layout);
       layout.applyBlueprint(bp, S.model, true);
-      S.sprites = bp.sprites;
+      update('loadProject', { sprites: bp.sprites });
     } catch {
       /* an old backup format: the committed blueprint stands */
     }

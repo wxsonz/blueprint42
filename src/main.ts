@@ -23,7 +23,7 @@ import { buildFiles, fsCall, isDirty, isSource, projectModel, splitArgs } from '
 import { SKINS, SKIN_FONTS, SKIN_GROUPS, isWip, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import { $, esc, store } from './dom';
-import { LEGEND, S, alerts, canvas, debounce, editor, gridPane, inspector, layout, loadingSample, menu, modelRevision, overlay, setDebounce, setEditor, setLastInspectorKey, setLastPbKey, setModelRevision, setTraceRevision, timeline, toast, traceRevision, view } from './state';
+import { LEGEND, S, alerts, canvas, debounce, editor, gridPane, inspector, layout, loadingSample, menu, modelRevision, overlay, setDebounce, setEditor, setLastInspectorKey, setLastPbKey, setModelRevision, setTraceRevision, timeline, toast, traceRevision, view, update, updateRun } from './state';
 import { renderDuel, renderFeed, renderStageCard } from './feed';
 import { paintPage, setUiZoom, stepUiZoom, ui } from './page';
 import { renderAlerts, renderDock, renderInspector, renderLiveStatus, renderSampleTabs, renderStatus, renderTestsMenu, violations } from './panels';
@@ -88,7 +88,7 @@ function setMode(m: AnimMode): void {
 function autoSpeed(trace: Trace): void {
   const total = trace.evs.reduce((a, e, i) => a + durationAt(trace, S.model, i) / (staged(e) ? Math.min(S.speed, FOCUS_MAX) : 1), 0);
   // statements animate inside the machines: never so fast they can't be followed
-  S.speed = SPEEDS.find((sp) => total / sp <= 120 || sp >= 3) ?? 3;
+  update('autoSpeed', { speed: SPEEDS.find((sp) => total / sp <= 120 || sp >= 3) ?? 3 });
   showSpeed();
 }
 
@@ -110,7 +110,7 @@ function showSpeed(): void {
 
 function setSpeedTo(v: number): void {
   if (!Number.isFinite(v)) return;
-  S.speed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(v * 100) / 100));
+  update('setSpeedTo', { speed: Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(v * 100) / 100)) });
   showSpeed();
 }
 
@@ -152,9 +152,9 @@ export function analyze(src: string, fresh: boolean): void {
     saveSoon();
   }
   const sel = S.selected;
-  if (sel?.k === 'node' && renamed.has(sel.id)) S.selected = { k: 'node', id: renamed.get(sel.id)! };
-  if (sel?.k === 'node' && !layout.nodes.has((S.selected as { id: string }).id)) S.selected = null;
-  S.model = model;
+  if (sel?.k === 'node' && renamed.has(sel.id)) update('parsed', { selected: { k: 'node', id: renamed.get(sel.id)! } }); // a renamed function stays selected
+  if (sel?.k === 'node' && !layout.nodes.has((S.selected as { id: string }).id)) update('parsed', { selected: null });
+  update('parsed', { model });
   const engine = engineFor(model);
   cancelGdb();
   if (engine === 'interp') {
@@ -191,17 +191,17 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
   const target = Math.max(0, total !== null ? Math.min(step, total) : step);
   const from = Math.floor(target / size) * size;
   windowLoading = true;
-  S.gdb = { status: 'running' };
+  update('loadWindow', { gdb: { status: 'running' } });
   renderAlerts();
   try {
     const r = await traceWindow(JSON.parse(session.key), from);
     if (S.model !== model) return;
     if (r === 'unavailable' || !r.ok) {
       toast(r === 'unavailable' ? 'the trace server is not running' : `window ${from}: ${r.error ?? 'failed'}`);
-      S.gdb = { status: 'done' };
+      update('loadWindow', { gdb: { status: 'done' } });
       return;
     }
-    S.gdb = { status: 'done', ms: r.ms };
+    update('loadWindow', { gdb: { status: 'done', ms: r.ms } });
     if (r.window && r.window.to < from && !r.truncated) {
       // the run ended before that step: show its last window instead
       toast(`the run ends at step ${r.window.to.toLocaleString('en-US')}`);
@@ -216,8 +216,8 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
     const evs = S.trace!.evs;
     let i = 0;
     for (; i < evs.length && n < target; i++) if (evs[i].k === 'step') n++;
-    S.pos = i;
-    if (play_) S.playing = true;
+    update('loadWindow', { pos: i });
+    if (play_) update('loadWindow', { playing: true });
   } finally {
     windowLoading = false;
     renderAlerts();
@@ -228,14 +228,14 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
 export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
-  S.trace = trace;
+  update('applyTrace', { trace });
   prepareStage(trace); // focus mode sizes each return's card before playing it
   setTraceRevision(traceRevision + 1);
   setLastInspectorKey('');
   const n = trace?.evs.length ?? 0;
-  S.pos = fresh ? 0 : atEnd ? n : Math.min(S.pos, n);
-  S.stepTarget = null;
-  if (!trace) S.playing = false;
+  update('applyTrace', { pos: fresh ? 0 : atEnd ? n : Math.min(S.pos, n) });
+  update('applyTrace', { stepTarget: null });
+  if (!trace) update('applyTrace', { playing: false });
 }
 
 // ---------------- engines: the interpreter, or the real thing under gdb ----------------
@@ -260,11 +260,11 @@ export function cancelGdb(): void {
   clearTimeout(gdbTimer);
   gdbAbort?.abort();
   gdbAbort = null;
-  if (S.gdb.status === 'running') S.gdb = { status: 'idle' };
+  if (S.gdb.status === 'running') update('cancelGdb', { gdb: { status: 'idle' } });
 }
 
 export function startGdb(src: string, model: Model, fresh: boolean): void {
-  S.gdb = { status: 'running' };
+  update('startGdb', { gdb: { status: 'running' } });
   gdbTimer = window.setTimeout(async () => {
     const ac = new AbortController();
     gdbAbort = ac;
@@ -293,13 +293,13 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
     if (ac.signal.aborted || S.model !== model) return;
     gdbAbort = null;
     if (r === 'unavailable') {
-      S.gdb = { status: 'unavailable' };
+      update('startGdb', { gdb: { status: 'unavailable' } });
       applyTrace(null, fresh);
     } else if (!r.ok) {
-      S.gdb = { status: 'error', compile: r.compile, error: r.error };
+      update('startGdb', { gdb: { status: 'error', compile: r.compile, error: r.error } });
       applyTrace(null, fresh);
     } else {
-      S.gdb = { status: 'done', ms: r.ms };
+      update('startGdb', { gdb: { status: 'done', ms: r.ms } });
       applyTrace(convertGdb({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, files ?? src), fresh);
       prefetchNext();
       if (fresh) {
@@ -323,7 +323,7 @@ function renderEngines(): void {
   box.innerHTML = opts.map(([id, label, title]) => `<button data-id="${id}" aria-pressed="${S.engine === id}" title="${esc(title)}">${label}</button>`).join('');
   box.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
     b.addEventListener('click', () => {
-      S.engine = b.dataset.id as typeof S.engine;
+      update('setEngine', { engine: b.dataset.id as typeof S.engine });
       store.set('engine', S.engine);
       renderEngines();
       analyze(editor.state.doc.toString(), false);
@@ -336,31 +336,31 @@ export const N = () => S.trace?.evs.length ?? 0;
 
 export function play(): void {
   if (!S.trace) return toast(S.model?.error ? 'fix the syntax error first' : 'nothing to run: this code has no main()');
-  if (S.pos >= N()) S.pos = 0;
-  S.stepTarget = null;
-  S.playing = true;
+  if (S.pos >= N()) update('play', { pos: 0 });
+  update('play', { stepTarget: null });
+  update('play', { playing: true });
 }
 
 function togglePlay(): void {
-  if (S.playing) S.playing = false;
+  if (S.playing) update('togglePlay', { playing: false });
   else play();
 }
 
 function stepFwd(): void {
   if (!S.trace) return;
-  if (S.stepTarget !== null) S.pos = S.stepTarget;
+  if (S.stepTarget !== null) update('stepFwd', { pos: S.stepTarget });
   const i = Math.floor(S.pos + 1e-9);
   if (i >= N()) return;
-  S.pos = i;
-  S.stepTarget = i + 1;
-  S.playing = true;
+  update('stepFwd', { pos: i });
+  update('stepFwd', { stepTarget: i + 1 });
+  update('stepFwd', { playing: true });
 }
 
 function stepBack(): void {
   if (!S.trace) return;
-  S.playing = false;
-  S.stepTarget = null;
-  S.pos = Math.max(0, Math.ceil(S.pos - 1e-9) - 1);
+  update('stepBack', { playing: false });
+  update('stepBack', { stepTarget: null });
+  update('stepBack', { pos: Math.max(0, Math.ceil(S.pos - 1e-9) - 1) });
 }
 
 const isCallish = (e: Ev) => e.k === 'call' || e.k === 'ret';
@@ -377,18 +377,18 @@ function nextBeat(): void {
   const next = starts.find((b) => b > from + 1e-9);
   // play the current beat to its end (the next one's start), then stop
   if (cur !== undefined && next !== undefined) {
-    S.pos = Math.max(S.pos, cur);
-    S.stepTarget = next;
-    S.playing = true;
+    update('nextBeat', { pos: Math.max(S.pos, cur) });
+    update('nextBeat', { stepTarget: next });
+    update('nextBeat', { playing: true });
   } else if (next !== undefined) seek(next);
   else stepFwd();
 }
 function prevBeat(): void {
   const starts = beats();
-  S.playing = false;
-  S.stepTarget = null;
+  update('prevBeat', { playing: false });
+  update('prevBeat', { stepTarget: null });
   const prev = [...starts].reverse().find((b) => b < S.pos - 1e-9);
-  S.pos = prev ?? 0;
+  update('prevBeat', { pos: prev ?? 0 });
 }
 
 function nextCall(): void {
@@ -396,24 +396,24 @@ function nextCall(): void {
   const from = S.stepTarget ?? Math.ceil(S.pos - 1e-9);
   const j = S.trace.evs.findIndex((e, k) => k >= from && isCallish(e));
   if (j < 0) return seek(N());
-  S.pos = j;
-  S.stepTarget = j + 1;
-  S.playing = true;
+  update('nextCall', { pos: j });
+  update('nextCall', { stepTarget: j + 1 });
+  update('nextCall', { playing: true });
 }
 
 function prevCall(): void {
   if (!S.trace) return;
-  S.playing = false;
-  S.stepTarget = null;
+  update('prevCall', { playing: false });
+  update('prevCall', { stepTarget: null });
   const cur = Math.ceil(S.pos - 1e-9);
-  for (let j = cur - 2; j >= 0; j--) if (isCallish(S.trace.evs[j])) return void (S.pos = j + 1);
-  S.pos = 0;
+  for (let j = cur - 2; j >= 0; j--) if (isCallish(S.trace.evs[j])) return void update('prevCall', { pos: j + 1 });
+  update('prevCall', { pos: 0 });
 }
 
 function seek(p: number): void {
-  S.playing = false;
-  S.stepTarget = null;
-  S.pos = Math.max(0, Math.min(p, N()));
+  update('seek', { playing: false });
+  update('seek', { stepTarget: null });
+  update('seek', { pos: Math.max(0, Math.min(p, N())) });
 }
 
 // one preset up or down from wherever it is (a typed 4× goes to 5× or 3×)
@@ -424,7 +424,7 @@ function setSpeed(dir: number): void {
 
 function restart(): void {
   if (!S.trace) return toast(S.model?.error ? 'fix the syntax error first' : 'nothing to run: no main()');
-  S.pos = 0;
+  update('restart', { pos: 0 });
   play();
 }
 
@@ -491,8 +491,8 @@ export function placeSprite(kind: SpriteKind, wx: number, wy: number, preset: Pa
   const id = `sprite:${crypto.randomUUID()}`;
   const sprite: Sprite = { id, kind, x: Math.round(wx), y: Math.round(wy), ...preset };
   S.sprites.push(sprite);
-  S.selected = { k: 'sprite', id };
-  S.legend = null;
+  update('placeSprite', { selected: { k: 'sprite', id } });
+  update('placeSprite', { legend: null });
   setLastInspectorKey('');
   saveSoon();
   bindingsChanged();
@@ -500,8 +500,8 @@ export function placeSprite(kind: SpriteKind, wx: number, wy: number, preset: Pa
 }
 
 export function removeSprite(id: string): void {
-  S.sprites = S.sprites.filter((s) => s.id !== id);
-  if (S.selected?.k === 'sprite' && S.selected.id === id) S.selected = null;
+  update('removeSprite', { sprites: S.sprites.filter((s) => s.id !== id) });
+  if (S.selected?.k === 'sprite' && S.selected.id === id) update('removeSprite', { selected: null });
   setLastInspectorKey('');
   saveSoon();
   bindingsChanged();
@@ -551,8 +551,7 @@ function bindMouse(): void {
     const [wx, wy] = view.toWorld(x, y);
     const hit = entityAt(S, wx, wy);
     pendingFold = hit?.k === 'node' ? foldAt(S, wx, wy) : null;
-    S.selected = hit;
-    S.legend = null;
+    update('select', { selected: hit, legend: null });
     if (hit?.k === 'sprite') {
       const sprite = S.sprites.find((s) => s.id === hit.id)!;
       drag = { k: 'sprite', id: hit.id, ox: wx - sprite.x, oy: wy - sprite.y, moved: false };
@@ -601,7 +600,7 @@ function bindMouse(): void {
         }
       }
     } else {
-      S.hovered = entityAt(S, wx, wy);
+      update('hover', { hovered: entityAt(S, wx, wy) });
     }
     // a statement longer than its station shows: the whole of it, on hover
     const at = !drag && !view.heapBarAt(x, y) ? stationAt(S, wx, wy) : null;
@@ -622,7 +621,7 @@ function bindMouse(): void {
     }
     if (drag?.k === 'module' && drag.moved) toast('module pinned where you put it (right-click → Unpin)');
     if ((drag?.k === 'node' || drag?.k === 'belt' || drag?.k === 'sprite' || drag?.k === 'module') && drag.moved) saveSoon();
-    if (drag?.k === 'pan' && !drag.moved && S.selected === null) S.legend = null;
+    if (drag?.k === 'pan' && !drag.moved && S.selected === null) update('end', { legend: null });
     drag = null;
     setCursorStyle();
   };
@@ -630,7 +629,7 @@ function bindMouse(): void {
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => {
     showTip(null);
-    if (!drag) S.hovered = null;
+    if (!drag) update('end', { hovered: null });
   });
   canvas.addEventListener('dragover', (e) => {
     if (e.dataTransfer?.types.includes('application/x-ftb-sprite')) e.preventDefault();
@@ -684,7 +683,7 @@ function bindMouse(): void {
     const [x, y] = localXY(e);
     const [wx, wy] = view.toWorld(x, y);
     const hit = entityAt(S, wx, wy);
-    S.selected = hit;
+    update('end', { selected: hit });
     const items: [string, () => void][] = [];
     if (hit?.k === 'node') {
       items.push(['Go to code', () => gotoCode(hit)]);
@@ -700,7 +699,7 @@ function bindMouse(): void {
       if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);
     } else if (hit?.k === 'sprite') {
-      items.push(['Bind…', () => { S.selected = hit; setLastInspectorKey(''); renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
+      items.push(['Bind…', () => { update('bind', { selected: hit }); setLastInspectorKey(''); renderInspector(); inspector.querySelector<HTMLInputElement>('[name="expr"]')?.focus(); }]);
       items.push(['Remove', () => removeSprite(hit.id)]);
     } else if (hit?.k === 'belt') {
       items.push(['Go to call site', () => gotoCode(hit)]);
@@ -799,7 +798,7 @@ function onKey(e: KeyboardEvent): void {
   else if (k === 'ArrowLeft') (e.shiftKey ? prevCall : prevBeat)();
   else if (k === 'Home') seek(0);
   else if (k === 'End') seek(N());
-  else if (k === 'Escape') (S.selected = null), (S.legend = null), hideMenu(), toggleLegend(false);
+  else if (k === 'Escape') update('escape', { selected: null, legend: null }), hideMenu(), toggleLegend(false);
   else if (k === 'f' || k === 'F') view.fit(S);
   else if (k === 'm' || k === 'M') setMode(animMode() === 'fast' ? 'focus' : 'fast');
   else if (k === '+' || k === '=') view.zoomAt(view.w / 2, view.h / 2, 1.2);
@@ -811,7 +810,7 @@ function onKey(e: KeyboardEvent): void {
 
 // ---------------- skins ----------------
 async function applySkin(skin: Skin): Promise<void> {
-  S.skin = skin;
+  update('applySkin', { skin });
   document.documentElement.dataset.skin = skin.id;
   store.set('skin', skin.id);
   renderSkinPicker();
@@ -974,18 +973,18 @@ export const hooks: EditorHooks = {
     setDebounce(window.setTimeout(() => analyze(doc, false), 150));
   },
   onCursor: (line, col) => {
-    S.cursor = { line, col };
+    update('editorCursor', { cursor: { line, col } });
     const active = S.project?.active;
     const f = S.model?.fns.find((x) => (!S.project || x.file === active) && line >= x.startLine && line <= x.endLine);
-    S.editorFn = f?.name ?? null;
+    update('editorCursor', { editorFn: f?.name ?? null });
   },
   onMode: (m) => {
-    S.mode = m;
+    update('editorMode', { mode: m });
   },
 };
 
 function toggleVim(): void {
-  S.vim = !S.vim;
+  update('toggleVim', { vim: !S.vim });
   store.set('vim', S.vim ? 'on' : 'off');
   setVim(editor, S.vim, hooks);
   renderVimToggle();
@@ -1130,7 +1129,7 @@ function tick(now: number): void {
   if (S.playing && t) {
     const n = t.evs.length;
     const i = Math.floor(S.pos);
-    if (i >= n) S.playing = false;
+    if (i >= n) update('advance', { playing: false });
     else {
       const before = S.pos;
       // spend this frame's time across as many events as it covers (inside a
@@ -1143,20 +1142,18 @@ function tick(now: number): void {
         const d = durationAt(t, S.model, j);
         const need = ((j + 1 - S.pos) * d) / rate;
         if (need <= left) {
-          S.pos = j + 1;
+          update('advance', { pos: j + 1 });
           left -= need;
           if (S.stepTarget !== null && S.pos >= S.stepTarget) break;
         } else {
-          S.pos += (left * rate) / d;
+          update('advance', { pos: S.pos + ((left * rate) / d) });
           left = 0;
         }
       }
       // M4: freeze on the step where an invariant first breaks.
       const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
       if (hit) {
-        S.pos = hit.at;
-        S.playing = false;
-        S.stepTarget = null;
+        update('invariantBroke', { pos: hit.at, playing: false, stepTarget: null });
         toast(`stopped: ${hit.invariant} broke — ${hit.detail}`);
         // Bring the broken sprite into view, clear of the alert banner.
         const sp = S.sprites.find((x) => x.id === hit.sprite);
@@ -1166,13 +1163,10 @@ function tick(now: number): void {
         }
       }
       if (S.stepTarget !== null && S.pos >= S.stepTarget) {
-        S.pos = S.stepTarget;
-        S.stepTarget = null;
-        S.playing = false;
+        update('stepDone', { pos: S.stepTarget, stepTarget: null, playing: false });
       }
       if (S.pos >= n) {
-        S.pos = n;
-        S.playing = false;
+        update('runEnd', { pos: n, playing: false });
         // the run goes on past this window: fetch the next and keep playing
         if (t.window?.more && S.stepTarget === null) void loadWindow(t.window.to, true);
       }
@@ -1203,7 +1197,7 @@ function tick(now: number): void {
       if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
     }
   }
-  S.violations = violations();
+  update('violations', { violations: violations() });
   // a page-wide background (PS3, PS4) is the whole window of GPU work: it
   // moves slowly, so 30 fps while playing too, as when idle
   if (!S.skin.fullBleed || now - lastPageAt >= 30) (lastPageAt = now), paintPage(now, S, view);
@@ -1262,8 +1256,8 @@ async function boot(): Promise<void> {
   $('btn-save').addEventListener('click', openSaveDialog);
   $<HTMLInputElement>('run-args').addEventListener('change', (e) => {
     const args = splitArgs((e.target as HTMLInputElement).value).slice(0, 32);
-    if (!S.project) return sampleRunChanged(() => (S.args = args));
-    S.project.run.args = args;
+    if (!S.project) return sampleRunChanged(() => update('args', { args }));
+    updateRun('args', { args });
     runChanged();
   });
   // steps per window (gdb sessions): a new size starts the session again
@@ -1303,8 +1297,8 @@ async function boot(): Promise<void> {
     const defs = input.value.split(/[\s,]+/).map((d) => d.replace(/^-D/, '')).filter(Boolean);
     const bad = defs.find((d) => !/^[A-Za-z_]\w*(=[\w.+-]*)?$/.test(d));
     if (bad) return toast(`-D ${bad}: use NAME or NAME=value`);
-    if (!S.project) return sampleRunChanged(() => (S.defines = defs.slice(0, 32)));
-    S.project.run.defines = defs.slice(0, 32);
+    if (!S.project) return sampleRunChanged(() => update('defines', { defines: defs.slice(0, 32) }));
+    updateRun('defines', { defines: defs.slice(0, 32) });
     runChanged();
   });
   window.addEventListener('beforeunload', (e) => {
@@ -1324,10 +1318,10 @@ async function boot(): Promise<void> {
   $<HTMLTextAreaElement>('stdin').addEventListener('input', (e) => {
     const value = (e.target as HTMLTextAreaElement).value;
     if (S.project) {
-      S.project.run.stdin = value;
+      updateRun('stdin', { stdin: value });
       return runChanged();
     }
-    sampleRunChanged(() => (S.stdin = value));
+    sampleRunChanged(() => update('stdin', { stdin: value }));
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
   $('btn-legend').addEventListener('click', () => toggleLegend());
@@ -1358,7 +1352,7 @@ async function boot(): Promise<void> {
   const followBtn = $('btn-follow');
   followBtn.setAttribute('aria-pressed', String(S.follow));
   followBtn.addEventListener('click', () => {
-    S.follow = !S.follow;
+    update('toggleFollow', { follow: !S.follow });
     followBtn.setAttribute('aria-pressed', String(S.follow));
   });
   overlay.addEventListener('mousedown', (e) => e.target === overlay && closeOverlay());

@@ -15,7 +15,7 @@ import { buildScene } from './route';
 import { SAMPLES, SAMPLE_PROJECTS, type Sample } from './samples';
 import { STRESS_CASES, STRESS_SIZES, stressFiles } from '../stress/gen.mjs';
 import type { IconKind } from './skins/types';
-import { LEGEND, S, alerts, decl, editorPane, gridPane, inspector, lastInspectorKey, layout, modelRevision, setLastInspectorKey, toast, traceRevision, view } from './state';
+import { LEGEND, S, alerts, decl, editorPane, gridPane, inspector, lastInspectorKey, layout, modelRevision, setLastInspectorKey, toast, traceRevision, view, update } from './state';
 import { DRIVER } from './workspace';
 import { drawIcon, gotoCode, placeSprite, removeSprite, toggleModule } from './main';
 import { bindingsChanged, loadSample, saveSoon } from './sample-ui';
@@ -92,8 +92,8 @@ export function renderDock(): void {
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
     });
     b.addEventListener('click', () => {
-      S.legend = S.legend === l.kind ? null : l.kind;
-      if (S.legend) S.selected = null;
+      update('legendItem', { legend: S.legend === l.kind ? null : l.kind });
+      if (S.legend) update('legendItem', { selected: null });
       renderDock();
     });
   });

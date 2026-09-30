@@ -102,7 +102,11 @@ Steps, in this order:
    and failed checks (step 7). The bench scripts from this week become
    `tools/bench` (a headed Chromium or Zen window, placed on the terminal's
    desktop), so "is it faster" is one command.
-6. [ ] **State changes by name** (M). `S` changes only through named
+6. [x] **State changes by name** (M). Done 2026-10-01: `S` is read-only to
+   the compiler outside `state.ts`; ~100 writes became `update('seek' |
+   'play' | 'advance' | 'select' | …, patch)` (and `updateRun` for a
+   project's run settings). Dev builds keep the last 200, repeats counted,
+   in `__ftb.diag().actions` and on every hook error and failed check. `S` changes only through named
    actions in `state.ts` (`seek`, `play`, `loadTrace`, `setSkin`, …); dev
    builds keep the last 200 with their arguments, attached to every error
    report. Done when nothing outside `state.ts` assigns to `S`.
