@@ -8,6 +8,7 @@ import { arrowHead, strokeLine, Walk } from './util';
 import { drawDock } from './dock';
 import { drawStdBuf, drawStdin } from './stdbuf';
 import { drawHeapBar, drawHeapCard, type HeapBarPalette } from './heapbar';
+import { drawTypeCard } from './typeshelf';
 import type { Skin } from './types';
 
 const UI = (px: number, w = 400) => `${w >= 600 ? 600 : 400} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
@@ -85,6 +86,9 @@ function withDock(t: Theme): Skin {
     },
     heapCard(dc, r, c) {
       drawHeapCard(dc, r, c, heap);
+    },
+    typeCard(dc, r, ty) {
+      drawTypeCard(dc, r, ty, { card: q.card, head: q.panel, edge: null, text: q.fg, muted: q.dim, faint: q.faint, name: q.dim, accent: q.accent, ui: t.ui, mono: t.mono, radius: 0 });
     },
     stdin(dc, r, b) {
       drawStdin(dc, r, b, { body: q.card, edge: null, text: q.fg, muted: q.dim, faint: q.faint, flow: q.accent, wait: q.wait, err: q.err, track: q.cell, ui: t.ui, mono: t.mono, radius: 0 });

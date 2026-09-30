@@ -39,3 +39,17 @@ describe('parse: M1 acceptance on samples/line_reader', () => {
     expect(m.error).not.toBeNull();
   });
 });
+
+describe('the types shelf', () => {
+  it('reads structs, enums (values as C gives them), typedefs and #defines', () => {
+    const src = '#define N 4\n#define SQ(x) ((x) * (x))\n\ntypedef unsigned long\tt_size;\n\ntypedef struct s_p\n{\n\tint\t\tx;\n\tchar\t*name;\n}\tt_p;\n\nenum e_k\n{\n\tA,\n\tB = 5,\n\tC\n};\n\nint\tmain(void)\n{\n\treturn (N);\n}\n';
+    const types = parse(src).types;
+    expect(types.map((t) => [t.kind, t.name, t.alias ?? '', t.members.map((m) => `${m.name}=${m.text}`).join(' ')])).toEqual([
+      ['typedef', 't_size', '', 'is=unsigned long'],
+      ['struct', 'struct s_p', 't_p', 'x=int name=char *'],
+      ['enum', 'enum e_k', '', 'A=0 B=5 C=6'],
+      ['defines', '#define', '', 'N=4 SQ(x)=((x) * (x))'],
+    ]);
+  });
+});
+

@@ -83,8 +83,10 @@ Next, in this order:
     wall to show them on: next to its name in the grid's head (`sort.c ·
     4/5 functions`, in the bad colour past 5; the line reader's combined
     buffer says 11/5, true of it as one file).
-12. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants
-    from headers, on the grid.
+12. [x] **Types shelf** (L). Structs, typedefs, enums and macro constants
+    from headers, on the grid: a column of cards left of the machines
+    (Minimal, Barebone; `skins/typeshelf.ts`, `parse.ts` `typeDefsOf`), the
+    `-D` value the run used, the struct in use outlined.
 13. [ ] **Legend overlay** (M). The real drawings and what each one means.
 14. [ ] **Real events as effects** (S each). A leak falls off the shelf at
     exit, `free` takes the block away, a segfault jams the machine.

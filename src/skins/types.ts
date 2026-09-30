@@ -267,6 +267,17 @@ export interface HeapCardInfo {
   watch?: { where: string; gone: boolean };
 }
 
+// A card on the types shelf: a type or a file's constants.
+export interface TypeCardInfo {
+  kind: 'struct' | 'union' | 'enum' | 'typedef' | 'defines';
+  name: string;
+  alias?: string;
+  file: string; // where it's defined ('' for the one buffer)
+  members: { name: string; text: string; note?: string; set?: boolean }[]; // set: the value the run used came from -D
+  more: number; // members with no row
+  inUse: boolean; // the running function has a variable of this type
+}
+
 export interface Skin {
   id: string;
   name: string;
@@ -295,6 +306,9 @@ export interface Skin {
   // Barebone prototype it)
   heapBar?(dc: Dc, r: Rect, b: HeapBarInfo): void;
   heapCard?(dc: Dc, r: Rect, c: HeapCardInfo): void;
+  // optional: a card on the types shelf, left of the machines (Minimal and
+  // Barebone prototype it); skins without it draw no shelf
+  typeCard?(dc: Dc, r: Rect, t: TypeCardInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
   strip(dc: Dc, r: Rect, info: StripInfo): void;

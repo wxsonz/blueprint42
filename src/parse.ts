@@ -49,8 +49,22 @@ export interface Global {
   init: Node | null;
 }
 
+// A type a file defines, for the types shelf: a struct or union with its
+// fields, an enum with its members' values, a plain typedef, or the file's
+// #defines (one entry per file).
+export interface TypeDef {
+  id: string; // type:<file>:<name>
+  kind: 'struct' | 'union' | 'enum' | 'typedef' | 'defines';
+  name: string; // `struct s_reader`, `enum e_lr_status`, `t_size`, `#define`
+  alias?: string; // the typedef name given to it
+  file: string;
+  line: number;
+  members: { name: string; text: string }[];
+}
+
 export interface Model {
   fns: FnInfo[];
+  types: TypeDef[];
   byName: Map<string, FnInfo>; // by key
   globals: Global[];
   macros: Map<string, number>;
@@ -144,6 +158,65 @@ export function structTable(trees: Tree[]): Map<string, Var[]> {
     const f = byTag.get(key);
     if (f) out.set(alias, f);
   }
+  return out;
+}
+
+export function typeDefsOf(tree: Tree, file: string): TypeDef[] {
+  const out: TypeDef[] = [];
+  const defines: TypeDef = { id: `type:${file}:#define`, kind: 'defines', name: '#define', file, line: 0, members: [] };
+  const entry = (spec: Node, alias: string | undefined, at: Node) => {
+    const body = spec.childForFieldName('body');
+    if (!body) return false;
+    const tag = spec.childForFieldName('name')?.text;
+    if (spec.type === 'enum_specifier') {
+      // members' values as C gives them: written, or one more than the last
+      let next = 0;
+      const members = body.namedChildren.filter((c): c is Node => c?.type === 'enumerator').map((e) => {
+        const v = e.childForFieldName('value')?.text;
+        const n = v !== undefined && /^-?\d+$/.test(v) ? Number(v) : v === undefined ? next : NaN;
+        next = Number.isNaN(n) ? NaN : n + 1;
+        return { name: e.childForFieldName('name')?.text ?? '?', text: v ?? (Number.isNaN(n) ? '?' : String(n)) };
+      });
+      out.push({ id: `type:${file}:enum ${tag ?? alias}`, kind: 'enum', name: tag ? `enum ${tag}` : 'enum', ...(alias ? { alias } : {}), file, line: at.startPosition.row, members });
+      return true;
+    }
+    const kind = spec.type === 'union_specifier' ? 'union' : 'struct';
+    out.push({ id: `type:${file}:${kind} ${tag ?? alias}`, kind, name: tag ? `${kind} ${tag}` : kind, ...(alias ? { alias } : {}), file, line: at.startPosition.row, members: fieldsIn(body).map((v) => ({ name: v.name, text: v.type })) });
+    return true;
+  };
+  const visit = (n: Node) => {
+    if (n.type === 'preproc_def') {
+      const name = n.childForFieldName('name')?.text;
+      const val = n.childForFieldName('value')?.text.trim();
+      if (name && val) (defines.members.push({ name, text: val }), defines.line || (defines.line = n.startPosition.row));
+      return;
+    }
+    if (n.type === 'preproc_function_def') {
+      const name = n.childForFieldName('name')?.text;
+      const params = n.childForFieldName('parameters')?.text ?? '()';
+      const val = n.childForFieldName('value')?.text.trim() ?? '';
+      if (name) defines.members.push({ name: `${name}${params}`, text: val });
+      return;
+    }
+    if (n.type.startsWith('preproc_')) {
+      for (const c of n.namedChildren) if (c) visit(c);
+      return;
+    }
+    if (n.type === 'type_definition') {
+      const spec = n.childForFieldName('type');
+      const names = n.childrenForFieldName('declarator').map((d) => declName(d));
+      const plain = names.find((d) => d.name && !d.suffix && !d.fnDecl)?.name;
+      if (spec && (spec.type === 'struct_specifier' || spec.type === 'union_specifier' || spec.type === 'enum_specifier') && entry(spec, plain, n)) return;
+      for (const d of names) if (d.name) out.push({ id: `type:${file}:${d.name}`, kind: 'typedef', name: d.name, file, line: n.startPosition.row, members: [{ name: 'is', text: `${spec?.text ?? '?'}${d.suffix ? ` ${d.suffix}` : ''}` }] });
+      return;
+    }
+    if (n.type === 'declaration' || n.type === 'struct_specifier' || n.type === 'union_specifier' || n.type === 'enum_specifier') {
+      const spec = n.type === 'declaration' ? n.childForFieldName('type') : n;
+      if (spec && (spec.type === 'struct_specifier' || spec.type === 'union_specifier' || spec.type === 'enum_specifier')) entry(spec, undefined, n);
+    }
+  };
+  for (const c of tree.rootNode.namedChildren) if (c) visit(c);
+  if (defines.members.length) out.push(defines);
   return out;
 }
 
@@ -363,6 +436,7 @@ export function parse(src: string): Model {
   attachFields(u.fns, [u.tree]);
   return {
     fns: u.fns, byName: new Map(u.fns.map((f) => [f.name, f])), globals: u.globals, macros: u.macros,
+    types: typeDefsOf(u.tree, ''),
     tree: u.tree, trees: [u.tree], project: false, files: [], warnings: [], error: u.error,
   };
 }
@@ -399,6 +473,7 @@ export function parseProject(sources: SourceFile[]): Model {
   const broken = parsed.find((p) => p.unit.error);
   return {
     fns, byName: new Map(fns.map((f) => [f.name, f])), globals: cUnits.flatMap((u) => u.globals), macros,
+    types: parsed.flatMap((p) => typeDefsOf(p.unit.tree, p.path)),
     tree: parsed[0]?.unit.tree ?? parser!.parse('')!, trees: parsed.map((p) => p.unit.tree), project: true,
     files: [...new Set(fns.map((f) => f.file))], warnings,
     error: broken ? { ...broken.unit.error!, file: broken.path } : null,

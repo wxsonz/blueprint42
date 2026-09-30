@@ -5,6 +5,7 @@ import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawStdBuf, drawStdin } from './stdbuf';
 import { drawHeapBar, drawHeapCard, type HeapBarPalette } from './heapbar';
+import { drawTypeCard } from './typeshelf';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
@@ -233,6 +234,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
   dock(dc, r, d) { drawDock(dc, r, d, dockPalette); },
   stdbuf(dc, r, b) { drawStdBuf(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
   heapBar(dc, r, b) { drawHeapBar(dc, r, b, heapPalette); },
+  typeCard(dc, r, t) { drawTypeCard(dc, r, t, { card: CARD, head: C.frameStack, edge: LINE, text: FG, muted: DIM, faint: FAINT, name: C.param, accent: ACCENT, ui: UI, mono: MONO, radius: 6 }); },
   heapCard(dc, r, c) { drawHeapCard(dc, r, c, heapPalette); },
   stdin(dc, r, b) { drawStdin(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
 

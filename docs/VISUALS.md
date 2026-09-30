@@ -107,6 +107,17 @@ from its right side ("hell" → program). Once all of it is taken, it says so:
 a read now returns 0. Truth: fd 0's real offset after each step, read from
 `/proc/<pid>/fdinfo/0`, so nothing runs in the program to find out.
 
+#### The types shelf (built; drawn in Minimal and Barebone)
+
+What the files define, on the grid in one column left of everything else
+(nothing is placed there): a card per struct or union (its fields and their
+types, `→ t_reader` for its typedef name), per enum (its members with the
+values C gives them, counted on from the last written one), per plain
+typedef, and one per file for its `#define`s. A constant the run set with
+`-D` shows the value it really had: `BUFFER_SIZE 4  -D (the file says 42)`.
+A struct the running function has a variable of is outlined. Past 12 rows a
+card counts the rest.
+
 #### The heap bar (built; drawn in Minimal and Barebone, others keep the shelf)
 
 The heap belongs to no function and outlives every call, so it's drawn as a

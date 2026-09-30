@@ -3,12 +3,13 @@
 // pixel is delegated to the active skin (skins/*.ts).
 import { cLiteral } from './skins/stdbuf';
 import { HEAP_CARD } from './skins/heapbar';
+import { TYPE_CARD, typeCardH } from './skins/typeshelf';
 import { lostBlocks, lostShort } from './ownership';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
 import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
-import type { FnInfo } from './parse';
+import type { FnInfo, TypeDef } from './parse';
 import type { Host } from './route';
 import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
@@ -17,7 +18,7 @@ import { fileCap, fnCaps } from './norm';
 import { gfxMode } from './gfx/gfx';
 import { GfxLayer, type GfxView } from './gfx/layer';
 import { sceneFor } from './gfx/scenes';
-import type { CrateInfo, Dc, HeapBarInfo, HeapCardInfo, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
+import type { CrateInfo, Dc, HeapBarInfo, HeapCardInfo, TypeCardInfo, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
 
 export { procPlace, type Belt };
 export { clip, pointeeName } from './values';
@@ -209,6 +210,27 @@ function sharersOf(snap: Snap): Map<string, number> {
   return m;
 }
 
+// The types shelf: one column left of everything else on the grid (nothing
+// is ever placed there), from the top of the machines down.
+const TYPE_ROWS = 12;
+export function typeShelf(s: ViewState, scene: ReturnType<typeof sceneAt>): { def: TypeDef; r: Rect; rows: number }[] {
+  const defs = s.model?.types ?? [];
+  if (!defs.length) return [];
+  let x0 = Infinity, y0 = Infinity;
+  for (const h of scene.hosts.values()) (x0 = Math.min(x0, h.x)), (y0 = Math.min(y0, h.y));
+  const pp = procPlace(s.layout);
+  if (pp) (x0 = Math.min(x0, pp.x)), (y0 = Math.min(y0, pp.y - 2.5));
+  if (!Number.isFinite(x0)) return [];
+  const x = x0 - TYPE_CARD.w - 1.5;
+  let y = y0;
+  return defs.map((def) => {
+    const rows = Math.min(def.members.length, TYPE_ROWS) + (def.members.length > TYPE_ROWS ? 1 : 0);
+    const r = { x, y, w: TYPE_CARD.w, h: typeCardH(rows) };
+    y += r.h + TYPE_CARD.gap;
+    return { def, r, rows };
+  });
+}
+
 export class GridView {
   private g: CanvasRenderingContext2D;
   // pointer cells whose line already goes to a byte strip in their machine
@@ -377,6 +399,7 @@ export class GridView {
     const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
     const shelf = slots >= 0 ? heapSlotRect(s.layout, slots, s.trace) : null;
     if (shelf) grow(shelf.x, shelf.y, 4, 1);
+    if (this.skinNow?.typeCard) for (const t of typeShelf(s, scene)) grow(t.r.x, t.r.y, t.r.w, t.r.h);
     const sample = s.trace?.evs.length ? frameAt(s.trace, s.pos).snap : s.trace?.snaps[0];
     for (const sprite of s.sprites ?? []) {
       const r = spriteWorldRect(sprite, sample?.bound?.[sprite.id]);
@@ -420,7 +443,9 @@ export class GridView {
     return r.x + r.w > -margin && r.y + r.h > -margin && r.x < this.w + margin && r.y < this.h + margin;
   }
 
+  private skinNow: Skin | null = null; // the skin last drawn (fit includes what it draws)
   draw(s: ViewState, skin: Skin, now: number): void {
+    this.skinNow = skin;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const k = 1 - Math.exp(-dt * 12);
@@ -662,6 +687,25 @@ export class GridView {
         g.restore();
       }
       g.restore();
+    }
+
+    // ---- the types shelf: what the files define, left of the machines ----
+    if (skin.typeCard) {
+      const defs = s.project?.run.defines ?? s.defines ?? [];
+      const dval = new Map(defs.map((d) => { const [k, ...v] = d.split('='); return [k.trim(), v.length ? v.join('=') : '1'] as const; }));
+      const top = st[st.length - 1];
+      const topFn = top ? s.model?.byName.get(top.fn) : undefined;
+      const types = topFn ? [...topFn.params, ...topFn.locals].map((v) => v.type) : [];
+      for (const { def, r } of typeShelf(s, scene)) {
+        if (!this.onScreen(r.x, r.y, r.w, r.h)) continue;
+        const inUse = def.kind !== 'defines' && types.some((ty) => [def.name, def.alias].some((n) => n && new RegExp(`(^|\\W)${n.replace(/\s+/g, '\\s+')}(\\W|$)`).test(ty)));
+        const members = def.members.slice(0, TYPE_ROWS).map((m) => {
+          const v = def.kind === 'defines' ? dval.get(m.name) : undefined;
+          return v !== undefined && v !== m.text ? { name: m.name, text: v, note: `-D (the file says ${m.text})`, set: true } : m;
+        });
+        const info: TypeCardInfo = { kind: def.kind, name: def.name, ...(def.alias ? { alias: def.alias } : {}), file: def.file.slice(def.file.lastIndexOf('/') + 1), members, more: Math.max(0, def.members.length - TYPE_ROWS), inUse };
+        skin.typeCard(dc, this.rectW(r.x, r.y, r.w, r.h), info);
+      }
     }
 
     // ---- machines: homes, plus live (or fading) recursive copies ----

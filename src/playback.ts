@@ -32,6 +32,8 @@ export interface ViewState {
   editorFn: string | null;
   sprites?: Sprite[];
   violations?: Violation[];
+  defines?: string[]; // the run's -D flags (a sample's)…
+  project?: { run: { defines: string[] } } | null; // …or a project's
 }
 
 // World footprint is shared by drawing, fitting and hit testing. A sampled
