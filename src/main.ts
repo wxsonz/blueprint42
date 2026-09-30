@@ -1094,7 +1094,20 @@ function adaptQuality(now: number): void {
   qSlow = qFast = 0;
 }
 
+// A frame that throws (a skin that can't draw some state) is logged once and
+// skipped: the loop, and so playback, keeps going.
+let lastFrameError = '';
 function frame(now: number): void {
+  requestAnimationFrame(frame);
+  try {
+    tick(now);
+  } catch (e) {
+    const msg = String((e as Error)?.stack ?? e);
+    if (msg !== lastFrameError) (lastFrameError = msg), console.error(e);
+  }
+}
+
+function tick(now: number): void {
   if (!S.playing && now - lastInputAt > 400 && view.settled() && !S.skin.busy?.() && now - lastDrawAt < 66) {
     // idle: the grid rests at 15 fps, but a page-wide background that moves
     // (PS3's wave, PS4's band) keeps 30 so its motion doesn't stutter
@@ -1102,7 +1115,6 @@ function frame(now: number): void {
     // a GPU background moves on its own at 30, the grid over it untouched
     else if (now - lastPageAt >= 33 && view.animateGfx(S.skin, now)) lastPageAt = now;
     lastT = now;
-    requestAnimationFrame(frame);
     return;
   }
   lastDrawAt = now;
@@ -1196,7 +1208,6 @@ function frame(now: number): void {
   renderDuel(now, S, view, editor);
   renderInspector();
   renderLiveStatus();
-  requestAnimationFrame(frame);
 }
 
 // ---------------- boot ----------------

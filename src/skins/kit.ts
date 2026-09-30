@@ -631,7 +631,7 @@ export function makeSkin(t: Theme): Skin {
       else if (b.flushed) row('→ terminal', cLiteral(b.flushed), 'int', { recent: true, flash: 1 });
       else row('holds', 'nothing', 'none');
       const inset = px(dc, L.inset ?? 0, 0);
-      skin.frame(dc, r, { title: cap('printf'), mode: b.n ? 'live' : 'none', stacked: 0, rows, head: { x: r.x + inset, y: r.y, w: r.w - inset, h: INV_HEAD_PX * dc.z }, cap: { used: b.n, max: b.cap } });
+      skin.frame(dc, r, { title: cap('printf'), mode: b.n ? 'live' : 'none', stacked: 0, rows, head: { x: r.x + inset, y: r.y, w: r.w - inset, h: INV_HEAD_PX * dc.z }, cap: b.cap > 0 ? { used: b.n, max: b.cap } : undefined });
       L.lamp(dc, r, { x: r.x, y: r.y, w: r.w, h: INV_HEAD_PX * dc.z }, { col: b.n ? stateCol('waiting') : stateCol('idle'), state: b.n ? 'waiting' : 'idle', stale: false });
     };
   }
