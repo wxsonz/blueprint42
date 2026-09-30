@@ -49,16 +49,38 @@ export function fitText(g: CanvasRenderingContext2D, text: string, font: (px: nu
   return out;
 }
 
+// Widths by font and text. While the camera zooms, a label's box and size
+// change every frame (a miss above), but sizes come in half pixels, so the
+// same few fonts come back: each width is measured once, the fit worked out
+// again from the numbers (the same answer as measuring them afresh).
+const widthMemo = new Map<string, number>();
+function widthIn(g: CanvasRenderingContext2D, font: string, text: string): number {
+  const key = `${font}|${text}`;
+  let w = widthMemo.get(key);
+  if (w === undefined) {
+    if (g.font !== font) g.font = font;
+    w = g.measureText(text).width;
+    if (widthMemo.size > 20000) widthMemo.clear();
+    widthMemo.set(key, w);
+  }
+  return w;
+}
+
+// a font that finishes loading changes every width: measure again
+if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', () => (fitMemo.clear(), widthMemo.clear()));
+
 function fitTextSlow(g: CanvasRenderingContext2D, text: string, font: (px: number) => string, px: number, maxW: number, minPx: number): string {
   let size = px;
-  g.font = font(size);
-  while (g.measureText(text).width > maxW && size > minPx) {
+  let f = font(size);
+  while (widthIn(g, f, text) > maxW && size > minPx) {
     size -= 0.5;
-    g.font = font(size);
+    f = font(size);
   }
-  if (g.measureText(text).width <= maxW) return text;
+  g.font = f;
+  if (widthIn(g, f, text) <= maxW) return text;
   let t = text;
-  while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  while (t.length > 1 && widthIn(g, f, t + '…') > maxW) t = t.slice(0, -1);
+  g.font = f;
   return t + '…';
 }
 
