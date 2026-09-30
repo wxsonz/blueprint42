@@ -350,6 +350,36 @@ int	main(void)
 }
 `;
 
+const bytes = `#include <unistd.h>
+
+int	copy_in(char *dst, const char *src)
+{
+	int	i;
+
+	i = 0;
+	while (src[i])
+	{
+		dst[i] = src[i];
+		i++;
+	}
+	dst[i] = '\\0';
+	return (i);
+}
+
+int	main(void)
+{
+	char		buf[16];
+	const char	*msg;
+	int			n;
+
+	msg = "hi there";
+	n = copy_in(buf, msg);
+	buf[0] = 'H';
+	write(1, buf, n);
+	return (0);
+}
+`;
+
 const leak = `#include <stdlib.h>
 
 int	*make_counter(int start)
@@ -429,6 +459,8 @@ export const SAMPLES: Sample[] = [
     blurb: 'a struct changed through a pointer, two passed by value, one returned', src: structs },
   { key: 'list', group: 'memory', title: 'linked list', file: 'list.c',
     blurb: 'nodes malloc’d and linked, walked, then freed one by one', src: list },
+  { key: 'bytes', group: 'memory', title: 'stack & literal bytes', file: 'bytes.c',
+    blurb: 'a string literal copied into a char array on main\'s stack: each byte where it lives', src: bytes },
   { key: 'crash', group: 'memory', title: 'a crash', file: 'crash.c',
     blurb: 'a search comes back NULL and main dereferences it: see where it dies', src: crash },
   { key: 'leak', group: 'memory', title: 'a leak', file: 'leak.c',

@@ -88,6 +88,8 @@ export interface Slot {
 }
 
 const isText = (type: string) => /\bchar\b/.test(type) && type.includes('*');
+// a char array's bytes are its own: they live in its row's pool, not REACHED
+export const isCharArray = (type: string) => /\bchar\b/.test(type) && /\[/.test(type) && !type.includes('*');
 
 // Slots in drawing order: pool by pool, each pool in declaration order.
 export function slotsOf(fn: FnInfo): Slot[] {
@@ -139,7 +141,7 @@ export interface Geom {
   store: { x: number; y: number; w: number; rows: number; pools: PoolGeom[]; slotTop: number[] }; // left column: one panel per non-empty pool; slotTop[i] = slot i's top, cells from the machine's top
   ret: { x: number; y: number; w: number; h: number }; // the RETURN panel, at the bottom
   stations: { x: number; y: number; w: number; h: number; zoom: number };
-  memory: { x: number; y: number; w: number; keys: string[] }; // one strip per key, inside the REACHED panel
+  memory: { x: number; w: number; keys: string[]; ys: number[] }; // one strip per key (ys: its top), inside its pool's panel
   memH: number;
   memGap: number;
   entryY: number; // where calls come in (left side)
@@ -160,19 +162,26 @@ export function geomOf(fn: FnInfo): Geom {
   const storeTop = motor.y + MH + 0.3;
   const pools: PoolGeom[] = [];
   const slotTop: number[] = [];
-  // the bytes behind each char *: reached memory, drawn inside REACHED under its rows
-  const keys = slots.filter((s) => s.kind !== 'more' && s.kind !== 'static' && isText(s.type)).map((s) => s.key);
-  let memY = 0;
+  // the bytes behind each char * (reached memory, drawn inside REACHED under
+  // its rows), and each char array's own bytes, under the rows of the pool it
+  // lives in (a local's in LOCALS, a static's in KEPT): memory where it lives
+  const mems = slots
+    .filter((s) => s.kind !== 'more' && ((s.kind !== 'static' && isText(s.type)) || isCharArray(s.type)))
+    .map((s) => ({ key: s.key, pool: isCharArray(s.type) ? s.pool : ('reached' as Pool) }));
+  const keys: string[] = [];
+  const ys: number[] = [];
   let y = storeTop;
   for (const { pool, title } of POOLS) {
     let first = slots.findIndex((sl) => sl.pool === pool);
-    const strips = pool === 'reached' ? keys.length : 0;
+    const here = mems.filter((m) => m.pool === pool);
+    const strips = here.length;
     if (first < 0 && !strips) continue;
     if (first < 0) first = slots.length;
     const rows = slots.filter((sl) => sl.pool === pool).length;
     const rowsH = (INV_HEAD_PX + rows * SLOT_PX + 8) / CELL_PX;
     for (let k = 0; k < rows; k++) slotTop[first + k] = y + (INV_HEAD_PX + k * SLOT_PX) / CELL_PX;
-    if (strips) memY = y + rowsH - (rows ? 0 : 4 / CELL_PX);
+    const memY = y + rowsH - (rows ? 0 : 4 / CELL_PX);
+    here.forEach((m, k) => (keys.push(m.key), ys.push(memY + k * (MEM_H + MEM_GAP))));
     const h = rowsH + strips * (MEM_H + MEM_GAP);
     pools.push({ pool, title, y, h, first, rows });
     y += h + POOL_GAP;
@@ -186,7 +195,7 @@ export function geomOf(fn: FnInfo): Geom {
     store: { x: PAD, y: storeTop, w: STORE_W, rows: slots.length, pools, slotTop },
     ret: { x: PAD, y: retY, w: STORE_W, h: RET_H },
     stations: st,
-    memory: { x: PAD + MEM_INSET, y: memY, w: STORE_W - MEM_INSET * 2, keys },
+    memory: { x: PAD + MEM_INSET, w: STORE_W - MEM_INSET * 2, keys, ys },
     memH: MEM_H, memGap: MEM_GAP,
     entryY: motor.y + MH * 0.5,
   };

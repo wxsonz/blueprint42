@@ -20,6 +20,8 @@ interface GVal {
   len?: number;
   elem?: number;
   deref?: GVal; // a struct pointer's pointee
+  hex?: string; // a char array's bytes (up to 48)
+  ro?: boolean; // a char * into the program's read-only memory (a literal)
 }
 interface GVar extends GVal {
   name: string;
@@ -236,7 +238,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   if (boundIds.size) currentBound = Object.create(null);
 
   // What the picture shows through a cell: a string, a struct's fields.
-  const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[] }>();
+  const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[]; lit?: boolean }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   let outText = r.outBefore ?? '';
   let buf: StdBuf | null = null;
@@ -326,11 +328,20 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     return `"${s.length > 40 ? s.slice(0, 40) : s}"${!g.strFull || s.length > 40 ? '…' : ''}`;
   };
   const structOf = (g: GVal): GVal | null => (g.kind === 'struct' ? g : g.kind === 'ptr' && g.deref?.kind === 'struct' ? g.deref : null);
-  const extraOf = (g: GVal): { str?: string; fields?: SnapField[] } | undefined => {
+  // bytes the picture can draw where they live: a char array's own, or a
+  // literal's (read-only memory, up to its \0 when the preview reached it)
+  const hexBytes = (h: string) => h.match(/../g)?.map((x) => parseInt(x, 16)) ?? [];
+  const memOf = (g: GVal): { bytes?: number[]; lit?: boolean } => {
+    if (g.hex !== undefined) return { bytes: hexBytes(g.hex) };
+    if (g.kind === 'ptr' && g.ro && g.str !== undefined) return { lit: true, bytes: [...g.str].map((ch) => ch.charCodeAt(0)).concat(g.strFull ? [0] : []) };
+    return {};
+  };
+  const extraOf = (g: GVal): { str?: string; fields?: SnapField[]; bytes?: number[]; lit?: boolean } | undefined => {
     const st = structOf(g);
-    if (st) return { fields: (st.fields ?? []).map((f) => ({ name: f.name, type: f.type, val: toV(f), ...(quote(f) ? { str: quote(f) } : {}) })) };
+    if (st) return { fields: (st.fields ?? []).map((f) => ({ name: f.name, type: f.type, val: toV(f), ...(quote(f) ? { str: quote(f) } : {}), ...memOf(f) })) };
     const q = quote(g);
-    return q ? { str: q } : undefined;
+    const m = memOf(g);
+    return q || m.bytes ? { ...(q ? { str: q } : {}), ...m } : undefined;
   };
   const setExtra = (c: number, g: GVal) => {
     const x = extraOf(g);

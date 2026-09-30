@@ -155,6 +155,29 @@ def load_regions():
                 regions.append((lo, blob))
 
 
+# The program's own read-only mappings (where string literals live), by
+# pid: a char * into them points at a literal, which can't be written.
+ro_maps = {}
+
+
+def read_only(addr):
+    pid = INF().pid
+    if pid not in ro_maps:
+        spans = []
+        try:
+            exe = os.path.realpath(f"/proc/{pid}/exe")
+            with open(f"/proc/{pid}/maps") as fh:
+                for ln in fh:
+                    parts = ln.split()
+                    if len(parts) >= 6 and parts[1].startswith("r-") and "w" not in parts[1] and os.path.realpath(parts[5]) == exe:
+                        lo, hi = (int(x, 16) for x in parts[0].split("-"))
+                        spans.append((lo, hi))
+        except OSError:
+            pass
+        ro_maps[pid] = spans
+    return any(lo <= addr < hi for lo, hi in ro_maps[pid])
+
+
 def ser(v, depth=0):
     """A gdb.Value as plain JSON: int / ptr (+ string preview) / struct / array."""
     t = v.type.strip_typedefs()
@@ -173,6 +196,8 @@ def ser(v, depth=0):
                 if raw is not None:
                     out["str"] = raw.split(b"\0")[0].decode("latin-1")
                     out["strFull"] = b"\0" in raw
+                    if read_only(out["v"]):
+                        out["ro"] = True
             elif out["v"] and is_charp(target):
                 # a char ** (argv, a split's result): the strings it points at,
                 # up to the NULL that ends the list, 8 at most
@@ -222,6 +247,14 @@ def ser(v, depth=0):
         else:
             out["kind"] = "raw"
             out["text"] = str(v)
+        if code == gdb.TYPE_CODE_ARRAY and v.address is not None:
+            elem = t.target().strip_typedefs()
+            if elem.sizeof == 1 and elem.code in (gdb.TYPE_CODE_INT, gdb.TYPE_CODE_CHAR):
+                # a char array (on the stack, static, or in a struct): its bytes,
+                # drawn where it lives, 48 at most like a heap block's
+                raw = read_bytes(int(v.address), min(t.sizeof, 48))
+                if raw is not None:
+                    out["hex"] = raw.hex()
     except gdb.MemoryError:
         out["kind"] = "raw"
         out["text"] = "<unreadable>"

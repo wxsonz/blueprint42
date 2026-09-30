@@ -69,10 +69,11 @@ export function drawStrip(dc: Dc, r: Rect, i: StripInfo, p: SpritePalette): void
       if (n < i.bytes.length && i.bytes[n] !== 0) {
         g.fillStyle = p.cell;
         g.fillRect(x + 1, track.y + 1, Math.max(1, cw - 2), track.h - 2);
-        if (cw > 13) {
+        // the byte itself, as long as a glyph fits (a 16-byte buffer at 0.8×)
+        if (cw > 8) {
           g.fillStyle = p.text;
           g.textAlign = 'center';
-          caption(g, byteText(i.bytes[n]), x + cw / 2, track.y + track.h / 2, cw - 2, p, Math.max(6, 9 * z));
+          caption(g, byteText(i.bytes[n]), x + cw / 2, track.y + track.h / 2, cw - 2, p, Math.max(6, Math.min(9 * z, cw * 0.8)));
         }
       }
       if (n) { g.strokeStyle = p.edge; g.beginPath(); g.moveTo(x, track.y + 2); g.lineTo(x, track.y + track.h - 2); g.stroke(); }

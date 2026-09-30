@@ -5,7 +5,7 @@ import { cLiteral } from './skins/stdbuf';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, procH, procLines, shut, slotsOf, slotY } from './machine';
+import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
 import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
@@ -1221,11 +1221,12 @@ export class GridView {
     };
     const mem = new Map<string, { r: Rect; len: number }>();
     geo.memory.keys.forEach((key, k) => {
-      const r = this.rectW(h.x + geo.memory.x, h.y + geo.memory.y + k * (geo.memH + geo.memGap), geo.memory.w, geo.memH);
+      const r = this.rectW(h.x + geo.memory.x, h.y + geo.memory.ys[k], geo.memory.w, geo.memH);
       const sl = slots.find((x) => x.key === key)!;
       const v = valueAt(key);
       const bytes = v.bytes ?? [];
-      mem.set(key, { r, len: bytes.length });
+      // a char array's strip is its own memory: no pointer line to it
+      mem.set(key, { r, len: v.own ? 0 : bytes.length });
       const wrote = writes.filter((w) => w.key === key && w.index !== undefined && arrived.has(key));
       const label = sl.kind === 'field' ? `${key.slice(2).split('.')[0]}${ARROW}${sl.name}` : sl.name;
       if (!v.bytes) {
@@ -1233,12 +1234,18 @@ export class GridView {
         // saw): say where it points, if anywhere
         g.save();
         g.globalAlpha *= 0.6;
-        skin.plate(dc, r.x + r.w / 2, r.y + r.h / 2, clipCode(`${label} → ${v.tag ? `${v.tag}${whereOf(key)}` : v.text || '?'}`, 34), 'void');
+        // (a char array isn't a pointer: it's its own bytes, not traced here)
+        const what = isCharArray(sl.type) ? `${label}: ${v.text || 'bytes not traced'}` : `${label} → ${v.tag ? `${v.tag}${whereOf(key)}` : v.text || '?'}`;
+        skin.plate(dc, r.x + r.w / 2, r.y + r.h / 2, clipCode(what, 34), 'void');
         g.restore();
         return;
       }
+      // a char array says its size (and how much of it is drawn); a pointer
+      // says what it points at and where that lives
+      const size = Number((sl.type.match(/\[(\d+)\]/) ?? [])[1] ?? bytes.length);
+      const own = `${label}: ${size} byte${size === 1 ? '' : 's'}, its own${size > bytes.length ? ` (first ${bytes.length} shown)` : ''}`;
       skin.strip(dc, r, {
-        label: `${label} → ${v.tag ?? '?'}${allocText(key)}`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
+        label: v.own ? own : `${label} → ${v.tag ?? '?'}${allocText(key) || whereOf(key)}`, bound: !!v.bytes, bytes, length: v.bytes ? bytes.length : null, pointer: null,
         markers: [...v.marks.map((mk) => ({ label: mk.label, index: mk.index, sampledIndex: mk.index })), ...wrote.slice(-1).map((w) => ({ label: 'wrote', index: w.index!, sampledIndex: w.index! }))],
         selected: false, hovered: false,
       });

@@ -18,6 +18,8 @@ export interface SnapField {
   type: string;
   val: V;
   str?: string; // a char * member's text, quoted
+  bytes?: number[]; // a char array member's first bytes (gdb engine, up to 48)
+  lit?: boolean; // a char * member into the program's read-only memory (a string literal)
 }
 
 export interface SnapCell {
@@ -27,7 +29,8 @@ export interface SnapCell {
   val: V;
   str?: string; // a char *'s text, quoted: what it points at, not where
   fields?: SnapField[]; // a struct's members, or the members of the struct it points at
-  bytes?: number[]; // a heap block's first bytes (gdb engine, up to 48)
+  bytes?: number[]; // a heap block's or a char array's first bytes (gdb engine, up to 48); a literal's, up to its \0
+  lit?: boolean; // a char * into the program's read-only memory: a string literal
 }
 
 // What rides a belt with a call or a return, beyond the bare value: the text

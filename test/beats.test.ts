@@ -1,11 +1,11 @@
 // Beats: every statement run, in every machine, from real traces.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
-import { beatDuration, beatLen, beatNow, computeText, readsOf, timelineOf, writesOf } from '../src/beats';
+import { beatDuration, beatLen, beatNow, computeText, readsOf, slotValue, timelineOf, writesOf } from '../src/beats';
 import { convertGdb } from '../src/gdb';
 import { planOf } from '../src/interior';
 import { run, type Trace } from '../src/interp';
-import { callPortY, geomOf, machineSize } from '../src/machine';
+import { callPortY, geomOf, machineSize, slotsOf } from '../src/machine';
 import { parse, type Model } from '../src/parse';
 import { sample, setupParser } from './helpers';
 
@@ -157,5 +157,40 @@ describe('machines are their insides', () => {
     expect(computeText(use, fn, t)).toBe('x = 8 + 1');
     const set = beats.find((x) => text(m, x).startsWith('tab[1] = 8'))!;
     expect(readsOf(set, fn, t)).toEqual([]);
+  }, 60000);
+
+  it('memory is drawn where it lives: a stack array\'s own bytes, a literal, a pointer into the stack, a static (gdb)', async () => {
+    const src = 'static char\tg_tag[8] = "keep";\n\nint\tfill(char *dst, const char *src)\n{\n\tint\ti;\n\n\ti = 0;\n\twhile (src[i])\n\t{\n\t\tdst[i] = src[i];\n\t\ti++;\n\t}\n\tdst[i] = \'\\0\';\n\treturn (i);\n}\n\nint\tmain(void)\n{\n\tchar\t\tbuf[16];\n\tconst char\t*msg;\n\tint\t\t\tn;\n\n\tmsg = "hi there";\n\tn = fill(buf, msg);\n\tg_tag[0] = g_tag[1];\n\treturn (n);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name) });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    const main = m.byName.get('main')!;
+    const fill = m.byName.get('fill')!;
+    const g = geomOf(main);
+    // buf's strip is in LOCALS (its own bytes), msg's in REACHED (what it points at)
+    expect(g.memory.keys).toEqual(['c:buf', 'c:msg']);
+    const locals = g.store.pools.find((p) => p.pool === 'local')!;
+    expect(g.memory.ys[0]).toBeGreaterThan(locals.y);
+    expect(g.memory.ys[0]).toBeLessThan(locals.y + locals.h);
+    const at = (fn: typeof main, key: string, i: number) => {
+      const snap = t.snaps[i];
+      const frame = snap.stack.filter((f) => f.fn === fn.name).at(-1) ?? null;
+      return slotValue(slotsOf(fn).find((s) => s.key === key)!, fn.name, frame, snap, t);
+    };
+    const end = t.evs.findIndex((e) => e.k === 'ret' && e.fn === 'fill') + 1;
+    const buf = at(main, 'c:buf', end);
+    expect(buf.own).toBe(true);
+    expect(String.fromCharCode(...buf.bytes!.slice(0, 9))).toBe('hi there\0');
+    const msg = at(main, 'c:msg', end);
+    expect(msg.tag).toBe('literal (read-only)');
+    expect(msg.bytes).toEqual([...'hi there'].map((c) => c.charCodeAt(0)).concat([0]));
+    // inside fill, dst reaches main's buf: the bytes as they are, where they are
+    const inFill = t.evs.findIndex((e) => e.k === 'ret' && e.fn === 'fill');
+    const dst = at(fill, 'c:dst', inFill);
+    expect(dst.tag).toBe('buf[0]');
+    expect(String.fromCharCode(...dst.bytes!.slice(0, 8))).toBe('hi there');
+    const tag = slotValue({ key: 's:g_tag', name: 'g_tag', depth: 0, param: false, kind: 'static', type: 'char [8]', pool: 'kept' }, '', null, t.snaps[t.snaps.length - 1], t);
+    expect(tag.own).toBe(true);
   }, 60000);
 });

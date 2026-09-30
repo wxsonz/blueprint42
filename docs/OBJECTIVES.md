@@ -26,9 +26,12 @@ Done:
 - [x] Belt crossings cut a real gap (the background shows through).
 
 Next, in this order:
-1. [ ] **Stack and literal bytes** (S). A stack array (`char buf[32]`) or a
-   string literal shows its bytes like a heap block does; today only heap
-   bytes are drawn.
+1. [x] **Stack and literal bytes** (S). A stack array (`char buf[32]`) or a
+   string literal shows its bytes like a heap block does. A char array's
+   strip sits in its own pool (LOCALS, KEPT), with no pointer line; a
+   literal is "literal (read-only)" in REACHED; a pointer into a stack
+   array shows those bytes and says "(stack)" (gdb engine; the `bytes`
+   sample).
 2. [ ] **stdin and stderr** (S). Input being used up by `read(0, …)`, and
    output to fd 2 flying into the terminal (only stdout does today).
 3. [ ] **The heap bar** (M). The heap belongs to no function and outlives

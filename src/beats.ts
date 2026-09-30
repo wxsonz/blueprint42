@@ -61,16 +61,29 @@ export const COMPUTE_END = 0.55;
 export interface SlotValue {
   text: string;
   kind: ValueKind;
-  bytes: number[] | null; // a char * with sampled memory: its bytes
+  bytes: number[] | null; // memory to draw: a char *'s target, or a char array's own bytes
+  own?: boolean; // the bytes are the slot's own (a char array), not reached through it
   marks: { label: string; index: number }[]; // sibling index fields (pos, len…) on that memory
   tag?: string; // a pointer to something: what its address points at (`bufs[0]`, `#2`)
 }
 
 const INDEX_NAMES = new Set(['pos', 'len', 'cap', 'size', 'start', 'end', 'idx', 'index', 'head', 'tail', 'count', 'i', 'j', 'n']);
 
-function heapBytes(snap: Snap, to: number | null, type: string): number[] | null {
+// The bytes a char * points at, from wherever they live: a heap block, a
+// char array on some frame's stack, or a static.
+function targetBytes(snap: Snap, to: number | null, type: string): number[] | null {
   if (to === null || !type.includes('char')) return null;
-  return snap.heap.find((c) => c.id === to)?.bytes ?? null;
+  const hit = snap.heap.find((c) => c.id === to) ?? snap.statics.find((c) => c.id === to) ?? snap.stack.flatMap((f) => f.cells).find((c) => c.id === to);
+  return hit?.bytes ?? null;
+}
+
+// A value's memory: a pointer's target, a literal it points at (read-only,
+// it lives in the program), or a char array's own bytes.
+function memOf(x: { val: V; type: string; bytes?: number[]; lit?: boolean }, snap: Snap): Pick<SlotValue, 'bytes' | 'own' | 'tag'> {
+  if (x.lit && x.bytes) return { bytes: x.bytes, tag: 'literal (read-only)' };
+  if (x.val.k === 'ptr') return { bytes: targetBytes(snap, x.val.to, x.type) };
+  if (x.bytes && /\[/.test(x.type)) return { bytes: x.bytes, own: true };
+  return { bytes: null };
 }
 
 export function slotValue(slot: Slot, fnName: string, frame: SnapFrame | null, snap: Snap, trace: Trace, live: Set<number> | null = null): SlotValue {
@@ -79,22 +92,23 @@ export function slotValue(slot: Slot, fnName: string, frame: SnapFrame | null, s
   if (slot.kind === 'static') {
     const id = staticCellId(trace, fnName, slot.name);
     const c = id !== null ? snap.statics.find((x) => x.id === id) : undefined;
-    return c ? { ...valueOf(c, null, trace, null), bytes: null, marks: [] } : none;
+    return c ? { ...valueOf(c, null, trace, null), marks: [], ...ptrTag(c.val, trace, frame), ...memOf(c, snap) } : none;
   }
   if (slot.kind === 'cell') {
     const c = frame?.cells.find((x) => x.name === slot.name);
     if (!c) return none;
-    return { ...valueOf(c, frame, trace, live), bytes: c.val.k === 'ptr' ? heapBytes(snap, c.val.to, c.type) : null, marks: [], ...ptrTag(c.val, trace, frame) };
+    return { ...valueOf(c, frame, trace, live), marks: [], ...ptrTag(c.val, trace, frame), ...memOf(c, snap) };
   }
   const [parent, field] = slot.key.slice(2).split('.');
   const pc = frame?.cells.find((x) => x.name === parent);
   const f = pc?.fields?.find((x) => x.name === field);
   if (!f) return none;
-  const bytes = f.val.k === 'ptr' ? heapBytes(snap, f.val.to, f.type) : null;
+  const m = memOf(f, snap);
+  const bytes = m.bytes;
   const marks = bytes
     ? (pc!.fields ?? []).filter((x) => x !== f && x.val.k === 'int' && INDEX_NAMES.has(x.name) && x.val.v >= 0 && x.val.v <= bytes.length).map((x) => ({ label: x.name, index: (x.val as { v: number }).v }))
     : [];
-  return { ...fieldValue(f, trace), bytes, marks, ...ptrTag(f.val, trace, frame) };
+  return { ...fieldValue(f, trace), marks, ...ptrTag(f.val, trace, frame), ...m };
 }
 
 // A pointer's tag says only what it holds: the address, named by what lives
