@@ -146,7 +146,9 @@ Steps, in this order:
    kinds of bugs: floating promises, unused values, `==`, shadowed names,
    a canvas state change without a matching restore. `npm run check`
    runs it.
-10. [ ] **A map for the next person** (S). `docs/HANDOFF.md` gets one page:
+10. [x] **A map for the next person** (S). Done 2026-10-01: `docs/HANDOFF.md`
+   "Debugging map" (what to reach for, by what's wrong), the new modules in
+   its architecture map, and this week's measuring gotchas. `docs/HANDOFF.md` gets one page:
    which module owns what (data in, data out), how to debug each kind of
    problem (wrong value, wrong place, slow, stuck, a skin), and which tool
    answers it.

@@ -9,7 +9,7 @@ why), then this file (current state and the next job).
 > and `gnl_*` below are history. The tool's project folder is `.blueprint42/`
 > (old `.ft_blueprint/` read as a fallback). Samples are one Examples menu.
 
-## Where things stand (2026-09-28)
+## Where things stand (2026-09-28; tooling and diagnostics 2026-10-01: see the debugging map)
 
 - `main` has everything through M5.5. M6 is on branch `m6-live`. Nothing
   is pushed (there is no remote).
@@ -45,11 +45,15 @@ npx vitest run -t "M3 acceptance"    # one test by name
 | `gdb.ts` | Client for the trace server + `convertGdb` (gdb timeline → `Trace`). |
 | `playback.ts` | Playback timing (`evDuration`, `switchAt`, `frameAt`), hosts (frame → home node or copy), the return card, M5.5 readouts and labels. No drawing. |
 | `hit.ts` | Hit-testing (`entityAt`, `stationAt`, `foldAt`) and rects (`heapSlotRect`, `stageRect`, `activeHostRect`). |
-| `render.ts` | `GridView`: camera, heap shelf, wires. **Draws nothing itself; calls the skin.** |
+| `frame.ts` | What a frame shows, as data (no canvas): `frameState` (step, snapshot, which machine runs, what's in flight) and what the process box, printf's buffer, stdin, modules, walls, the heap bar and the IN dock say. Tested in `test/frame.test.ts`. |
+| `render.ts` | `GridView`: camera and layout of the frame; `draw` is a list of paint passes (walls, belts, …, duel) reading `frameState`. **Draws nothing itself; calls the skin** (through `skins/guard.ts`). |
 | `skins/*.ts` | `Skin` interface (`skins/types.ts`) + every skin; the consoles are in `skins/consoles/`, one file each. |
 | `styles/*.css` | Chrome and editor restyled via CSS variables on `html[data-skin]`. |
 | `main.ts` | Playback loop, mouse and keys, skins, boot. |
-| `state.ts`, `dom.ts` | Shared app state (`S`, DOM handles; setters for reassigned values) and DOM helpers. |
+| `state.ts`, `dom.ts` | Shared app state and DOM helpers. `S` is read-only outside `state.ts`: change it with `update('name', patch)` (dev builds log the last 200). |
+| `diag.ts`, `diag-ui.ts` | Diagnostics: hook errors, failed trace checks, the frame profiler, the dev panel ("diag" on the top bar) and `__ftb.diag()`. |
+| `validate.ts` | `validateTrace`: what must hold of any trace (ids, pointers, calls and returns, malloc and free, output only forward). |
+| `skins/guard.ts` | Every skin hook runs guarded: a throw is reported once and the canvas put back; the frame goes on. |
 | `panels.ts`, `playbar.ts` | Inspector, sample tabs, dock, alerts, status line, violations; the playbar. |
 | `project-ui.ts`, `sample-ui.ts` | Projects (M5), live edits (M6), polling, dialogs; per-sample localStorage and blueprint import/export. |
 | `feed.ts`, `page.ts` | Kill feed, duel, focus card; clock, app zoom, page background. |
@@ -243,6 +247,25 @@ pushes a file's text and cursor; the page applies it like typing.
 - Known: while the program plays, the in-app editor follows the running
   line, which can switch its file away from the one nvim is on.
 
+## Debugging map (2026-10-01)
+
+What to reach for, by what's wrong. Tools are in `tools/` (decision 047);
+browsers they open for a measurement go to the terminal's virtual desktop.
+
+| Something is… | Look at | Tool |
+|---|---|---|
+| **a wrong value** (a readout, a card, a dock) | what the frame says, as data: `frame.ts` (`frameState`, `dockInfo`, `heapModel`, …), then the trace | a test in `test/frame.test.ts` against the run; `validateTrace` for the trace itself (`__ftb.diag().checks` in dev) |
+| **drawn in the wrong place, or changed by a refactor** | the paint pass (`render.ts` `pass*`), then the skin hook | `node tools/pixcmp.mjs --a <ref>`: which frames differ, pictures of each; 0 differing means nothing changed |
+| **slow** | the pass or hook that costs, and its canvas calls | the dev panel ("diag"); `node tools/bench.mjs` (Chromium or `--browser zen`, two refs alternating) |
+| **stuck or blank** | hook errors (a skin that threw), engine errors (`EngineError` names the stage) | the dev panel's errors, each with the state changes that led to it (`__ftb.diag().actions`) |
+| **a skin** (crash, NaN, spilling out of its box) | the skin contract | `npm test` (`test/skin-contract.test.ts`); `node tools/capture-hooks.mjs` when an info grows |
+| **the engines** (gdb conversion, the interpreter) | `validateTrace` on every sample, both engines | `test/validate.test.ts`; `EngineError` says setup / stops (at which stop) / finish |
+
+Every change: `npm run check` (tsc, Oxlint with types, the canvas save/restore
+check: under 2 s) and `npm test`. A change that should keep the pictures:
+`pixcmp` against the commit before it says 0 differing. Commits from before
+`__ftb.freeze` (2026-10-01) compare noisily: their own animation loop runs on.
+
 ## Gotchas learned the hard way
 
 - **gdb Python:**
@@ -264,6 +287,25 @@ pushes a file's text and cursor; the page applies it like typing.
   computeBelts }` for exact coordinates.
 - **GNL trace size:** a 3-line input produces about 1,050 events and a
   1.6 MB JSON response. Fine locally; delta-encode it if it grows.
+- **Measuring (2026-10-01):**
+  - Headless Chromium has no GPU compositor: its frame rates aren't the
+    author's. Pictures and call counts are fine; use `tools/bench.mjs`
+    (a real window) for speed.
+  - Firefox and Zen draw 2D canvases on another thread (CanvasRenderer), so
+    time spent there never shows in the page's JavaScript. A gradient fill is
+    far dearer there than in Chromium; a Firefox profile (`about:profiling`)
+    shows it. A page on another virtual desktop is paused (0 frames).
+  - Vite serves edited modules as `?t=…`: `import('/src/x.ts')` from a tool
+    can load a second, fresh copy. Import the URL the page loaded
+    (`performance.getEntriesByType('resource')`).
+  - Two runs of a program can differ: glibc writes a random key into a freed
+    tcache chunk, and a sample may read it. `pixcmp` replays one run to both
+    versions for that reason.
+  - Pillow's `getbbox()` on RGBA looks at alpha only by default: colour-only
+    differences read as none.
+  - A canvas `fillRect` and a rect path antialias differently at fractional
+    positions; separate fills and one path agree only for shapes that don't
+    touch.
 
 ## Open questions for the author
 
