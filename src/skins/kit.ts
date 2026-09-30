@@ -7,6 +7,7 @@ import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } fr
 import type { BeltOpts } from './kit-types';
 import type { Dc, DockInfo, IconKind, NodeInfo, PlateKind, PlateRole, Pt, Rect, RowInfo, Skin } from './types';
 import { INV_HEAD_PX, SLOT_PX } from '../machine';
+import { cLiteral } from './stdbuf';
 import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawRuns, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, tailRuns, Walk, type CapLook, type TagLook } from './util';
 
 export interface Palette {
@@ -605,6 +606,25 @@ export function makeSkin(t: Theme): Skin {
         g.globalAlpha = 1;
       }
       ports(dc, r, d.inPorts, [], live ? col : p.line);
+    };
+    // printf's buffer, from the same parts: the skin's storage panel (its
+    // head's capacity is how full the buffer is), the flush rule and what it
+    // holds as rows, and the dock's lamp, lit while bytes wait
+    skin.stdbuf = (dc, r, b) => {
+      const rowH = SLOT_PX * dc.z;
+      const top = r.y + INV_HEAD_PX * dc.z;
+      const rows: RowInfo[] = [];
+      const row = (name: string, value: string, kind: RowInfo['kind'], o: Partial<RowInfo> = {}) => {
+        const y = top + rows.length * rowH;
+        if (y + rowH <= r.y + r.h) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
+      };
+      row(b.mode === 'terminal' ? 'to a terminal' : 'to a pipe', b.mode === 'terminal' ? 'flushed at \\n' : 'flushed when full', 'none');
+      if (b.n) row('waiting', cLiteral(b.text), 'int');
+      else if (b.flushed) row('→ terminal', cLiteral(b.flushed), 'int', { recent: true, flash: 1 });
+      else row('holds', 'nothing', 'none');
+      const inset = px(dc, L.inset ?? 0, 0);
+      skin.frame(dc, r, { title: cap('printf'), mode: b.n ? 'live' : 'none', stacked: 0, rows, head: { x: r.x + inset, y: r.y, w: r.w - inset, h: INV_HEAD_PX * dc.z }, cap: { used: b.n, max: b.cap } });
+      L.lamp(dc, r, { x: r.x, y: r.y, w: r.w, h: INV_HEAD_PX * dc.z }, { col: b.n ? stateCol('waiting') : stateCol('idle'), state: b.n ? 'waiting' : 'idle', stale: false });
     };
   }
   return skin;

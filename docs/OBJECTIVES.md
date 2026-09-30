@@ -73,7 +73,9 @@ Next, in this order:
 8. [x] **Long statements** (S). Station code is cut at 44 characters; show the
    whole line (wrap or on hover). Hover a cut or wrapped statement: a tip
    (styled like the other panels, per skin) shows all of it on one line.
-9. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.
+9. [x] **The printf buffer in PS1–PS4** (S each), in each skin's own parts:
+   one of its storage panels (`printf`, the head's capacity how full), the
+   dock's own light lit while bytes wait (`kit.ts`, with `Theme.look.dock`).
 10. [ ] **`static` functions** marked the same way in every skin (S).
 11. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
     wall to show them on.
