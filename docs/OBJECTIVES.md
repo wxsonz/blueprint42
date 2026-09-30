@@ -7,6 +7,106 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 Skin polish is not on this list. It's optional and guided by the author one
 skin at a time; `docs/SKINS.md` says which skins are reviewed.
 
+## Next (2026-10-01): easy to diagnose, hard to break
+
+The main objective: when something looks wrong, slow or stuck, the tool
+itself says where, and a change can't quietly break a picture. No new
+features and no new looks: every step keeps the pixels and the behaviour
+the same, and proves it (step 1 first, so the others can be checked).
+
+Why now. Each of these cost real time this week, and each was found by hand
+with throwaway scripts:
+- One skin threw once (PS2's capacity bar, a 0/0) and the whole playback
+  froze: nothing stood between a hook and the frame loop.
+- A condition readout showed a pointer's own value where the value it
+  reads should be (`→tab[0] > →tab[0]`); nothing checked what a frame shows
+  against the trace.
+- PS3's focus veil ignored the picked theme colour; text fits made before a
+  font loaded were kept. State a picture depends on wasn't followed.
+- Every performance question needed a new script, a git worktree for
+  before/after pictures, and three browsers (headless Chromium misreports
+  the GPU; Firefox draws canvases on another thread).
+
+Where the risk sits (sizes today):
+- `GridView.draw` (`src/render.ts`) is one 667-line function: layout,
+  values, animation and painting mixed. `convertGdb` (`src/gdb.ts`, 416
+  lines), `run` (`src/interp.ts`, 373) and `boot` (`src/main.ts`, 259)
+  follow.
+- `main.ts` writes the shared state `S` directly in 80 places; nothing
+  records who changed what.
+- The tests (103) cover the pipeline well but never call a skin's drawing
+  code: `test/skins.test.ts` checks the picker's groups only.
+
+Steps, in this order:
+1. [ ] **Pictures you can diff** (M). Rendering takes its clock from the
+   frame, never `performance.now()` (the leak fall and the crash jam read it
+   now, so two runs of the same frame differ). Then `tools/pixcmp`: draws
+   fixed frames (samples × positions × zooms × skins × 1, 1.25, 2 scaling)
+   from two git refs and reports what differs, composited over the page
+   colour. Done when the same ref against itself differs in 0 pixels, and a
+   refactor step can say "identical" from one command.
+2. [ ] **A skin can't stop the frame** (S). Every skin hook runs inside a
+   guard: a throw is logged once (skin, hook, the info it got), the item is
+   skipped or drawn as a plain marked box, and the frame goes on. Replaces
+   the single try/catch around the whole frame (`main.ts` `frame`). Done
+   when a hook forced to throw leaves the rest of the grid drawn and the
+   error listed (step 5).
+3. [ ] **Skin contract tests** (M). Every skin × every hook, called with
+   ordinary and edge-case infos (empty text, 0 and huge capacities, 0-size
+   rects, no trace, fractional zooms, each tint): nothing throws, nothing
+   non-finite reaches the canvas (a recording 2D context rejects NaN), and
+   drawing stays inside the rect it was given (bar declared overhangs).
+   Would have caught the 0/0. Done when it runs in `npm test` for all 34
+   skins.
+4. [ ] **What a frame shows, as data** (L). Split `GridView.draw` into a
+   pure step, `frameScene(state, trace, pos, camera) → Scene` (every
+   machine, row, readout, plate, card and line with its rect and the value
+   it shows), and painting passes that only draw a Scene. The Scene is
+   testable without a canvas: "at step 42, the readout says `5 > 2`",
+   "the lost card is red", "this line ends at the address its pointer
+   holds" (SPEC principle 4 as tests). Hit-testing reads the same Scene, so
+   what you click is what's drawn. Done when `draw` is a short list of
+   passes, and the readout, heap bar, dock and stdin have Scene tests.
+5. [ ] **Diagnostics built in** (M). A dev panel (and `__ftb.diag()`)
+   instead of scripts: per frame, the time in each pass and each skin hook,
+   canvas calls by kind (fills, gradients, text, images), memo hit rates,
+   the page's frame rate and the background's, recent hook errors (step 2)
+   and failed checks (step 7). The bench scripts from this week become
+   `tools/bench` (a headed Chromium or Zen window, placed on the terminal's
+   desktop), so "is it faster" is one command.
+6. [ ] **State changes by name** (M). `S` changes only through named
+   actions in `state.ts` (`seek`, `play`, `loadTrace`, `setSkin`, …); dev
+   builds keep the last 200 with their arguments, attached to every error
+   report. Done when nothing outside `state.ts` assigns to `S`.
+7. [ ] **A trace that checks itself** (M). `validateTrace(trace)`: every
+   event's cells, frames and heap blocks exist in the snapshots around it;
+   snapshots only change where an event says; ids stay stable; output only
+   grows. Run on every trace in dev and in the tests, for both engines
+   (the interpreter and gdb), so a converter bug fails where it happens,
+   not as a wrong picture later. Split `convertGdb` and `run` into stages
+   with typed outputs so a failure names its stage.
+8. [ ] **State a skin depends on, followed** (S). Colours and sizes that
+   depend on a tint, a mode or a font are computed when read (as PS3's veil
+   now is), never copied once; memos key on everything they depend on, or
+   clear on the event that changes it (as text fitting now clears on font
+   load). A contract test switches every tint and checks the veil, panels
+   and plates follow.
+9. [ ] **A linter** (S). ESLint with a few rules that catch this week's
+   kinds of bugs: floating promises, unused values, `==`, shadowed names,
+   a canvas state change without a matching restore. `npm run check`
+   runs it.
+10. [ ] **A map for the next person** (S). `docs/HANDOFF.md` gets one page:
+   which module owns what (data in, data out), how to debug each kind of
+   problem (wrong value, wrong place, slow, stuck, a skin), and which tool
+   answers it.
+
+Rules for these steps:
+- Behaviour and pictures don't change; each step is checked with step 1's
+  diff (0 differing pixels outside what the step names) and the tests.
+- Reviewed skins keep their code's look; only the plumbing around hooks
+  changes.
+- One step per commit series; each leaves the app working.
+
 ## Today (2026-09-30): nothing hidden
 
 The main objective: the picture never hides what the program did. Whatever
