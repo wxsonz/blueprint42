@@ -1129,9 +1129,15 @@ export class GridView {
     const allWrites = act && act.phase === 'write' ? writesOf(act.beat, fn, trace) : [];
     // at most 10 fly one by one; the 11th carries the count of the rest
     const writes = allWrites.slice(0, 11);
-    const chipU = (n: number, f: number) => Math.max(0, Math.min(1, (f - 0.1 * n) / 0.7));
+    // chip n of `count` in flight at phase f (0..1): each flies for 0.7 of the
+    // phase, starting a little after the one before, spaced so the last one
+    // still lands by the end of the phase
+    const chipU = (n: number, f: number, count: number) => {
+      const gap = count > 1 ? Math.min(0.1, 0.3 / (count - 1)) : 0;
+      return Math.max(0, Math.min(1, (f - gap * n) / 0.7));
+    };
     const arrived = new Set<string>();
-    allWrites.forEach((w, n) => chipU(Math.min(n, 10), act!.landed) >= 1 && arrived.add(w.key)); // the rest land with the "+n more"
+    allWrites.forEach((w, n) => chipU(Math.min(n, 10), act!.landed, writes.length) >= 1 && arrived.add(w.key)); // the rest land with the "+n more"
     const slots = slotsOf(fn);
     const X = this.sx(h.x + geo.store.x);
     const Y = this.sy(h.y + geo.store.y);
@@ -1291,7 +1297,7 @@ export class GridView {
       // from the first of them, so none is read without a sign
       const reads = readsOf(act.beat, fn, trace);
       reads.slice(0, 9).forEach((r, n) => {
-        const u = chipU(n, act.p / READ_END);
+        const u = chipU(n, act.p / READ_END, Math.min(reads.length, 9));
         if (u <= 0 || u >= 1) return;
         // `*p` flies from the memory at p's address (its row, wherever it is), not from p
         const src = r.cell !== undefined ? anchors.get(r.cell) : undefined;
@@ -1304,7 +1310,7 @@ export class GridView {
       });
     }
     writes.forEach((w, n) => {
-      const u = chipU(n, act.landed);
+      const u = chipU(n, act.landed, writes.length);
       if (u <= 0 || u >= 1) return;
       let to = slotAt.get(w.key) ?? [X + W, Y];
       const mm = mem.get(w.key);
