@@ -1,4 +1,5 @@
 import { setGlassTint } from './gfx/scenes/ps2';
+import { renderLegend } from './legend';
 import { beatStarts } from './beats';
 import { machineSize } from './machine';
 import { connectLive } from './live';
@@ -795,7 +796,7 @@ function onKey(e: KeyboardEvent): void {
   else if (k === 'ArrowLeft') (e.shiftKey ? prevCall : prevBeat)();
   else if (k === 'Home') seek(0);
   else if (k === 'End') seek(N());
-  else if (k === 'Escape') (S.selected = null), (S.legend = null), hideMenu();
+  else if (k === 'Escape') (S.selected = null), (S.legend = null), hideMenu(), toggleLegend(false);
   else if (k === 'f' || k === 'F') view.fit(S);
   else if (k === 'm' || k === 'M') setMode(animMode() === 'fast' ? 'focus' : 'fast');
   else if (k === '+' || k === '=') view.zoomAt(view.w / 2, view.h / 2, 1.2);
@@ -816,6 +817,15 @@ async function applySkin(skin: Skin): Promise<void> {
   await Promise.all((SKIN_FONTS[skin.id] ?? []).map((f) => document.fonts.load(f).catch(() => null)));
   renderDock();
   setLastPbKey('');
+  if (!$('legend').hidden) renderLegend($('legend'), skin); // its drawings are the skin's
+}
+
+// The Legend overlay: the real drawings, as this skin draws them.
+function toggleLegend(open = $('legend').hidden): void {
+  const el = $('legend');
+  el.hidden = !open;
+  $('btn-legend').setAttribute('aria-pressed', String(open));
+  if (open) renderLegend(el, S.skin);
 }
 
 // Skins with theme colours (the PS3's XMB) get a row of swatches on the top
@@ -1300,6 +1310,8 @@ async function boot(): Promise<void> {
     sampleRunChanged(() => (S.stdin = value));
   });
   $('btn-fit').addEventListener('click', () => view.fit(S));
+  $('btn-legend').addEventListener('click', () => toggleLegend());
+  $('legend').addEventListener('click', (e) => (e.target as HTMLElement).closest('[data-close]') && toggleLegend(false));
   $('btn-tidy').addEventListener('click', tidy);
   document.addEventListener('pointerdown', (e) => {
     const list = $('skin-list');

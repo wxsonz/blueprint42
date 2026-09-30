@@ -87,7 +87,10 @@ Next, in this order:
     from headers, on the grid: a column of cards left of the machines
     (Minimal, Barebone; `skins/typeshelf.ts`, `parse.ts` `typeDefsOf`), the
     `-D` value the run used, the struct in use outlined.
-13. [ ] **Legend overlay** (M). The real drawings and what each one means.
+13. [x] **Legend overlay** (M). The real drawings and what each one means:
+    the grid's Legend button (Esc closes); each tile drawn by the active
+    skin's own hooks with example values (`src/legend.ts`), so it is 1:1
+    with the canvas in every skin.
 14. [ ] **Real events as effects** (S each). A leak falls off the shelf at
     exit, `free` takes the block away, a segfault jams the machine.
 
@@ -97,8 +100,8 @@ IN dock is mostly empty with one argument or none.
 The toolbelt (the legend strip at the bottom left) is hidden for now, the
 author's call: its icons aren't 1:1 with what the canvas draws. Its right half
 was the only way to drag author sprites onto the grid; strips still come from
-the inspector. It comes back as the Legend overlay (13), drawn with the real
-pictures.
+the inspector. The Legend overlay (13) now does its first job, drawn with the real
+pictures; placing strips stays in the inspector.
 
 ## 2026-09-29: the machine, redesigned
 

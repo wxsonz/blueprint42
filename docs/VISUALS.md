@@ -107,6 +107,15 @@ from its right side ("hell" → program). Once all of it is taken, it says so:
 a read now returns 0. Truth: fd 0's real offset after each step, read from
 `/proc/<pid>/fdinfo/0`, so nothing runs in the program to find out.
 
+#### Legend (built; every skin)
+
+The grid's **Legend** button opens an overlay of the real drawings, each made
+by the active skin's own hooks with example values (a copy going in, a value
+coming back, an address, a belt, a pointer's line, a dangling pointer, the
+IN dock, storage, bytes, statements with loop rounds, the terminal, and in
+skins that draw them the printf buffer, stdin, a heap card, a type), each
+with what it means. It replaces the toolbelt's generic icons.
+
 #### The types shelf (built; drawn in Minimal and Barebone)
 
 What the files define, on the grid in one column left of everything else

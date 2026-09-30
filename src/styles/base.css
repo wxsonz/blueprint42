@@ -208,7 +208,7 @@ kbd {
 
 /* ---------- floating panels on the canvas ---------- */
 #alerts { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(60%, 520px); pointer-events: none; }
-.alert, #inspector, #dock, #toast, #tip, .dlg, #menu {
+.alert, #inspector, #dock, #toast, #tip, #legend, .dlg, #menu {
   background: var(--panel-bg);
   color: var(--panel-fg);
   border: var(--panel-border);
@@ -265,6 +265,14 @@ kbd {
 #dock .slot.placeable:active { cursor: grabbing; }
 #dock .slot:nth-child(6) { margin-left: 6px; }
 
+#legend { position: absolute; inset: 12px; overflow: auto; padding: 10px 14px 14px; z-index: 6; }
+#legend[hidden] { display: none; }
+#legend .lg-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+#legend .lg-head .c { opacity: 0.7; flex: 1; }
+#legend .lg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 14px; }
+#legend figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+#legend canvas { display: block; border-radius: 4px; }
+#legend figcaption { font-size: 12px; line-height: 1.4; opacity: 0.9; }
 #tip { position: absolute; max-width: min(640px, 80%); padding: 5px 9px; font: 12px var(--mono, ui-monospace, monospace); white-space: pre-wrap; word-break: break-word; pointer-events: none; z-index: 5; }
 #tip[hidden] { display: none; }
 #toast { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); padding: 6px 12px; white-space: nowrap; pointer-events: none; }
