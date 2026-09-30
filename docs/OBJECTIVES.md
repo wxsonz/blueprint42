@@ -31,24 +31,37 @@ Next, in this order:
    bytes are drawn.
 2. [ ] **stdin and stderr** (S). Input being used up by `read(0, …)`, and
    output to fd 2 flying into the terminal (only stdout does today).
-3. [ ] **Two names for the same memory** (M). Pointers holding the same
+3. [ ] **The heap bar** (M). The heap belongs to no function and outlives
+   every call, so it's drawn as a bar fixed to the screen (bottom left),
+   with you wherever you go, replacing the heap shelf (one thing, one
+   picture). One card per live block: its size, where it was malloc'd, its
+   first bytes or fields, who points at it. `malloc` drops a card in, `free`
+   takes it out, blocks still there at exit stay in red (leaks); `+n` when
+   more exist than fit. Pointer lines run from rows to their card (full from
+   the running frame, quieter otherwise, a stub when the row is off screen),
+   and it folds down to a thin line when the space is wanted. A struct can
+   be *watched* there too, never moved: "watching `main.r` (on main's
+   stack)", and "gone: its frame returned" once it has, because a local
+   lives in its frame. Items 4 and 5 are drawn on it. Prototyped in Minimal
+   and Barebone.
+4. [ ] **Two names for the same memory** (M). Pointers holding the same
    address are marked as sharing it, not just given separate lines.
-4. [ ] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
+5. [ ] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
    and a warning when a function returns without freeing or handing it on.
-5. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
+6. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
    `**pp` read from where the memory is, like `*p` and `a[i]`.
-6. [ ] **Loop rounds as a whole** (M). Which way each round went, not only
+7. [ ] **Loop rounds as a whole** (M). Which way each round went, not only
    each row's past values.
-7. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
+8. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
    whole line (wrap or on hover).
-8. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.
-9. [ ] **`static` functions** marked the same way in every skin (S).
-10. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
+9. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.
+10. [ ] **`static` functions** marked the same way in every skin (S).
+11. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
     wall to show them on.
-11. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants
+12. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants
     from headers, on the grid.
-12. [ ] **Legend overlay** (M). The real drawings and what each one means.
-13. [ ] **Real events as effects** (S each). A leak falls off the shelf at
+13. [ ] **Legend overlay** (M). The real drawings and what each one means.
+14. [ ] **Real events as effects** (S each). A leak falls off the shelf at
     exit, `free` takes the block away, a segfault jams the machine.
 
 Rough edges: the kill feed covers the stations of machines under it; the
@@ -57,7 +70,7 @@ IN dock is mostly empty with one argument or none.
 The toolbelt (the legend strip at the bottom left) is hidden for now, the
 author's call: its icons aren't 1:1 with what the canvas draws. Its right half
 was the only way to drag author sprites onto the grid; strips still come from
-the inspector. It comes back as the Legend overlay (12), drawn with the real
+the inspector. It comes back as the Legend overlay (13), drawn with the real
 pictures.
 
 ## 2026-09-29: the machine, redesigned
