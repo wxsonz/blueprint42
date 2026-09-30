@@ -168,7 +168,9 @@ export function drawHeapCard(dc: Dc, r: Rect, c: HeapCardInfo, p: HeapBarPalette
       const room = r.x + r.w - pad - x;
       const text = `${ref.name}${k < c.refs.length - 1 ? ',' : ''}`;
       const left = c.refs.length - k;
-      if (g.measureText(text).width > room) {
+      // keep room to count the rest: never drop a name silently
+      const reserve = k < c.refs.length - 1 ? g.measureText(` +${left - 1}`).width : 0;
+      if (g.measureText(text).width + reserve > room) {
         g.fillStyle = p.muted;
         g.fillText(fitText(g, `+${left}`, (s) => p.mono(s), 9.5, room, 6), x, y);
         break;

@@ -120,6 +120,10 @@ the heap shelf under the process box (one thing, one picture).
   head (push)`; the running frame's at full strength). A block no stack or
   static pointer holds says so. Pointers inside other heap blocks aren't
   read yet, so a list's middle nodes can say that too.
+- **Two names for the same memory**: a pointer's tag says how many pointers
+  hold that same address (`heap #2 ×3`), counting distinct pointers: a field
+  read through two pointers to one struct is one pointer. The card names
+  them, and a name that doesn't fit is counted (`+1`), never dropped.
 - `malloc` drops a card in from above; `free` takes it out, down and away.
   Blocks still there at exit stay, in red, `LEAK`, and the header counts them.
 - Pointer lines run from rows down to the bar's edge above their card: full

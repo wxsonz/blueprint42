@@ -50,8 +50,9 @@ Next, in this order:
    stack)", and "gone: its frame returned" once it has, because a local
    lives in its frame. Items 4 and 5 are drawn on it. Prototyped in Minimal
    and Barebone.
-4. [ ] **Two names for the same memory** (M). Pointers holding the same
-   address are marked as sharing it, not just given separate lines.
+4. [x] **Two names for the same memory** (M). Pointers holding the same
+   address are marked as sharing it, not just given separate lines: `×N` on
+   the tag (every skin that draws tags), the names on the heap card.
 5. [ ] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
    and a warning when a function returns without freeing or handing it on.
 6. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,

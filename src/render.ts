@@ -182,6 +182,31 @@ function callsOf(trace: Trace) {
   return m;
 }
 
+// How many distinct pointers hold each address in a snapshot (`to|label`):
+// variables, statics, and the fields shown through them. A field read
+// through two pointers to the same struct is one pointer, counted once.
+const shareMemo = new WeakMap<Snap, Map<string, number>>();
+export function pointerId(c: SnapCell, fl?: { name: string }): string {
+  return fl ? `${c.val.k === 'ptr' ? `@${c.val.to}` : c.id}.${fl.name}` : String(c.id);
+}
+function sharersOf(snap: Snap): Map<string, number> {
+  let m = shareMemo.get(snap);
+  if (m) return m;
+  const seen = new Map<string, Set<string>>();
+  const add = (v: V, id: string) => {
+    if (v.k !== 'ptr' || v.to === null) return;
+    const k = `${v.to}|${v.label ?? ''}`;
+    (seen.get(k) ?? seen.set(k, new Set()).get(k)!).add(id);
+  };
+  for (const c of [...snap.statics, ...snap.stack.flatMap((f) => f.cells)]) {
+    add(c.val, pointerId(c));
+    for (const fl of c.fields ?? []) add(fl.val, pointerId(c, fl));
+  }
+  m = new Map([...seen].map(([k, ids]) => [k, ids.size]));
+  shareMemo.set(snap, m);
+  return m;
+}
+
 export class GridView {
   private g: CanvasRenderingContext2D;
   // pointer cells whose line already goes to a byte strip in their machine
@@ -1100,13 +1125,18 @@ export class GridView {
     // fields they show), named by where they live
     const topId = st[st.length - 1]?.id ?? null;
     const refs = new Map<number, { name: string; top: boolean }[]>();
-    const add = (to: number, name: string, top: boolean) => (refs.get(to) ?? refs.set(to, []).get(to)!).push({ name, top });
+    const refIds = new Set<string>();
+    const add = (to: number, name: string, top: boolean, id: string) => {
+      if (refIds.has(id)) return; // the same pointer seen through a second name
+      refIds.add(id);
+      (refs.get(to) ?? refs.set(to, []).get(to)!).push({ name, top });
+    };
     const watchIds = new Set(watched.flatMap((w) => (w.c ? [w.c.id] : [])));
     for (const f of st) for (const c of f.cells) {
-      if (c.val.k === 'ptr' && c.val.to !== null && (blocks.has(c.val.to) || watchIds.has(c.val.to))) add(c.val.to, `${c.name} (${f.fn})`, f.id === topId);
-      for (const fl of c.fields ?? []) if (fl.val.k === 'ptr' && fl.val.to !== null && blocks.has(fl.val.to)) add(fl.val.to, `${c.name}${c.val.k === 'ptr' ? '->' : '.'}${fl.name} (${f.fn})`, f.id === topId);
+      if (c.val.k === 'ptr' && c.val.to !== null && (blocks.has(c.val.to) || watchIds.has(c.val.to))) add(c.val.to, `${c.name} (${f.fn})`, f.id === topId, pointerId(c));
+      for (const fl of c.fields ?? []) if (fl.val.k === 'ptr' && fl.val.to !== null && blocks.has(fl.val.to)) add(fl.val.to, `${c.name}${c.val.k === 'ptr' ? '->' : '.'}${fl.name} (${f.fn})`, f.id === topId, pointerId(c, fl));
     }
-    for (const c of snap?.statics ?? []) if (c.val.k === 'ptr' && c.val.to !== null && blocks.has(c.val.to)) add(c.val.to, `${c.name} (static)`, false);
+    for (const c of snap?.statics ?? []) if (c.val.k === 'ptr' && c.val.to !== null && blocks.has(c.val.to)) add(c.val.to, `${c.name} (static)`, false, pointerId(c));
     // a block a typed pointer holds (at its start) shows the fields gdb read
     // through that pointer: the struct as it is in the block
     const fieldsOf = new Map<number, { name: string; value: string }[]>();
@@ -1326,6 +1356,22 @@ export class GridView {
       const late = arrived.has(key);
       return slotValue(sl, fn.name, late ? fA : fB, late ? after : before, trace, frame ? live : null);
     };
+    // two names for the same memory: a pointer whose address another pointer
+    // holds too says how many do (×2)
+    const shareTag = (key: string, tag: string | undefined): string | undefined => {
+      if (!tag) return tag;
+      const sl = slots.find((x) => x.key === key)!;
+      const late = arrived.has(key);
+      const fr_ = late ? fA : fB;
+      const sn = late ? after : before;
+      if (!fr_ || !sn) return tag;
+      let val: V | undefined;
+      if (sl.kind === 'cell') val = fr_.cells.find((x) => x.name === sl.name)?.val;
+      else if (sl.kind === 'field') val = fr_.cells.find((x) => x.name === sl.parent)?.fields?.find((x) => x.name === sl.name)?.val;
+      if (val?.k !== 'ptr' || val.to === null) return tag;
+      const n = sharersOf(sn).get(`${val.to}|${val.label ?? ''}`) ?? 0;
+      return n >= 2 ? `${tag} ×${n}` : tag;
+    };
     const rows: RowInfo[] = slots.map((sl, i) => {
       const v = valueAt(sl.key);
       const rect: Rect = { x: X, y: this.sy(h.y + geo.store.slotTop[i]), w: W, h: SLOT_PX * z };
@@ -1348,7 +1394,7 @@ export class GridView {
       // what it held before, while its frame runs (the value it holds now is `value`)
       const past = frame && sl.kind !== 'static' ? slotHistory(sl, fn.name, frame.id, trace, arrived.has(sl.key) ? act!.beat.after : act ? act.beat.before : snapIdx) : undefined;
       return {
-        name: label, value: v.text, kind: v.kind, param: sl.param, tag: v.tag, recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
+        name: label, value: v.text, kind: v.kind, param: sl.param, tag: shareTag(sl.key, v.tag), recent: hit, flash: hit ? Math.max(0, 1 - act!.landed * 0.6) : 0,
         rect, depth: sl.depth, fold: sl.fold ?? null, past,
       };
     });
