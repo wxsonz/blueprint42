@@ -7,7 +7,54 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 Skin polish is not on this list. It's optional and guided by the author one
 skin at a time; `docs/SKINS.md` says which skins are reviewed.
 
-## Today (2026-09-29): the machine, redesigned
+## Today (2026-09-30): nothing hidden
+
+The main objective: the picture never hides what the program did. Whatever
+happens is drawn where it happens, and whatever doesn't fit is counted
+(`docs/VISUALS.md`, clarity rule 6; decision 046). Prototyped in Minimal and
+Barebone; truth fixes go to every skin.
+
+Done:
+- [x] printf's buffer above the process box: what waits, how full, when it
+      flushes (Minimal, Barebone); a flush falls into the terminal, `write`
+      goes straight in past it (every skin).
+- [x] The statement that died is crossed out with its signal.
+- [x] `*p` and `a[i]` read from the memory they really read, and show the value.
+- [x] Nothing dropped silently: older past values, reads past 8, writes past
+      10, the dock's arguments are counted.
+- [x] Values in flight always land, with time for each one.
+- [x] Belt crossings cut a real gap (the background shows through).
+
+Next, in this order:
+1. [ ] **Stack and literal bytes** (S). A stack array (`char buf[32]`) or a
+   string literal shows its bytes like a heap block does; today only heap
+   bytes are drawn.
+2. [ ] **stdin and stderr** (S). Input being used up by `read(0, …)`, and
+   output to fd 2 flying into the terminal (only stdout does today).
+3. [ ] **Two names for the same memory** (M). Pointers holding the same
+   address are marked as sharing it, not just given separate lines.
+4. [ ] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
+   and a warning when a function returns without freeing or handing it on.
+5. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
+   `**pp` read from where the memory is, like `*p` and `a[i]`.
+6. [ ] **Loop rounds as a whole** (M). Which way each round went, not only
+   each row's past values.
+7. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
+   whole line (wrap or on hover).
+8. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.
+9. [ ] **`static` functions** marked the same way in every skin (S).
+10. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
+    wall to show them on.
+11. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants
+    from headers, on the grid.
+12. [ ] **Legend overlay** (M). The real drawings and what each one means.
+13. [ ] **Real events as effects** (S each). A leak falls off the shelf at
+    exit, `free` takes the block away, a segfault jams the machine.
+
+Rough edges: the kill feed covers the stations of machines under it; the
+IN dock is mostly empty with one argument or none.
+
+## 2026-09-29: the machine, redesigned
 
 The main objective: a machine reads as the life of one call, top to bottom
 (`docs/VISUALS.md`, "Machine anatomy"; decision 041). It's the first piece of
