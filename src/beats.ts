@@ -28,6 +28,7 @@ export interface Beat {
   lastRet: number; // the return of its last call (-1: none): carries the write when nothing else does
   result?: boolean; // a switch: which way it went
   weight: number; // reads + writes, for pacing
+  plates?: number; // values that fly back to storage (up to 11: ten, then "+n more")
 }
 
 export interface Timeline {
@@ -40,7 +41,15 @@ export interface Timeline {
 // Seconds for a beat at 1×: quick in Fast, readable in Focus.
 export function beatLen(b: Beat, mode: 'fast' | 'focus'): number {
   const w = Math.min(8, b.weight) + (b.calls ? 2 : 0);
-  return mode === 'focus' ? Math.min(2.4, 0.9 + 0.13 * w) : Math.min(0.7, 0.3 + 0.04 * w);
+  const base = mode === 'focus' ? Math.min(2.4, 0.9 + 0.13 * w) : Math.min(0.7, 0.3 + 0.04 * w);
+  // each value after the first gets its own time to fly and land (added to
+  // the write phase, which is the last 45% of the beat)
+  return base + writeTime(b, mode) / (1 - COMPUTE_END);
+}
+
+// seconds at 1x the write phase gets beyond the base, for its plates
+export function writeTime(b: Beat, mode: 'fast' | 'focus'): number {
+  return Math.max(0, (b.plates ?? 0) - 1) * (mode === 'focus' ? 0.16 : 0.09);
 }
 
 // Phase ends in a beat's progress: read, then compute; write runs to 1.
@@ -351,7 +360,9 @@ function build(trace: Trace, model: Model): Timeline {
   for (let i = 0; i < n; i++) if (beatAt[i] >= 0) (own.get(beatAt[i]) ?? own.set(beatAt[i], []).get(beatAt[i])!).push(i);
   beats.forEach((b, k) => {
     const fn = model.byName.get(b.fn)!;
-    b.weight = readsOf(b, fn, trace).length + Math.min(8, writesOf(b, fn, trace).length);
+    const nw = writesOf(b, fn, trace).length;
+    b.weight = readsOf(b, fn, trace).length + Math.min(8, nw);
+    b.plates = Math.min(11, nw);
     const list = own.get(k) ?? [];
     // what a call changed lands as its result comes back, not before the call
     if (b.lastRet > list[list.length - 1]) {
@@ -393,12 +404,19 @@ export function beatNow(trace: Trace, model: Model, pos: number): BeatNow | null
   return { beat: tl.beats[k], p, phase, landed: Math.max(0, Math.min(1, (p - COMPUTE_END) / (1 - COMPUTE_END))) };
 }
 
+const evDurationRet = () => 1.05; // playback.ts evDuration for a return
+
 // Seconds at 1× for event i: a beat's share, or the event kind's own time.
 export function beatDuration(trace: Trace, model: Model, i: number, mode: 'fast' | 'focus'): number | null {
   const tl = timelineOf(trace, model);
   const k = tl.beatAt[i];
-  // a return keeps its belt timing even when it carries a statement's write
-  if (k < 0 || trace.evs[i].k === 'ret') return null;
+  if (k < 0) return null;
+  // a return keeps its belt timing even when it carries a statement's write,
+  // but gets longer if that write has more values to land than it has time for
+  if (trace.evs[i].k === 'ret') {
+    const extra = writeTime(tl.beats[k], mode);
+    return extra > 0 ? evDurationRet() + extra : null;
+  }
   return Math.max(0.002, (tl.p1[i] - tl.p0[i]) * beatLen(tl.beats[k], mode));
 }
 
