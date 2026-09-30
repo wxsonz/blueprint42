@@ -56,6 +56,7 @@ function interiorInfo(
     return {
       kind: st.kind, text: hot ? o.hot!.text : st.text, hot, x, y, textX: o.x + textX(st.depth) * o.z, readout,
       count: st.kind === 'loop' && state ? state.decided.get(i)?.count ?? null : null,
+      ...(state?.rounds.has(i) ? { rounds: state.rounds.get(i) } : {}),
       state: !state ? 'idle' : state.current === i && live ? 'current' : state.visited.has(i) ? 'visited' : 'idle',
     };
   });

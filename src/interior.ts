@@ -457,7 +457,13 @@ export interface InteriorState {
   visited: Set<number>; // stations this frame has reached so far
   decided: Map<number, { d: Decision; count: number | null }>; // switch → its latest result (and a loop's count)
   pending: number | null; // a switch the frame is on, its result not known yet
+  // loop rounds as a whole: a loop's results this time through (in, in, …,
+  // out), and an if inside it: its result in each of those rounds (null: not
+  // reached that round). The last ROUNDS; `older` counts the rounds before.
+  rounds: Map<number, { marks: (boolean | null)[]; older: number }>;
 }
+
+export const ROUNDS = 12;
 
 // The state of `frame` (a frame of this plan's function) just before event `i` finishes.
 export function interiorAt(trace: Trace, plan: Plan, frame: number, i: number): InteriorState {
@@ -502,5 +508,38 @@ export function interiorAt(trace: Trace, plan: Plan, frame: number, i: number): 
   // on a switch whose result isn't known yet: the latest one is older than this visit
   const cur = current !== null ? plan.stations[current] : null;
   const pending = cur && (cur.kind === 'if' || cur.kind === 'loop') && (decided.get(current!)?.d.at ?? -1) < since ? current : null;
-  return { current, visited, decided, pending };
+  // rounds: each loop's current time through (since it last exited, or its
+  // last one if it has), then each switch inside it, round by round
+  const rounds = new Map<number, { marks: (boolean | null)[]; older: number }>();
+  const upTo = (k: number) => (run.decisions.get(k) ?? []).filter((d) => d.at <= i);
+  for (let L = 0; L < st.length; L++) {
+    if (st[L].kind !== 'loop') continue;
+    const ds = upTo(L);
+    if (!ds.length) continue;
+    // the entry: back from the latest decision to just after the false before it
+    let a = ds.length - 1;
+    while (a > 0 && ds[a - 1].result) a--;
+    const entry = ds.slice(a);
+    const shown = entry.slice(-ROUNDS);
+    const older = entry.length - shown.length;
+    rounds.set(L, { marks: shown.map((d) => d.result), older });
+    // the switches directly inside it (not inside a nested loop)
+    for (let S = L + 1; S <= st[L].end; S++) {
+      if (st[S].kind !== 'if') continue;
+      let inner = false;
+      for (let N = L + 1; N < S; N++) if (st[N].kind === 'loop' && S <= st[N].end) inner = true;
+      if (inner) continue;
+      const sd = upTo(S);
+      rounds.set(S, {
+        older,
+        marks: shown.map((d, r) => {
+          if (!d.result) return null; // the round that left: the body didn't run
+          const next = shown[r + 1]?.at ?? (entry[entry.indexOf(d) + 1]?.at ?? Infinity);
+          const hit = sd.find((x) => x.at > d.at && x.at <= next);
+          return hit ? hit.result : null;
+        }),
+      });
+    }
+  }
+  return { current, visited, decided, pending, rounds };
 }

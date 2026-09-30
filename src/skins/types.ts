@@ -199,6 +199,10 @@ export interface StationInfo {
   textX: number;
   readout: { text: string; result: boolean | null } | null; // a switch: its operands and result, on the row below
   count: number | null; // a loop: times round
+  // a loop: which way each round went (true: in, false: out); an if inside a
+  // loop: its result in each of those rounds (null: not reached). The latest
+  // rounds; `older` counts the ones before them
+  rounds?: { marks: (boolean | null)[]; older: number };
   state: 'idle' | 'visited' | 'current';
   hot?: boolean; // its text is the expression with the values it just read (inside a machine)
 }

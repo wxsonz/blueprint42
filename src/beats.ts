@@ -248,14 +248,43 @@ export function evalIndex(text: string, frame: SnapFrame | null): number {
 // `a[i]`, `a[j + 1]`: the element of a local array, when its value is plain
 // to read ("[1, 2, 3]" / "{1, 2, 3}") and the index can be computed; null
 // otherwise (then only the index's reads are shown and `a[…]` stays as written)
-function elementOf(leaf: Leaf, frame: SnapFrame | null): string | null {
-  const c = frame?.cells.find((x) => x.name === leaf.path[0]);
-  if (!c || c.val.k !== 'raw' || leaf.index === undefined) return null;
+function elementOf(leaf: Leaf, frame: SnapFrame | null, snap?: Snap): string | null {
+  let c = frame?.cells.find((x) => x.name === leaf.path[0]);
+  if (!c || leaf.index === undefined) return null;
+  // a pointer into an array (`int *tab` at main's tab[0]): the element is
+  // read from that array, from where the pointer points
+  let offset = 0;
+  if (c.val.k === 'ptr' && snap) {
+    const at = /\[(\d+)\]$/.exec(c.val.label ?? '');
+    const target = c.val.to !== null && at ? cellIn(snap, c.val.to) : null;
+    if (!target) return null;
+    offset = Number(at![1]);
+    c = target as typeof c;
+  }
+  if (c.val.k !== 'raw') return null;
   const m = /^[[{]([^[\]{}<>"']*)[\]}]$/.exec(c.val.text.trim());
   if (!m) return null;
   const items = m[1].split(',').map((x) => x.trim());
-  const idx = evalIndex(leaf.index, frame);
+  const idx = offset + evalIndex(leaf.index, frame);
   return Number.isInteger(idx) && idx >= 0 && idx < items.length && items[idx] !== '' && !items[idx].includes('.') ? items[idx] : null;
+}
+
+// A leaf's value as the picture shows it in an expression, or null to keep
+// it as written: `*p` / `**pp` / `a->b->c` / `a[i]` from the memory they
+// read, names and fields from their rows. (A switch's readout uses this.)
+export function leafText(leaf: Leaf, fnName: string, frame: SnapFrame | null, snap: Snap, trace: Trace): string | null {
+  if (leaf.keep) return null;
+  if (leaf.deref) return derefOf(leaf, fnName, frame, snap, trace)?.text ?? null;
+  if (leaf.chain) return chainOf(leaf, frame, snap, trace)?.text ?? null;
+  if (leaf.index !== undefined) return elementOf(leaf, frame, snap);
+  const c = frame?.cells.find((x) => x.name === leaf.path[0]) ?? (() => {
+    const id = staticCellId(trace, fnName, leaf.path[0]);
+    return id !== null ? snap.statics.find((x) => x.id === id) : undefined;
+  })();
+  if (!c) return null;
+  if (leaf.path.length === 1) return valueOf(c, frame, trace, null).text;
+  const fld = c.fields?.find((x) => x.name === leaf.path[1]);
+  return fld ? fieldValue(fld, trace).text : null;
 }
 
 export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
@@ -273,7 +302,7 @@ export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
     if (leaf.chain) continue; // a chain that can't be followed stays as written
     if (leaf.index !== undefined) {
       // the element flies from the array's own row
-      const e = elementOf(leaf, frame);
+      const e = elementOf(leaf, frame, snap);
       const k = `c:${leaf.path[0]}`;
       if (e !== null && slots.some((s) => s.key === k) && !out.some((r) => r.key === `${k}[${leaf.index}]`)) out.push({ key: `${k}[${leaf.index}]`, text: e });
       continue;
@@ -294,11 +323,11 @@ export function computeText(b: Beat, fn: FnInfo, trace: Trace): string {
   const frame = frameIn(snap, b.frame);
   let out = src;
   // an element read replaces `a[i]` whole, so the index inside it isn't replaced first
-  const whole = leaves.filter((l) => l.index !== undefined && elementOf(l, frame) !== null);
+  const whole = leaves.filter((l) => l.index !== undefined && elementOf(l, frame, snap) !== null);
   for (const leaf of [...leaves].sort((x, y) => y.from - x.from)) {
     if (leaf.keep) continue;
     if (leaf.index !== undefined) {
-      const e = elementOf(leaf, frame);
+      const e = elementOf(leaf, frame, snap);
       if (e !== null) out = out.slice(0, leaf.from) + e + out.slice(leaf.to);
       continue;
     }

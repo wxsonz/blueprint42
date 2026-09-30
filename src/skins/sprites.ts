@@ -329,12 +329,46 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       g.fillText(badge, right, s.y);
       g.textAlign = 'left';
     }
+    // loop rounds as a whole, right on the readout row: one mark a round
+    // (filled: in / then; hollow: out / else; a dot: not reached that
+    // round), a loop's and the ifs inside it in the same columns
+    let marksW = 0;
+    if (s.rounds && s.rounds.marks.length) {
+      const ry = s.y + i.row;
+      const mw = Math.max(4, 6 * z);
+      const gap = Math.max(1.5, 2.5 * z);
+      const n = s.rounds.marks.length;
+      marksW = n * (mw + gap);
+      s.rounds.marks.forEach((m, k) => {
+        const x = right - (n - k) * (mw + gap) + gap;
+        g.lineWidth = Math.max(1, 1.2 * z);
+        if (m === null) {
+          g.fillStyle = p.muted;
+          g.fillRect(x + mw / 2 - 1, ry - 1, 2, 2);
+        } else if (m) {
+          g.fillStyle = p.accent;
+          g.fillRect(x, ry - mw / 2, mw, mw);
+        } else {
+          g.strokeStyle = p.marker;
+          g.strokeRect(x + 0.5, ry - mw / 2 + 0.5, mw - 1, mw - 1);
+        }
+      });
+      if (s.rounds.older) {
+        g.font = p.font(fs * 0.8);
+        g.fillStyle = p.muted;
+        g.textAlign = 'right';
+        const t = `+${s.rounds.older}`;
+        g.fillText(t, right - marksW - 2 * z, ry);
+        marksW += g.measureText(t).width + 4 * z;
+        g.textAlign = 'left';
+      }
+    }
     if (s.readout) {
       const ry = s.y + i.row;
       const res = s.readout.result;
       g.font = p.font(fs * 0.95);
       g.fillStyle = res === null ? p.muted : res ? p.accent : p.marker;
-      g.fillText(cut(s.readout.text, right - s.textX - 4 * z), s.textX + 4 * z, ry);
+      g.fillText(cut(s.readout.text, right - s.textX - 4 * z - marksW), s.textX + 4 * z, ry);
     }
     g.globalAlpha = i.mode !== 'live' ? 0.75 : 1;
   });

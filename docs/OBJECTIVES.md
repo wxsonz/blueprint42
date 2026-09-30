@@ -63,8 +63,13 @@ Next, in this order:
    any integer expression of names and numbers (C's truncating `/`); a chain
    goes through `->` only (a nested `a->b.c` stays as written), reading a
    block's fields where gdb read them through a pointer of the same type.
-7. [ ] **Loop rounds as a whole** (M). Which way each round went, not only
-   each row's past values.
+7. [x] **Loop rounds as a whole** (M). Which way each round went, not only
+   each row's past values: one mark per round on a loop's readout row (in /
+   out), and on each `if` directly inside it, its result in the same columns
+   (a dot: not reached that round); the last 12, older ones counted (every
+   skin that draws stations with the shared interior). A switch's readout now
+   reads `*p`, `a[i]` and chains from their memory too (it showed the
+   pointer's own value before).
 8. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
    whole line (wrap or on hover).
 9. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.

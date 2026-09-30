@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
 import { beatDuration, beatLen, beatNow, computeText, readsOf, slotValue, timelineOf, writesOf } from '../src/beats';
 import { convertGdb } from '../src/gdb';
-import { planOf } from '../src/interior';
+import { interiorAt, planOf } from '../src/interior';
 import { lostBlocks } from '../src/ownership';
 import { run, type Trace } from '../src/interp';
 import { callPortY, geomOf, machineSize, slotsOf } from '../src/machine';
@@ -237,4 +237,18 @@ describe('machines are their insides', () => {
     expect(chain).toEqual([{ key: 'd:p.next.v', text: '42', cell: b.id }]);
     expect(computeText(at('x = **pp + 1'), fn, t)).toBe('x = 42 + 1'); // pp → ip → x, which the line before set to 42
   }, 60000);
+
+  it('loop rounds as a whole: in, in, in, out, and the if inside it round by round', () => {
+    const src = 'int\tf(int n)\n{\n\tint\ti;\n\tint\ts;\n\n\ti = 0;\n\ts = 0;\n\twhile (i < n)\n\t{\n\t\tif (i % 2 == 0)\n\t\t\ts = s + i;\n\t\ti = i + 1;\n\t}\n\treturn (s);\n}\n\nint\tmain(void)\n{\n\treturn (f(3));\n}\n';
+    const m = parse(src);
+    const t = run(m);
+    const fn = m.byName.get('f')!;
+    const plan = planOf(fn);
+    const frame = t.evs.find((e) => e.k === 'call' && e.fn === 'f')!.frame!;
+    const loop = plan.stations.findIndex((x) => x.kind === 'loop');
+    const iff = plan.stations.findIndex((x) => x.kind === 'if');
+    const end = interiorAt(t, plan, frame, t.evs.length - 1);
+    expect(end.rounds.get(loop)).toEqual({ marks: [true, true, true, false], older: 0 });
+    expect(end.rounds.get(iff)).toEqual({ marks: [true, false, true, null], older: 0 });
+  });
 });

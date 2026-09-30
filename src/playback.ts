@@ -2,11 +2,11 @@
 // card, hosts (which node shows which frame) and M5.5 readouts and labels.
 import type { Layout } from './layout';
 import type { Station } from './interior';
-import { beatDuration } from './beats';
+import { beatDuration, leafText } from './beats';
 import type { Model } from './parse';
-import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
+import { fmtVal, type Ev, type Payload, type Snap, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, hostKey, type Belt, type Scene } from './route';
-import { clip, fieldValue, pointeeName, staticCellId, valueOf } from './values';
+import { clip, fieldValue, pointeeName, valueOf } from './values';
 import type { Pt, Rect, StripInfo } from './skins/types';
 import type { BoundValue, Sprite } from './blueprint';
 import type { Violation } from './invariants';
@@ -408,22 +408,15 @@ export function beltHandle(b: Belt): Pt {
 // Only names and one-level members are replaced; everything else stays as written.
 export function readoutOf(sw: Station, trace: Trace, snap: Snap | null, frameId: number, fn: string): string {
   const raw = sw.cond ?? '';
-  const f = snap?.stack.find((x) => x.id === frameId) ?? null;
-  const cellOf = (name: string): SnapCell | null => {
-    const c = f?.cells.find((x) => x.name === name);
-    if (c) return c;
-    const id = staticCellId(trace, fn, name);
-    return id !== null ? snap?.statics.find((x) => x.id === id) ?? null : null;
-  };
+  if (!snap) return '';
+  const f = snap.stack.find((x) => x.id === frameId) ?? null;
   let out = raw;
-  for (const leaf of [...(sw.leaves ?? [])].sort((a, b) => b.from - a.from)) {
-    const c = cellOf(leaf.path[0]);
-    let text: string | null = null;
-    if (c && leaf.path.length === 1) text = valueOf(c, f, trace, null).text;
-    else if (c && leaf.path.length === 2) {
-      const fld = c.fields?.find((x) => x.name === leaf.path[1]);
-      if (fld) text = fieldValue(fld, trace).text;
-    }
+  // an element read replaces `a[i]` whole: the index inside isn't replaced first
+  const leaves = sw.leaves ?? [];
+  const whole = leaves.filter((l) => l.index !== undefined && leafText(l, fn, f, snap, trace) !== null);
+  for (const leaf of [...leaves].sort((a, b) => b.from - a.from)) {
+    if (!whole.includes(leaf) && whole.some((w) => leaf.from >= w.from && leaf.to <= w.to)) continue;
+    const text = leafText(leaf, fn, f, snap, trace);
     if (text !== null) out = out.slice(0, leaf.from) + text + out.slice(leaf.to);
   }
   return out === raw ? '' : out.replace(/\s+/g, ' ').trim();
