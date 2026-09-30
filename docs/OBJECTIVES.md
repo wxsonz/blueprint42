@@ -76,7 +76,9 @@ Next, in this order:
 9. [x] **The printf buffer in PS1–PS4** (S each), in each skin's own parts:
    one of its storage panels (`printf`, the head's capacity how full), the
    dock's own light lit while bytes wait (`kit.ts`, with `Theme.look.dock`).
-10. [ ] **`static` functions** marked the same way in every skin (S).
+10. [x] **`static` functions** marked the same way in every skin (S): as C
+    writes it, in the machine's title every skin draws (`static
+    lr_append(fd, buf, nl)`); skins with a dock showed nothing before.
 11. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module
     wall to show them on.
 12. [ ] **Types shelf** (L). Structs, typedefs, enums and macro constants

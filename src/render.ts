@@ -1262,7 +1262,8 @@ export class GridView {
     const closed = shut.has(fn.name);
     const geo = fn.broken ? null : geomOf(fn);
     const shown = frame ?? returned;
-    const name = `${fn.cname}(${fn.params.map((p) => p.name).join(', ')})${h.copy > 1 ? ` #${h.copy}` : ''}`;
+    // `static` as C writes it, in the title every skin draws: seen only inside its file
+    const name = `${fn.isStatic ? 'static ' : ''}${fn.cname}(${fn.params.map((p) => p.name).join(', ')})${h.copy > 1 ? ` #${h.copy}` : ''}`;
     // a floor under see-through walls (skins that paint whole windows don't
     // need one, and a square floor would show past their rounded corners)
     if (!skin.solidMachines) {
