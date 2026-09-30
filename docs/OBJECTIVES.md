@@ -70,8 +70,9 @@ Next, in this order:
    skin that draws stations with the shared interior). A switch's readout now
    reads `*p`, `a[i]` and chains from their memory too (it showed the
    pointer's own value before).
-8. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
-   whole line (wrap or on hover).
+8. [x] **Long statements** (S). Station code is cut at 44 characters; show the
+   whole line (wrap or on hover). Hover a cut or wrapped statement: a tip
+   (styled like the other panels, per skin) shows all of it on one line.
 9. [ ] **The printf buffer in PS1–PS4** (S each), in each skin's own parts.
 10. [ ] **`static` functions** marked the same way in every skin (S).
 11. [ ] **Capacity for a single file** (S). Its 5 definitions, with no module

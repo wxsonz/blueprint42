@@ -599,6 +599,9 @@ function bindMouse(): void {
     } else {
       S.hovered = entityAt(S, wx, wy);
     }
+    // a statement longer than its station shows: the whole of it, on hover
+    const at = !drag && !view.heapBarAt(x, y) ? stationAt(S, wx, wy) : null;
+    showTip(at?.st.full ? { text: at.st.full, x: e.clientX, y: e.clientY } : null);
     setCursorStyle();
   });
 
@@ -622,6 +625,7 @@ function bindMouse(): void {
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => {
+    showTip(null);
     if (!drag) S.hovered = null;
   });
   canvas.addEventListener('dragover', (e) => {
@@ -718,6 +722,18 @@ function bindMouse(): void {
     items.push(['Fit view', () => view.fit(S)]);
     showMenu(e.clientX, e.clientY, items);
   });
+}
+
+// The hover tip (a statement in full): page coordinates, next to the pointer.
+function showTip(t: { text: string; x: number; y: number } | null): void {
+  const el = document.getElementById('tip');
+  if (!el) return;
+  if (!t) return void (el.hidden = true);
+  if (el.textContent !== t.text) el.textContent = t.text;
+  el.hidden = false;
+  const r = el.parentElement!.getBoundingClientRect();
+  el.style.left = `${Math.min(t.x - r.left + 14, r.width - el.offsetWidth - 8)}px`;
+  el.style.top = `${t.y - r.top + 18}px`;
 }
 
 function showMenu(x: number, y: number, items: [string, () => void][]): void {

@@ -208,7 +208,7 @@ kbd {
 
 /* ---------- floating panels on the canvas ---------- */
 #alerts { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(60%, 520px); pointer-events: none; }
-.alert, #inspector, #dock, #toast, .dlg, #menu {
+.alert, #inspector, #dock, #toast, #tip, .dlg, #menu {
   background: var(--panel-bg);
   color: var(--panel-fg);
   border: var(--panel-border);
@@ -265,6 +265,8 @@ kbd {
 #dock .slot.placeable:active { cursor: grabbing; }
 #dock .slot:nth-child(6) { margin-left: 6px; }
 
+#tip { position: absolute; max-width: min(640px, 80%); padding: 5px 9px; font: 12px var(--mono, ui-monospace, monospace); white-space: pre-wrap; word-break: break-word; pointer-events: none; z-index: 5; }
+#tip[hidden] { display: none; }
 #toast { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); padding: 6px 12px; white-space: nowrap; pointer-events: none; }
 #toast.act { pointer-events: auto; }
 #toast .btn { margin-left: 8px; }

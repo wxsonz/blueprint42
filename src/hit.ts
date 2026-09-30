@@ -177,7 +177,7 @@ export function machineHeadAt(s: ViewState, wx: number, wy: number): string | nu
 }
 
 // The statement a point inside a machine is on: its function and line.
-export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number } | null {
+export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; line: number; st: Station } | null {
   const scene = sceneAt(s);
   for (const h of scene.hosts.values()) {
     const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
@@ -190,7 +190,7 @@ export function stationAt(s: ViewState, wx: number, wy: number): { fn: string; l
     const row = Math.floor((ly - HEAD) / ROW);
     let hit: Station | null = null;
     for (const st of plan.stations) if (st.row <= row && st.kind !== 'else') hit = st;
-    return hit ? { fn: fn.name, line: hit.line } : null;
+    return hit ? { fn: fn.name, line: hit.line, st: hit } : null;
   }
   return null;
 }

@@ -32,6 +32,7 @@ export interface Station {
   line: number; // 0-based row the engine stops at for it (a switch: its condition's row)
   last: number; // last row of the whole statement
   text: string; // one line of source
+  full?: string; // the whole statement on one line, when `text` doesn't show all of it (hover shows it)
   depth: number; // 0 = the main line
   row: number; // first layout row (a switch takes two: code, then its readout)
   cond?: string; // a switch's condition as written, without the outer parentheses (leaves index into it)
@@ -221,7 +222,7 @@ export function planOf(fn: FnInfo): Plan {
     const line = kind === 'loop' && loop === 'do' ? condNode.startPosition.row : n.startPosition.row;
     const b0 = firstRow(body);
     return push({
-      kind, line, last: n.endPosition.row, text: clipText(text), depth, cond: c.text, leaves: leavesOf(c),
+      kind, line, last: n.endPosition.row, text: clipText(text), ...(clipText(text) !== text ? { full: text } : {}), depth, cond: c.text, leaves: leavesOf(c),
       body: body ? [body.startPosition.row, body.endPosition.row] : undefined,
       inferable: !!body && b0 !== line, loop, calls: callsOf(c),
     }, 2);
@@ -229,6 +230,7 @@ export function planOf(fn: FnInfo): Plan {
   const stmt = (n: Node, depth: number) => {
     const simple = (kind: StationKind) => push({
       kind, line: n.startPosition.row, last: n.endPosition.row, text: clipText(one(n.text.split('\n')[0])), depth,
+      ...(clipText(one(n.text.split('\n')[0])) !== one(n.text) ? { full: one(n.text) } : {}),
       src: n.text, reads: readsOf(n), calls: callsOf(n),
     });
     switch (n.type) {

@@ -251,4 +251,11 @@ describe('machines are their insides', () => {
     expect(end.rounds.get(loop)).toEqual({ marks: [true, true, true, false], older: 0 });
     expect(end.rounds.get(iff)).toEqual({ marks: [true, false, true, null], older: 0 });
   });
+
+  it('a long or wrapped statement keeps its whole text for the hover tip', () => {
+    const src = 'int\tf(int alpha, int beta)\n{\n\treturn (alpha * alpha + beta * beta\n\t\t+ alpha * beta + beta * alpha + 12345);\n}\n\nint\tmain(void)\n{\n\treturn (f(1, 2));\n}\n';
+    const st = planOf(parse(src).byName.get('f')!).stations.find((x) => x.kind === 'ret')!;
+    expect(st.text.length).toBeLessThanOrEqual(44);
+    expect(st.full).toBe('return (alpha * alpha + beta * beta + alpha * beta + beta * alpha + 12345);');
+  });
 });
