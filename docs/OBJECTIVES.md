@@ -72,7 +72,15 @@ Steps, in this order:
    drawing stays inside the rect it was given (bar declared overhangs).
    Would have caught the 0/0. Done when it runs in `npm test` for all 34
    skins.
-4. [ ] **What a frame shows, as data** (L). Split `GridView.draw` into a
+4. [x] **What a frame shows, as data** (L). Done 2026-10-01: `src/frame.ts`
+   (`frameState`, and what the process box, printf's buffer, stdin, the
+   modules, walls, the heap bar and the IN dock show) with no canvas;
+   `GridView.draw` is 64 lines naming 15 paint passes (0 of 2,970 frames
+   differ). `test/frame.test.ts`: a readout says the array's values at j and
+   j + 1, a block is lost the moment nothing points at it, the dock shows the
+   arguments the call carried, stdin never gives back what it took. Not yet:
+   machines' hit rects (`hit.ts`) are worked out apart from the frame; the
+   heap bar's are the ones its pass laid out. Split `GridView.draw` into a
    pure step, `frameScene(state, trace, pos, camera) → Scene` (every
    machine, row, readout, plate, card and line with its rect and the value
    it shows), and painting passes that only draw a Scene. The Scene is

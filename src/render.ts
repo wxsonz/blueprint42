@@ -1,29 +1,31 @@
 // Grid engine: camera and drawing. Playback timing and hosts live in
 // playback.ts, hit-testing and rects in hit.ts, routing in route.ts; every
 // pixel is delegated to the active skin (skins/*.ts).
+import { beltCount, callsOf, dockInfo, waitingOnOf, fileOfHost, frameState, heapBarInfo, heapCardInfo, heapModel, pointerId, watchCardInfo, moduleInfo, procInfo, relatedBelt, stateOfHost, stdbufInfo, stdinInfo, wallInfo, type FrameState } from './frame';
 import { guardSkin } from './skins/guard';
 import { cLiteral } from './skins/stdbuf';
 import { HEAP_CARD } from './skins/heapbar';
 import { TYPE_CARD, typeCardH } from './skins/typeshelf';
-import { lostBlocks, lostShort } from './ownership';
-import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
+
+import { CELL_PX, INV_HEAD_PX, MH, MW, SLOT_PX } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
-import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
+import { computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
+import { geomOf, isCharArray, procH, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
 import type { FnInfo, TypeDef } from './parse';
 import type { Host } from './route';
-import { fmtVal, type Ev, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
+import { fmtVal, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
-import { fileCap, fnCaps } from './norm';
+import { fnCaps } from './norm';
 import { gfxMode } from './gfx/gfx';
 import { GfxLayer, type GfxView } from './gfx/layer';
 import { sceneFor } from './gfx/scenes';
-import type { CrateInfo, Dc, HeapBarInfo, HeapCardInfo, TypeCardInfo, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
+import type { CrateInfo, Dc, TypeCardInfo, InteriorInfo, Pt, Rect, RowInfo, RunState, Skin, StationInfo } from './skins/types';
 
 export { procPlace, type Belt };
 export { clip, pointeeName } from './values';
-import { MODE, argLabel, beltHandle, clipCode, entKey, eventPair, frameAt, frameHosts, lastReturned, returnOf, liveHostPairs, readoutOf, retLabel, returnCard, sceneAt, spriteStripInfo, spriteWorldRect, staged, switchAt, type Duel, type DuelEnd, type ViewState } from './playback';
+export { pointerId } from './frame';
+import { MODE, argLabel, beltHandle, clipCode, frameAt, frameHosts, lastReturned, returnOf, readoutOf, retLabel, returnCard, sceneAt, spriteStripInfo, spriteWorldRect, staged, switchAt, type Duel, type DuelEnd, type ViewState } from './playback';
 
 import { heapSlotRect, wallCrossings } from './hit';
 
@@ -168,43 +170,10 @@ function quantizeFonts(g: CanvasRenderingContext2D): void {
 // …and each heap block's malloc: the line, and the function that called it.
 // …and, for the dock, where each call came from (the caller's line) and
 // which call of its function it is.
-const callMemo = new WeakMap<Trace, { calls: Map<number, number>; errs: Map<number, Trace['evs'][number]>; allocs: Map<number, { line: number; fn: string | null }>; site: Map<number, number>; nth: Map<number, [number, number]> }>();
-function callsOf(trace: Trace) {
-  let m = callMemo.get(trace);
-  if (!m) {
-    m = { calls: new Map(), errs: new Map(), allocs: new Map(), site: new Map(), nth: new Map() };
-    const lastLine = new Map<number, number>(); // frame -> the line it last ran
-    const byFn = new Map<string, number[]>();
-    trace.evs.forEach((e, i) => {
-      if (e.frame === null) return;
-      if (e.k === 'call') {
-        // the caller's line: the interpreter's call event carries it; under gdb, the caller's last stop
-        const caller = trace.snaps[i]?.stack.at(-1)?.id;
-        const at = trace.engine === 'interp' ? e.line : caller !== undefined ? lastLine.get(caller) : undefined;
-        if (at !== undefined) m!.site.set(e.frame, at + 1);
-        (byFn.get(e.fn) ?? byFn.set(e.fn, []).get(e.fn)!).push(e.frame);
-      } else lastLine.set(e.frame, e.line);
-      if (e.k === 'call') m!.calls.set(e.frame, i);
-      else if (e.k === 'error') m!.errs.set(e.frame, e);
-      else if (e.k === 'alloc') {
-        const ci = m!.calls.get(e.frame);
-        const call = ci !== undefined ? trace.evs[ci] : null;
-        m!.allocs.set(e.cell, { line: e.line + 1, fn: call?.k === 'call' ? call.fn : null });
-      }
-    });
-    for (const frames of byFn.values()) frames.forEach((f, k) => m!.nth.set(f, [k + 1, frames.length]));
-    callMemo.set(trace, m);
-  }
-  return m;
-}
-
 // How many distinct pointers hold each address in a snapshot (`to|label`):
 // variables, statics, and the fields shown through them. A field read
 // through two pointers to the same struct is one pointer, counted once.
 const shareMemo = new WeakMap<Snap, Map<string, number>>();
-export function pointerId(c: SnapCell, fl?: { name: string }): string {
-  return fl ? `${c.val.k === 'ptr' ? `@${c.val.to}` : c.id}.${fl.name}` : String(c.id);
-}
 function sharersOf(snap: Snap): Map<string, number> {
   let m = shareMemo.get(snap);
   if (m) return m;
@@ -242,6 +211,29 @@ export function typeShelf(s: ViewState, scene: ReturnType<typeof sceneAt>): { de
     y += r.h + TYPE_CARD.gap;
     return { def, r, rows };
   });
+}
+
+// One frame's values, shared by the paint passes: what it shows (FrameState)
+// and what the camera and skin make of it.
+interface Frame extends FrameState {
+  fs: FrameState;
+  s: ViewState;
+  skin: Skin;
+  g: CanvasRenderingContext2D;
+  dc: Dc;
+  cs: number;
+  z: number;
+  now: number;
+  sinceEnd: number; // seconds since playback reached the run's end
+  related: (b: Belt) => boolean;
+  fileOfHost: (k: string) => string | undefined;
+  visible: Belt[]; // belts on screen, in drawing order (the belts pass sets it)
+  pp: ReturnType<typeof procPlace>;
+  hostsToDraw: Host[];
+  portsOf: (hk: string) => { inPorts: number[]; outPorts: number[] };
+  stateOf: (h: Host) => RunState;
+  anchors: Map<number, Anchor>; // where each cell's row is, for pointer lines
+  drawHeapBar: (() => void) | null; // the heap bar, laid out, drawn on top
 }
 
 export class GridView {
@@ -466,6 +458,8 @@ export class GridView {
   private endedAt: number | null = null; // when playback reached the run's end (ms)
   private frameNow = 0; // this frame's time (ms): every animation reads it, never the wall clock, so a frame redraws the same
   ending = false; // an end effect is playing: keep drawing
+  // A frame: what it shows (frameState, src/frame.ts: no canvas), then the
+  // passes that paint it, bottom to top. Each reads the frame's values from F.
   draw(s: ViewState, skin: Skin, now: number): void {
     skin = guardSkin(skin); // a hook that throws can't stop the frame (src/skins/guard.ts)
     this.skinNow = skin;
@@ -489,82 +483,61 @@ export class GridView {
       this.bgKind = 'page';
     } else this.background(skin, dc, now);
 
-    const trace = s.trace;
-    const fr = trace && trace.evs.length ? frameAt(trace, s.pos) : null;
-    const snap = fr?.snap ?? trace?.snaps[0] ?? null;
-    const ev = fr?.ev ?? null;
-    const t = fr?.t ?? 0;
-    const ph = fr?.ph ?? null;
-    const finished = !!trace && s.pos >= trace.evs.length;
+    const fs = frameState(s);
     // the run's end as an event: a leak falls off, a crash jams its machine
-    if (!finished) this.endedAt = null;
+    if (!fs.finished) this.endedAt = null;
     else if (this.endedAt === null) this.endedAt = now;
     const sinceEnd = this.endedAt === null ? Infinity : (now - this.endedAt) / 1000;
     this.ending = sinceEnd < 0.9;
-    const selKey = entKey(s.selected);
-    const hovKey = entKey(s.hovered);
-    const scene = sceneAt(s);
+    const { scene } = fs;
+    const F: Frame = {
+      ...fs, fs, s, skin, g, dc, cs, z, now, sinceEnd,
+      related: (b: Belt) => relatedBelt(s, fs, b),
+      fileOfHost: (k: string) => fileOfHost(s, fs, k),
+      visible: [],
+      pp: procPlace(s.layout),
+      // machines: homes, plus live (or fading) recursive copies
+      hostsToDraw: [...scene.hosts.values()].filter((h) => !h.module && (h.copy === 1 || fs.liveHosts.has(h.key))),
+      portsOf: (hk: string) => {
+        const p = scene.ports.get(hk);
+        return { inPorts: (p?.in ?? []).map((y) => this.sy(y)), outPorts: (p?.out ?? []).map((y) => this.sy(y)) };
+      },
+      stateOf: (h: Host) => stateOfHost(fs, h),
+      anchors: new Map<number, Anchor>(),
+      drawHeapBar: null,
+    };
+    this.stripWired.clear();
+    this.passWalls(F); // module walls (M5): an expanded file, under everything else
+    this.passGhosts(F);
+    this.passBelts(F);
+    this.passDoors(F);
+    this.passProcess(F);
+    this.passTypes(F);
+    this.passModules(F);
+    this.passHeap(F); // laid out now so pointer lines know where its cards are; drawn last
+    this.passMachines(F);
+    this.passSprites(F);
+    this.passWires(F);
+    this.passVeil(F);
+    this.passMotion(F);
+    F.drawHeapBar?.();
+    this.passHandle(F);
+    this.passDuel(F);
+  }
 
-    const hostOf = frameHosts(snap, scene);
-    const st = snap?.stack ?? [];
-    const framesOnHost = new Map<string, SnapFrame[]>();
-    for (const f of st) {
-      const hk = hostOf.get(f.id)!;
-      if (!framesOnHost.has(hk)) framesOnHost.set(hk, []);
-      framesOnHost.get(hk)!.push(f);
-    }
-    const topHost = st.length ? hostOf.get(st[st.length - 1].id)! : null;
-    let errHost: string | null = null;
-    if (trace?.error && finished) {
-      const last = trace.evs[trace.evs.length - 1];
-      for (const [id, hk] of hostOf) if (id === last?.frame) errHost = hk;
-      if (!errHost && last?.frame !== null) {
-        for (const sn of trace.snaps) for (const f of sn.stack) if (f.id === last.frame) errHost = scene.moduleOf.get(f.fn) ?? f.fn;
-      }
-    }
-
-    // Animation targets: the belt a call/return rides, and a copy fading in or out.
-    let animPair: [string, string] | null = null;
-    let fading: { host: string; alpha: number } | null = null;
-    if (ev && trace && (ev.k === 'call' || ev.k === 'ret')) {
-      animPair = eventPair(trace, fr!.i, ev, scene);
-      const target = animPair?.[1];
-      if (target && scene.hosts.get(target)!.copy > 1) {
-        if (ev.k === 'call' && !ph!.switched) fading = { host: target, alpha: ph!.before };
-        if (ev.k === 'ret') fading = { host: target, alpha: Math.max(0.15, 1 - ph!.before * 0.85) };
-      }
-    }
-    const animKey = animPair ? `${animPair[0]}>${animPair[1]}` : null;
-    const liveKeys = new Set(liveHostPairs(snap, hostOf).map(([a, b]) => `${a}>${b}`));
-    const liveHosts = new Set(hostOf.values());
-    if (fading) liveHosts.add(fading.host);
-
-    // ---- focus: what the pointer is on dims everything unrelated ----
-    const focus = s.selected ?? s.hovered;
-    const focusFn = focus?.k === 'node' ? focus.id.slice(5) : null;
-    const fileOfHost = (k: string) => scene.hosts.get(k)?.module ?? s.layout.nodes.get(`func:${scene.hosts.get(k)?.fn}`)?.file;
-    const related = (b: Belt) =>
-      !focus ? true :
-      focus.k === 'belt' ? b.key === focus.key :
-      focus.k === 'proc' ? b.from === '' :
-      focus.k === 'module' ? fileOfHost(b.fromHost) === focus.file || fileOfHost(b.toHost) === focus.file :
-      focusFn !== null ? b.from === focusFn || b.to === focusFn : true;
-
+  private passWalls(F: Frame): void {
+    const { s, skin, g, dc, fs, scene } = F;
     // ---- module walls (M5): an expanded file, under everything else ----
-    const liveFiles = new Set(st.map((f) => s.layout.nodes.get(`func:${f.fn}`)?.file));
     for (const w of scene.walls) {
       if (!this.onScreen(w.rect.x, w.rect.y, w.rect.w, w.rect.h)) continue;
-      const m = s.layout.modules.get(w.file);
       g.save();
-      skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), {
-        name: w.file, fns: s.layout.nodesOf(w.file).length, kind: 'module', live: liveFiles.has(w.file), pinned: !!m?.pinned,
-        ...(skin.capacity && s.model ? { cap: fileCap(s.model, w.file) } : {}),
-        selected: selKey === `m:${w.file}`, hovered: hovKey === `m:${w.file}`,
-        head: this.rectW(w.rect.x, w.rect.y, w.rect.w, 1.2),
-      });
+      skin.wall(dc, this.rectW(w.rect.x, w.rect.y, w.rect.w, w.rect.h), { ...wallInfo(s, fs, w.file, !!skin.capacity), head: this.rectW(w.rect.x, w.rect.y, w.rect.w, 1.2) });
       g.restore();
     }
+  }
 
+  private passGhosts(F: Frame): void {
+    const { skin, g, dc, scene, liveHosts } = F;
     // ---- ghost slot for a recursive function's first copy ----
     for (const h of scene.hosts.values()) {
       if (h.copy !== 2 || liveHosts.has(h.key)) continue;
@@ -572,9 +545,12 @@ export class GridView {
       skin.ghost(dc, this.rectW(h.x, h.y, h.w, h.h), `spawns ${h.fn} #2`);
       g.restore();
     }
+  }
 
+  private passBelts(F: Frame): void {
+    const { s, skin, g, dc, cs, z, ev, selKey, hovKey, scene, animKey, liveKeys, liveHosts, focus, focusFn, related } = F;
     // ---- belts: drawn quiet → live → focused, with gaps cut at crossings ----
-    const visible = scene.belts.filter((b) => {
+    const visible = (F.visible = scene.belts.filter((b) => {
       // off screen: nothing to draw
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const [x, y] of b.pts) (x0 = Math.min(x0, x)), (y0 = Math.min(y0, y)), (x1 = Math.max(x1, x)), (y1 = Math.max(y1, y));
@@ -582,7 +558,7 @@ export class GridView {
       if (!b.chain) return true;
       const target = scene.hosts.get(b.toHost)!;
       return target.copy === 2 || liveHosts.has(b.toHost);
-    });
+    }));
     const order = (b: Belt) => (related(b) && focus ? 3 : b.key === animKey ? 2 : liveKeys.has(b.key) ? 1 : 0);
     visible.sort((a, b) => order(a) - order(b));
     // a belt passes under every belt drawn after it that crosses it: it's
@@ -610,8 +586,7 @@ export class GridView {
         selected: selKey === `b:${b.key}`,
         hovered: hovKey === `b:${b.key}` || (!!focusFn && !dim && !!focus),
         custom: b.custom,
-        // a trunk into or out of a collapsed module carries this many call sites
-        count: isModuleKey(b.fromHost) || isModuleKey(b.toHost) ? b.lines.length : 0,
+        count: beltCount(b),
       });
       g.restore();
       const predicted = b.from === b.to || isModuleKey(b.from) || isModuleKey(b.to) || !!s.model?.byName.get(b.from)?.calls.some((c) => c.callee === b.to);
@@ -629,7 +604,10 @@ export class GridView {
         g.restore();
       }
     }
+  }
 
+  private passDoors(F: Frame): void {
+    const { skin, g, dc, scene, animKey, liveKeys, related, visible, fileOfHost } = F;
     // ---- doors: where a belt passes through the wall of a module it serves ----
     const wallOf = new Map(scene.walls.map((w) => [w.file, w.rect]));
     for (const b of visible) {
@@ -648,42 +626,25 @@ export class GridView {
         }
       }
     }
+  }
 
+  private passProcess(F: Frame): void {
+    const { skin, g, dc, cs, fs, trace, ev, t, pp } = F;
     // ---- process ----
-    const pp = procPlace(s.layout);
     if (pp) {
       g.save();
-      skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(termText(trace))), {
-        state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
-        exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
-        // what has really reached the terminal by now (gdb engine); before,
-        // only the whole output once the program had finished
-        out: trace?.outText !== undefined && snap?.out ? trace.outText.slice(0, snap.out.sent) || undefined : finished ? trace?.stdout : undefined,
-        errSpans: trace?.errSpans,
-        args: trace?.args,
-        lines: Math.max(2, procLines(termText(trace))),
-        selected: selKey === 'p',
-        hovered: hovKey === 'p',
-      });
+      skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(termText(trace))), procInfo(fs));
       // printf's buffer above it: what printf holds that hasn't reached the
       // terminal (only when the trace really read it: the gdb engine)
-      const buf = snap?.out;
-      if (skin.stdbuf && buf && trace?.outMode) {
-        const prev = fr && fr.si > 0 ? trace.snaps[fr.si - 1]?.out : undefined;
-        const n = buf.buf?.n ?? 0;
-        const was = prev?.buf?.n ?? 0;
+      const buf = skin.stdbuf ? stdbufInfo(fs) : null;
+      if (skin.stdbuf && buf) {
         const BH = 1.7;
-        skin.stdbuf(dc, this.rectW(pp.x, pp.y - BH - 0.4, MW, BH), {
-          text: buf.buf?.text ?? '', n, cap: buf.buf?.cap ?? 4096, mode: trace.outMode,
-          flushed: was > 0 && n < was && prev!.sent < buf.sent ? prev!.buf!.text : null,
-        });
+        skin.stdbuf(dc, this.rectW(pp.x, pp.y - BH - 0.4, MW, BH), buf);
       }
       // stdin under it: the run's input, what the program has taken, what's left
       const inY = pp.y + procH(termText(trace)) + 0.4;
-      if (skin.stdin && trace && stdinShown(trace)) {
-        const pos = snap?.inPos ?? 0;
-        skin.stdin(dc, this.rectW(pp.x, inY, MW, STDIN_H), { text: trace.inText!, pos, taken: ev?.k === 'in' ? ev.text : null });
-      }
+      const stdin = skin.stdin ? stdinInfo(fs) : null;
+      if (skin.stdin && stdin) skin.stdin(dc, this.rectW(pp.x, inY, MW, STDIN_H), stdin);
       // what a read takes leaves stdin for the program, out of its right side
       if (ev?.k === 'in' && t > 0 && t < 1 && trace && stdinShown(trace)) {
         const [bx, by, bw] = [this.sx(pp.x), this.sy(inY), MW * cs];
@@ -718,7 +679,10 @@ export class GridView {
       }
       g.restore();
     }
+  }
 
+  private passTypes(F: Frame): void {
+    const { s, skin, dc, scene, st } = F;
     // ---- the types shelf: what the files define, left of the machines ----
     if (skin.typeCard) {
       const defs = s.project?.run.defines ?? s.defines ?? [];
@@ -737,58 +701,26 @@ export class GridView {
         skin.typeCard(dc, this.rectW(r.x, r.y, r.w, r.h), info);
       }
     }
+  }
 
-    // ---- machines: homes, plus live (or fading) recursive copies ----
-    // (their insides are drawn further down, once values are known)
-    const hostsToDraw = [...scene.hosts.values()].filter((h) => !h.module && (h.copy === 1 || liveHosts.has(h.key)));
-    const portsOf = (hk: string) => {
-      const p = scene.ports.get(hk);
-      return { inPorts: (p?.in ?? []).map((y) => this.sy(y)), outPorts: (p?.out ?? []).map((y) => this.sy(y)) };
-    };
-    const stateOf = (h: Host): RunState => {
-      const frames = framesOnHost.get(h.key) ?? [];
-      return errHost === h.key || (errHost === h.fn && h.copy === 1) ? 'error' : topHost === h.key ? 'running' : frames.length ? 'waiting' : 'idle';
-    };
-
+  private passModules(F: Frame): void {
+    const { s, skin, g, dc, fs, scene, portsOf } = F;
     // ---- collapsed modules (M5): one block per file, doors listed ----
     for (const h of scene.hosts.values()) {
       if (!h.module || !this.onScreen(h.x, h.y, h.w, h.h)) continue;
-      const inside = framesOnHost.get(h.key) ?? [];
-      const liveFns = new Set(inside.map((f) => f.fn));
-      const fns = s.layout.nodesOf(h.module).map((n) => n.fn);
-      const doors = doorsOf(fns);
-      const newest = inside[inside.length - 1];
       g.save();
-      skin.module(dc, this.rectW(h.x, h.y, h.w, h.h), {
-        name: h.module, fns: fns.length,
-        doors: doors.slice(0, MOD_DOORS).map((f) => ({ name: f.cname, live: liveFns.has(f.name), undeclared: f.declared === false })),
-        more: Math.max(0, doors.length - MOD_DOORS),
-        state: errHost === h.key ? 'error' : topHost === h.key ? 'running' : inside.length ? 'waiting' : 'idle',
-        running: newest ? s.model?.byName.get(newest.fn)?.cname ?? newest.fn : null,
-        depth: inside.length,
-        pinned: !!s.layout.modules.get(h.module)?.pinned,
-        selected: selKey === `m:${h.module}`, hovered: hovKey === `m:${h.module}`,
-        ...portsOf(h.key),
-        ...(skin.capacity && s.model ? { cap: fileCap(s.model, h.module) } : {}),
-      });
+      skin.module(dc, this.rectW(h.x, h.y, h.w, h.h), { ...moduleInfo(s, fs, h, !!skin.capacity), ...portsOf(h.key) });
       g.restore();
     }
+  }
 
-    // ---- statics (on homes) + frames (on every drawn host) ----
-    const anchors = new Map<number, Anchor>();
-    this.stripWired.clear();
-    const flash = ev && ev.k === 'write' && ph!.switched ? { cell: ev.cell, a: 1 - ph!.after } : null;
-    const lastEv = trace && fr && !ev && fr.i > 0 ? trace.evs[fr.i - 1] : null;
-    const recent = lastEv?.k === 'write' ? lastEv.cell : null;
-    const live = new Set<number>();
-    for (const f of st) for (const c of f.cells) live.add(c.id);
-    for (const c of snap?.statics ?? []) live.add(c.id);
-
+  private passHeap(F: Frame): void {
+    const { s, skin, g, dc, z, trace, fr, snap, ev, t, finished, pp, anchors, flash, recent, live, fs } = F;
     // ---- heap bar (gdb engine; skins that draw it): laid out now so pointer
     // lines know where its cards are, drawn over everything further down ----
-    const drawHeapBar = trace?.heapSlots && skin.heapBar && skin.heapCard ? this.heapBarLayout(skin, dc, trace, fr, snap, ev, t, finished, anchors, live, recent, st) : this.noHeapBar();
+    F.drawHeapBar = trace?.heapSlots && skin.heapBar && skin.heapCard ? this.heapBarLayout(skin, dc, fs, anchors, live) : this.noHeapBar();
     // ---- heap shelf (gdb engine): live blocks, the one being freed, leaks ----
-    if (trace?.heapSlots && pp && !drawHeapBar) {
+    if (trace?.heapSlots && pp && !F.drawHeapBar) {
       const shown = new Map<number, SnapCell>();
       for (const c of snap?.heap ?? []) shown.set(c.id, c);
       let freeing: number | null = null;
@@ -830,11 +762,10 @@ export class GridView {
         live.add(c.id);
       }
     }
+  }
 
-    const now_ = trace && fr ? beatNow(trace, s.model!, s.pos) : null;
-    // a Focus scene veils everything but its two ends: machines under the
-    // veil draw compact (their insides would barely show, and cost the most)
-    const scenePair = ev && staged(ev) && animPair ? new Set(animPair) : null;
+  private passMachines(F: Frame): void {
+    const { s, skin, g, dc, z, sinceEnd, trace, fr, selKey, hovKey, scene, framesOnHost, errHost, fading, hostsToDraw, stateOf, anchors, live, now_, scenePair } = F;
     // Where every machine's rows are, from geometry alone, before any is
     // culled: a pointer into a machine off screen (or closed, or too small to
     // show its storage) still has an end to draw its line to. Drawn machines
@@ -860,7 +791,10 @@ export class GridView {
       this.drawMachine(skin, dc, s, h, fn, node.stale, node.place.pinned, frame, returned, stateOf(h), selected, hovered, now_, frames.length, anchors, live, scene.ports.get(h.key) ?? { in: [], out: [] }, !!scenePair && !scenePair.has(h.key));
       g.restore();
     }
+  }
 
+  private passSprites(F: Frame): void {
+    const { s, skin, g, dc, trace, fr, snap, selKey, hovKey } = F;
     // ---- authored data sprites; all displayed values come from the selected snapshot ----
     for (const sprite of s.sprites ?? []) {
       const value = snap?.bound?.[sprite.id];
@@ -882,7 +816,10 @@ export class GridView {
       });
       g.restore();
     }
+  }
 
+  private passWires(F: Frame): void {
+    const { skin, g, dc, snap, ev, ph, st, focus, focusFn, anchors, live } = F;
     // ---- pointer wires ----
     // Every pointer gets its line, so a pointer always reads as one. The
     // running frame's, the focused function's and one a write is travelling
@@ -929,7 +866,10 @@ export class GridView {
       }
       g.restore();
     }
+  }
 
+  private passVeil(F: Frame): void {
+    const { skin, g, dc, z, trace, ev, t, ph, scene, animPair, animKey, pp, anchors } = F;
     // ---- focus mode: veil everything but the sender and the receiver ----
     if (ev && ph && trace && staged(ev)) {
       const hostRect = (k: string): Rect | null => {
@@ -988,7 +928,10 @@ export class GridView {
       }
       g.restore();
     }
+  }
 
+  private passMotion(F: Frame): void {
+    const { skin, g, dc, cs, trace, fr, ev, ph, scene, animKey, anchors } = F;
     // ---- things in motion ----
     // In focus mode data is drawn at least full size, however far out the
     // camera is: it is there to be read.
@@ -1070,16 +1013,20 @@ export class GridView {
       }
     }
     g.restore();
+  }
 
-    drawHeapBar?.();
-
+  private passHandle(F: Frame): void {
+    const { s, skin, dc, scene } = F;
     // ---- selected belt handle ----
     const sel = s.selected;
     if (sel?.k === 'belt') {
       const b = scene.belts.find((x) => x.key === sel.key);
       if (b) skin.beltHandle(dc, this.sp(beltHandle(b)));
     }
+  }
 
+  private passDuel(F: Frame): void {
+    const { s, trace, fr, ev, ph, scene, animPair, animKey, now_ } = F;
     // ---- the duel: a transfer whose sender or receiver is off screen pops up
     // side by side, sender on the left, receiver on the right ----
     this.duel = null;
@@ -1175,67 +1122,20 @@ export class GridView {
     return null;
   }
 
-  private heapBarLayout(
-    skin: Skin, dc: Dc, trace: Trace, fr: ReturnType<typeof frameAt> | null, snap: Snap | null, ev: Ev | null, t: number,
-    finished: boolean, anchors: Map<number, Anchor>, live: Set<number>, recent: number | null, st: SnapFrame[],
-  ): (() => void) | null {
+  private heapBarLayout(skin: Skin, dc: Dc, fs: FrameState, anchors: Map<number, Anchor>, live: Set<number>): (() => void) | null {
     this.heapRect = this.heapHead = null;
-    const allocs = callsOf(trace).allocs;
-    const blocks = new Map<number, { c: SnapCell; state: HeapCardInfo['state']; t: number }>();
-    for (const c of snap?.heap ?? []) blocks.set(c.id, { c, state: 'live', t: 1 });
-    if (ev?.k === 'alloc' && blocks.has(ev.cell) && t >= switchAt(ev)) blocks.get(ev.cell)!.state = 'new', blocks.get(ev.cell)!.t = Math.min(1, (t - switchAt(ev)) / (1 - switchAt(ev)) * 1.6);
-    if (ev?.k === 'free' && t < switchAt(ev)) {
-      const c = trace.snaps[fr!.i].heap.find((x) => x.id === ev.cell);
-      if (c) blocks.set(c.id, { c, state: 'freeing', t: t / switchAt(ev) });
-    }
-    const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
-    // lost before exit: nothing points at it since some event at or before now
-    const happened = (i: number) => finished || (!!fr && (i < fr.i || (i === fr.i && fr.t >= switchAt(trace.evs[i]))));
-    const lost = new Map(lostBlocks(trace).filter((l) => happened(l.at)).map((l) => [l.cell, l]));
     // a leak falls off at exit, then stays where it was, in red
-    for (const b of blocks.values()) if (leaked.has(b.c.id)) (b.state = 'leak'), (b.t = Math.min(1, this.endedAt === null ? 1 : (this.frameNow - this.endedAt) / 800));
-    for (const b of blocks.values()) if (b.state === 'live' && lost.has(b.c.id)) b.state = 'lost';
-    // watched structs: where each lives right now (the running copy's frame
-    // when it recurses), or that its frame is gone
-    const watched = [...this.watches].map((key) => {
-      const [fn, name] = key.split('|');
-      const f = [...st].reverse().find((x) => x.fn === fn);
-      const c = f?.cells.find((x) => x.name === name);
-      const ever = callsOf(trace).calls.size > 0 && trace.evs.some((e) => e.k === 'call' && e.fn === fn);
-      const where = c ? `watching ${fn}.${name} (on ${fn}'s stack)` : ever ? `watching ${fn}.${name}` : `watching ${fn}.${name} (${fn} not called yet)`;
-      return { key, fn, name, c: c ?? null, where, gone: !c && ever };
-    });
-    if (!blocks.size && !allocs.size && !watched.length && !(trace.window && trace.window.from > 0)) return this.noHeapBar(); // a run with no malloc: no bar
-    // who holds each block's address: pointers in frames and statics (and the
-    // fields they show), named by where they live
-    const topId = st[st.length - 1]?.id ?? null;
-    const refs = new Map<number, { name: string; top: boolean }[]>();
-    const refIds = new Set<string>();
-    const add = (to: number, name: string, top: boolean, id: string) => {
-      if (refIds.has(id)) return; // the same pointer seen through a second name
-      refIds.add(id);
-      (refs.get(to) ?? refs.set(to, []).get(to)!).push({ name, top });
-    };
-    const watchIds = new Set(watched.flatMap((w) => (w.c ? [w.c.id] : [])));
-    for (const f of st) for (const c of f.cells) {
-      if (c.val.k === 'ptr' && c.val.to !== null && (blocks.has(c.val.to) || watchIds.has(c.val.to))) add(c.val.to, `${c.name} (${f.fn})`, f.id === topId, pointerId(c));
-      for (const fl of c.fields ?? []) if (fl.val.k === 'ptr' && fl.val.to !== null && blocks.has(fl.val.to)) add(fl.val.to, `${c.name}${c.val.k === 'ptr' ? '->' : '.'}${fl.name} (${f.fn})`, f.id === topId, pointerId(c, fl));
-    }
-    for (const c of snap?.statics ?? []) if (c.val.k === 'ptr' && c.val.to !== null && blocks.has(c.val.to)) add(c.val.to, `${c.name} (static)`, false, pointerId(c));
-    for (const c of snap?.heap ?? []) for (const p of c.ptrs ?? []) if (blocks.has(p.to)) add(p.to, `${c.name}+${p.off}`, false, `h${c.id}.${p.off}`);
-    // a block a typed pointer holds (at its start) shows the fields gdb read
-    // through that pointer: the struct as it is in the block
-    const fieldsOf = new Map<number, { name: string; value: string }[]>();
-    for (const f of st) for (const c of f.cells) {
-      if (c.val.k !== 'ptr' || c.val.to === null || c.val.label || !c.fields?.length || !blocks.has(c.val.to) || fieldsOf.has(c.val.to)) continue;
-      fieldsOf.set(c.val.to, c.fields.map((fl) => ({ name: fl.name, value: fl.str ?? (fl.val.k === 'ptr' && fl.val.to !== null && !fl.val.label ? `→${trace.cells.get(fl.val.to)?.name ?? ''}` : fmtVal(fl.val, fl.type)) })));
-    }
+    const leakT = Math.min(1, this.endedAt === null ? 1 : (this.frameNow - this.endedAt) / 800);
+    const m = heapModel(fs, this.watches, leakT);
+    if (!m) return this.noHeapBar(); // a run with no malloc: no bar
+    const { refs, watched, bySlot } = m;
+    const { trace, fr, recent } = fs;
+    if (!trace) return this.noHeapBar();
     // room: as many cards as fit in 62% of the width; the rest are counted
     const K = HEAP_CARD;
     const x0 = 12;
     const maxW = Math.max(K.w + 16, this.w * 0.62);
     const fit = Math.max(1, Math.floor((maxW - 16 + K.gap) / (K.w + K.gap)));
-    const bySlot = [...blocks.values()].sort((a, b) => (trace.heapSlots!.get(a.c.id) ?? 0) - (trace.heapSlots!.get(b.c.id) ?? 0));
     // when they don't all fit: what's happening now, then what the running
     // frame holds, then the oldest
     const rank = (b: { c: SnapCell; state: string }) => (b.state !== 'live' ? 0 : b.c.id === recent ? 1 : refs.get(b.c.id)?.some((r) => r.top) ? 2 : 3);
@@ -1261,40 +1161,13 @@ export class GridView {
       anchors.set(b.c.id, at);
       live.add(b.c.id);
     }
-    const site = (id: number) => {
-      const a = allocs.get(id);
-      if (a) return `${a.fn ?? '?'}:${a.line}`;
-      return trace.window && trace.window.from > 0 ? `before step ${trace.window.from}` : '';
-    };
-    const info: HeapBarInfo = {
-      count: [...blocks.values()].filter((b) => b.state !== 'freeing').length,
-      bytes: [...blocks.values()].filter((b) => b.state !== 'freeing').reduce((a, b) => a + Number((b.c.type.match(/\d+/) ?? ['0'])[0]), 0),
-      more, folded, leaks: [...blocks.values()].filter((b) => b.state === 'leak').length,
-      empty: trace.window && trace.window.from > 0 ? 'now' : !allocs.size ? 'none' : trace.evs.findIndex((e) => e.k === 'alloc') < (fr?.i ?? 0) ? 'now' : 'yet',
-    };
+    const info = heapBarInfo(m, trace, fr, more, folded);
     return () => {
       const d1: Dc = { ...dc, z: 1 };
       skin.heapBar!(d1, bar, info);
       if (folded) return;
-      for (const b of cards) {
-        const r = rects.get(b.c.id)!;
-        skin.heapCard!(d1, r, {
-          name: b.c.name, size: Number((b.c.type.match(/\d+/) ?? ['0'])[0]), site: site(b.c.id),
-          preview: b.c.val.k === 'raw' ? b.c.val.text : '', bytes: b.c.bytes ?? [],
-          refs: refs.get(b.c.id) ?? [], state: b.state, recent: b.c.id === recent, t: b.t,
-          ...(lost.has(b.c.id) && !refs.get(b.c.id)?.length ? { note: lostShort(lost.get(b.c.id)!) } : {}),
-          ...(fieldsOf.has(b.c.id) ? { fields: fieldsOf.get(b.c.id) } : {}),
-        });
-      }
-      watched.forEach((w, k) => {
-        const c = w.c;
-        skin.heapCard!(d1, watchRect(k), {
-          name: w.name, size: 0, site: '', preview: '', bytes: [],
-          fields: c?.fields?.map((fl) => ({ name: fl.name, value: fl.str ?? (fl.val.k === 'ptr' && fl.val.to !== null && !fl.val.label ? `→${trace.cells.get(fl.val.to)?.name ?? ''}` : fmtVal(fl.val, fl.type)) })) ?? [],
-          refs: c ? refs.get(c.id) ?? [] : [], state: 'live', recent: c?.id === recent, t: 1,
-          watch: { where: w.where, gone: w.gone },
-        });
-      });
+      for (const b of cards) skin.heapCard!(d1, rects.get(b.c.id)!, heapCardInfo(m, b, trace, recent));
+      watched.forEach((w, k) => skin.heapCard!(d1, watchRect(k), watchCardInfo(m, w, trace, recent)));
     };
   }
 
@@ -1356,30 +1229,12 @@ export class GridView {
     const note = state === 'running' ? 'running' : state === 'waiting' ? 'waiting on a call' : state === 'error' ? 'crashed here' : frame ? '' : returned ? 'done' : '';
     skin.wall(dc, R, { name, fns: 0, note, kind: 'machine', live: state === 'running', pinned: h.copy === 1 && pinned, selected, hovered, head: { x: R.x, y: R.y, w: R.w, h: headH } });
     const m = closed || !geo ? { x: 1, y: 1, w: MW, h: MH } : geo.motor;
-    let waitingOn: string | null = null;
-    if (state === 'waiting' && frame && trace) {
-      const st = frameAt(trace, s.pos).snap.stack;
-      waitingOn = st[st.findIndex((f) => f.id === frame.id) + 1]?.fn ?? null;
-    }
+    const waitingOn = waitingOnOf(trace, s.pos, frame, state);
     const motorR = this.rectW(h.x + m.x, h.y + m.y, MW, MH);
     const inPorts = ports.in.map((y) => this.sy(y));
     const editing = h.copy === 1 && s.editorFn === h.fn;
-    if (skin.dock) {
-      // the IN dock: the arguments as they arrived with the call on show
-      const on = frame ?? returned;
-      const ci = on && trace ? callsOf(trace).calls.get(on.id) : undefined;
-      const call = ci !== undefined ? trace!.evs[ci] : null;
-      const err = frame && trace ? callsOf(trace).errs.get(frame.id) ?? null : null;
-      const before = on && !call && trace?.window && trace.window.from > 0 ? trace.window.from : null;
-      skin.dock(dc, motorR, {
-        name: h.fn, state, waitingOn, frames: stacked, stale, copy: h.copy, editing, inPorts, before,
-        args: call?.k === 'call' ? call.args.map((a) => ({ name: a.name, text: fmtVal(a.val), ...ptrTag(a.val, trace!, on) })) : null,
-        last: !frame && !!call,
-        crash: state === 'error' && err?.k === 'error' ? { line: err.line + 1, msg: err.msg } : null,
-        ...(skin.capacity ? { cap: fnCaps(fn).params } : {}),
-        ...(call?.k === 'call' && on ? { from: { fn: call.caller ?? 'the process', line: call.caller ? callsOf(trace!).site.get(on.id) ?? null : null, nth: callsOf(trace!).nth.get(on.id) ?? [1, 1] } } : {}),
-      });
-    } else skin.node(dc, motorR, {
+    if (skin.dock) skin.dock(dc, motorR, { ...dockInfo(trace, h, fn, frame, returned, state, waitingOn, stacked, stale, editing, !!skin.capacity), inPorts });
+    else skin.node(dc, motorR, {
       name: h.copy > 1 ? `${h.fn} #${h.copy}` : h.fn, state, waitingOn, frames: stacked, stale, pinned: false,
       isStatic: fn.isStatic, params: fn.params.length, selected: false, hovered: false,
       editing, hasFrame: false, copy: h.copy, inPorts, outPorts: [],
