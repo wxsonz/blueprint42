@@ -124,6 +124,15 @@ the heap shelf under the process box (one thing, one picture).
   hold that same address (`heap #2 ×3`), counting distinct pointers: a field
   read through two pointers to one struct is one pointer. The card names
   them, and a name that doesn't fit is counted (`+1`), never dropped.
+- **Who can free it.** C has no owners, only pointers: whoever holds its
+  address can free it, and the card's `←` line names them (pointers inside
+  other blocks too: `#3+8`). The moment the last one goes (its function
+  returns without freeing it or handing it on, or it's overwritten), nothing
+  can free it any more: the card turns red, `LOST`, "lost when leaky
+  returned", and an alert gives the step. Claimed only when every pointer
+  could be seen (every live block read whole, no array or struct shown only
+  as text on a stack or in a static); otherwise nothing is said. Main
+  returning is the exit, which is said as a leak at exit instead.
 - `malloc` drops a card in from above; `free` takes it out, down and away.
   Blocks still there at exit stay, in red, `LEAK`, and the header counts them.
 - Pointer lines run from rows down to the bar's edge above their card: full

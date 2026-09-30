@@ -1,5 +1,6 @@
 // The panels around the grid: the Examples menu, the dock, alerts, the
 // status bar, and the inspector (with M4's invariant checks it reports).
+import { lostBlocks, lostText } from './ownership';
 import { isSafeBindingExpr } from './blueprint';
 import { $, esc } from './dom';
 import { fmtVal } from './interp';
@@ -153,6 +154,11 @@ export function renderAlerts(): void {
   if (leaks.length) {
     const bytes = leaks.reduce((a, l) => a + l.size, 0);
     al('warn', `<b>Leak at exit:</b> ${leaks.length} block${leaks.length > 1 ? 's' : ''}, ${bytes} B never freed (${leaks.map((l) => `${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${l.line !== null ? ` from ${at(l.line, l.file)}` : ''}`).join(', ')}).`);
+  }
+  // lost before exit: the moment nothing could free a block any more
+  for (const l of S.trace ? lostBlocks(S.trace) : []) {
+    const a = S.trace!.leaks?.find((x) => x.cell === l.cell);
+    al('warn', `<b>Lost:</b> ${esc(S.trace!.cells.get(l.cell)?.name ?? '?')}${a && a.line !== null ? ` from ${at(a.line, a.file)}` : ''}: ${esc(lostText(l))} (<a data-seek="${l.at + 1}">step ${l.at + 1}</a>, ${at(l.line, l.file)}); nothing points at it after that.`);
   }
   for (const w of S.trace?.warnings ?? []) al('warn', esc(w));
   // M4: invariants that broke, and calls the static picture didn't predict

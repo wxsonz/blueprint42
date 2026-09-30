@@ -240,7 +240,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   if (boundIds.size) currentBound = Object.create(null);
 
   // What the picture shows through a cell: a string, a struct's fields.
-  const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[]; lit?: boolean }>();
+  const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[]; lit?: boolean; ptrs?: { to: number; off: number }[]; whole?: boolean }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   let outText = r.outBefore ?? '';
   const errSpans: [number, number][] = [];
@@ -530,11 +530,25 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
       const w = via(regions.find((g) => g.cell === c));
       emit({ k: 'write', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, cell: c, val: nv, via: w, text: `${v.name} = ${text(v)}` });
     }
+    // a block's 8-byte words that hold another live block's address: the
+    // pointers inside the heap (a list's next), for who-holds-what
+    const ptrsIn = (bytes: number[]): { to: number; off: number }[] => {
+      const out: { to: number; off: number }[] = [];
+      for (let off = 0; off + 8 <= bytes.length; off += 8) {
+        let v = 0;
+        for (let k = 7; k >= 0; k--) v = v * 256 + bytes[off + k];
+        if (!v) continue;
+        for (const h of heapAddr.values()) if (!h.freed && v >= h.addr && v < h.addr + Math.max(1, h.size)) out.push({ to: h.cell, off });
+      }
+      return out;
+    };
     for (const b of stop.heap) {
       const c = heapCell.get(b.id);
       if (c === undefined) continue;
       const nv: V = { k: 'raw', text: preview(b.hex, b.size) };
-      extras.set(c, { ...extras.get(c), bytes: b.hex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [] });
+      const bytes = hexBytes(b.hex);
+      const ptrs = ptrsIn(bytes);
+      extras.set(c, { ...extras.get(c), bytes, whole: bytes.length >= b.size, ...(ptrs.length ? { ptrs } : { ptrs: undefined }) });
       if (JSON.stringify(nv) === JSON.stringify(vals.get(c))) continue;
       const first = vals.get(c)?.k === 'raw' && (vals.get(c) as { text: string }).text === 'uninitialised';
       vals.set(c, nv);

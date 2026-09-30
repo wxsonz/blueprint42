@@ -31,6 +31,8 @@ export interface SnapCell {
   fields?: SnapField[]; // a struct's members, or the members of the struct it points at
   bytes?: number[]; // a heap block's or a char array's first bytes (gdb engine, up to 48); a literal's, up to its \0
   lit?: boolean; // a char * into the program's read-only memory: a string literal
+  ptrs?: { to: number; off: number }[]; // a heap block: the pointers in its bytes to other live blocks (8-byte words)
+  whole?: boolean; // a heap block: all its bytes were read (so ptrs is every pointer in it)
 }
 
 // What rides a belt with a call or a return, beyond the bare value: the text

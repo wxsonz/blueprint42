@@ -254,7 +254,8 @@ export interface HeapCardInfo {
   bytes: number[];
   fields?: { name: string; value: string }[]; // a struct's fields, as read through a typed pointer to it
   refs: { name: string; top: boolean }[]; // the pointers holding its address (top: in the running frame)
-  state: 'live' | 'new' | 'freeing' | 'leak';
+  state: 'live' | 'new' | 'freeing' | 'leak' | 'lost'; // lost: nothing points at it any more (a leak from then on)
+  note?: string; // why it's lost
   recent: boolean; // written this step
   t: number; // how far a drop-in (new) or take-out (freeing) has gone, 0..1
   // a struct being watched, not a heap block: where it really lives, or that

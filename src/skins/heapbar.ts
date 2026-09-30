@@ -66,14 +66,14 @@ export function drawHeapCard(dc: Dc, r: Rect, c: HeapCardInfo, p: HeapBarPalette
   const e = c.t * c.t * (3 - 2 * c.t);
   if (c.state === 'new') (g.globalAlpha *= e), g.translate(0, -(1 - e) * 18);
   if (c.state === 'freeing') (g.globalAlpha *= 1 - e), g.translate(0, e * 18);
-  const col = c.state === 'leak' ? p.err : c.state === 'new' || c.recent ? p.flow : p.edge;
+  const col = c.state === 'leak' || c.state === 'lost' ? p.err : c.state === 'new' || c.recent ? p.flow : p.edge;
   rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, p.radius);
   g.fillStyle = p.card;
   g.fill();
   if (col) {
     g.strokeStyle = col;
-    g.lineWidth = c.state === 'leak' || c.state === 'new' ? 1.5 : 1;
-    if (c.state === 'leak') g.setLineDash([4, 3]);
+    g.lineWidth = c.state === 'leak' || c.state === 'lost' || c.state === 'new' ? 1.5 : 1;
+    if (c.state === 'leak' || c.state === 'lost') g.setLineDash([4, 3]);
     g.stroke();
     g.setLineDash([]);
   }
@@ -85,9 +85,9 @@ export function drawHeapCard(dc: Dc, r: Rect, c: HeapCardInfo, p: HeapBarPalette
   let y = r.y + 12;
   g.textAlign = 'right';
   g.font = p.mono(10, 700);
-  g.fillStyle = c.state === 'leak' ? p.err : p.muted;
+  g.fillStyle = c.state === 'leak' || c.state === 'lost' ? p.err : p.muted;
   if (c.watch?.gone) g.globalAlpha *= 0.55;
-  const right = c.watch ? 'watch' : c.state === 'leak' ? `LEAK · ${c.size} B` : c.state === 'freeing' ? `free · ${c.size} B` : `${c.size} B`;
+  const right = c.watch ? 'watch' : c.state === 'leak' ? `LEAK · ${c.size} B` : c.state === 'lost' ? `LOST · ${c.size} B` : c.state === 'freeing' ? `free · ${c.size} B` : `${c.size} B`;
   g.fillText(right, r.x + r.w - pad, y);
   const rw = g.measureText(right).width;
   g.textAlign = 'left';
@@ -155,6 +155,10 @@ export function drawHeapCard(dc: Dc, r: Rect, c: HeapCardInfo, p: HeapBarPalette
   g.font = p.mono(9.5);
   if (c.watch && !c.refs.length) {
     // a watched struct: nothing to say when no pointer holds it
+  } else if (c.note) {
+    // lost: why nothing can free it now
+    g.fillStyle = p.err;
+    g.fillText(fitText(g, c.note, (s) => p.mono(s), 9.5, inner, 6), r.x + pad, y);
   } else if (!c.refs.length) {
     g.fillStyle = p.faint;
     g.fillText(fitText(g, 'no stack or static pointer to it', (s) => p.mono(s), 9.5, inner, 6), r.x + pad, y);

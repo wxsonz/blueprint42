@@ -380,6 +380,40 @@ int	main(void)
 }
 `;
 
+const lost = `#include <stdlib.h>
+
+void	leaky(int n)
+{
+	int	*p;
+
+	p = malloc(sizeof(int));
+	if (!p)
+		return ;
+	*p = n;
+}
+
+int	*kept(int n)
+{
+	int	*q;
+
+	q = malloc(sizeof(int));
+	if (!q)
+		return (NULL);
+	*q = n;
+	return (q);
+}
+
+int	main(void)
+{
+	int	*k;
+
+	leaky(1);
+	k = kept(2);
+	free(k);
+	return (0);
+}
+`;
+
 const leak = `#include <stdlib.h>
 
 int	*make_counter(int start)
@@ -461,6 +495,8 @@ export const SAMPLES: Sample[] = [
     blurb: 'nodes malloc’d and linked, walked, then freed one by one', src: list },
   { key: 'bytes', group: 'memory', title: 'stack & literal bytes', file: 'bytes.c',
     blurb: 'a string literal copied into a char array on main\'s stack: each byte where it lives', src: bytes },
+  { key: 'lost', group: 'memory', title: 'a lost block', file: 'lost.c',
+    blurb: 'leaky() returns without freeing its block or handing it on: nothing can free it from then on; kept() hands its block back', src: lost },
   { key: 'crash', group: 'memory', title: 'a crash', file: 'crash.c',
     blurb: 'a search comes back NULL and main dereferences it: see where it dies', src: crash },
   { key: 'leak', group: 'memory', title: 'a leak', file: 'leak.c',

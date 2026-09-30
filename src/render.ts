@@ -3,6 +3,7 @@
 // pixel is delegated to the active skin (skins/*.ts).
 import { cLiteral } from './skins/stdbuf';
 import { HEAP_CARD } from './skins/heapbar';
+import { lostBlocks, lostShort } from './ownership';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
@@ -1109,7 +1110,11 @@ export class GridView {
       if (c) blocks.set(c.id, { c, state: 'freeing', t: t / switchAt(ev) });
     }
     const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
+    // lost before exit: nothing points at it since some event at or before now
+    const happened = (i: number) => finished || (!!fr && (i < fr.i || (i === fr.i && fr.t >= switchAt(trace.evs[i]))));
+    const lost = new Map(lostBlocks(trace).filter((l) => happened(l.at)).map((l) => [l.cell, l]));
     for (const b of blocks.values()) if (leaked.has(b.c.id)) b.state = 'leak';
+    for (const b of blocks.values()) if (b.state === 'live' && lost.has(b.c.id)) b.state = 'lost';
     // watched structs: where each lives right now (the running copy's frame
     // when it recurses), or that its frame is gone
     const watched = [...this.watches].map((key) => {
@@ -1137,6 +1142,7 @@ export class GridView {
       for (const fl of c.fields ?? []) if (fl.val.k === 'ptr' && fl.val.to !== null && blocks.has(fl.val.to)) add(fl.val.to, `${c.name}${c.val.k === 'ptr' ? '->' : '.'}${fl.name} (${f.fn})`, f.id === topId, pointerId(c, fl));
     }
     for (const c of snap?.statics ?? []) if (c.val.k === 'ptr' && c.val.to !== null && blocks.has(c.val.to)) add(c.val.to, `${c.name} (static)`, false, pointerId(c));
+    for (const c of snap?.heap ?? []) for (const p of c.ptrs ?? []) if (blocks.has(p.to)) add(p.to, `${c.name}+${p.off}`, false, `h${c.id}.${p.off}`);
     // a block a typed pointer holds (at its start) shows the fields gdb read
     // through that pointer: the struct as it is in the block
     const fieldsOf = new Map<number, { name: string; value: string }[]>();
@@ -1196,6 +1202,7 @@ export class GridView {
           name: b.c.name, size: Number((b.c.type.match(/\d+/) ?? ['0'])[0]), site: site(b.c.id),
           preview: b.c.val.k === 'raw' ? b.c.val.text : '', bytes: b.c.bytes ?? [],
           refs: refs.get(b.c.id) ?? [], state: b.state, recent: b.c.id === recent, t: b.t,
+          ...(lost.has(b.c.id) && !refs.get(b.c.id)?.length ? { note: lostShort(lost.get(b.c.id)!) } : {}),
           ...(fieldsOf.has(b.c.id) ? { fields: fieldsOf.get(b.c.id) } : {}),
         });
       }

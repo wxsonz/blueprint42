@@ -53,8 +53,11 @@ Next, in this order:
 4. [x] **Two names for the same memory** (M). Pointers holding the same
    address are marked as sharing it, not just given separate lines: `×N` on
    the tag (every skin that draws tags), the names on the heap card.
-5. [ ] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
+5. [x] **Ownership of heap blocks** (M). Who must free a block: a tag on it,
    and a warning when a function returns without freeing or handing it on.
+   Built as what C really has: the pointers holding it (the card's `←`
+   line, heap-internal ones included) and the moment the last one goes
+   (`LOST`, an alert with the step; `src/ownership.ts`; the `lost` sample).
 6. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
    `**pp` read from where the memory is, like `*p` and `a[i]`.
 7. [ ] **Loop rounds as a whole** (M). Which way each round went, not only

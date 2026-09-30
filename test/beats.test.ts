@@ -4,6 +4,7 @@ import { handleTrace } from '../server/trace.mjs';
 import { beatDuration, beatLen, beatNow, computeText, readsOf, slotValue, timelineOf, writesOf } from '../src/beats';
 import { convertGdb } from '../src/gdb';
 import { planOf } from '../src/interior';
+import { lostBlocks } from '../src/ownership';
 import { run, type Trace } from '../src/interp';
 import { callPortY, geomOf, machineSize, slotsOf } from '../src/machine';
 import { parse, type Model } from '../src/parse';
@@ -207,5 +208,16 @@ describe('machines are their insides', () => {
     expect(t.outText).toBe('helloops\n');
     expect(t.errSpans).toEqual([[4, 9]]);
     expect(t.stdout).toBe('hell');
+  }, 60000);
+
+  it('a block is lost when its last pointer goes: a function returns without freeing it or handing it on (gdb)', async () => {
+    const src = '#include <stdlib.h>\n\nvoid\tleaky(void)\n{\n\tint\t*p;\n\n\tp = malloc(sizeof(int));\n\t*p = 1;\n}\n\nint\t*kept(void)\n{\n\tint\t*q;\n\n\tq = malloc(sizeof(int));\n\treturn (q);\n}\n\nint\tmain(void)\n{\n\tint\t*k;\n\n\tleaky();\n\tk = kept();\n\tfree(k);\n\treturn (0);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name) });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    const lost = lostBlocks(t);
+    // leaky's block: lost when leaky returns; kept's is handed on (returned, stored in k), then freed
+    expect(lost.map((l) => [t.cells.get(l.cell)?.name, l.why, l.fn])).toEqual([['#1', 'ret', 'leaky']]);
   }, 60000);
 });
