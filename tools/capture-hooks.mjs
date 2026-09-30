@@ -28,10 +28,10 @@ try {
       await new Promise((r) => setTimeout(r, 1200));
     }, sample);
     for (const skinId of ['minimal', 'ps2']) {
-    const got = await b.page.evaluate(([per, skinId]) => {
+    const got = await b.page.evaluate(([per, id]) => {
       const f = window.__ftb;
       // the infos are the engine's, not the skin's; two skins so optional hooks are reached
-      const skin = f.SKINS.find((x) => x.id === skinId);
+      const skin = f.SKINS.find((x) => x.id === id);
       const seen = {};
       const clean = (v, depth = 0) => {
         if (v === null || typeof v !== 'object') return typeof v === 'function' ? undefined : typeof v === 'number' && !Number.isFinite(v) ? String(v) : v;

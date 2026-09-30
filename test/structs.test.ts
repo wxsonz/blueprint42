@@ -59,10 +59,10 @@ describe('struct fields', () => {
     const ri = t.evs.findIndex((e) => e.k === 'ret' && e.fn === 'lr_consume');
     const card = returnCard(t, ri)!;
     expect(card.caller).toBe('read_line');
-    const pos = card.rows.find((r) => r.depth === 1 && r.name === 'pos')!;
+    const pos = card.rows.find((row) => row.depth === 1 && row.name === 'pos')!;
     expect([pos.in, pos.out, pos.changed]).toEqual(['0', '6', true]);
-    expect(card.rows.find((r) => r.name === 'cap')!.changed).toBe(false);
-    expect(card.rows.find((r) => r.name === 'line_end')!.out).toBeUndefined(); // a copy, not an output
+    expect(card.rows.find((row) => row.name === 'cap')!.changed).toBe(false);
+    expect(card.rows.find((row) => row.name === 'line_end')!.out).toBeUndefined(); // a copy, not an output
     expect(card.ret).toEqual([{ name: 'returns', depth: 0, in: '', out: 'void' }]);
   }, 60000);
 });

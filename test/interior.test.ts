@@ -63,7 +63,7 @@ describe('inside a machine (M5.5)', () => {
     expect(readoutOf(p.stations[loop], t, t.snaps[st3.decided.get(loop)!.d.snap], full, fn.name)).toBe('23 < 23');
 
     // mid-loop: the token is on the loop's body, the count so far
-    const mid = t.evs.findIndex((e, i) => i > calls.find(([e]) => e.frame === full)![1] && e.k === 'step' && e.frame === full && e.line === p.stations[loop + 1].line);
+    const mid = t.evs.findIndex((e, i) => i > calls.find(([c]) => c.frame === full)![1] && e.k === 'step' && e.frame === full && e.line === p.stations[loop + 1].line);
     const st4 = interiorAt(t, p, full, mid);
     expect(st4.current).toBe(loop + 1);
     expect(st4.decided.get(loop)!.count).toBe(1);

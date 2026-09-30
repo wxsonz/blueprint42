@@ -30,6 +30,7 @@ const STYLE = ['globalAlpha', 'globalCompositeOperation', 'fillStyle', 'strokeSt
 type Snap = { depth: number; t: DOMMatrix; dash: number[]; style: Record<string, unknown> };
 const snap = (g: CanvasRenderingContext2D, d: { n: number }): Snap => ({ depth: d.n, t: g.getTransform(), dash: g.getLineDash(), style: Object.fromEntries(STYLE.map((k) => [k, (g as unknown as Record<string, unknown>)[k]])) });
 function putBack(g: CanvasRenderingContext2D, d: { n: number }, s: Snap): void {
+  // lint-canvas: balanced elsewhere (it closes the saves a failed hook left open)
   while (d.n > s.depth) g.restore();
   for (const k of STYLE) (g as unknown as Record<string, unknown>)[k] = s.style[k];
   g.setTransform(s.t);

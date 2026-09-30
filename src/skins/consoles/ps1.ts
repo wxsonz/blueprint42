@@ -191,9 +191,9 @@ export const ps1Theme: Theme = {
       if (buttons && r.w > 110 * dc.z) {
         const s = Math.max(2.5, 4.2 * dc.z);
         g.lineWidth = Math.max(1, 1.6 * dc.z);
-        for (const k of ['sq', 'cross', 'circ', 'tri'] as const) {
-          g.strokeStyle = active ? PS_SYM[k] : '#9a9aa0';
-          psSymbol(g, k, right - s, bar.y + bar.h / 2, s);
+        for (const sym of ['sq', 'cross', 'circ', 'tri'] as const) {
+          g.strokeStyle = active ? PS_SYM[sym] : '#9a9aa0';
+          psSymbol(g, sym, right - s, bar.y + bar.h / 2, s);
           right -= s * 3;
         }
       }

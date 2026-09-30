@@ -78,10 +78,10 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.beginPath();
     for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
       for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
-        const px = (x - camX) * dc.cs;
-        const py = (y - camY) * dc.cs;
-        g.moveTo(px + 1, py);
-        g.arc(px, py, 1, 0, Math.PI * 2);
+        const dx = (x - camX) * dc.cs;
+        const dy = (y - camY) * dc.cs;
+        g.moveTo(dx + 1, dy);
+        g.arc(dx, dy, 1, 0, Math.PI * 2);
       }
     }
     g.fill();

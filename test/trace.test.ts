@@ -64,11 +64,11 @@ describe('trace server (cc + gdb)', () => {
     const t = convertGdb(r, m, s.src);
     const observed = t.snaps.map((snap) => snap.bound?.strip).filter((v) => v?.bound);
     expect(observed.length).toBeGreaterThan(10);
-    const positions = observed.map((v) => v!.markers?.find((m) => m.label === 'pos')?.index).filter((v): v is number => v !== undefined);
+    const positions = observed.map((v) => v!.markers?.find((mk) => mk.label === 'pos')?.index).filter((v): v is number => v !== undefined);
     expect(new Set(positions).size).toBeGreaterThan(1);
     for (const v of observed) {
-      const pos = v!.markers?.find((m) => m.label === 'pos')?.index;
-      const len = v!.markers?.find((m) => m.label === 'len')?.index;
+      const pos = v!.markers?.find((mk) => mk.label === 'pos')?.index;
+      const len = v!.markers?.find((mk) => mk.label === 'len')?.index;
       if (pos !== undefined && len !== undefined) expect(pos).toBeLessThanOrEqual(len);
       expect(v!.bytes?.length ?? 0).toBeLessThanOrEqual(256);
     }

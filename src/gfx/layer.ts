@@ -202,7 +202,7 @@ export class GfxLayer {
           this.backend = 'webgpu';
           // lost, or a shader it wouldn't take: WebGL2 on a fresh canvas (a
           // canvas that had a WebGPU context can't give a WebGL one)
-          device.lost.then((info) => this.gpu?.device === device && this.fallBack(`WebGPU device lost${info.message ? `: ${info.message}` : ''}`));
+          void device.lost.then((info) => this.gpu?.device === device && this.fallBack(`WebGPU device lost${info.message ? `: ${info.message}` : ''}`));
           device.addEventListener('uncapturederror', (e) => this.gpu?.device === device && this.fallBack(`WebGPU: ${(e as GPUUncapturedErrorEvent).error.message}`));
           return;
         }

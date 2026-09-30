@@ -56,13 +56,14 @@ folders, modules, Makefile builds, confirmed saves), M5.5 (machines are
 their insides: statements animated in place with real reads and writes) and
 M6 (live edits and cursor from any editor; `nvim/` is the Neovim
 plugin: `:B42Connect [port]`, `:B42Open`; the old `:Ftb…` names still work).
-No linter yet.
+`npm run lint` is Oxlint (type-aware) plus `tools/lint-canvas.mjs`
+(decision 048); `npm run check` runs `tsc` then it.
 
 ```sh
 npm install
 npm run dev      # vite dev server + the trace server at POST /api/trace
 npm run dev -- ~/42/get_next_line   # …and open that folder (like `code <folder>`)
-npm run check    # tsc --noEmit
+npm run check    # tsc --noEmit, then npm run lint (Oxlint + the canvas save/restore check)
 npm test         # vitest: unit tests + integration tests that run cc and gdb
 npx vitest run test/route.test.ts          # one file
 npx vitest run -t "M3 acceptance"          # one test by name

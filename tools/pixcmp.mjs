@@ -52,7 +52,7 @@ const DRAW = async ({ skin, pos, zoom }) => {
 };
 const PNG = () => window.__ftb.view.canvas.toDataURL('image/png');
 // in B's page: compare its current frame with A's PNG, over a fixed colour
-const DIFF = async ({ png, threshold }) => {
+const DIFF = async ({ png, threshold: limit }) => {
   const c = window.__ftb.view.canvas;
   // both sides through the same PNG round trip (it's lossy for see-through
   // pixels, so a PNG against a live canvas would differ where nothing did)
@@ -70,12 +70,12 @@ const DIFF = async ({ png, threshold }) => {
   for (let i = 0; i < a.length; i += 4) {
     const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
     if (d > max) max = d;
-    if (d > threshold) {
+    if (d > limit) {
       n++;
       const p = i / 4, x = p % w, y = (p / w) | 0;
       x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     }
-    md.data.set([255, 0, 0, d > threshold ? 255 : d ? 90 : 0], i);
+    md.data.set([255, 0, 0, d > limit ? 255 : d ? 90 : 0], i);
   }
   mg.putImageData(md, 0, 0);
   return { max, n, box: n ? [x0, y0, x1, y1] : null, map: map.toDataURL('image/png'), png: minePng };

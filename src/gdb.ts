@@ -272,10 +272,10 @@ function convertStages(r: GResult, model: Model, sources: string | Record<string
   };
   const frameSnaps = new Map<number, SnapFrame>();
   const snapFrame = (f: { id: number; fn: string; cells: Map<string, number> }): SnapFrame => {
-    const cells = shareCells(`f${f.id}`, [...f.cells.values()]);
+    const list = shareCells(`f${f.id}`, [...f.cells.values()]);
     const prev = frameSnaps.get(f.id);
-    if (prev && prev.cells === cells && prev.fn === f.fn) return prev;
-    const next = { id: f.id, fn: f.fn, cells };
+    if (prev && prev.cells === list && prev.fn === f.fn) return prev;
+    const next = { id: f.id, fn: f.fn, cells: list };
     frameSnaps.set(f.id, next);
     return next;
   };
@@ -402,8 +402,8 @@ function convertStages(r: GResult, model: Model, sources: string | Record<string
   };
 
   mark.stage = 'stops';
-  for (const [k, stop] of stops.entries()) {
-    mark.at = k;
+  for (const [stopIndex, stop] of stops.entries()) {
+    mark.at = stopIndex;
     const nextBound = stop.bound;
     for (const id of Object.keys(nextBound ?? {})) boundIds.add(id);
     for (const e of stop.events) {
@@ -446,8 +446,8 @@ function convertStages(r: GResult, model: Model, sources: string | Record<string
           args: params.map((p) => {
             const c = f.cells.get(p.name);
             const val = c !== undefined ? vals.get(c)! : { k: 'undef' as const };
-            const data = payload(data_?.vars.find((v) => v.name === p.name) ?? null);
-            return { name: p.name, val, text: fmtVal(val), ...(data ? { data } : {}) };
+            const pl = payload(data_?.vars.find((v) => v.name === p.name) ?? null);
+            return { name: p.name, val, text: fmtVal(val), ...(pl ? { data: pl } : {}) };
           }),
         });
       } else if (e.k === 'ret') {

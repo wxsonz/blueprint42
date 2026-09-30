@@ -227,7 +227,7 @@ interface Frame extends FrameState {
   now: number;
   sinceEnd: number; // seconds since playback reached the run's end
   related: (b: Belt) => boolean;
-  fileOfHost: (k: string) => string | undefined;
+  fileOf: (k: string) => string | undefined; // the file a host belongs to
   visible: Belt[]; // belts on screen, in drawing order (the belts pass sets it)
   pp: ReturnType<typeof procPlace>;
   hostsToDraw: Host[];
@@ -495,7 +495,7 @@ export class GridView {
     const F: Frame = {
       ...fs, fs, s, skin, g, dc, cs, z, now, sinceEnd,
       related: (b: Belt) => relatedBelt(s, fs, b),
-      fileOfHost: (k: string) => fileOfHost(s, fs, k),
+      fileOf: (hk: string) => fileOfHost(s, fs, hk),
       visible: [],
       pp: procPlace(s.layout),
       // machines: homes, plus live (or fading) recursive copies
@@ -609,12 +609,12 @@ export class GridView {
   }
 
   private passDoors(F: Frame): void {
-    const { skin, g, dc, scene, animKey, liveKeys, related, visible, fileOfHost } = F;
+    const { skin, g, dc, scene, animKey, liveKeys, related, visible, fileOf } = F;
     // ---- doors: where a belt passes through the wall of a module it serves ----
     const wallOf = new Map(scene.walls.map((w) => [w.file, w.rect]));
     for (const b of visible) {
-      const fa = fileOfHost(b.fromHost);
-      const fb = fileOfHost(b.toHost);
+      const fa = fileOf(b.fromHost);
+      const fb = fileOf(b.toHost);
       if (fa === fb) continue;
       const live = b.key === animKey || liveKeys.has(b.key);
       for (const file of [fa, fb]) {
@@ -1169,7 +1169,7 @@ export class GridView {
       skin.heapBar!(d1, bar, info);
       if (folded) return;
       for (const b of cards) skin.heapCard!(d1, rects.get(b.c.id)!, heapCardInfo(m, b, trace, recent));
-      watched.forEach((w, k) => skin.heapCard!(d1, watchRect(k), watchCardInfo(m, w, trace, recent)));
+      watched.forEach((wc, k) => skin.heapCard!(d1, watchRect(k), watchCardInfo(m, wc, trace, recent)));
     };
   }
 
@@ -1423,12 +1423,12 @@ export class GridView {
 
     // a pointer with bytes drawn below gets its line to them (a field in
     // REACHED too, which the global wire pass doesn't know about)
-    for (const [key, m] of mem) {
+    for (const [key, mv] of mem) {
       const from = slotAt.get(key);
-      if (!from || !m.len) continue;
+      if (!from || !mv.len) continue;
       // out of the row's left side, into the strip's left end (as every pointer line)
       const start: Pt = [X, from[1]];
-      const to: Pt = [m.r.x, m.r.y + m.r.h / 2];
+      const to: Pt = [mv.r.x, mv.r.y + mv.r.h / 2];
       const out = Math.max(cs * 0.7, 14 * z);
       const c: [Pt, Pt, Pt, Pt] = [start, [Math.min(start[0], to[0]) - out, start[1]], [Math.min(start[0], to[0]) - out, to[1]], to];
       const pts: Pt[] = [];

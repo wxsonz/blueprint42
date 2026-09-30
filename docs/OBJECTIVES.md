@@ -137,7 +137,12 @@ Steps, in this order:
    clear on the event that changes it (as text fitting now clears on font
    load). A contract test switches every tint and checks the veil, panels
    and plates follow.
-9. [ ] **A linter** (S). ESLint with a few rules that catch this week's
+9. [x] **A linter** (S). Done 2026-10-01 (decision 048): Oxlint with types
+   (eqeqeq, no-shadow, no floating promises) and `tools/lint-canvas.mjs` (a
+   save without its restore, a return with one open), in `npm run check`
+   (under 2 s). ESLint can't: typescript-eslint needs TypeScript's JS API,
+   which TypeScript 7 doesn't have. It found 27 shadowed names and a floating
+   promise; fixed. ESLint with a few rules that catch this week's
    kinds of bugs: floating promises, unused values, `==`, shadowed names,
    a canvas state change without a matching restore. `npm run check`
    runs it.

@@ -29,14 +29,14 @@ describe('guarded skin hooks', () => {
     const dc = { g, z: 1, cs: 40, time: 0, vw: 100, vh: 100 };
     const skin = {
       id: 'broken',
-      panel(dc: { g: typeof g }) {
-        dc.g.save();
-        dc.g.save();
-        dc.g.fillStyle = 'red';
-        dc.g.lineWidth = 9;
+      panel(d: { g: typeof g }) {
+        d.g.save();
+        d.g.save();
+        d.g.fillStyle = 'red';
+        d.g.lineWidth = 9;
         throw new Error('0/0 in a progress bar');
       },
-      card(dc: { g: typeof g }) { dc.g.fillRect(7); },
+      card(d: { g: typeof g }) { d.g.fillRect(7); },
     } as unknown as Skin;
     const s = guardSkin(skin, false);
     for (let i = 0; i < 3; i++) (s as unknown as { panel: (d: unknown, r: unknown) => void }).panel(dc, { x: 1, y: 2, w: 3, h: 4 });
@@ -54,7 +54,7 @@ describe('guarded skin hooks', () => {
   it("changes nothing when hooks succeed: state they leave behind stays (skins rely on it)", () => {
     const g = fakeContext();
     const dc = { g, z: 1, cs: 40, time: 0, vw: 100, vh: 100 };
-    const skin = { id: 'ok', frame(dc: { g: typeof g }) { dc.g.lineWidth = 3; } } as unknown as Skin;
+    const skin = { id: 'ok', frame(d: { g: typeof g }) { d.g.lineWidth = 3; } } as unknown as Skin;
     (guardSkin(skin, false) as unknown as { frame: (d: unknown) => void }).frame(dc);
     expect(g.lineWidth).toBe(3);
     expect(hookErrors.size).toBe(0);

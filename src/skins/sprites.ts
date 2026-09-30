@@ -339,8 +339,8 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       const gap = Math.max(1.5, 2.5 * z);
       const n = s.rounds.marks.length;
       marksW = n * (mw + gap);
-      s.rounds.marks.forEach((m, k) => {
-        const x = right - (n - k) * (mw + gap) + gap;
+      s.rounds.marks.forEach((m, j) => {
+        const x = right - (n - j) * (mw + gap) + gap;
         g.lineWidth = Math.max(1, 1.2 * z);
         if (m === null) {
           g.fillStyle = p.muted;

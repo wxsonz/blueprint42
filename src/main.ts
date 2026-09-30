@@ -105,8 +105,7 @@ function showSpeed(): void {
   const capped = animMode() === 'focus' && S.speed > FOCUS_MAX;
   read.classList.toggle('capped', capped);
   read.title = capped ? `${fmtSpeed(S.speed)}; Focus stages calls, returns and pointer writes at ${fmtSpeed(FOCUS_MAX)} at most` : 'Speed: click to pick or type one, scroll to change';
-  const menu = $('speed-menu');
-  if (!menu.hidden) renderSpeedMenu();
+  if (!$('speed-menu').hidden) renderSpeedMenu();
 }
 
 function setSpeedTo(v: number): void {
@@ -116,15 +115,15 @@ function setSpeedTo(v: number): void {
 }
 
 function renderSpeedMenu(): void {
-  const menu = $('speed-menu');
-  menu.innerHTML = `<div class="grid">${SPEEDS.map((v) => `<button role="menuitemradio" data-speed="${v}" aria-checked="${v === S.speed}">${fmtSpeed(v)}</button>`).join('')}</div>
+  const box = $('speed-menu');
+  box.innerHTML = `<div class="grid">${SPEEDS.map((v) => `<button role="menuitemradio" data-speed="${v}" aria-checked="${v === S.speed}">${fmtSpeed(v)}</button>`).join('')}</div>
     <label>or type <input id="speed-typed" type="number" min="${SPEED_MIN}" max="${SPEED_MAX}" step="0.25" value="${S.speed}"> ×</label>
     <div class="note">Scroll over the speed to change it. Focus stages calls and returns at ${fmtSpeed(FOCUS_MAX)} at most.</div>`;
 }
 
 function toggleSpeedMenu(open = $('speed-menu').hidden): void {
-  const menu = $('speed-menu');
-  menu.hidden = !open;
+  const box = $('speed-menu');
+  box.hidden = !open;
   $('pb-speed').setAttribute('aria-expanded', String(open));
   if (open) renderSpeedMenu();
 }

@@ -76,9 +76,9 @@ function ps2Grain(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
     for (let i = 0; i < 128 * 128; i++) {
       // 2 px specks (a coarse sandblast), dark pits only: light specks
       // read as dust on a dark screen
-      const x = (i % 128) >> 1;
-      const y = Math.floor(i / 128) >> 1;
-      const r = hash(x * 131 + y * 977 + 3);
+      const gx = (i % 128) >> 1;
+      const gy = Math.floor(i / 128) >> 1;
+      const r = hash(gx * 131 + gy * 977 + 3);
       img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = 0;
       img.data[i * 4 + 3] = r * 80;
     }
