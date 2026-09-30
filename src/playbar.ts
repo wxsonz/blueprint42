@@ -35,9 +35,12 @@ function describe(e: Ev, trace: Trace): string {
     case 'free':
       return `free(<span class="ptr">${esc(trace.cells.get(e.cell)?.name ?? '?')}</span>)`;
     case 'out':
+      if (e.fd === 2) return `stderr <span class="arrow">→</span> terminal <span class="err">${esc(JSON.stringify(e.text))}</span>`;
       return e.via === 'write'
         ? `write <span class="arrow">→</span> terminal <span class="ret">${esc(JSON.stringify(e.text))}</span>`
         : `printf's buffer flushed <span class="arrow">→</span> terminal <span class="ret">${esc(JSON.stringify(e.text))}</span>`;
+    case 'in':
+      return `stdin <span class="arrow">→</span> program <span class="ret">${esc(JSON.stringify(e.text))}</span> (${e.to - e.from} B)`;
   }
 }
 
@@ -153,7 +156,7 @@ function drawTimeline(): void {
         const e = t.evs[i];
         const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
         const h = 3 + (d / maxD) * (H - 8);
-        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : e.k === 'out' ? col.write : col[e.k];
+        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : e.k === 'out' || e.k === 'in' ? col.write : col[e.k];
         cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
       }
       return c;

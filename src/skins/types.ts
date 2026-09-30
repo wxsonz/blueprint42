@@ -113,6 +113,7 @@ export interface ProcInfo {
   state: 'idle' | 'running' | 'done' | 'crashed';
   exit: string | null;
   out?: string; // what the program printed: what has really reached the terminal by now
+  errSpans?: [number, number][]; // stretches of `out` that came through stderr (gdb engine)
   args?: string[]; // its command-line arguments, for the prompt line
   lines?: number; // how many lines of output the box has room for (it grows with them)
   selected: boolean;
@@ -225,6 +226,15 @@ export interface StdBufInfo {
   flushed: string | null; // bytes that just left it for the terminal (this step's flush), or null
 }
 
+// stdin, under the process box: the input the run was given (a file, as
+// `< in.txt`), how much the program has taken, and what's left. Only drawn
+// when the trace really read fd 0's offset each step (the gdb engine).
+export interface StdinInfo {
+  text: string; // all of it
+  pos: number; // bytes taken so far
+  taken: string | null; // what this step took, or null
+}
+
 export interface Skin {
   id: string;
   name: string;
@@ -246,6 +256,8 @@ export interface Skin {
   dock?(dc: Dc, r: Rect, d: DockInfo): void;
   // optional: printf's buffer above the process box (Minimal and Barebone prototype it)
   stdbuf?(dc: Dc, r: Rect, b: StdBufInfo): void;
+  // optional: stdin under the process box (Minimal and Barebone prototype it)
+  stdin?(dc: Dc, r: Rect, b: StdinInfo): void;
   frame(dc: Dc, r: Rect, f: FrameInfo): void;
   chest(dc: Dc, r: Rect, c: ChestInfo): void;
   strip(dc: Dc, r: Rect, info: StripInfo): void;

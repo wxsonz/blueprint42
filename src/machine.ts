@@ -22,6 +22,21 @@ export function procH(out: string | undefined): number {
   return MH + (Math.max(0, procLines(out) - 2) * 13) / CELL_PX;
 }
 
+// What the terminal shows: stdout and stderr as they reached it (gdb engine),
+// else the program's whole stdout.
+export function termText(t: { outText?: string; stdout?: string } | null | undefined): string | undefined {
+  return t?.outText ?? t?.stdout;
+}
+// stdin's node under the process box (gdb runs given input), and the height
+// of the whole block: the heap shelf starts under it.
+export const STDIN_H = 1.7;
+export function stdinShown(t: { inText?: string } | null | undefined): boolean {
+  return !!t?.inText;
+}
+export function procBlockH(t: { outText?: string; stdout?: string; inText?: string } | null | undefined): number {
+  return procH(termText(t)) + (stdinShown(t) ? STDIN_H + 0.4 : 0);
+}
+
 // Struct variables unfold into their fields under their own row. Folded
 // ones ("fnKey.var") show just the one row. Open by default: seeing the
 // struct is the point.

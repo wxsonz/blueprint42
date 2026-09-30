@@ -680,6 +680,23 @@ X86_64 = False
 last_buf = [None]
 
 
+# How much of stdin the program has taken: the kernel's offset on fd 0 (it
+# reads a file, in.txt), from /proc, so nothing runs in the inferior. It
+# counts what left the file, into read's buffer or stdio's.
+last_in = [None]
+
+
+def stdin_pos():
+    try:
+        with open(f"/proc/{INF().pid}/fdinfo/0") as fh:
+            for ln in fh:
+                if ln.startswith("pos:"):
+                    return int(ln.split()[1])
+    except (OSError, ValueError, gdb.error):
+        pass
+    return None
+
+
 def stdout_buffer():
     if not X86_64:
         return None
@@ -969,6 +986,10 @@ def record_stop():
     if buf != last_buf[0]:
         stops[-1]["stdbuf"] = buf
         last_buf[0] = buf
+    pos = stdin_pos()
+    if pos is not None and pos != last_in[0]:
+        stops[-1]["inPos"] = pos
+        last_in[0] = pos
     pending.clear()
 
 
@@ -1235,6 +1256,7 @@ def reset_recording():
     seen_frames.clear()
     defined_locals.clear()
     last_buf[0] = None
+    last_in[0] = None
     last_top[0] = None
     stops.clear()
     pending.clear()

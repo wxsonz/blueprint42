@@ -7,7 +7,7 @@ import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } fr
 import type { BeltOpts } from './kit-types';
 import type { Dc, DockInfo, IconKind, NodeInfo, PlateKind, PlateRole, Pt, Rect, RowInfo, Skin } from './types';
 import { INV_HEAD_PX, SLOT_PX } from '../machine';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk, type CapLook, type TagLook } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawRuns, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, tailRuns, Walk, type CapLook, type TagLook } from './util';
 
 export interface Palette {
   bg: string; // the floor
@@ -59,6 +59,7 @@ export interface Theme {
   radius: number; // corner radius at zoom 1 (0 = square)
   ptrTags?: boolean; // pointer rows show an address tag, not a value (prototyped in Barebone)
   capacity?: boolean; // draws the Norm's limits (prototyped in Barebone)
+  stderr?: boolean; // its terminal tells stderr's text apart, in the error colour (prototyped in Barebone)
   plateShapes?: boolean; // a belt's arguments and return values differ in shape (prototyped in Barebone)
   upper?: boolean; // titles in capitals
   spotlight: string;
@@ -432,7 +433,8 @@ export function makeSkin(t: Theme): Skin {
       if (more) (g.textAlign = 'right'), g.fillText(moreText, r.x + r.w - pad, r.y + pad), (g.textAlign = 'left');
       const out = tailLines(pr.out, room);
       g.fillStyle = p.fg;
-      out.forEach((l, i) => g.fillText(fitText(g, l, t.mono, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
+      if (t.stderr && pr.errSpans?.length) tailRuns(pr.out, pr.errSpans, room).forEach((l, i) => ((g.font = t.mono(px(dc, 10.5, 7))), drawRuns(g, l, r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13), r.w - pad * 2, p.fg, p.err)));
+      else out.forEach((l, i) => g.fillText(fitText(g, l, t.mono, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
       const dy = out.length ? px(dc, 13) * out.length - px(dc, 4) : 0;
       if (pr.state === 'done' && pr.exit !== null) {
         g.fillStyle = p.ret;

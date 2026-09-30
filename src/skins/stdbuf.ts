@@ -3,7 +3,7 @@
 // the terminal yet. It says when it flushes (at each newline to a terminal,
 // only when full to a pipe) and how full it is. One drawing, coloured by the
 // skin (prototyped in Minimal and Barebone).
-import type { Dc, Rect, StdBufInfo } from './types';
+import type { Dc, Rect, StdBufInfo, StdinInfo } from './types';
 import { drawCap, fitText, rrect } from './util';
 
 export interface StdBufPalette {
@@ -65,5 +65,61 @@ export function drawStdBuf(dc: Dc, r: Rect, b: StdBufInfo, p: StdBufPalette): vo
   } else {
     g.fillStyle = p.faint;
     g.fillText('empty', r.x + pad, y);
+  }
+}
+
+// stdin (docs/VISUALS.md, "Input"): a node under the process box holding the
+// input the run was given. What the program has taken is used up (it left
+// the file: a read, or stdio filling its own buffer); what's left waits at
+// the front. Same palette as printf's buffer.
+export function drawStdin(dc: Dc, r: Rect, b: StdinInfo, p: StdBufPalette): void {
+  const g = dc.g;
+  const rad = p.radius ? px(dc, p.radius, 2) : 0;
+  rrect(g, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
+  g.fillStyle = p.body;
+  g.fill();
+  if (p.edge) {
+    g.strokeStyle = b.taken ? p.flow : p.edge;
+    g.lineWidth = 1;
+    g.stroke();
+  }
+  const pad = px(dc, 10);
+  const inner = r.w - pad * 2;
+  g.textBaseline = 'middle';
+  // head: what it is, how much is taken
+  let y = r.y + px(dc, 11);
+  const total = b.text.length;
+  g.textAlign = 'right';
+  g.font = p.mono(px(dc, 9.5, 6));
+  g.fillStyle = b.pos >= total ? p.faint : p.muted;
+  const count = `${b.pos}/${total} taken`;
+  g.fillText(count, r.x + r.w - pad, y);
+  const countW = g.measureText(count).width;
+  g.textAlign = 'left';
+  g.font = p.ui(px(dc, 10, 6), 700);
+  g.fillStyle = p.muted;
+  g.fillText(fitText(g, 'STDIN', (s) => p.ui(s, 700), px(dc, 10, 6), inner - countW - px(dc, 6), 5), r.x + pad, y);
+  // the used-up part of a thin track, to the left: input is taken from the front
+  const ty = y + px(dc, 8);
+  g.fillStyle = p.track;
+  g.fillRect(r.x + pad, ty, inner, Math.max(1, px(dc, 2)));
+  g.fillStyle = p.flow;
+  g.fillRect(r.x + pad, ty, total ? (inner * Math.min(b.pos, total)) / total : 0, Math.max(1, px(dc, 2)));
+  y += px(dc, 16);
+  g.font = p.ui(px(dc, 10, 6));
+  g.fillStyle = p.faint;
+  g.fillText(fitText(g, 'from a file: reads take from the front', (s) => p.ui(s), px(dc, 10, 6), inner, 5), r.x + pad, y);
+  // body: what this step took, else what's left
+  y = r.y + r.h - px(dc, 13);
+  g.font = p.mono(px(dc, 12, 6), 600);
+  if (b.taken) {
+    g.fillStyle = p.flow;
+    g.fillText(fitText(g, `${cLiteral(b.taken)}  → program`, (s) => p.mono(s, 600), px(dc, 12, 6), inner, 5), r.x + pad, y);
+  } else if (b.pos < total) {
+    g.fillStyle = p.text;
+    g.fillText(fitText(g, `${cLiteral(b.text.slice(b.pos))}  left`, (s) => p.mono(s, 600), px(dc, 12, 6), inner, 5), r.x + pad, y);
+  } else {
+    g.fillStyle = p.faint;
+    g.fillText(fitText(g, 'all taken: a read now returns 0 (end of file)', (s) => p.mono(s, 600), px(dc, 12, 6), inner, 5), r.x + pad, y);
   }
 }

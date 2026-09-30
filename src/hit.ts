@@ -1,9 +1,10 @@
 // Hit-testing and rects: what's under the pointer, and where things are.
 import { CELL_PX, MW, SLOT_PX, type Layout } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, type Station } from './interior';
-import { geomOf, procH, shut, slotsOf } from './machine';
+import { geomOf, procBlockH, procH, shut, slotsOf, termText } from './machine';
 import { buildScene, procPlace, type Belt } from './route';
 import type { Pt, Rect } from './skins/types';
+import type { Trace } from './interp';
 import { eventPair, frameAt, frameHosts, sceneAt, spriteWorldRect, type Entity, type ViewState } from './playback';
 
 // Where a belt crosses a module's wall: [point, whether the wall edge is vertical].
@@ -58,7 +59,7 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
     if (wx >= h.x && wx < h.x + h.w && wy >= h.y && wy < h.y + h.h) return { k: 'node', id: `func:${h.fn}`, copy: h.copy };
   }
   const pp = procPlace(s.layout);
-  if (pp && wx >= pp.x && wx < pp.x + MW && wy >= pp.y && wy < pp.y + procH(s.trace?.stdout)) return { k: 'proc' };
+  if (pp && wx >= pp.x && wx < pp.x + MW && wy >= pp.y && wy < pp.y + procH(termText(s.trace))) return { k: 'proc' };
   let best: Belt | null = null;
   let bestD = 0.3;
   for (const b of scene.belts) {
@@ -70,9 +71,9 @@ export function entityAt(s: ViewState, wx: number, wy: number): Entity | null {
 }
 
 // Heap blocks sit on a shelf under the process, one row per slot.
-export function heapSlotRect(layout: Layout, slot: number, out?: string): Rect | null {
+export function heapSlotRect(layout: Layout, slot: number, trace?: Trace | null): Rect | null {
   const pp = procPlace(layout);
-  return pp ? { x: pp.x, y: pp.y + procH(out) + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
+  return pp ? { x: pp.x, y: pp.y + procBlockH(trace) + 1.2 + slot * 1.1, w: 1, h: 1 } : null;
 }
 
 // Focus mode: world rect of who sends ('src'), who receives ('dst'), or
@@ -85,7 +86,7 @@ export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both'
   const hostR = (k: string): Rect | null => {
     if (k === '') {
       const pp = procPlace(s.layout);
-      return pp ? { x: pp.x, y: pp.y, w: MW, h: procH(s.trace?.stdout) } : null;
+      return pp ? { x: pp.x, y: pp.y, w: MW, h: procH(termText(s.trace)) } : null;
     }
     const h = scene.hosts.get(k);
     return h ? { x: h.x, y: h.y, w: h.w, h: h.h + h.inv } : null;
@@ -107,7 +108,7 @@ export function stageRect(s: ViewState, i: number, which: 'src' | 'dst' | 'both'
     src = via ? hostR(hosts.get(via.id) ?? '') : null;
     const to = frameOf(ev.cell);
     if (to) dst = hostR(hosts.get(to.id) ?? '');
-    else if (s.trace.heapSlots?.has(ev.cell)) dst = heapSlotRect(s.layout, s.trace.heapSlots.get(ev.cell)!, s.trace.stdout);
+    else if (s.trace.heapSlots?.has(ev.cell)) dst = heapSlotRect(s.layout, s.trace.heapSlots.get(ev.cell)!, s.trace);
     else {
       const c = s.trace.cells.get(ev.cell);
       const n = c ? s.layout.visible().find((x) => x.name === c.owner) : undefined;

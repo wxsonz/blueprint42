@@ -93,6 +93,20 @@ Truth comes from the run, not from a model of libc: the bytes that really
 reached the output after each step, and the buffer's real contents
 (`stdout`'s write pointers in glibc) read under gdb.
 
+`write(2, …)` (and `perror`, `fprintf(stderr, …)`) reaches the same
+terminal, in with the rest. stderr has no buffer, so it always goes straight
+in from the side. Minimal and Barebone draw its text in the error colour.
+
+#### Input: stdin (built; drawn in Minimal and Barebone)
+
+Under the process box sits a **stdin** node: the input the run was given (a
+file, as `< in.txt`), how much the program has taken (`4/23 taken`, a thin
+track filling from the left) and what's left. When the program takes bytes,
+through `read(0, …)` or stdio filling its own buffer, they leave the node
+from its right side ("hell" → program). Once all of it is taken, it says so:
+a read now returns 0. Truth: fd 0's real offset after each step, read from
+`/proc/<pid>/fdinfo/0`, so nothing runs in the program to find out.
+
 ### 2. Module (a `.c` file)
 
 | Construct | Norm | Picture | Moves when | Status | Edit later |

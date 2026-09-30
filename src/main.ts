@@ -205,7 +205,7 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
       return loadWindow(r.window.to, play_);
     }
     const p = S.project;
-    applyTrace(convertGdb(r, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
+    applyTrace(convertGdb({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
     prefetchNext();
     // the event where step `target` is: each 'step' event is one step of the run
     let n = from;
@@ -296,7 +296,7 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
       applyTrace(null, fresh);
     } else {
       S.gdb = { status: 'done', ms: r.ms };
-      applyTrace(convertGdb(r, model, files ?? src), fresh);
+      applyTrace(convertGdb({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, files ?? src), fresh);
       prefetchNext();
       if (fresh) {
         autoSpeed(S.trace!);

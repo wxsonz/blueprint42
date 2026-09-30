@@ -211,6 +211,46 @@ export function tailLines(out: string | undefined, n: number): string[] {
   return lines.slice(-n);
 }
 
+// The last n lines as runs of stdout and stderr text (errSpans: offsets into
+// out that came through fd 2), for a terminal that tells them apart.
+export type TermRun = { text: string; err: boolean };
+export function tailRuns(out: string | undefined, errSpans: [number, number][] | undefined, n: number): TermRun[][] {
+  if (!out) return [];
+  const body = out.replace(/\n$/, '');
+  const lines: TermRun[][] = [[]];
+  const isErr = (i: number) => !!errSpans?.some(([a, b]) => i >= a && i < b);
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === '\n') {
+      lines.push([]);
+      continue;
+    }
+    const line = lines[lines.length - 1];
+    const err = isErr(i);
+    const last = line[line.length - 1];
+    if (last && last.err === err) last.text += ch;
+    else line.push({ text: ch, err });
+  }
+  return lines.slice(-n);
+}
+
+// One terminal line of runs, left to right, cut with … at maxW.
+export function drawRuns(g: CanvasRenderingContext2D, runs: TermRun[], x: number, y: number, maxW: number, out: string, err: string): void {
+  let at = x;
+  for (const r of runs) {
+    const room = x + maxW - at;
+    if (room <= 0) break;
+    let t = r.text;
+    if (g.measureText(t).width > room) {
+      while (t.length > 1 && g.measureText(t + '…').width > room) t = t.slice(0, -1);
+      t += '…';
+    }
+    g.fillStyle = r.err ? err : out;
+    g.fillText(t, at, y);
+    at += g.measureText(t).width;
+  }
+}
+
 // Middle of a belt's middle leg: where a trunk shows how many calls it carries.
 export function beltMid(pts: Pt[]): Pt {
   const w = new Walk(pts);

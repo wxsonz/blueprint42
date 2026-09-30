@@ -32,8 +32,10 @@ Next, in this order:
    literal is "literal (read-only)" in REACHED; a pointer into a stack
    array shows those bytes and says "(stack)" (gdb engine; the `bytes`
    sample).
-2. [ ] **stdin and stderr** (S). Input being used up by `read(0, …)`, and
-   output to fd 2 flying into the terminal (only stdout does today).
+2. [x] **stdin and stderr** (S). Input being used up by `read(0, …)` (a
+   stdin node under the process box, fd 0's real offset), and output to fd 2
+   flying into the terminal, its text in the error colour (Minimal,
+   Barebone).
 3. [ ] **The heap bar** (M). The heap belongs to no function and outlives
    every call, so it's drawn as a bar fixed to the screen (bottom left),
    with you wherever you go, replacing the heap shelf (one thing, one

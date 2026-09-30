@@ -5,7 +5,7 @@ import { cLiteral } from './skins/stdbuf';
 import { CELL_PX, INV_HEAD_PX, MH, MOD_DOORS, MW, SLOT_PX, doorsOf } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { beatNow, computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
-import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY } from './machine';
+import { geomOf, isCharArray, procH, procLines, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
 import type { FnInfo } from './parse';
 import type { Host } from './route';
 import { fmtVal, type Payload, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
@@ -346,7 +346,7 @@ export class GridView {
     for (const w of scene.walls) grow(w.rect.x, w.rect.y, w.rect.w, w.rect.h);
     for (const b of scene.belts) for (const [x, y] of b.pts) grow(x - 0.5, y - 0.5, 1, 1);
     const slots = s.trace?.heapSlots ? Math.max(-1, ...s.trace.heapSlots.values()) : -1;
-    const shelf = slots >= 0 ? heapSlotRect(s.layout, slots, s.trace?.stdout) : null;
+    const shelf = slots >= 0 ? heapSlotRect(s.layout, slots, s.trace) : null;
     if (shelf) grow(shelf.x, shelf.y, 4, 1);
     const sample = s.trace?.evs.length ? frameAt(s.trace, s.pos).snap : s.trace?.snaps[0];
     for (const sprite of s.sprites ?? []) {
@@ -569,14 +569,15 @@ export class GridView {
     const pp = procPlace(s.layout);
     if (pp) {
       g.save();
-      skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(trace?.stdout)), {
+      skin.proc(dc, this.rectW(pp.x, pp.y, MW, procH(termText(trace))), {
         state: !trace || (!st.length && !finished) ? 'idle' : finished ? (trace.error ? 'crashed' : 'done') : 'running',
         exit: finished && trace?.exit ? fmtVal(trace.exit) : null,
         // what has really reached the terminal by now (gdb engine); before,
         // only the whole output once the program had finished
         out: trace?.outText !== undefined && snap?.out ? trace.outText.slice(0, snap.out.sent) || undefined : finished ? trace?.stdout : undefined,
+        errSpans: trace?.errSpans,
         args: trace?.args,
-        lines: Math.max(2, procLines(trace?.stdout)),
+        lines: Math.max(2, procLines(termText(trace))),
         selected: selKey === 'p',
         hovered: hovKey === 'p',
       });
@@ -593,13 +594,34 @@ export class GridView {
           flushed: was > 0 && n < was && prev!.sent < buf.sent ? prev!.buf!.text : null,
         });
       }
+      // stdin under it: the run's input, what the program has taken, what's left
+      const inY = pp.y + procH(termText(trace)) + 0.4;
+      if (skin.stdin && trace && stdinShown(trace)) {
+        const pos = snap?.inPos ?? 0;
+        skin.stdin(dc, this.rectW(pp.x, inY, MW, STDIN_H), { text: trace.inText!, pos, taken: ev?.k === 'in' ? ev.text : null });
+      }
+      // what a read takes leaves stdin for the program, out of its right side
+      if (ev?.k === 'in' && t > 0 && t < 1 && trace && stdinShown(trace)) {
+        const [bx, by, bw] = [this.sx(pp.x), this.sy(inY), MW * cs];
+        const from: Pt = [bx + bw, by + STDIN_H * cs * 0.5];
+        const into: Pt = [bx + bw + 2 * cs, by + STDIN_H * cs * 0.5];
+        const u = Math.min(1, t / 0.85);
+        const e = u * u * (3 - 2 * u);
+        const x = from[0] + (into[0] - from[0]) * e;
+        g.save();
+        if (skin.trail) skin.trail(dc, [from, [x, from[1]]], 'arg');
+        skin.pulse(dc, x, from[1]);
+        skin.plate(dc, x, from[1], cLiteral(ev.text.length > 24 ? `${ev.text.slice(0, 23)}…` : ev.text), 'arg');
+        g.restore();
+      }
       // bytes really leaving through write(2) (gdb engine): printf's flush
       // falls from its buffer into the terminal; the program's own write goes
       // straight in from its side, past the buffer
-      if (ev?.k === 'out' && ev.fd === 1 && t > 0 && t < 1) {
+      // (stderr has no buffer: it always goes straight in, whoever wrote it)
+      if (ev?.k === 'out' && (ev.fd === 1 || ev.fd === 2) && t > 0 && t < 1) {
         const [bx, by, bw] = [this.sx(pp.x), this.sy(pp.y), MW * cs];
         const into: Pt = [bx + bw * 0.45, by + 1.1 * cs];
-        const from: Pt = ev.via === 'printf' ? [bx + bw * 0.45, by - 0.9 * cs] : [bx + bw + 1.2 * cs, by + 1.1 * cs];
+        const from: Pt = ev.via === 'printf' && ev.fd === 1 ? [bx + bw * 0.45, by - 0.9 * cs] : [bx + bw + 1.2 * cs, by + 1.1 * cs];
         const u = Math.min(1, t / 0.85);
         const e = u * u * (3 - 2 * u);
         const x = from[0] + (into[0] - from[0]) * e;
@@ -671,7 +693,7 @@ export class GridView {
       const leaked = new Set(finished ? (trace.leaks ?? []).map((l) => l.cell) : []);
       for (const c of shown.values()) {
         const slot = trace.heapSlots.get(c.id);
-        const w = slot !== undefined ? heapSlotRect(s.layout, slot, s.trace?.stdout) : null;
+        const w = slot !== undefined ? heapSlotRect(s.layout, slot, s.trace) : null;
         if (!w) continue;
         const r = this.rectW(w.x + 0.12, w.y + 0.12, 0.76, 0.76);
         g.save();
@@ -793,7 +815,7 @@ export class GridView {
     // ---- focus mode: veil everything but the sender and the receiver ----
     if (ev && ph && trace && staged(ev)) {
       const hostRect = (k: string): Rect | null => {
-        if (k === '') return pp ? this.rectW(pp.x, pp.y, MW, procH(trace.stdout)) : null;
+        if (k === '') return pp ? this.rectW(pp.x, pp.y, MW, procH(termText(trace))) : null;
         const h = scene.hosts.get(k);
         return h ? this.rectW(h.x, h.y, h.w, h.h + h.inv) : null;
       };

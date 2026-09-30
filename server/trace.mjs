@@ -204,7 +204,7 @@ export async function handleTrace(req) {
     }
     if (trace.error && (!trace.stops || trace.stops.length === 0)) return { ok: false, error: trace.error, gdb: gdb.err.slice(-4000) };
     const read = async (n) => (await readFile(join(dir, n), 'utf8').catch(() => '')).slice(0, OUT_CAP);
-    return { ok: true, flags, ms: Date.now() - started, ...trace, bindingScopes, args, stdout: await read('out.txt'), stderr: await read('err.txt') };
+    return { ok: true, flags, ms: Date.now() - started, ...trace, bindingScopes, args, stdout: await read('out.txt'), stderr: await read('err.txt'), stdinText: String(req?.stdin ?? '').slice(0, OUT_CAP) };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

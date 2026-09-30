@@ -230,6 +230,8 @@ export function evDuration(e: Ev): number {
       return 0.55;
     case 'out':
       return 0.7;
+    case 'in':
+      return 0.7;
   }
 }
 

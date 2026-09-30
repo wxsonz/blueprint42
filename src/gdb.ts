@@ -52,6 +52,7 @@ interface GStop {
   bound?: Record<string, BoundValue>;
   exited?: boolean;
   stdbuf?: StdBuf | null; // printf's buffer after this stop, when it changed
+  inPos?: number; // stdin's offset after this stop, when it changed
 }
 // How a window was fetched (the tracer's session, for the nerd stats).
 export interface WindowStats {
@@ -79,6 +80,7 @@ export interface GResult {
   stderr?: string;
   window?: { from: number | null; to: number }; // the steps this trace covers
   outBefore?: string; // stdout written before the window began
+  stdinText?: string; // the stdin it ran with (echoed by the server, or set by the page)
   steps?: number; // steps the run reached
   stats?: WindowStats;
   ms?: number;
@@ -241,6 +243,9 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   const extras = new Map<number, { str?: string; fields?: SnapField[]; bytes?: number[]; lit?: boolean }>();
   const snapCell = (id: number): SnapCell => ({ id, name: cells.get(id)!.name, type: types.get(id) ?? '', val: vals.get(id) ?? { k: 'undef' }, ...extras.get(id) });
   let outText = r.outBefore ?? '';
+  const errSpans: [number, number][] = [];
+  const inText = r.stdinText ?? '';
+  let inPos: number | null = null;
   let buf: StdBuf | null = null;
   // Snapshots share what didn't change: a list of cells is reused while every
   // cell in it holds the same value and extras (both are replaced, never
@@ -264,6 +269,7 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
   };
   const snapshot = (): Snap => ({
     ...(r.outMode ? { out: { sent: outText.length, buf } } : {}),
+    ...(inPos !== null ? { inPos } : {}),
     stack: stack.map(snapFrame),
     statics: shareCells('s', [...statics.values()]),
     heap: shareCells('h', [...heapCell.values()]),
@@ -389,10 +395,12 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     for (const e of stop.events) {
       const top = stack[stack.length - 1] ?? null;
       if (e.k === 'out') {
-        if (e.fd !== 1) continue;
+        if (e.fd !== 1 && e.fd !== 2) continue;
+        // stderr reaches the same terminal, unbuffered: in with the rest, marked
+        if (e.fd === 2) errSpans.push([outText.length, outText.length + e.text.length]);
         outText += e.text;
         // a flush sends everything printf's buffer held: it's empty after
-        if (e.via === 'printf') {
+        if (e.fd === 1 && e.via === 'printf') {
           const was = buf as StdBuf | null;
           buf = stop.stdbuf !== undefined ? stop.stdbuf : was ? { ...was, text: '', n: 0 } : null;
         }
@@ -536,6 +544,12 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     }
 
     if (stop.stdbuf !== undefined) buf = stop.stdbuf;
+    if (stop.inPos !== undefined) {
+      // a window's first stop: whatever was read before it isn't a read now
+      const was = inPos ?? (r.window?.from ? stop.inPos : 0);
+      inPos = stop.inPos;
+      if (inPos > was) emit({ k: 'in', line: lastLine, file: fileOf(lastFile), frame: top?.id ?? null, from: was, to: inPos, text: inText.slice(was, inPos) });
+    }
     if (stop.line !== null && top) {
       lastLine = stop.line - 1;
       lastFile = stop.file ?? top.file;
@@ -568,7 +582,8 @@ export function convertGdb(r: GResult, model: Model, sources: string | Record<st
     error,
     truncated: !!r.truncated,
     stdout: r.stdout,
-    ...(r.outMode ? { outText, outMode: r.outMode } : {}),
+    ...(r.outMode ? { outText, outMode: r.outMode, ...(errSpans.length ? { errSpans } : {}) } : {}),
+    ...(r.stdinText ? { inText } : {}),
     ...(r.window ? { window: { from: r.window.from ?? 0, to: r.window.to, total: r.stats?.total ?? null, more: !!r.truncated } } : {}),
     args: r.args,
     heapSlots,

@@ -52,6 +52,7 @@ export interface OutState { sent: number; buf: StdBuf | null }
 
 export interface Snap {
   out?: OutState;
+  inPos?: number; // how many bytes of Trace.inText the program has taken from stdin (gdb engine)
   stack: SnapFrame[];
   statics: SnapCell[]; // function-local statics and globals
   heap: SnapCell[]; // live malloc blocks (gdb engine only)
@@ -77,6 +78,8 @@ export type Ev = EvBase &
     // bytes that really left through write(2): the user's own write, or libc
     // flushing printf's buffer (gdb engine)
     | { k: 'out'; fd: number; text: string; via: 'printf' | 'write' }
+    // bytes the program took from stdin (fd 0's offset moved): Trace.inText[from, to)
+    | { k: 'in'; from: number; to: number; text: string }
   );
 
 export interface CellInfo {
@@ -94,7 +97,9 @@ export interface Trace {
   error: { msg: string; line: number; file?: string } | null;
   truncated: boolean;
   stdout?: string;
-  outText?: string; // stdout's bytes in the order they left (gdb engine)
+  outText?: string; // what reached the terminal, in order: stdout's bytes, and stderr's (gdb engine)
+  errSpans?: [number, number][]; // the stretches of outText that came through stderr (fd 2)
+  inText?: string; // stdin as the run was given it (gdb engine)
   outMode?: 'terminal' | 'pipe'; // what stdout was, which decides printf's buffering
   // gdb sessions: the steps of the run this trace covers ([from, to]), the
   // run's length once seen, and whether it goes on past `to`

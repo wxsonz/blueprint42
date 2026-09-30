@@ -193,4 +193,19 @@ describe('machines are their insides', () => {
     const tag = slotValue({ key: 's:g_tag', name: 'g_tag', depth: 0, param: false, kind: 'static', type: 'char [8]', pool: 'kept' }, '', null, t.snaps[t.snaps.length - 1], t);
     expect(tag.own).toBe(true);
   }, 60000);
+
+  it('stdin is used up by read(0, …), and stderr reaches the terminal marked as its own (gdb)', async () => {
+    const src = '#include <unistd.h>\n\nint\tmain(void)\n{\n\tchar\tbuf[4];\n\tint\t\tn;\n\n\tn = read(0, buf, 4);\n\twrite(1, buf, n);\n\twrite(2, "oops\\n", 5);\n\tn = read(0, buf, 4);\n\treturn (n);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name), stdin: 'hello\n' });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    expect(t.inText).toBe('hello\n');
+    const ins = t.evs.filter((e) => e.k === 'in');
+    expect(ins.map((e) => e.k === 'in' && e.text)).toEqual(['hell', 'o\n']);
+    expect(t.snaps.at(-1)!.inPos).toBe(6);
+    expect(t.outText).toBe('helloops\n');
+    expect(t.errSpans).toEqual([[4, 9]]);
+    expect(t.stdout).toBe('hell');
+  }, 60000);
 });

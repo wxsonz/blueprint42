@@ -1,9 +1,9 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawRuns, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, tailRuns, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
-import { drawStdBuf } from './stdbuf';
+import { drawStdBuf, drawStdin } from './stdbuf';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
 
 const UI = (px: number, w = 500) => `${w} ${px}px Inter, "DejaVu Sans", system-ui, sans-serif`;
@@ -230,6 +230,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
 
   dock(dc, r, d) { drawDock(dc, r, d, dockPalette); },
   stdbuf(dc, r, b) { drawStdBuf(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
+  stdin(dc, r, b) { drawStdin(dc, r, b, { body: C.proc, edge: LINE, text: FG, muted: DIM, faint: FAINT, flow: ACCENT, wait: WAIT, err: ERR, track: LINE, ui: UI, mono: MONO, radius: 6 }); },
 
   node(dc, r, n) {
     const g = dc.g;
@@ -375,7 +376,9 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     const out = tailLines(p.out, room);
     g.font = MONO(px(dc, 10.5, 7));
     g.fillStyle = FG;
-    out.forEach((l, i) => g.fillText(fitText(g, l, MONO, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
+    // stderr reaches the same terminal: its text in the error colour
+    if (p.errSpans?.length) tailRuns(p.out, p.errSpans, room).forEach((l, i) => ((g.font = MONO(px(dc, 10.5, 7))), drawRuns(g, l, r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13), r.w - pad * 2, FG, ERR)));
+    else out.forEach((l, i) => g.fillText(fitText(g, l, MONO, px(dc, 10.5, 7), r.w - pad * 2, 6), r.x + pad, r.y + pad + px(dc, 16) + i * px(dc, 13)));
     const dy = out.length ? px(dc, 13) * out.length - px(dc, 4) : 0;
     if (p.state === 'done' && p.exit !== null) {
       const big = out.length ? 16 : 22;
