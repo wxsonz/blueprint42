@@ -190,7 +190,11 @@ export class GfxLayer {
   private async start(): Promise<void> {
     try {
       const adapter = 'gpu' in navigator ? await navigator.gpu.requestAdapter({ powerPreference: 'low-power' }) : null;
-      if (adapter) {
+      // an emulated adapter (SwiftShader) runs the scene on the CPU: slower
+      // than the canvas drawing it replaces, so it doesn't count as a GPU
+      const soft = !!adapter && (adapter.info?.architecture === 'swiftshader' || (adapter as { isFallbackAdapter?: boolean }).isFallbackAdapter === true);
+      if (soft) this.failed = 'WebGPU: only a software adapter';
+      if (adapter && !soft) {
         const device = await adapter.requestDevice();
         const ctx = this.canvas.getContext('webgpu') as GPUCanvasContext | null;
         if (ctx) {
@@ -207,6 +211,10 @@ export class GfxLayer {
       this.failed = `WebGPU: ${(e as Error).message}`;
     }
     const gl = this.canvas.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: true });
+    if (gl && softwareGl(gl)) {
+      this.failed = `${this.failed ? `${this.failed}; ` : ''}WebGL2: a software renderer (${softwareGl(gl)})`;
+      return;
+    }
     if (gl) {
       this.setupGl(gl);
       this.backend = 'webgl2';
@@ -227,7 +235,7 @@ export class GfxLayer {
     this.canvas.replaceWith(fresh);
     this.canvas = fresh;
     const gl = fresh.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: true });
-    if (!gl) return;
+    if (!gl || softwareGl(gl)) return;
     try {
       this.setupGl(gl);
       this.backend = 'webgl2';
@@ -278,7 +286,7 @@ export class GfxLayer {
   }
 
   hide(): void {
-    this.canvas.hidden = true;
+    if (!this.canvas.hidden) this.canvas.hidden = true; // (unchanged: no DOM write every frame)
   }
 
   // Draw one frame of `scene`. False if it can't (no backend, or the scene
@@ -298,7 +306,7 @@ export class GfxLayer {
       this.failed = `${scene.id}: ${(e as Error).message}`;
       drawn = false;
     }
-    this.canvas.hidden = !drawn;
+    if (this.canvas.hidden === drawn) this.canvas.hidden = !drawn;
     this.lastMs = performance.now() - t0;
     if (drawn) this.frames++;
     return drawn;
@@ -535,6 +543,14 @@ export class GfxLayer {
     }
     return true;
   }
+}
+
+// The renderer's name when WebGL runs on the CPU (SwiftShader, llvmpipe):
+// the scene would be slower than the canvas drawing, so it isn't used.
+function softwareGl(gl: WebGL2RenderingContext): string | null {
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+  return /swiftshader|llvmpipe|softpipe|software/i.test(name) ? name : null;
 }
 
 function program(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {

@@ -259,6 +259,7 @@ export class GridView {
   private still: { key: string; c: HTMLCanvasElement } | null = null; // GFX: simple
   // the background drawn on this canvas: its frames and the last one's cost
   bgFrames = 0;
+  drawn = 0; // frames the grid drew, ever (the GFX readout's fps)
   bgMs = 0;
   bgKind: 'gpu' | 'canvas' | 'still' | 'off' | 'page' = 'canvas';
 
@@ -465,6 +466,7 @@ export class GridView {
   ending = false; // an end effect is playing: keep drawing
   draw(s: ViewState, skin: Skin, now: number): void {
     this.skinNow = skin;
+    this.drawn++;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const k = 1 - Math.exp(-dt * 12);
@@ -1174,7 +1176,6 @@ export class GridView {
     finished: boolean, anchors: Map<number, Anchor>, live: Set<number>, recent: number | null, st: SnapFrame[],
   ): (() => void) | null {
     this.heapRect = this.heapHead = null;
-    this.setBarH(0);
     const allocs = callsOf(trace).allocs;
     const blocks = new Map<number, { c: SnapCell; state: HeapCardInfo['state']; t: number }>();
     for (const c of snap?.heap ?? []) blocks.set(c.id, { c, state: 'live', t: 1 });
@@ -1200,7 +1201,7 @@ export class GridView {
       const where = c ? `watching ${fn}.${name} (on ${fn}'s stack)` : ever ? `watching ${fn}.${name}` : `watching ${fn}.${name} (${fn} not called yet)`;
       return { key, fn, name, c: c ?? null, where, gone: !c && ever };
     });
-    if (!blocks.size && !allocs.size && !watched.length && !(trace.window && trace.window.from > 0)) return null; // a run with no malloc: no bar
+    if (!blocks.size && !allocs.size && !watched.length && !(trace.window && trace.window.from > 0)) return this.noHeapBar(); // a run with no malloc: no bar
     // who holds each block's address: pointers in frames and statics (and the
     // fields they show), named by where they live
     const topId = st[st.length - 1]?.id ?? null;

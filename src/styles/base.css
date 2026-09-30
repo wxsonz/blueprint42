@@ -671,7 +671,7 @@ kbd {
 .gfx-api[data-kind='webgl2'] { color: var(--accent); }
 .gfx-api[data-kind='canvas'], .gfx-api[data-kind='page'] { color: var(--warn, #ffcc55); }
 .gfx-api[data-kind='still'], .gfx-api[data-kind='off'] { opacity: 0.7; }
-.gfx-rate { min-width: 10.5em; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.gfx-rate { min-width: 13em; opacity: 0.85; font-variant-numeric: tabular-nums; }
 .example-list section + section { margin-top: 8px; border-top: var(--rule, 1px solid rgba(128,128,128,0.25)); padding-top: 6px; }
 .example-list h3 { margin: 2px 6px 4px; font: 700 calc(11px * var(--label-scale, 1)) var(--label-font, var(--font-ui)); text-transform: uppercase; letter-spacing: 0.06em; }
 .example-list h3 span { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--panel-dim); margin-top: 1px; }

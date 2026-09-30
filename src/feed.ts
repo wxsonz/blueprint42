@@ -248,7 +248,7 @@ export function renderStageCard(S: FeedState, traceRevision: number): void {
   const fr = t && t.evs.length ? frameAt(t, S.pos) : null;
   const ph = fr?.ph;
   if (!t || !fr || !ph || ph.parked !== 'card') {
-    stageCard.hidden = true;
+    if (!stageCard.hidden) stageCard.hidden = true; // (no DOM write every frame)
     stageCardKey = '';
     return;
   }

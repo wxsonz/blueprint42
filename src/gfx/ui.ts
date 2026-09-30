@@ -39,10 +39,13 @@ export function initGfxButton(view: GridView, skin: () => Skin): void {
     if (on) render();
   };
   label();
-  // the readout beside the button: what draws it, frames a second, CPU ms
+  // the readout beside the button: what draws the background; the page's
+  // frames a second (the grid's); and the background's own rate and CPU ms
+  // when it differs (a page-wide one moves at 30 while the grid draws more,
+  // and on when the grid rests)
   const api = document.querySelector<HTMLElement>('#gfx-stats .gfx-api')!;
   const rate = document.querySelector<HTMLElement>('#gfx-stats .gfx-rate')!;
-  let last = { t: performance.now(), gpu: 0, bg: 0, page: 0 };
+  let last = { t: performance.now(), gpu: 0, bg: 0, page: 0, drawn: 0 };
   setInterval(() => {
     const now = performance.now();
     const L = view.gfx;
@@ -54,8 +57,11 @@ export function initGfxButton(view: GridView, skin: () => Skin): void {
     const dt = (now - last.t) / 1000;
     const n = view.bgKind === 'gpu' ? L.frames - last.gpu : view.bgKind === 'page' ? pageStats.frames - last.page : view.bgFrames - last.bg;
     const ms = view.bgKind === 'gpu' ? L.lastMs : view.bgKind === 'page' ? pageStats.ms : view.bgMs;
-    rate.textContent = view.bgKind === 'off' ? '' : view.bgKind === 'still' ? `${ms.toFixed(1)} ms` : `${Math.round(n / dt)} fps · ${ms.toFixed(ms < 10 ? 2 : 1)} ms`;
-    last = { t: now, gpu: L.frames, bg: view.bgFrames, page: pageStats.frames };
+    const fps = Math.round((view.drawn - last.drawn) / dt);
+    const bgFps = Math.round(n / dt);
+    const cost = `${ms.toFixed(ms < 10 ? 2 : 1)} ms`;
+    rate.textContent = view.bgKind === 'off' ? `${fps} fps` : view.bgKind === 'still' ? `${fps} fps · bg ${cost}` : Math.abs(bgFps - fps) > 2 ? `${fps} fps · bg ${bgFps}/s ${cost}` : `${fps} fps · ${cost}`;
+    last = { t: now, gpu: L.frames, bg: view.bgFrames, page: pageStats.frames, drawn: view.drawn };
   }, 500);
   btn.addEventListener('click', () => open(menu.hidden !== false));
   menu.addEventListener('click', (e) => {
