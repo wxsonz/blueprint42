@@ -113,8 +113,7 @@ function windowChrome(dc: Dc, r: Rect, title: string, lights: [Gel, Gel, Gel], d
   const tx = r.x + px(dc, 12) + 2 * px(dc, 16) + lr + px(dc, 6);
   const tw = r.x + r.w - px(dc, 8) - tx;
   const fs = px(dc, 12, 7);
-  const t = fitText(g, title, (s) => UI(s), fs, tw, 6);
-  g.font = UI(fs);
+  const t = fitText(g, title, (s) => UI(s), fs, tw, 6); // (sets the font it fitted at: a long title is smaller, not reset and spilled)
   g.fillStyle = dim ? '#8a8a8a' : '#222';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -335,11 +334,14 @@ export const aqua: Skin = {
     g.fillStyle = w.live ? '#1b4f9c' : '#4a4f57';
     g.textAlign = 'left';
     g.textBaseline = 'middle';
-    g.fillText(fitText(g, w.name, (s2) => UI(s2, true), fs, h.w - px(dc, 60), 6), h.x + px(dc, 12), h.y + h.h / 2 + 0.5);
+    const name = fitText(g, w.name, (s2) => UI(s2, true), fs, h.w - px(dc, 60), 6);
+    const nameW = g.measureText(name).width;
+    g.fillText(name, h.x + px(dc, 12), h.y + h.h / 2 + 0.5);
     g.font = UI(px(dc, 10, 6));
     g.fillStyle = '#7a7a7a';
     g.textAlign = 'right';
-    g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
+    // the note gets what the name leaves (fitted, never spilled over it)
+    g.fillText(fitText(g, `${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, (s2) => UI(s2), px(dc, 10, 6), h.w - nameW - px(dc, 36), 6), h.x + h.w - px(dc, 12), h.y + h.h / 2 + 0.5);
     if (w.selected || w.hovered) focusRing(g, r, rad, w.selected);
   },
 

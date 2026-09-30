@@ -195,12 +195,15 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
     g.fillStyle = w.live ? ACCENT : DIM;
     g.textAlign = 'left';
     g.textBaseline = 'middle';
-    g.fillText(fitText(g, w.name, MONO, px(dc, 11, 7), h.w - px(dc, 70), 6), h.x + px(dc, 14), h.y + h.h / 2);
+    const name = fitText(g, w.name, MONO, px(dc, 11, 7), h.w - px(dc, 70), 6);
+    const nameW = g.measureText(name).width;
+    g.fillText(name, h.x + px(dc, 14), h.y + h.h / 2);
     g.font = MONO(px(dc, 10, 6));
     g.fillStyle = FAINT;
     g.textAlign = 'right';
     if (w.cap) drawCap(g, { ...w.cap, unit: 'functions' }, h.x + h.w - px(dc, 14), h.y + h.h / 2, { font: (s) => MONO(s), size: px(dc, 10, 6), faint: FAINT, full: WAIT, over: ERR, track: LINE });
-    else g.fillText(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, h.x + h.w - px(dc, 14), h.y + h.h / 2);
+    // the note gets what the name leaves (fitted, never spilled over it)
+    else g.fillText(fitText(g, `${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`, MONO, px(dc, 10, 6), h.w - nameW - px(dc, 42), 6), h.x + h.w - px(dc, 14), h.y + h.h / 2);
     if (w.selected || w.hovered) outline(g, r, rad, w.selected);
   },
 

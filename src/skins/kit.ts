@@ -227,12 +227,15 @@ export function makeSkin(t: Theme): Skin {
       g.textBaseline = 'middle';
       g.textAlign = 'left';
       g.fillStyle = w.live ? p.accent : p.dim;
-      g.fillText(fitText(g, cap(w.name), (s) => t.ui(s, 700), px(dc, 11.5, 7), h.w - px(dc, 110), 6), h.x + px(dc, 12), h.y + h.h / 2);
+      const name = fitText(g, cap(w.name), (s) => t.ui(s, 700), px(dc, 11.5, 7), h.w - px(dc, 110), 6);
+      const nameW = g.measureText(name).width;
+      g.fillText(name, h.x + px(dc, 12), h.y + h.h / 2);
       g.textAlign = 'right';
       g.fillStyle = p.faint;
       g.font = t.mono(px(dc, 10, 6));
       if (w.cap) drawCap(g, { ...w.cap, unit: cap('functions') }, h.x + h.w - px(dc, 12), h.y + h.h / 2, { font: t.mono, size: px(dc, 10, 6), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap });
-      else g.fillText(cap(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`), h.x + h.w - px(dc, 12), h.y + h.h / 2);
+      // the note gets what the name leaves (fitted, never spilled over it)
+      else g.fillText(fitText(g, cap(`${w.note ?? `${w.fns} fn${w.fns === 1 ? '' : 's'}`}${w.pinned ? ' · pinned' : ''}`), t.mono, px(dc, 10, 6), h.w - nameW - px(dc, 36), 6), h.x + h.w - px(dc, 12), h.y + h.h / 2);
       if (w.selected || w.hovered) outline(dc, r, w.selected);
     },
 
@@ -366,10 +369,14 @@ export function makeSkin(t: Theme): Skin {
         g.textAlign = 'left';
         g.textBaseline = 'middle';
         g.fillStyle = f.mode === 'live' ? p.dim : p.faint;
-        g.font = t.ui(px(dc, 9.5, 7), 700);
-        g.fillText(label, r.x + pad, f.head.y + f.head.h / 2 + 1);
       }
-      if (f.cap) drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: t.mono, size: px(dc, 9.5, 7), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap });
+      const capW = f.cap ? drawCap(g, f.cap, r.x + r.w - pad, f.head.y + f.head.h / 2 + 1, { font: t.mono, size: px(dc, 9.5, 7), faint: p.faint, full: p.wait, over: p.err, track: p.cell, look: t.look?.cap }) : 0;
+      if (!t.panel) {
+        // the title fits what the capacity leaves (a wide font spilled a long one out of the box)
+        g.textAlign = 'left';
+        g.fillStyle = f.mode === 'live' ? p.dim : p.faint;
+        g.fillText(fitText(g, label, (s) => t.ui(s, 700), px(dc, 9.5, 7), r.w - pad * 2 - (capW ? capW + pad : 0), 6), r.x + pad, f.head.y + f.head.h / 2 + 1);
+      }
       for (const row of f.rows) {
         const rr = row.rect;
         if (row.recent || row.flash > 0) {

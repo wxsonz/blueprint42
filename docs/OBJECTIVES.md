@@ -56,7 +56,16 @@ Steps, in this order:
    the single try/catch around the whole frame (`main.ts` `frame`). Done
    when a hook forced to throw leaves the rest of the grid drawn and the
    error listed (step 5).
-3. [ ] **Skin contract tests** (M). Every skin × every hook, called with
+3. [x] **Skin contract tests** (M). Done 2026-10-01: `test/skin-contract.test.ts`,
+   what the grid really passes recorded by `tools/capture-hooks.mjs`
+   (`test/fixtures/hook-calls.json`, rerun it when an info grows), in a
+   recording context (`test/helpers/rec2d.ts`); overhangs declared per hook.
+   It found and these fixed: a capacity of 0 (printf's buffer before its
+   first call) drew a bar of width NaN in every skin; a squeezed tag and a
+   rounded box asked for negative radii (a real browser throws); the kit's
+   storage titles and wall notes, and Minimal's and Aqua's wall notes,
+   spilled long text out of their boxes; Aqua reset a fitted title to full
+   size. Pictures change only there. Every skin × every hook, called with
    ordinary and edge-case infos (empty text, 0 and huge capacities, 0-size
    rects, no trace, fractional zooms, each tint): nothing throws, nothing
    non-finite reaches the canvas (a recording 2D context rejects NaN), and

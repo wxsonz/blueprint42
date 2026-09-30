@@ -1,7 +1,8 @@
 import type { CapInfo, Dc, Past, PlateRole, Pt, Rect } from './types';
 
 export function rrect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | [number, number, number, number]): void {
-  const [a, b, c, d] = typeof r === 'number' ? [r, r, r, r] : r;
+  // (a negative radius makes arcTo throw: none, then)
+  const [a, b, c, d] = (typeof r === 'number' ? [r, r, r, r] : r).map((v) => (v < 0 ? 0 : v));
   g.beginPath();
   g.moveTo(x + a, y);
   g.lineTo(x + w - b, y);
@@ -362,7 +363,10 @@ export function drawCap(g: CanvasRenderingContext2D, c: CapInfo, xRight: number,
   g.textBaseline = 'middle';
   g.fillStyle = col;
   g.fillText(text, xRight, y);
-  (o.look?.draw ?? plainBar)(g, xRight - tw - gap - bw, y, bw, bh, c, col, o.track);
+  // a capacity of 0 (nothing known yet: printf's buffer before the first
+  // call) has no fraction to draw; its bar is empty, or full if over
+  const cb = c.max > 0 ? c : { ...c, used: c.used > 0 ? 2 : 0, max: 1 };
+  (o.look?.draw ?? plainBar)(g, xRight - tw - gap - bw, y, bw, bh, cb, col, o.track);
   g.textAlign = align;
   g.textBaseline = base;
   return tw + gap + bw;
@@ -416,6 +420,7 @@ const plainTag: TagLook = {
 // small plate with a socket dot (an address, not a value) and what lives
 // there. Returns its width. `fill` null: an outline in `col`; else a shade.
 export function drawTag(g: CanvasRenderingContext2D, text: string, xAt: number, y: number, maxW: number, o: { font: (px: number) => string; size: number; col: string; fill: string | null; h: number; radius: number; left?: boolean; look?: TagLook }): number {
+  if (!(o.h > 0)) return 0; // no room for it (a squeezed row: its dot's radius would be negative, which throws)
   const look = o.look ?? plainTag;
   const padL = look.padL(o.h);
   const padR = look.padR(o.h);
