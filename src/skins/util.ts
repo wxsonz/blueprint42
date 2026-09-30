@@ -1,4 +1,5 @@
 import type { CapInfo, Dc, Past, PlateRole, Pt, Rect } from './types';
+import { memo } from '../diag';
 
 export function rrect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | [number, number, number, number]): void {
   // (a negative radius makes arcTo throw: none, then)
@@ -41,9 +42,11 @@ export function fitText(g: CanvasRenderingContext2D, text: string, font: (px: nu
   const key = `${font(px)}|${Math.round(maxW * 2)}|${minPx}|${text}`;
   const hit = fitMemo.get(key);
   if (hit) {
+    memo.fitHit++;
     g.font = hit.font;
     return hit.text;
   }
+  memo.fitMiss++;
   const out = fitTextSlow(g, text, font, px, maxW, minPx);
   if (fitMemo.size > 6000) fitMemo.clear();
   fitMemo.set(key, { text: out, font: g.font });
@@ -58,7 +61,9 @@ const widthMemo = new Map<string, number>();
 function widthIn(g: CanvasRenderingContext2D, font: string, text: string): number {
   const key = `${font}|${text}`;
   let w = widthMemo.get(key);
-  if (w === undefined) {
+  if (w !== undefined) memo.widthHit++;
+  else {
+    memo.widthMiss++;
     if (g.font !== font) g.font = font;
     w = g.measureText(text).width;
     if (widthMemo.size > 20000) widthMemo.clear();

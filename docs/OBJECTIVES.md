@@ -89,7 +89,13 @@ Steps, in this order:
    holds" (SPEC principle 4 as tests). Hit-testing reads the same Scene, so
    what you click is what's drawn. Done when `draw` is a short list of
    passes, and the readout, heap bar, dock and stdin have Scene tests.
-5. [ ] **Diagnostics built in** (M). A dev panel (and `__ftb.diag()`)
+5. [x] **Diagnostics built in** (M). Done 2026-10-01: `src/diag.ts` (the
+   profiler, off until asked) and the dev panel `src/diag-ui.ts` (top bar,
+   "diag"; `__ftb.diag(true|false)`): ms per paint pass and skin hook, canvas
+   calls by kind, the text memos' hit rates, frames a second, hook errors and
+   failed trace checks. `tools/bench.mjs`: a headed Chromium or Zen window on
+   the terminal's desktop, one ref or two alternating, fps with that
+   breakdown; it refuses to report from a hidden window. A dev panel (and `__ftb.diag()`)
    instead of scripts: per frame, the time in each pass and each skin hook,
    canvas calls by kind (fills, gradients, text, images), memo hit rates,
    the page's frame rate and the background's, recent hook errors (step 2)

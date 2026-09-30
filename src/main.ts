@@ -1,3 +1,5 @@
+import { diagReport } from './diag';
+import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
 import { setGlassTint } from './gfx/scenes/ps2';
 import { renderLegend } from './legend';
@@ -1473,7 +1475,11 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
   editor.focus();
   // Dev-only handle for the headless screenshot checks.
-  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS, glass: setGlassTint, freeze: (on = true) => void (frozen = on) } });
+  if (import.meta.env.DEV) Object.assign(window, { __ftb: { S, view, layout, editor, computeBelts, openFolder, switchFile, refreshMeta, dirtyFiles, stageRect, applySkin, SKINS, glass: setGlassTint, freeze: (on = true) => void (frozen = on),
+    // diagnostics: what a frame costs, what went wrong (on: start or stop the profiler)
+    // (stopping returns what was counted, then clears it)
+    diag: (on?: boolean) => { const r = diagReport(); if (on !== undefined) diagOn(view, on); return on ? diagReport() : r; } } });
+  if (import.meta.env.DEV) initDiagPanel(view);
 }
 
 boot().catch((err) => {

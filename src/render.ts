@@ -3,6 +3,7 @@
 // pixel is delegated to the active skin (skins/*.ts).
 import { beltCount, callsOf, dockInfo, waitingOnOf, fileOfHost, frameState, heapBarInfo, heapCardInfo, heapModel, pointerId, watchCardInfo, moduleInfo, procInfo, relatedBelt, stateOfHost, stdbufInfo, stdinInfo, wallInfo, type FrameState } from './frame';
 import { guardSkin } from './skins/guard';
+import { prof, profPass } from './diag';
 import { cLiteral } from './skins/stdbuf';
 import { HEAP_CARD } from './skins/heapbar';
 import { TYPE_CARD, typeCardH } from './skins/typeshelf';
@@ -237,7 +238,7 @@ interface Frame extends FrameState {
 }
 
 export class GridView {
-  private g: CanvasRenderingContext2D;
+  readonly g: CanvasRenderingContext2D; // (read by the diagnostics, to count its calls)
   // pointer cells whose line already goes to a byte strip in their machine
   private stripWired = new Set<number>();
   private dpr = 1;
@@ -481,8 +482,9 @@ export class GridView {
       g.clearRect(0, 0, this.w, this.h); // the page behind shows through
       this.gfx.hide();
       this.bgKind = 'page';
-    } else this.background(skin, dc, now);
+    } else profPass('background', () => this.background(skin, dc, now));
 
+    if (prof.on) prof.frames++;
     const fs = frameState(s);
     // the run's end as an event: a leak falls off, a crash jams its machine
     if (!fs.finished) this.endedAt = null;
@@ -507,22 +509,22 @@ export class GridView {
       drawHeapBar: null,
     };
     this.stripWired.clear();
-    this.passWalls(F); // module walls (M5): an expanded file, under everything else
-    this.passGhosts(F);
-    this.passBelts(F);
-    this.passDoors(F);
-    this.passProcess(F);
-    this.passTypes(F);
-    this.passModules(F);
-    this.passHeap(F); // laid out now so pointer lines know where its cards are; drawn last
-    this.passMachines(F);
-    this.passSprites(F);
-    this.passWires(F);
-    this.passVeil(F);
-    this.passMotion(F);
-    F.drawHeapBar?.();
-    this.passHandle(F);
-    this.passDuel(F);
+    profPass('walls', () => this.passWalls(F)); // module walls (M5): an expanded file, under everything else
+    profPass('ghosts', () => this.passGhosts(F));
+    profPass('belts', () => this.passBelts(F));
+    profPass('doors', () => this.passDoors(F));
+    profPass('process', () => this.passProcess(F));
+    profPass('types', () => this.passTypes(F));
+    profPass('modules', () => this.passModules(F));
+    profPass('heap', () => this.passHeap(F)); // laid out now so pointer lines know where its cards are; drawn last
+    profPass('machines', () => this.passMachines(F));
+    profPass('sprites', () => this.passSprites(F));
+    profPass('wires', () => this.passWires(F));
+    profPass('veil', () => this.passVeil(F));
+    profPass('motion', () => this.passMotion(F));
+    profPass('heap bar', () => F.drawHeapBar?.());
+    profPass('handle', () => this.passHandle(F));
+    profPass('duel', () => this.passDuel(F));
   }
 
   private passWalls(F: Frame): void {

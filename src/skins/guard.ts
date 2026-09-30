@@ -8,7 +8,7 @@
 // so a save/restore around each would change their pictures. A Proxy, not a
 // copy: a skin's getters (PS3's veil, which follows the theme colour) stay
 // live.
-import { reportHookError } from '../diag';
+import { prof, profHook, reportHookError } from '../diag';
 import type { Dc, Skin } from './types';
 
 const guarded = new WeakMap<Skin, Skin>();
@@ -56,6 +56,7 @@ export function guardSkin(skin: Skin, markErrors = !!import.meta.env?.DEV): Skin
           if (!isDc(dc)) return (v as (...a: unknown[]) => unknown).apply(this === proxy ? target : this, args);
           const d = depthOf(dc.g);
           const before = snap(dc.g, d);
+          const t0 = prof.on ? performance.now() : 0;
           try {
             return (v as (...a: unknown[]) => unknown).apply(this === proxy ? target : this, args);
           } catch (err) {
@@ -63,6 +64,8 @@ export function guardSkin(skin: Skin, markErrors = !!import.meta.env?.DEV): Skin
             reportHookError(skin.id, hook, err, args.slice(1));
             if (markErrors) mark(dc, args.find(isRect));
             return undefined;
+          } finally {
+            if (prof.on) profHook(`${skin.id}.${hook}`, performance.now() - t0);
           }
         }, { raw: v });
         wrapped.set(prop, w);
