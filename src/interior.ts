@@ -18,8 +18,14 @@ export interface Leaf {
   path: [string] | [string, string]; // `x`, or `a->b` / `a.b`
   keep?: boolean; // read, but shown as written (`i++`, `&x`): a value there would read wrong
   deref?: boolean; // `*p`: the read is of the memory p holds the address of, not of p
-  index?: string; // `a[i]`: an element of array a, at this index (a name or a number)
+  index?: string; // `a[i]`, `a[j + 1]`: an element of array a, at this index (an integer expression of names and numbers)
+  derefs?: number; // `**pp`: how many addresses to follow (with deref; 1 when absent)
+  chain?: string[]; // `p->next->len`: the fields after path's, each reached through a pointer (`->`)
 }
+
+// An index worth resolving: names, numbers and integer operators only (no
+// call, no cast, no member access).
+export const plainIndex = (t: string) => /^[\w\s+\-*/%()]+$/.test(t) && !/\w\s*\(/.test(t);
 
 export interface Station {
   kind: StationKind;
@@ -84,7 +90,23 @@ export function leavesOf(cond: Node): Leaf[] {
       const a = n.childForFieldName('argument');
       const f = n.childForFieldName('field');
       if (a?.type === 'identifier' && f) out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text, f.text] });
-      else if (a) walk(a); // deeper chains: only the inner part
+      else if (a && f) {
+        // a chain `p->next->len`: every step after the first goes through a
+        // pointer (`->`); a nested struct (`a->b.c`) isn't read yet
+        const fields: string[] = [];
+        let x: Node | null = n;
+        let arrows = true;
+        while (x?.type === 'field_expression') {
+          const xf = x.childForFieldName('field');
+          if (!xf) break;
+          fields.unshift(xf.text);
+          const inner: Node | null = x.childForFieldName('argument');
+          if (inner?.type === 'field_expression' && x.child(1)?.text !== '->') arrows = false;
+          x = inner;
+        }
+        if (x?.type === 'identifier' && arrows && fields.length >= 2) out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [x.text, fields[0]], chain: fields.slice(1) });
+        else walk(a); // otherwise: only the inner part
+      } else if (a) walk(a);
       return;
     }
     if (n.type === 'identifier') {
@@ -93,9 +115,12 @@ export function leavesOf(cond: Node): Leaf[] {
     }
     // `*p`: what is read is the memory at p's address (the leaf covers `*p`)
     if (n.type === 'pointer_expression' && n.child(0)?.text === '*') {
-      const a = n.childForFieldName('argument') ?? n.namedChild(0);
+      // `*p`, `**pp`: follow the addresses, one per star
+      let a = n.childForFieldName('argument') ?? n.namedChild(0);
+      let k = 1;
+      while (a && a.type === 'pointer_expression' && a.child(0)?.text === '*') (a = a.childForFieldName('argument') ?? a.namedChild(0)), k++;
       if (a?.type === 'identifier') {
-        out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], deref: true });
+        out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], deref: true, ...(k > 1 ? { derefs: k } : {}) });
         return;
       }
     }
@@ -115,7 +140,7 @@ export function leavesOf(cond: Node): Leaf[] {
       const a = n.childForFieldName('argument') ?? n.namedChild(0);
       const i = n.childForFieldName('index') ?? n.namedChild(1);
       // `a[i]` with a plain index: the element is read (and i, to find it)
-      if (a?.type === 'identifier' && (i?.type === 'identifier' || i?.type === 'number_literal')) out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], index: i.text });
+      if (a?.type === 'identifier' && i && plainIndex(i.text)) out.push({ from: n.startIndex - base, to: n.endIndex - base, path: [a.text], index: i.text });
       if (i) walk(i);
       return;
     }
@@ -147,7 +172,8 @@ function readsOf(n: Node): Leaf[] {
     const out = right ? shift(leavesOf(right), right, base) : [];
     // `*p = …` reads p (where to write), not *p: only `*p += …` reads what's there
     const whole = (l: Leaf) => op === '=' && l.from === 0 && l.to === left!.text.length;
-    const target = (l: Leaf): Leaf => (whole(l) && l.deref ? { ...l, deref: undefined, keep: true } : l);
+    // `*p = …` / `p->next->len = …`: the addresses on the way are read to find the place
+    const target = (l: Leaf): Leaf => (whole(l) && l.deref ? { ...l, deref: undefined, derefs: undefined, keep: true } : whole(l) && l.chain ? { ...l, chain: undefined, to: l.from + l.path.join('->').length, keep: true } : l);
     if (left && (op !== '=' || (left.type !== 'identifier' && left.type !== 'field_expression'))) out.unshift(...shift(leavesOf(left).filter((l) => !(whole(l) && l.index !== undefined)).map(target), left, base));
     return out;
   }

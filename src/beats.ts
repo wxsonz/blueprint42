@@ -172,29 +172,89 @@ function cellIn(snap: Snap, id: number) {
   return snap.statics.find((c) => c.id === id) ?? snap.heap.find((c) => c.id === id) ?? null;
 }
 
-// `*p`: the value at the address p holds, and that cell's id; null when p
-// holds no address the trace has a cell for (then only p's own read is shown)
+// `*p`, `**pp`: the value at the address p holds (following one address per
+// star), and that cell's id; null when an address on the way isn't one the
+// trace has a cell for (then only p's own read is shown)
 function derefOf(leaf: Leaf, fnName: string, frame: SnapFrame | null, snap: Snap, trace: Trace): { cell: number; text: string } | null {
   const id = frame?.cells.find((c) => c.name === leaf.path[0])?.id ?? staticCellId(trace, fnName, leaf.path[0]);
-  const p = id !== null && id !== undefined ? cellIn(snap, id) : null;
-  if (!p || p.val.k !== 'ptr' || p.val.to === null) return null;
-  const t = cellIn(snap, p.val.to);
+  let t = id !== null && id !== undefined ? cellIn(snap, id) : null;
+  for (let k = 0; k < (leaf.derefs ?? 1); k++) {
+    if (!t || t.val.k !== 'ptr' || t.val.to === null || t.val.label) return null; // into the middle of something: not read here
+    t = cellIn(snap, t.val.to);
+  }
   return t && !t.fields ? { cell: t.id, text: valueOf(t, frame, trace, null).text } : null;
 }
 
-// `a[i]`: the element of a local array, when its value is plain to read
-// ("[1, 2, 3]" / "{1, 2, 3}", a plain index); null otherwise (then only the
-// index's read is shown and `a[i]` stays as written)
+// `p->next->len`: each step through a pointer to the memory it reaches. A
+// struct's fields are known where gdb read them through a typed pointer: the
+// first step's in p's own row; after that, from any pointer of the same type
+// holding that address (`next` is a `t_node *`, so another `t_node *` to the
+// same block shows the same memory).
+function chainOf(leaf: Leaf, frame: SnapFrame | null, snap: Snap, trace: Trace): { cell: number; text: string } | null {
+  if (!leaf.chain?.length) return null;
+  const base = frame?.cells.find((c) => c.name === leaf.path[0]);
+  let f = base?.fields?.find((x) => x.name === leaf.path[1]);
+  let at: number | null = base?.val.k === 'ptr' ? base.val.to : base?.id ?? null;
+  const cells = [...snap.statics, ...snap.stack.flatMap((x) => x.cells)];
+  for (const name of leaf.chain) {
+    if (!f || f.val.k !== 'ptr' || f.val.to === null || f.val.label) return null;
+    const to = f.val.to;
+    const type = f.type.replace(/\s+/g, ' ').trim();
+    const via = cells.find((c) => c.val.k === 'ptr' && c.val.to === to && !c.val.label && c.fields && c.type.replace(/\s+/g, ' ').trim() === type);
+    const own = cellIn(snap, to);
+    const fields = via?.fields ?? own?.fields;
+    f = fields?.find((x) => x.name === name);
+    at = to;
+  }
+  return f && at !== null ? { cell: at, text: fieldValue(f, trace).text } : null;
+}
+
+// An index as C computes it: names (the frame's ints), numbers, + - * / %
+// and parentheses; / and % truncate toward zero. NaN when it can't be told.
+export function evalIndex(text: string, frame: SnapFrame | null): number {
+  const toks = text.match(/\d+|[A-Za-z_]\w*|[-+*/%()]/g) ?? [];
+  if (toks.join('') !== text.replace(/\s+/g, '')) return NaN;
+  let i = 0;
+  const atom = (): number => {
+    const t = toks[i++];
+    if (t === '(') {
+      const v = sum();
+      return toks[i++] === ')' ? v : NaN;
+    }
+    if (t === '-') return -atom();
+    if (t === '+') return atom();
+    if (t !== undefined && /^\d+$/.test(t)) return Number(t);
+    const v = t !== undefined ? frame?.cells.find((c) => c.name === t)?.val : undefined;
+    return v?.k === 'int' ? v.v : NaN;
+  };
+  const prod = (): number => {
+    let v = atom();
+    while (toks[i] === '*' || toks[i] === '/' || toks[i] === '%') {
+      const op = toks[i++];
+      const r = atom();
+      v = op === '*' ? v * r : r === 0 ? NaN : op === '/' ? Math.trunc(v / r) : v % r;
+    }
+    return v;
+  };
+  const sum = (): number => {
+    let v = prod();
+    while (toks[i] === '+' || toks[i] === '-') v = toks[i++] === '+' ? v + prod() : v - prod();
+    return v;
+  };
+  const v = sum();
+  return i === toks.length ? v : NaN;
+}
+
+// `a[i]`, `a[j + 1]`: the element of a local array, when its value is plain
+// to read ("[1, 2, 3]" / "{1, 2, 3}") and the index can be computed; null
+// otherwise (then only the index's reads are shown and `a[…]` stays as written)
 function elementOf(leaf: Leaf, frame: SnapFrame | null): string | null {
   const c = frame?.cells.find((x) => x.name === leaf.path[0]);
   if (!c || c.val.k !== 'raw' || leaf.index === undefined) return null;
   const m = /^[[{]([^[\]{}<>"']*)[\]}]$/.exec(c.val.text.trim());
   if (!m) return null;
   const items = m[1].split(',').map((x) => x.trim());
-  const idx = /^\d+$/.test(leaf.index) ? Number(leaf.index) : (() => {
-    const v = frame!.cells.find((x) => x.name === leaf.index)?.val;
-    return v?.k === 'int' ? v.v : NaN;
-  })();
+  const idx = evalIndex(leaf.index, frame);
   return Number.isInteger(idx) && idx >= 0 && idx < items.length && items[idx] !== '' && !items[idx].includes('.') ? items[idx] : null;
 }
 
@@ -204,11 +264,13 @@ export function readsOf(b: Beat, fn: FnInfo, trace: Trace): Read[] {
   const frame = frameIn(snap, b.frame);
   const out: Read[] = [];
   for (const leaf of leavesOfStation(planOf(fn).stations[b.station]).leaves) {
-    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
+    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : leaf.chain ? chainOf(leaf, frame, snap, trace) : null;
     if (d) {
-      if (!out.some((r) => r.cell === d.cell)) out.push({ key: `d:${leaf.path[0]}`, text: d.text, cell: d.cell });
+      const key = leaf.chain ? `d:${[...leaf.path, ...leaf.chain].join('.')}` : `d:${leaf.path[0]}`;
+      if (!out.some((r) => r.key === key)) out.push({ key, text: d.text, cell: d.cell });
       continue;
     }
+    if (leaf.chain) continue; // a chain that can't be followed stays as written
     if (leaf.index !== undefined) {
       // the element flies from the array's own row
       const e = elementOf(leaf, frame);
@@ -241,9 +303,9 @@ export function computeText(b: Beat, fn: FnInfo, trace: Trace): string {
       continue;
     }
     if (whole.some((w) => leaf.from >= w.from && leaf.to <= w.to)) continue;
-    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : null;
+    const d = leaf.deref ? derefOf(leaf, fn.name, frame, snap, trace) : leaf.chain ? chainOf(leaf, frame, snap, trace) : null;
     if (d) out = out.slice(0, leaf.from) + d.text + out.slice(leaf.to);
-    if (leaf.deref) continue; // with no cell to read, `*p` stays as written
+    if (leaf.deref || leaf.chain) continue; // with no cell to read, `*p` / `a->b->c` stays as written
     const key = slotKeyOf(leaf, slots);
     if (!key) continue;
     const v = slotValue(slots.find((s) => s.key === key)!, fn.name, frame, snap, trace);

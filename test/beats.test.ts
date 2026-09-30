@@ -220,4 +220,21 @@ describe('machines are their insides', () => {
     // leaky's block: lost when leaky returns; kept's is handed on (returned, stored in k), then freed
     expect(lost.map((l) => [t.cells.get(l.cell)?.name, l.why, l.fn])).toEqual([['#1', 'ret', 'leaky']]);
   }, 60000);
+
+  it('a[j + 1], p->next->v and **pp read from where the memory is (gdb)', async () => {
+    const src = 'typedef struct s_n\n{\n\tint\t\t\tv;\n\tstruct s_n\t*next;\n}\tt_n;\n\nint\tmain(void)\n{\n\tint\ttab[3];\n\tint\tj;\n\tt_n\ta;\n\tt_n\tb;\n\tt_n\t*p;\n\tint\t*ip;\n\tint\t**pp;\n\tint\tx;\n\n\ttab[0] = 7;\n\ttab[1] = 8;\n\ttab[2] = 9;\n\tj = 1;\n\tx = tab[j + 1];\n\tb.v = 42;\n\tb.next = 0;\n\ta.v = 1;\n\ta.next = &b;\n\tp = &a;\n\tx = p->next->v;\n\tip = &x;\n\tpp = &ip;\n\tx = **pp + 1;\n\treturn (x);\n}\n';
+    const m = parse(src);
+    const r = await handleTrace({ src, fns: m.fns.map((f) => f.name) });
+    expect(r.ok, r.error ?? r.compile?.text).toBe(true);
+    const t = convertGdb(r, m, src);
+    const fn = m.byName.get('main')!;
+    const beats = timelineOf(t, m).beats.filter((x) => x.fn === 'main');
+    const at = (s: string) => beats.find((x) => text(m, x).startsWith(s))!;
+    expect(computeText(at('x = tab[j + 1]'), fn, t)).toBe('x = 9');
+    expect(computeText(at('x = p->next->v'), fn, t)).toBe('x = 42');
+    const chain = readsOf(at('x = p->next->v'), fn, t);
+    const b = t.snaps[at('x = p->next->v').before].stack[0].cells.find((c) => c.name === 'b')!;
+    expect(chain).toEqual([{ key: 'd:p.next.v', text: '42', cell: b.id }]);
+    expect(computeText(at('x = **pp + 1'), fn, t)).toBe('x = 42 + 1'); // pp → ip → x, which the line before set to 42
+  }, 60000);
 });

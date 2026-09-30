@@ -58,8 +58,11 @@ Next, in this order:
    Built as what C really has: the pointers holding it (the card's `←`
    line, heap-internal ones included) and the moment the last one goes
    (`LOST`, an alert with the step; `src/ownership.ts`; the `lost` sample).
-6. [ ] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
-   `**pp` read from where the memory is, like `*p` and `a[i]`.
+6. [x] **Computed indexes and chains** (M). `a[j + 1]`, `p->next->len`,
+   `**pp` read from where the memory is, like `*p` and `a[i]`. An index is
+   any integer expression of names and numbers (C's truncating `/`); a chain
+   goes through `->` only (a nested `a->b.c` stays as written), reading a
+   block's fields where gdb read them through a pointer of the same type.
 7. [ ] **Loop rounds as a whole** (M). Which way each round went, not only
    each row's past values.
 8. [ ] **Long statements** (S). Station code is cut at 44 characters; show the
