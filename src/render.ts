@@ -1454,6 +1454,11 @@ export class GridView {
       hot: act && act.beat.kind !== 'switch' && act.phase !== 'read' && compute ? { station: act.beat.station, text: compute } : null,
     });
     if (skin.capacity) info.cap = { ...fnCaps(fn).lines, unit: 'lines' };
+    // breakpoints: playback pauses on these statements
+    for (const [k, st] of plan.stations.entries()) {
+      const b = s.breaks?.find((x) => x.fn === fn.name && x.line === st.line);
+      if (b) info.stations[k].pause = { cond: b.cond };
+    }
     // the statement it died in: its frame crashed while there
     if (state === 'error' && frame && ist?.current != null) {
       const e = callsOf(trace).errs.get(frame.id);

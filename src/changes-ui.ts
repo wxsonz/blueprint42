@@ -125,3 +125,37 @@ export function searchAgain(): void {
   const input = document.getElementById('trace-search') as HTMLInputElement | null;
   if (input?.value.trim()) input.dispatchEvent(new Event('input'));
 }
+
+// "Pause here when…": a small field where the statement was clicked; Enter
+// sets the breakpoint's condition (`len > cap`, `p == NULL`), empty: always
+export function askCondition(fn: string, line: number, x: number, y: number): void {
+  let el = document.getElementById('bp-cond') as HTMLElement | null;
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bp-cond';
+    document.getElementById('grid-wrap')!.appendChild(el);
+  }
+  const wrap = document.getElementById('grid-wrap')!.getBoundingClientRect();
+  el.style.left = `${Math.max(8, Math.min(x - wrap.left, wrap.width - 300))}px`;
+  el.style.top = `${Math.max(8, y - wrap.top + 10)}px`;
+  const now = S.breaks.find((b) => b.fn === fn && b.line === line);
+  el.innerHTML = `<label>pause at line ${line + 1} when <input spellcheck="false" placeholder="len > cap   (empty: always)" value="${esc(now?.cond ?? '')}"></label><span class="err" hidden></span>`;
+  el.hidden = false;
+  const input = el.querySelector('input')!;
+  const err = el.querySelector<HTMLElement>('.err')!;
+  input.focus();
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') return void (el!.hidden = true);
+    if (e.key !== 'Enter') return;
+    const cond = input.value.trim() || null;
+    if (cond && !/^\s*[A-Za-z_]\w*\s*(==|!=|<=|>=|<|>)\s*(-?\d+|NULL|[A-Za-z_]\w*)\s*$/.test(cond)) {
+      err.hidden = false;
+      err.textContent = 'a variable, ==, !=, <, <=, >, >=, then a number, NULL or a variable';
+      return;
+    }
+    update('break', { breaks: [...S.breaks.filter((b) => !(b.fn === fn && b.line === line)), { fn, line, cond }] });
+    el!.hidden = true;
+  });
+  input.addEventListener('blur', () => setTimeout(() => (el!.hidden = true), 150));
+}

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { parse } from '../src/parse';
-import { changesOf, explainValue, searchTrace } from '../src/history';
+import { breakHits, changesOf, condHolds, explainValue, searchTrace } from '../src/history';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);
@@ -90,5 +90,34 @@ describe('search the trace', () => {
     const t = convertGdb(r, m, s.src);
     expect(searchTrace(t, [], 'malloc').at.length).toBe(3);
     expect(searchTrace(t, [], 'free').at.length).toBe(3);
+  }, 60000);
+});
+
+describe('breakpoints', () => {
+  it("pauses at each visit of a marked statement, and with a condition only when it holds (reader)", async () => {
+    const s = sample('reader');
+    const m = parse(s.src);
+    const r = await handleTrace({ src: s.src, files: s.files, fns: m.fns.map((f) => f.name), stdin: s.stdin, defines: s.defines });
+    const t = convertGdb(r, m, s.src);
+    const lines = s.src.split('\n');
+    // the loop's `line = read_line(0);` (the second one, inside the while)
+    const L = lines.map((l, i) => (l.trim() === 'line = read_line(0);' ? i : -1)).filter((i) => i >= 0).at(-1)!;
+    const hits = breakHits(t, [{ fn: 'main', line: L, cond: null }]);
+    // by hand: each time main's frame arrives on that line from another one
+    const hand: number[] = [];
+    let was: number | null = null;
+    t.evs.forEach((e, i) => {
+      const f = t.snaps[i + 1].stack.find((x) => x.id === e.frame);
+      if (e.frame === null || f?.fn !== 'main') return;
+      if (e.k !== 'call' && e.k !== 'ret' && e.line === L && was !== L) hand.push(i);
+      was = e.line;
+    });
+    expect(hits).toEqual(hand);
+    expect(hits.length).toBe(3); // three lines read, each loop round reaches it once
+    // a condition: only the round where n == 2
+    const two = breakHits(t, [{ fn: 'main', line: L, cond: 'n == 2' }]);
+    expect(two.length).toBe(1);
+    expect(condHolds(t.snaps[two[0] + 1].stack.find((f) => f.fn === 'main')!.cells, 'n == 2')).toBe(true);
+    expect(condHolds([], 'nonsense')).toBe(null);
   }, 60000);
 });

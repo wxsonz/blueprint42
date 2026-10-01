@@ -1,5 +1,6 @@
 import { diagReport, reportCheck } from './diag';
-import { initSearch, renderChanges, searchAgain, showChanges, showExplain } from './changes-ui';
+import { askCondition, initSearch, renderChanges, searchAgain, showChanges, showExplain } from './changes-ui';
+import { breakHits } from './history';
 import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
@@ -266,6 +267,14 @@ export function cancelGdb(): void {
   gdbAbort?.abort();
   gdbAbort = null;
   if (S.gdb.status === 'running') update('cancelGdb', { gdb: { status: 'idle' } });
+}
+
+// the steps playback pauses on, worked out once per trace and set of breakpoints
+let breakMemo: { t: Trace | null; key: string; hits: number[] } = { t: null, key: '', hits: [] };
+function breakHitsNow(): number[] {
+  const key = JSON.stringify(S.breaks);
+  if (breakMemo.t !== S.trace || breakMemo.key !== key) breakMemo = { t: S.trace, key, hits: S.trace ? breakHits(S.trace, S.breaks) : [] };
+  return breakMemo.hits;
 }
 
 // What the trace server is asked to run: this file or the open project, with
@@ -702,6 +711,14 @@ function bindMouse(): void {
       if (row && skin.heapBar) {
         const key = `${row.fn}|${row.name}`;
         items.push([view.watches.has(key) ? `Stop watching ${row.name}` : `Watch ${row.name} on the heap bar`, () => void (view.watches.has(key) ? view.watches.delete(key) : view.watches.add(key))]);
+      }
+      // a statement: pause playback on it (when a condition holds, if one is given)
+      const sta = stationAt(S, wx, wy);
+      if (sta) {
+        const has = S.breaks.find((b) => b.fn === sta.fn && b.line === sta.line);
+        if (has) items.push([`Stop pausing at line ${sta.line + 1}`, () => update('unbreak', { breaks: S.breaks.filter((b) => b !== has) })]);
+        else items.push([`Pause here (line ${sta.line + 1})`, () => update('break', { breaks: [...S.breaks, { fn: sta.fn, line: sta.line, cond: null }] })]);
+        items.push([has?.cond ? `Pause here when… (now: ${has.cond})` : 'Pause here when…', () => askCondition(sta.fn, sta.line, e.clientX, e.clientY)]);
       }
       // any variable's row: every step it changed, on the timeline
       const slot = slotAt(S, wx, wy);
@@ -1173,6 +1190,14 @@ function tick(now: number): void {
           const r = spriteWorldRect(sp, S.trace?.snaps[hit.at]?.bound?.[sp.id]);
           view.ensureVisible(r.x, r.y - 2, r.w, r.h + 2, Math.max(2.5, (view.h * 0.28) / view.cs));
         }
+      }
+      // a breakpoint: pause where a marked statement is reached (and its condition holds)
+      const bp = S.breaks.length ? breakHitsNow().find((h) => h > before + 1e-9 && h <= S.pos) : undefined;
+      if (bp !== undefined) {
+        update('breakpoint', { pos: bp, playing: false, stepTarget: null });
+        const e = S.trace!.evs[bp];
+        const b = S.breaks.find((x) => x.line === e.line);
+        toast(`paused at line ${e.line + 1}${b?.cond ? `: ${b.cond}` : ''}`);
       }
       if (S.stepTarget !== null && S.pos >= S.stepTarget) {
         update('stepDone', { pos: S.stepTarget, stepTarget: null, playing: false });

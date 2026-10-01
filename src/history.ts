@@ -183,3 +183,51 @@ export function searchTrace(t: Trace, fns: string[], query: string): SearchResul
   if (fn) { const at = all((e) => e.k === 'call' && e.fn === fn); return { kind: 'calls', at, note: `${fn}: called ${at.length}×` }; }
   return { kind: 'none', at: [], note: `nothing to search for in "${q}": try i == 3, a function's name, line 52, malloc, free, write, read` };
 }
+
+// ---- breakpoints by picture (nice to have 6) ----
+export interface Breakpoint { fn: string; line: number; cond: string | null } // line 0-based; cond like `len > cap`
+
+// a condition on one call's variables: `name op (number | NULL | name)`; null if it can't be read
+export function condHolds(cells: SnapCell[], cond: string): boolean | null {
+  const m = /^\s*([A-Za-z_]\w*)\s*(==|!=|<=|>=|<|>)\s*(-?\d+|NULL|[A-Za-z_]\w*)\s*$/.exec(cond);
+  if (!m) return null;
+  const [, a, op, b] = m;
+  const val = (name: string): number | 'null' | 'addr' | undefined => {
+    const c = cells.find((x) => x.name === name);
+    if (!c) return undefined;
+    if (c.val.k === 'int') return Number(c.val.v);
+    if (c.val.k === 'ptr') return c.val.to === null ? 'null' : 'addr';
+    return undefined;
+  };
+  const x = val(a);
+  const y = b === 'NULL' ? 'null' : /^-?\d+$/.test(b) ? Number(b) : val(b);
+  if (x === undefined || y === undefined) return null;
+  if (typeof x === 'number' && typeof y === 'number') return OPS[op](x, y);
+  if (op === '==') return x === y;
+  if (op === '!=') return x !== y;
+  return null;
+}
+
+// the steps playback pauses on: each time a marked statement is reached (the
+// first event on its line after the call was on another one) and its
+// condition, if any, holds in that call
+export function breakHits(t: Trace, breaks: Breakpoint[]): number[] {
+  if (!breaks.length) return [];
+  const lineOf = new Map<number, number>(); // frame -> the line it was last on
+  const out: number[] = [];
+  t.evs.forEach((e, i) => {
+    if (e.frame === null) return;
+    const was = lineOf.get(e.frame);
+    lineOf.set(e.frame, e.line);
+    if (e.k === 'call' || e.k === 'ret' || was === e.line) return;
+    const f = t.snaps[i + 1]?.stack.find((x) => x.id === e.frame) ?? t.snaps[i]?.stack.find((x) => x.id === e.frame);
+    if (!f) return;
+    for (const b of breaks) {
+      if (b.fn !== f.fn || b.line !== e.line) continue;
+      if (b.cond && condHolds(f.cells, b.cond) !== true) continue;
+      out.push(i);
+      break;
+    }
+  });
+  return out;
+}

@@ -764,3 +764,9 @@ kbd {
 /* search the trace: a box after the timeline */
 #trace-search { width: 13em; font: calc(11px * var(--mono-scale, 1)) var(--font-mono); background: var(--input-bg, transparent); color: inherit; border: var(--input-border, 1px solid color-mix(in srgb, currentColor 30%, transparent)); border-radius: 3px; padding: 2px 6px; }
 #trace-search-note { font: calc(11px * var(--mono-scale, 1)) var(--font-mono); opacity: 0.75; white-space: nowrap; max-width: 22em; overflow: hidden; text-overflow: ellipsis; }
+
+/* "pause here when…": the condition field */
+#bp-cond { position: absolute; z-index: 8; padding: 6px 8px; background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 8px 30px rgba(0,0,0,0.45)); font: calc(12px * var(--mono-scale, 1)) var(--font-mono); }
+#bp-cond[hidden] { display: none; }
+#bp-cond input { width: 12em; font: inherit; margin-left: 4px; }
+#bp-cond .err { display: block; color: var(--err, #e8453a); margin-top: 4px; }

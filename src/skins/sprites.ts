@@ -307,6 +307,17 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
       g.strokeStyle = p.marker;
       g.stroke();
     }
+    if (s.pause) {
+      // a breakpoint: a ring round its stop (dashed: only when its condition holds)
+      g.save();
+      g.strokeStyle = p.over ?? p.accent;
+      g.lineWidth = Math.max(1.2, 1.6 * z);
+      if (s.pause.cond) g.setLineDash([Math.max(2, 3 * z), Math.max(1.5, 2 * z)]);
+      g.beginPath();
+      g.arc(s.x, s.y, u * 2.1, 0, Math.PI * 2);
+      g.stroke();
+      g.restore();
+    }
     if (died) {
       // a cross through its stop: it never finished
       g.strokeStyle = dead;

@@ -72,7 +72,13 @@ In this order (the first three are the most value for the least work):
    function name (its calls), a line number, `malloc` / `free`, `write`. The
    matches are marked; Enter jumps to the next. Done when each kind finds
    what a hand count of the trace finds.
-6. [ ] **Breakpoints by picture** (M). Click a station's stop to pause there
+6. [x] **Breakpoints by picture** (M). Done 2026-10-01: `breakHits` and
+   `condHolds` (`src/history.ts`: each visit of a marked statement, a
+   condition in that call's variables), the station menu ("Pause here",
+   "Pause here when…"), a ring round the stop in every skin
+   (`drawInterior`; dashed when conditional), playback pauses on the
+   recorded trace. Tested on the reader: 3 hits as counted by hand, 1 with
+   `n == 2`; played in the app it paused at exactly those steps. Click a station's stop to pause there
    when playback reaches it (a dot on the station); a condition on it (`len
    > cap`) pauses only when it holds. Uses the trace already recorded (no
    re-run). Done when playing the reader stops at each breakpoint hit and

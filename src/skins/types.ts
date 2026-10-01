@@ -208,6 +208,7 @@ export interface StationInfo {
   rounds?: { marks: (boolean | null)[]; older: number };
   state: 'idle' | 'visited' | 'current';
   hot?: boolean; // its text is the expression with the values it just read (inside a machine)
+  pause?: { cond: string | null }; // a breakpoint: playback pauses here (when cond holds)
 }
 
 export interface InteriorInfo {

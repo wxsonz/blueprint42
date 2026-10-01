@@ -1,5 +1,6 @@
 // Playback logic with no drawing: sprite rects, playback timing, the return
 // card, hosts (which node shows which frame) and M5.5 readouts and labels.
+import type { Breakpoint } from './history';
 import type { Layout } from './layout';
 import type { Station } from './interior';
 import { beatDuration, leafText } from './beats';
@@ -34,6 +35,7 @@ export interface ViewState {
   violations?: Violation[];
   defines?: string[]; // the run's -D flags (a sample's)…
   project?: { run: { defines: string[] } } | null; // …or a project's
+  breaks?: Breakpoint[]; // statements playback pauses on (src/history.ts)
 }
 
 // World footprint is shared by drawing, fitting and hit testing. A sampled
