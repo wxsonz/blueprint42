@@ -8,6 +8,7 @@
 //   node tools/bench.mjs --browser zen --a HEAD~1 --b WORK --skins ps3 --mode focus
 //   options: --sample list  --mode fast|focus  --zoom 0.6  --seconds 3  --rounds 2
 //            --a <ref> (only one version: omit --b)  --b <ref>  --json
+//            --uncapped (Chromium: no vsync, so fps is the frame's whole cost, not the refresh rate)
 //
 // The window must be visible: a page on another desktop is paused by the
 // browser, and the tool stops rather than report numbers that mean nothing.
@@ -15,11 +16,11 @@ import { serve } from './lib/serve.mjs';
 import { launchChromium } from './lib/browser.mjs';
 import { launchZen } from './lib/zen.mjs';
 
-const opt = { browser: 'chromium', a: 'WORK', b: '', skins: 'minimal', sample: 'list', mode: 'fast', zoom: '0.6', seconds: '3', rounds: '2', json: '' };
+const opt = { browser: 'chromium', a: 'WORK', b: '', skins: 'minimal', sample: 'list', mode: 'fast', zoom: '0.6', seconds: '3', rounds: '2', json: '', uncapped: '' };
 for (let i = 2; i < process.argv.length; i++) {
   const k = process.argv[i].replace(/^--/, '');
   if (!(k in opt)) { console.error(`unknown option --${k}`); process.exit(2); }
-  opt[k] = k === 'json' ? '1' : process.argv[++i];
+  opt[k] = k === 'json' || k === 'uncapped' ? '1' : process.argv[++i];
 }
 
 // runs in the page
@@ -60,7 +61,7 @@ const PLAY = async ({ sample, skin, mode, zoom, seconds }) => {
 const refs = [opt.a, ...(opt.b ? [opt.b] : [])];
 const servers = [];
 for (const r of refs) servers.push(await serve(r));
-const browser = opt.browser === 'zen' ? await launchZen() : await launchChromium({ headed: true });
+const browser = opt.browser === 'zen' ? await launchZen() : await launchChromium({ headed: true, uncapped: !!opt.uncapped });
 const goto = (u) => (opt.browser === 'zen' ? browser.goto(u) : browser.page.goto(u, { waitUntil: 'load' }));
 const play = async (args) => JSON.parse(opt.browser === 'zen' ? await browser.evaluate(`(${PLAY})(${JSON.stringify(args)})`) : await browser.page.evaluate(PLAY, args));
 

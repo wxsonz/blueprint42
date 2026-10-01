@@ -38,7 +38,14 @@ export async function launchZen({ port = 9400 + Math.floor(Math.random() * 400) 
   // a tab of our own, in front (Zen opens its own start tab)
   const { context } = await send('browsingContext.create', { type: 'tab', background: false });
   await send('browsingContext.activate', { context }).catch(() => {});
-  for (const ms of [0, 800]) { await new Promise((r) => setTimeout(r, ms)); toTerminalDesktop(proc.pid); }
+  // beside the terminal, or not at all (never on whatever desktop the author is on)
+  let where = 'lost';
+  for (const ms of [0, 800]) { await new Promise((r) => setTimeout(r, ms)); where = toTerminalDesktop(proc.pid); }
+  if (where === 'lost') {
+    try { await send('browser.close'); } catch { /* gone */ }
+    proc.kill();
+    throw new Error('could not tell which window is this terminal, so Zen was closed rather than left on another desktop');
+  }
   const evaluate = async (expr) => {
     const r = await send('script.evaluate', { expression: expr, target: { context }, awaitPromise: true, resultOwnership: 'none' });
     if (r.type === 'exception') throw new Error(r.exceptionDetails.text);
