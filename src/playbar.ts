@@ -10,7 +10,7 @@ import { violations } from './panels';
 import { switchFile } from './project-ui';
 import { pointeeName } from './render';
 import { frameAt } from './playback';
-import { renderChanges } from './changes-ui';
+import { renderChanges, renderCompare } from './changes-ui';
 import { renderReport } from './report-ui';
 import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline, traceRevision } from './state';
 import { EditorView } from '@codemirror/view';
@@ -68,6 +68,7 @@ function roomLine(): { html: string; ev: Ev | null; key: string } | null {
 
 export function renderPlaybar(): void {
   if (S.changes) renderChanges();
+  if (S.compare) renderCompare();
   renderReport(); // (rewrites only when the run's end is reached or left)
   const t = S.trace;
   const n = N();
@@ -190,6 +191,23 @@ function drawTimeline(): void {
     for (const i of S.search.at) {
       const sx = ((i + 0.9) / n) * W;
       g.beginPath(); g.moveTo(sx - 3.5, H); g.lineTo(sx + 3.5, H); g.lineTo(sx, H - 6); g.fill();
+    }
+  }
+  // two runs side by side: the other run as a strip along the top, to the
+  // same scale (solid while they're the same, dashed after they part), and a
+  // line down the timeline at the step they part
+  if (S.compare) {
+    const c = S.compare;
+    const end = Math.min(c.len, n) / n * W;
+    const part = c.div ? Math.min(c.div.at + 0.9, n) / n * W : end;
+    g.fillStyle = cssVar('--tl-call');
+    g.fillRect(0, 0, part, 3);
+    g.globalAlpha = 0.55;
+    for (let sx = part; sx < end; sx += 6) g.fillRect(sx, 0, Math.min(3, end - sx), 3);
+    g.globalAlpha = 1;
+    if (c.div) {
+      g.fillStyle = cssVar('--tl-head');
+      g.fillRect(part - 1, 0, 2, H);
     }
   }
   g.fillStyle = '#ef5b50';

@@ -231,3 +231,99 @@ export function breakHits(t: Trace, breaks: Breakpoint[]): number[] {
   });
   return out;
 }
+
+// ---- two runs side by side (nice to have 7) ----
+export interface Divergence {
+  at: number; // the first event where the runs part
+  why: 'path' | 'value' | 'length';
+  detail: string; // one sentence: what differs, both ways
+  a: string;
+  b: string;
+}
+
+const where = (t: Trace, i: number) => {
+  const e = t.evs[i];
+  const fn = e.frame !== null ? t.snaps[i + 1]?.stack.find((f) => f.id === e.frame)?.fn ?? t.snaps[i]?.stack.find((f) => f.id === e.frame)?.fn : null;
+  return { k: e.k, line: e.line, fn: fn ?? null };
+};
+// what a run's variables hold, by where they are (depth, function, name):
+// only those the program has set (a value that changed in its call): a local
+// nobody set yet is stack garbage, and garbage differs run to run without the
+// program doing anything differently (arguments come in with the call, and
+// are compared there)
+// (under gdb a call's first stop is at its entry, before its frame is set
+// up: what its locals read there, and how that "changes" at the next stop,
+// is garbage too; a change counts from the call's third stop)
+function settled(t: Trace) {
+  const was = new Map<number, string>();
+  const set = new Set<number>();
+  const stops = new Map<number, number>(); // frame -> its stops so far
+  const heapWas = new Map<number, number[]>();
+  const heapSet = new Map<number, Set<number>>();
+  return (i: number): Map<string, string> => {
+    const e = t.evs[i];
+    if (e.k === 'step' && e.frame !== null) stops.set(e.frame, (stops.get(e.frame) ?? 0) + 1);
+    const s = t.snaps[i + 1];
+    const m = new Map<string, string>();
+    s.stack.forEach((f, depth) => f.cells.forEach((c) => {
+      const v = valText(c);
+      const before = was.get(c.id);
+      const settledFrame = t.engine !== 'gdb' || (stops.get(f.id) ?? 0) >= 3;
+      if (before !== undefined && before !== v && settledFrame) set.add(c.id);
+      was.set(c.id, v);
+      if (set.has(c.id)) m.set(`${depth}:${f.fn}.${c.name}`, v);
+    }));
+    for (const c of s.statics) m.set(`static.${c.name}`, valText(c));
+    // a heap block's bytes: malloc hands out whatever was there, so a byte
+    // counts once the program changed it (read() into it, a store)
+    for (const c of s.heap) {
+      const now = c.bytes ?? [];
+      const prev = heapWas.get(c.id);
+      let mask = heapSet.get(c.id);
+      if (!mask) heapSet.set(c.id, (mask = new Set()));
+      if (prev) now.forEach((x, k) => { if (prev[k] !== x) mask.add(k); });
+      heapWas.set(c.id, now);
+      if (mask.size) m.set(`heap.${t.cells.get(c.id)?.name ?? c.id}`, [...mask].sort((x, y) => x - y).map((k) => `${k}:${now[k]}`).join(' '));
+    }
+    return m;
+  };
+}
+
+export function divergence(a: Trace, b: Trace): Divergence | null {
+  const n = Math.min(a.evs.length, b.evs.length);
+  const sa = settled(a), sb = settled(b);
+  for (let i = 0; i < n; i++) {
+    const wa = where(a, i), wb = where(b, i);
+    const ea = a.evs[i], eb = b.evs[i];
+    if (ea.k === 'call' && eb.k === 'call') {
+      const args = (e: typeof ea) => (e.k === 'call' ? e.args.map((x) => `${x.name} = ${x.text}`).join(', ') : '');
+      if (args(ea) !== args(eb)) return { at: i, why: 'value', a: args(ea), b: args(eb), detail: `at step ${i + 1}, ${ea.fn} is called with ${args(ea)} in this run and ${args(eb)} in the other` };
+    }
+    if (wa.k !== wb.k || wa.line !== wb.line || wa.fn !== wb.fn) {
+      const say = (w: typeof wa) => `${w.k === 'step' ? 'line' : w.k} ${w.line + 1}${w.fn ? ` in ${w.fn}` : ''}`;
+      return { at: i, why: 'path', a: say(wa), b: say(wb), detail: `they take different paths at step ${i + 1}: ${say(wa)} in this run, ${say(wb)} in the other` };
+    }
+    const va = sa(i), vb = sb(i);
+    for (const [k, x] of va) {
+      const y = vb.get(k);
+      if (y !== undefined && y !== x) {
+        if (k.startsWith('heap.')) {
+          // the first byte that differs, as a char and a number
+          const bytes = (v: string) => new Map(v.split(' ').map((p) => p.split(':').map(Number) as [number, number]));
+          const ba = bytes(x), bb = bytes(y);
+          const at = [...ba.keys()].find((j) => bb.has(j) && bb.get(j) !== ba.get(j));
+          if (at !== undefined) {
+            const ch = (b8: number) => `${b8 >= 32 && b8 < 127 ? `'${String.fromCharCode(b8)}'` : b8 === 10 ? "'\\n'" : b8 === 0 ? "'\\0'" : 'byte'} (${b8})`;
+            const blk = k.slice(5);
+            return { at: i, why: 'value', a: ch(ba.get(at)!), b: ch(bb.get(at)!), detail: `after step ${i + 1} (line ${wa.line + 1}${wa.fn ? ` in ${wa.fn}` : ''}), byte ${at} of block ${blk} is ${ch(ba.get(at)!)} in this run and ${ch(bb.get(at)!)} in the other` };
+          }
+          continue;
+        }
+        const name = k.slice(k.indexOf(':') + 1);
+        return { at: i, why: 'value', a: x, b: y, detail: `after step ${i + 1} (line ${wa.line + 1}${wa.fn ? ` in ${wa.fn}` : ''}), ${name} is ${x} in this run and ${y} in the other` };
+      }
+    }
+  }
+  if (a.evs.length !== b.evs.length) return { at: n, why: 'length', a: `${a.evs.length} steps`, b: `${b.evs.length} steps`, detail: `the same for ${n} steps, then one run ends: ${a.evs.length} steps here, ${b.evs.length} in the other` };
+  return null;
+}

@@ -13,7 +13,7 @@ import type { Sprite } from './blueprint';
 import type { Project } from './workspace';
 import type { Change } from './history';
 import type { TestCase } from './cases';
-import type { Breakpoint } from './history';
+import type { Breakpoint, Divergence } from './history';
 import { $, store } from './dom';
 import { setRecentActions } from './diag';
 
@@ -41,6 +41,7 @@ export type AppState = ViewState & {
   cases: TestCase[]; // a single file's test cases (a project's are in its run settings)
   search: { query: string; at: number[]; note: string } | null; // the trace search's matches, marked on the timeline
   breaks: Breakpoint[]; // statements playback pauses on
+  compare: { name: string; len: number; div: Divergence | null } | null; // this run beside a test case's: where they part
 };
 const state: AppState = {
   layout,
@@ -71,6 +72,7 @@ const state: AppState = {
   cases: [],
   search: null,
   breaks: [],
+  compare: null,
 };
 
 // S is read everywhere and changed only through update(), by name: dev

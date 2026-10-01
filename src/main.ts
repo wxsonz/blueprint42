@@ -1,5 +1,5 @@
 import { diagReport, reportCheck } from './diag';
-import { askCondition, initSearch, renderChanges, searchAgain, showChanges, showExplain } from './changes-ui';
+import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
 import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
@@ -232,6 +232,7 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const atEnd = S.trace !== null && S.pos >= oldN;
   update('applyTrace', { trace });
   if (S.changes) update('applyTrace', { changes: null }), renderChanges(); // marks of the last run don't belong to this one
+  if (S.compare) update('applyTrace', { compare: null }), renderCompare();
   searchAgain();
   // dev: does the trace hold together? (src/validate.ts; failures in the diagnostics panel)
   if (import.meta.env.DEV && trace) setTimeout(() => { if (S.trace === trace) for (const p of validateTrace(trace)) reportCheck(p); }, 0);

@@ -83,7 +83,16 @@ In this order (the first three are the most value for the least work):
    > cap`) pauses only when it holds. Uses the trace already recorded (no
    re-run). Done when playing the reader stops at each breakpoint hit and
    nowhere else.
-7. [ ] **Two runs side by side** (L). Run the same program with two inputs
+7. [x] **Two runs side by side** (L). Done 2026-10-01: `divergence`
+   (`src/history.ts`): the first step where the path (event, line, function),
+   a call's arguments, or a value the program set differ. Stack garbage
+   before a variable's first store, a gdb frame's entry stops and malloc's
+   leftovers don't count; heap bytes count once the program wrote them. A
+   test case's `vs` button traces it like the page's run and puts a chip by
+   the timeline (where they part, both values, a jump) and the other run as
+   a strip along the timeline's top. `test/history.test.ts` pins it on two
+   reader inputs: step 481, byte 11 of block #3, `' '` against `'\n'`; the
+   same input never parts. Run the same program with two inputs
    (or two -D values): the timeline shows both, and the first step where
    they differ (a branch taken, a value) is marked, with both values shown.
    Done when two reader inputs diverge at the step a hand check says.

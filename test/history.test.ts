@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { parse } from '../src/parse';
-import { breakHits, changesOf, condHolds, explainValue, searchTrace } from '../src/history';
+import { breakHits, changesOf, condHolds, divergence, explainValue, searchTrace } from '../src/history';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);
@@ -120,4 +120,29 @@ describe('breakpoints', () => {
     expect(condHolds(t.snaps[two[0] + 1].stack.find((f) => f.fn === 'main')!.cells, 'n == 2')).toBe(true);
     expect(condHolds([], 'nonsense')).toBe(null);
   }, 60000);
+});
+
+describe('two runs side by side', () => {
+  it('finds the first step two reader inputs part, as a hand check of both traces does', async () => {
+    const s = sample('reader');
+    const m = parse(s.src);
+    const run = async (stdin: string) => {
+      const r = await handleTrace({ src: s.src, files: s.files, fns: m.fns.map((f) => f.name), stdin, defines: s.defines });
+      expect(r.ok, r.error).toBe(true);
+      return convertGdb({ ...r, stdinText: r.stdinText ?? stdin }, m, s.src);
+    };
+    const a = await run('hello\nworld of lines\n!\n');
+    const b = await run('hello\nworld\n!\n');
+    const d = divergence(a, b)!;
+    expect(d).toBeTruthy();
+    // pinned from a real run: BUFFER_SIZE=4 reads "rld " in one and "rld\n" in
+    // the other; lr_append copies it into the line, block #3, byte 11. Stack
+    // garbage (lr_copy's i before i = 0) and malloc's leftovers don't count.
+    expect(d).toMatchObject({ at: 480, why: 'value', a: "' ' (32)", b: "'\\n' (10)" });
+    expect(d.detail).toContain('byte 11 of block #3');
+    // the same input never parts
+    expect(divergence(a, await run('hello\nworld of lines\n!\n'))).toBe(null);
+    // before the step they part, the runs are the same: same events, same lines
+    for (let i = 0; i < d.at; i++) expect([a.evs[i].k, a.evs[i].line]).toEqual([b.evs[i].k, b.evs[i].line]);
+  }, 120000);
 });

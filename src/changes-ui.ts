@@ -159,3 +159,39 @@ export function askCondition(fn: string, line: number, x: number, y: number): vo
   });
   input.addEventListener('blur', () => setTimeout(() => (el!.hidden = true), 150));
 }
+
+// Two runs side by side (nice to have 7): this run beside a test case's
+// (cases-ui.ts traces it); the chip says where they part and jumps there,
+// the timeline (playbar.ts) draws the other run as a strip under this one.
+let compareShown = '';
+function compareChip(): HTMLElement {
+  let el = document.getElementById('compare');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'compare';
+    el.className = 'changes';
+    el.hidden = true;
+    (document.getElementById('changes') ?? timeline).after(el);
+    el.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-go]');
+      if (!b) return;
+      if (b.dataset.go === 'close') return void (update('hideCompare', { compare: null }), renderCompare());
+      const d = S.compare?.div;
+      // to the start of the step they part at: both runs are the same up to here
+      if (d) update('compareJump', { pos: d.at + 0.9, playing: false, stepTarget: null });
+    });
+  }
+  return el;
+}
+
+export function renderCompare(): void {
+  const el = compareChip();
+  const c = S.compare;
+  const key = c ? JSON.stringify([c.name, c.len, c.div]) : '';
+  if (key === compareShown) return;
+  compareShown = key;
+  if (!c) return void (el.hidden = true);
+  el.hidden = false;
+  el.innerHTML = `<span class="what">vs ${esc(c.name)}</span><span class="n" title="${esc(c.div?.detail ?? '')}">${c.div ? esc(c.div.detail) : `the same, all ${c.len} steps`}</span>
+    ${c.div ? '<button class="btn sm" data-go="jump" title="Go to the step they part at">go</button>' : ''}<button class="btn sm" data-go="close" title="Stop comparing">×</button>`;
+}

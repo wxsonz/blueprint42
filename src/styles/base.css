@@ -723,6 +723,7 @@ kbd {
 .changes[hidden] { display: none; }
 .changes .what { font-weight: 600; }
 .changes .n { opacity: 0.75; margin-right: 4px; }
+#compare .n { max-width: 52ch; overflow: hidden; text-overflow: ellipsis; }
 
 /* the end report: how the run ended, what it left behind (bottom right of the grid) */
 #end-report { position: absolute; right: 12px; bottom: 12px; z-index: 6; width: min(420px, calc(100% - 24px)); max-height: 45%; overflow: auto;
