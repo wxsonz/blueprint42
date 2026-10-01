@@ -30,7 +30,11 @@ In this order (the first three are the most value for the least work):
    moved); next/previous write jumps there, with the statement that did it
    lit. Done when a test finds every write to `list->next` in the list
    sample, and the marks match the trace.
-2. [ ] **The end report** (M). When a run ends, a card: each leak with its
+2. [x] **The end report** (M). Done 2026-10-01: `src/report.ts`
+   (`endReport`: how it ended, each leak with its size, where it was malloc'd
+   and when it was lost) and the card at the run's end (`src/report-ui.ts`),
+   each row a jump. `test/report.test.ts` on the lost, crash and leak
+   samples. When a run ends, a card: each leak with its
    size and where it was malloc'd (function, line), each lost block with the
    step it was lost at, the exit code or the signal and the line it died on.
    Click a row to jump there. Only what the trace knows; nothing guessed.

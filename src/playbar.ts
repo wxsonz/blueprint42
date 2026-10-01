@@ -11,6 +11,7 @@ import { switchFile } from './project-ui';
 import { pointeeName } from './render';
 import { frameAt } from './playback';
 import { renderChanges } from './changes-ui';
+import { renderReport } from './report-ui';
 import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline, traceRevision } from './state';
 import { EditorView } from '@codemirror/view';
 import { N } from './main';
@@ -67,6 +68,7 @@ function roomLine(): { html: string; ev: Ev | null; key: string } | null {
 
 export function renderPlaybar(): void {
   if (S.changes) renderChanges();
+  renderReport(); // (rewrites only when the run's end is reached or left)
   const t = S.trace;
   const n = N();
   const fr = t && n ? frameAt(t, S.pos) : null;

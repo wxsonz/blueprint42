@@ -723,3 +723,17 @@ kbd {
 .changes[hidden] { display: none; }
 .changes .what { font-weight: 600; }
 .changes .n { opacity: 0.75; margin-right: 4px; }
+
+/* the end report: how the run ended, what it left behind (bottom right of the grid) */
+#end-report { position: absolute; right: 12px; bottom: 12px; z-index: 6; width: min(420px, calc(100% - 24px)); max-height: 45%; overflow: auto;
+  background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 10px 40px rgba(0,0,0,0.5)); }
+#end-report[hidden] { display: none; }
+#end-report .er-title { display: flex; justify-content: space-between; align-items: center; padding: var(--ptitle-pad, 6px 10px); background: var(--ptitle-bg); color: var(--ptitle-fg); border-bottom: var(--ptitle-border, none); font: var(--ptitle-font, 600 13px var(--font-ui)); }
+#end-report .er-body { padding: 8px 12px; font: calc(12px * var(--mono-scale, 1)) var(--font-mono); }
+#end-report p { margin: 2px 0 6px; }
+#end-report ul { margin: 0; padding-left: 16px; }
+#end-report li { margin: 3px 0; }
+#end-report .bad { color: var(--err, #e8453a); font-weight: 600; }
+#end-report .ok { color: var(--ok, #58e0c0); }
+#end-report .k { opacity: 0.7; }
+#end-report button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
