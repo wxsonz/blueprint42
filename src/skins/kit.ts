@@ -593,9 +593,11 @@ export function makeSkin(t: Theme): Skin {
       const rowH = SLOT_PX * dc.z;
       const top = r.y + INV_HEAD_PX * dc.z;
       const rows: RowInfo[] = [];
+      // (a row that fills the panel exactly fits: without the tolerance, float
+      // rounding of the panel's screen position made it come and go as the camera moved)
       const row = (name: string, value: string, kind: RowInfo['kind'], o: Partial<RowInfo> = {}) => {
         const y = top + rows.length * rowH;
-        if (y + rowH <= r.y + r.h) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
+        if (y + rowH <= r.y + r.h + rowH * 1e-6) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
       };
       if (word) row('state', word, d.state === 'error' ? 'dangling' : 'int');
       if (d.state === 'error' && d.crash) row(`died at line ${d.crash.line}`, d.crash.msg || ' ', 'dangling');
@@ -604,7 +606,7 @@ export function makeSkin(t: Theme): Skin {
       else if (!d.args.length) row('no arguments', ' ', 'none');
       else {
         // no room for the rest: say how many, never drop them silently
-        const room = Math.floor((r.y + r.h - top) / rowH) - rows.length;
+        const room = Math.floor((r.y + r.h - top) / rowH + 1e-6) - rows.length;
         const fit = d.args.length > room ? Math.max(0, room - 1) : d.args.length;
         for (const a of d.args.slice(0, fit)) row(a.name, a.text, a.tag ? 'ptr' : 'int', { param: true, tag: a.tag });
         if (fit < d.args.length) row(`+${d.args.length - fit} more`, 'arguments', 'none');
@@ -633,7 +635,7 @@ export function makeSkin(t: Theme): Skin {
       const rows: RowInfo[] = [];
       const row = (name: string, value: string, kind: RowInfo['kind'], o: Partial<RowInfo> = {}) => {
         const y = top + rows.length * rowH;
-        if (y + rowH <= r.y + r.h) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
+        if (y + rowH <= r.y + r.h + rowH * 1e-6) rows.push({ name, value, kind, param: false, recent: false, flash: 0, rect: { x: r.x, y, w: r.w, h: rowH }, depth: 0, fold: null, ...o });
       };
       row(b.mode === 'terminal' ? 'to a terminal' : 'to a pipe', b.mode === 'terminal' ? 'flushed at \\n' : 'flushed when full', 'none');
       if (b.n) row('waiting', cLiteral(b.text), 'int');
