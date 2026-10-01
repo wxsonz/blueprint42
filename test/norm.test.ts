@@ -4,7 +4,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from '../src/parse';
-import { fileCap, fnCaps } from '../src/norm';
+import { fileCap, fnCaps, normMarks } from '../src/norm';
+import { SAMPLES } from '../src/samples';
 import { setupParser } from './helpers';
 
 beforeAll(setupParser);
@@ -69,5 +70,34 @@ describe('Norm capacity', () => {
       const over = fileCap(parse(src), '').used > 5;
       expect(norminette(src).includes('TOO_MANY_FUNCS')).toBe(over);
     }
+  });
+});
+
+// The Norm's other rules, pinned on what norminette 3.3.59 reported for these
+// files (rule, 1-based line); its columns count differently, so lines only.
+describe('Norm marks', () => {
+  const marks = (src: string) => normMarks(parse(src).tree, src).map((m) => [m.rule, m.line + 1]);
+  it('forbidden statements, ternaries, a late declaration, a long line, no header', () => {
+    const src = "int\tf(int a)\n{\n\tint\tx;\n\n\tx = a;\n\tfor (x = 0; x < 3; x++)\n\t\tx = x;\n\tdo\n\t\tx--;\n\twhile (x);\n\tswitch (a)\n\t{\n\t\tcase 1:\n\t\t\tbreak;\n\t}\n\tgoto end;\nend:\n\tx = a ? 1 : 2;\n\tint\ty;\n\ty = 1;\n\treturn (x + y + aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);\n}\n";
+    expect(marks(src)).toEqual([
+      ['INVALID_HEADER', 1], ['FORBIDDEN_CS', 6],
+      ['DO_WHILE', 8], // (the Norm's rule: norminette reports this loop's while line instead)
+      ['FORBIDDEN_CS', 11], ['FORBIDDEN_CS', 13], ['GOTO_FBIDDEN', 16], ['LABEL_FBIDDEN', 17],
+      ['TERNARY_FBIDDEN', 18], ['VAR_DECL_START_FUNC', 19], ['LINE_TOO_LONG', 21],
+    ]);
+  });
+  it('declarations: a blank line before one, one in an inner block', () => {
+    expect(marks("int\tg(int a)\n{\n\tint\tx;\n\n\tint\ty;\n\n\tx = a;\n\ty = a;\n\tif (x)\n\t{\n\t\tint\tz;\n\n\t\tz = 1;\n\t}\n\treturn (x + y);\n}\n")).toEqual([['INVALID_HEADER', 1], ['VAR_DECL_START_FUNC', 5], ['WRONG_SCOPE_VAR', 11]]);
+  });
+  it('a line of 80 columns passes, 81 doesn\'t (a tab reaches the next multiple of 4)', () => {
+    const body = (w: number) => `int\tf(void)\n{\n\treturn (${'1'.repeat(w - 4 - 10)});\n}\n`;
+    expect(marks(body(80)).map((m) => m[0])).not.toContain('LINE_TOO_LONG');
+    expect(marks(body(81))).toContainEqual(['LINE_TOO_LONG', 3]);
+  });
+  it('the 42 header, as norminette matches it', () => {
+    expect(marks("/* ************************************************************************** */\n/*                                                                            */\n/*                                                       :::      ::::::::    */\n/*   x.c                                                 :+:      :+:    :+:  */\n/*                                                   +:+ +:+         +:+      */\n/*   By: wxz <wxz@student.42.fr>                    +#+  +:+       +#+        */\n/*                                               +#+#+#+#+#+   +#+            */\n/*   Created: 2026/10/01 10:00:00 by wxz               #+#    #+#             */\n/*   Updated: 2026/10/01 10:00:00 by wxz              ###   ########.fr       */\n/*                                                                            */\n/* ************************************************************************** */\n\nint\tf(void)\n{\n\treturn (0);\n}\n")).toEqual([]);
+  });
+  it('the samples: only the header (norminette says the same of these rules)', () => {
+    for (const s of SAMPLES) expect(marks(s.src).map((m) => m[0]), s.key).toEqual(['INVALID_HEADER']);
   });
 });

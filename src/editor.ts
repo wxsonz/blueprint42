@@ -24,6 +24,42 @@ const execField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+// ---- the Norm's marks (src/norm.ts normMarks): a dotted underline, the rule on hover ----
+export const setNormMarks = StateEffect.define<{ line: number; col: number; rule: string; msg: string }[]>();
+
+const normField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setNormMarks)) continue;
+      const doc = tr.state.doc;
+      const ranges = e.value.flatMap((m) => {
+        if (m.line >= doc.lines) return [];
+        const l = doc.line(m.line + 1);
+        // a long line from where it passes 80 columns; the header, the first line; else the keyword
+        const from = m.rule === 'LINE_TOO_LONG' ? l.from + colAt(l.text, m.col) : m.rule === 'INVALID_HEADER' ? l.from : Math.min(l.to, l.from + m.col);
+        const word = /^[A-Za-z_?]\w*/.exec(l.text.slice(from - l.from))?.[0].length ?? 1;
+        const to = m.rule === 'LINE_TOO_LONG' || m.rule === 'INVALID_HEADER' ? l.to : Math.min(l.to, from + word);
+        return to > from ? [Decoration.mark({ class: 'cm-norm', attributes: { title: `${m.rule}: ${m.msg}` } }).range(from, to)] : [];
+      });
+      deco = Decoration.set(ranges, true);
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+// the character a display column (a tab reaching the next multiple of 4) falls in
+function colAt(text: string, col: number): number {
+  let w = 0;
+  for (let i = 0; i < text.length; i++) {
+    w = text[i] === '\t' ? (w + 4) & ~3 : w + 1;
+    if (w > col) return i;
+  }
+  return text.length;
+}
+
 // Colours and fonts come from CSS variables, so each skin restyles the editor.
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'var(--ed-bg)', color: 'var(--ed-fg)' },
@@ -38,6 +74,7 @@ const theme = EditorView.theme({
   '&:not(.cm-focused) .cm-fat-cursor': { background: 'none !important', outline: '1px solid var(--ed-cursor)', color: 'inherit !important' },
   '.cm-execLine': { backgroundColor: 'var(--ed-exec)', boxShadow: 'inset 3px 0 0 var(--ed-exec-bar)' },
   '.cm-errLine': { backgroundColor: 'var(--ed-err)', boxShadow: 'inset 3px 0 0 var(--ed-err-bar)' },
+  '.cm-norm': { textDecoration: 'underline dotted var(--ed-norm, #d9a03a)', textDecorationThickness: '1.5px', textUnderlineOffset: '3px' },
   '.cm-matchingBracket': { backgroundColor: 'var(--ed-sel)', outline: 'none' },
   '.cm-panels': { backgroundColor: 'var(--ed-gutter)', color: 'var(--ed-fg)' },
   '.cm-panels input': { fontFamily: 'var(--ed-font)', color: 'var(--ed-fg)', background: 'transparent', border: 'none', outline: 'none' },
@@ -85,6 +122,7 @@ export function createState(doc: string, hooks: EditorHooks, useVim: boolean, ex
         syntaxHighlighting(highlight),
         theme,
         execField,
+        normField,
         // Tab types a tab where the cursor is (indents only a selection);
         // Shift+Tab takes one indent off the line
         keymap.of([...defaultKeymap, ...historyKeymap, { key: 'Tab', run: typing(insertTab), shift: typing(indentLess) }]),

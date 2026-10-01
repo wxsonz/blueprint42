@@ -12,12 +12,12 @@ import { CELL_PX, INV_HEAD_PX, MH, MW, SLOT_PX } from './layout';
 import { HEAD, ROW, interiorAt, planOf, rowMid, stopX, textX, type InteriorState, type Plan, type Station } from './interior';
 import { computeText, ptrTag, readsOf, READ_END, slotHistory, slotValue, writesOf, type BeatNow } from './beats';
 import { geomOf, isCharArray, procH, shut, slotsOf, slotY, STDIN_H, stdinShown, termText } from './machine';
-import type { FnInfo, TypeDef } from './parse';
+import { textOf, type FnInfo, type TypeDef } from './parse';
 import type { Host } from './route';
 import { fmtVal, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
 import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
-import { fnCaps } from './norm';
+import { fnCaps, normMarks } from './norm';
 import { gfxMode } from './gfx/gfx';
 import { GfxLayer, type GfxView } from './gfx/layer';
 import { sceneFor } from './gfx/scenes';
@@ -1454,6 +1454,15 @@ export class GridView {
       hot: act && act.beat.kind !== 'switch' && act.phase !== 'read' && compute ? { station: act.beat.station, text: compute } : null,
     });
     if (skin.capacity) info.cap = { ...fnCaps(fn).lines, unit: 'lines' };
+    // the Norm's other rules: each mark on the innermost statement whose rows hold it
+    if (skin.normMarks) {
+      const marks = normMarks(fn.node.tree, textOf(fn.node.tree)).filter((nm) => nm.line >= fn.node.startPosition.row && nm.line <= fn.node.endPosition.row);
+      for (const nm of marks) {
+        let best = -1;
+        plan.stations.forEach((st, k) => { if (st.line <= nm.line && nm.line <= st.last && (best < 0 || st.line >= plan.stations[best].line)) best = k; });
+        if (best >= 0) info.stations[best].norm = info.stations[best].norm ? `${info.stations[best].norm}; ${nm.msg}` : nm.msg;
+      }
+    }
     // breakpoints: playback pauses on these statements
     for (const [k, st] of plan.stations.entries()) {
       const b = s.breaks?.find((x) => x.fn === fn.name && x.line === st.line);

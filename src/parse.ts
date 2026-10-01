@@ -319,9 +319,17 @@ interface Unit {
   error: { line: number; col: number } | null;
 }
 
+// each parsed tree's source text, exactly (its root node can start after
+// leading blank lines, so rootNode.text isn't the file)
+const treeText = new WeakMap<Tree, string>();
+export const textOf = (tree: Tree): string => treeText.get(tree) ?? tree.rootNode.text;
+// the tree of a project file as last parsed (null: not parsed yet)
+export const unitTree = (path: string): Tree | null => unitCache.get(path)?.unit.tree ?? null;
+
 function parseUnit(src: string, file: string): Unit {
   if (!parser) throw new Error('parser not initialised');
   const tree = parser.parse(src)!;
+  treeText.set(tree, src);
   const root = tree.rootNode;
   const fns: FnInfo[] = [];
   const globals: Global[] = [];

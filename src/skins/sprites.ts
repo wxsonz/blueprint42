@@ -333,7 +333,19 @@ export function drawInterior(dc: Dc, r: Rect, i: InteriorInfo, p: SpritePalette)
     g.globalAlpha = (i.mode !== 'live' ? 0.75 : 1) * (on ? 1 : 0.7);
     const badge = died ? `✕ ${i.died!.msg.split(':')[0] || 'died'}` : s.count !== null ? `×${s.count}` : '';
     const bw = badge ? g.measureText(badge).width + 6 * z : 0;
-    g.fillText(cut(s.text, right - s.textX - bw), s.textX, s.y);
+    const shownText = cut(s.text, right - s.textX - bw);
+    g.fillText(shownText, s.textX, s.y);
+    if (s.norm) {
+      // it breaks the Norm: a dotted line under its code
+      g.save();
+      g.strokeStyle = p.over ?? p.marker;
+      g.globalAlpha = 1;
+      g.lineWidth = Math.max(1, 1.2 * z);
+      g.setLineDash([Math.max(1, 1.5 * z), Math.max(1.5, 2 * z)]);
+      const uy = s.y + fs * 0.62;
+      g.beginPath(); g.moveTo(s.textX, uy); g.lineTo(s.textX + g.measureText(shownText).width, uy); g.stroke();
+      g.restore();
+    }
     if (badge) {
       g.textAlign = 'right';
       g.fillStyle = died ? dead : s.count ? p.accent : p.muted;

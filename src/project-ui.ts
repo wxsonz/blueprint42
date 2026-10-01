@@ -11,7 +11,7 @@ import { SAMPLES, SAMPLE_PROJECTS, type SampleProject } from './samples';
 import { baseName } from './skins/util';
 import { S, debounce, editor, layout, overlay, setDebounce, setLastExec, setLoadingSample, toast, view, update } from './state';
 import { BP_JSON, DRIVER, type Listing, META, type Opened, type PFile, type Project, RUN_JSON, fromFiles, fsCall, hash, isDirty, isSource, joinArgs, lineDiff, parseRun, runEmpty, save, serializeRun } from './workspace';
-import { analyze, cancelGdb, closeOverlay, currentSrc, engineFor, hooks, startGdb } from './main';
+import { analyze, cancelGdb, closeOverlay, currentSrc, engineFor, hooks, renderNormMarks, startGdb } from './main';
 import { bindingsChanged, loadSample, renderInsides, saveSoon, settle } from './sample-ui';
 
 // ---------------- projects (M5) ----------------
@@ -204,6 +204,7 @@ export function switchFile(path: string, at?: { line: number; col: number }): vo
     swapState(editor, stateFor(f), S.vim, hooks);
     setLoadingSample(false);
     setLastExec(''); // mark the running line again, in this file
+    renderNormMarks();
     renderProjectChrome();
     projectSaveSoon();
   }

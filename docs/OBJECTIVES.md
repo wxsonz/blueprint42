@@ -96,7 +96,15 @@ In this order (the first three are the most value for the least work):
    (or two -D values): the timeline shows both, and the first step where
    they differ (a branch taken, a value) is marked, with both values shown.
    Done when two reader inputs diverge at the step a hand check says.
-8. [ ] **More of the Norm** (M). Beyond the capacity bars: line width (80),
+8. [x] **More of the Norm** (M). Done 2026-10-01: `normMarks`
+   (`src/norm.ts`: LINE_TOO_LONG, FORBIDDEN_CS, GOTO / LABEL, TERNARY,
+   VAR_DECL_START_FUNC, WRONG_SCOPE_VAR, INVALID_HEADER with norminette's
+   own pattern; do … while as the Norm's rule, which norminette misreads). A
+   dotted underline in the editor (the rule on hover) and under the
+   statement in Minimal and Barebone (`normMarks` skin flag).
+   `test/norm.test.ts` pins norminette 3.3.59's lines on fixtures, the
+   80/81-column edge and a valid header; the samples only lack the header,
+   as norminette says. Beyond the capacity bars: line width (80),
    forbidden statements (for, do while, switch, goto, ternary), declarations
    after statements, the 42 header, as marks on the machine and the line in
    the editor, counted as norminette counts (`src/norm.ts`). Done when the

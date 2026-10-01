@@ -61,6 +61,7 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
   blurb: dark ? 'quiet cards and hairlines' : 'quiet cards and hairlines, on white',
   casing: C.bg,
   capacity: true,
+  normMarks: true,
   spotlight: C.spot,
   strip(dc, r, info) { drawStrip(dc, r, info, spritePalette); },
   sprite(dc, r, kind, info) { drawSprite(dc, r, kind, info, spritePalette); },

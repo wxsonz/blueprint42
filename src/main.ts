@@ -10,7 +10,7 @@ import { beatStarts } from './beats';
 import { machineSize } from './machine';
 import { connectLive } from './live';
 import { Vim } from '@replit/codemirror-vim';
-import { createEditor, setVim, type EditorHooks } from './editor';
+import { createEditor, setNormMarks, setVim, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp';
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
@@ -18,7 +18,8 @@ import { convertGdb, type GdbRequest, type GResult } from './gdb';
 import { initGfxButton } from './gfx/ui';
 import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
-import { initParser, parse, type Model } from './parse';
+import { initParser, parse, textOf, unitTree, type Model } from './parse';
+import { normMarks } from './norm';
 import { animMode, prepareStage, computeBelts, durationAt, frameAt, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity } from './playback';
 import { activeHostRect, entityAt, foldAt, stationAt, machineHeadAt, stageRect, slotAt } from './hit';
 import { SAMPLE_PROJECTS } from './samples';
@@ -136,6 +137,16 @@ export function currentSrc(): string {
   return editor.state.doc.toString();
 }
 
+// The Norm's marks in the editor: the file it shows, as last parsed (a file
+// that isn't C, or whose parse is older than the text, gets none)
+export function renderNormMarks(): void {
+  const p = S.project;
+  const tree = p ? (/\.[ch]$/.test(p.active) ? unitTree(p.active) : null) : S.model?.tree ?? null;
+  const text = editor.state.doc.toString();
+  const marks = tree && textOf(tree) === text ? normMarks(tree, text) : [];
+  editor.dispatch({ effects: setNormMarks.of(marks) });
+}
+
 export function analyze(src: string, fresh: boolean): void {
   const model = S.project ? projectModel(S.project) : parse(src);
   setModelRevision(modelRevision + 1);
@@ -157,6 +168,7 @@ export function analyze(src: string, fresh: boolean): void {
   if (sel?.k === 'node' && renamed.has(sel.id)) update('parsed', { selected: { k: 'node', id: renamed.get(sel.id)! } }); // a renamed function stays selected
   if (sel?.k === 'node' && !layout.nodes.has((S.selected as { id: string }).id)) update('parsed', { selected: null });
   update('parsed', { model });
+  renderNormMarks();
   const engine = engineFor(model);
   cancelGdb();
   if (engine === 'interp') {

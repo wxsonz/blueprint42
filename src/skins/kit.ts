@@ -60,6 +60,7 @@ export interface Theme {
   radius: number; // corner radius at zoom 1 (0 = square)
   ptrTags?: boolean; // pointer rows show an address tag, not a value (prototyped in Barebone)
   capacity?: boolean; // draws the Norm's limits (prototyped in Barebone)
+  normMarks?: boolean; // marks statements that break the Norm's other rules (prototyped in Barebone)
   stderr?: boolean; // its terminal tells stderr's text apart, in the error colour (prototyped in Barebone)
   plateShapes?: boolean; // a belt's arguments and return values differ in shape (prototyped in Barebone)
   upper?: boolean; // titles in capitals
@@ -134,6 +135,7 @@ export function makeSkin(t: Theme): Skin {
   const skin: Skin = {
     id: t.id,
     capacity: t.capacity,
+    normMarks: t.normMarks,
     name: t.name,
     blurb: t.blurb,
     get casing() { return p.bg; }, // live: a theme may change its colours
