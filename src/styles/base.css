@@ -789,3 +789,10 @@ html[data-replay] #btn-open, html[data-replay] .examples:has(#tests, #examples),
 /* the skin picker's weight (src/skins/weight.ts) */
 .sk .wt { margin-left: 4px; padding: 0 4px; border-radius: 3px; font-size: 0.75em; font-weight: 500; border: 1px solid currentColor; opacity: 0.7; }
 .sk .wt.heavy { opacity: 1; }
+
+/* a guided tour's card (src/tour-ui.ts), top middle of the grid */
+#tour { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9; width: min(520px, calc(100% - 32px)); padding: 8px 12px; background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 8px 30px rgba(0,0,0,0.45)); font: 13px/1.45 var(--font-ui); }
+#tour[hidden] { display: none; }
+#tour .tr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: calc(11px * var(--mono-scale, 1)) var(--font-mono); opacity: 0.85; }
+#tour p { margin: 6px 0; }
+#tour .tr-go { text-align: right; }

@@ -154,7 +154,15 @@ In this order (the first three are the most value for the least work):
     a quiet machine. `test/weight.test.ts`. In the skin picker, a light / medium /
     heavy mark from `tools/bench.mjs` numbers kept in the repo (and a note
     that Firefox pays more for gradients), so a slow laptop can pick well.
-13. [ ] **Guided tours** (L). A sample can carry narration: steps with a
+13. [x] **Guided tours** (L). Done 2026-10-01: `src/tour.ts` (a stop is a
+    function, a piece of a statement's line and a sentence; it resolves to
+    the step where that statement is about to run, and a stop the run never
+    reaches is left out and said), `src/tour-ui.ts` ("▶ tour" by the speed;
+    playing pauses at each stop, frames the running machine, shows the
+    sentence with next / end). The swap sample has a tour of its pointers;
+    `test/tour.test.ts` checks each sentence's claims against the trace (a
+    and b hold x's and y's addresses, the values before and after each
+    write, swap's frame gone at the end). A sample can carry narration: steps with a
     sentence each ("watch `buf` here"); playing it moves the camera there,
     pauses, and shows the sentence. Authored in the sample (no new file
     format beyond a list of { step, text, focus }). Done when one sample has

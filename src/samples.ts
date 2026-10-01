@@ -2,6 +2,7 @@
 // shows something the blueprint can do; the line reader is also the test
 // fixture (samples/line_reader, read-only: its tests pin its behaviour).
 import type { TestCase } from './cases';
+import type { TourStop } from './tour';
 import lrH from '../samples/line_reader/line_reader.h?raw';
 import lrC from '../samples/line_reader/line_reader.c?raw';
 import lrU from '../samples/line_reader/line_reader_utils.c?raw';
@@ -17,6 +18,7 @@ export interface Sample {
   defines?: string[]; // -D flags for the trace server
   files?: Record<string, string>; // read-only support files (headers) next to the buffer
   cases?: TestCase[]; // test cases it comes with (src/cases.ts)
+  tour?: TourStop[]; // a guided tour (src/tour.ts): stops with a sentence each
 }
 
 const pointer = `void	bump(int *n)
@@ -478,7 +480,16 @@ export const SAMPLES: Sample[] = [
   { key: 'pointer', group: 'basics', title: 'pointer in, value out', file: 'pointer.c',
     blurb: 'a pointer goes in, bump() writes through it, step() returns *n + 2', src: pointer },
   { key: 'swap', group: 'basics', title: 'swap', file: 'swap.c',
-    blurb: 'two pointers, one temporary: watch the writes land in main', src: swap },
+    blurb: 'two pointers, one temporary: watch the writes land in main', src: swap,
+    // its pointers, stop by stop (test/tour.test.ts checks each sentence against the trace)
+    tour: [
+      { fn: 'main', at: 'x = 3;', text: 'x and y are main\'s locals: two ints in main\'s frame, on the stack. Nothing has been stored in them yet.' },
+      { fn: 'main', at: 'swap(&x, &y);', text: 'Next, main calls swap with &x and &y: the addresses of x and y, not their values. Those two addresses are copied into swap\'s parameters a and b.' },
+      { fn: 'swap', at: 'tmp = *a;', text: 'a holds the address of main\'s x, so *a reads x through the pointer. Next, its 3 is copied into tmp, swap\'s own local.' },
+      { fn: 'swap', at: '*a = *b;', text: 'Next, *b reads main\'s y (5) and *a = writes it into main\'s x. a and b themselves don\'t change: they keep the same two addresses.' },
+      { fn: 'swap', at: '*b = tmp;', text: 'Next, the 3 in tmp goes through b into main\'s y.' },
+      { fn: 'main', at: 'return (x - y);', text: 'Back in main: x is 5 and y is 3. swap never had x or y, only their addresses; its frame, with a, b and tmp, is gone.' },
+    ] },
   { key: 'counter', group: 'basics', title: 'static counter', file: 'counter.c',
     blurb: 'a static local survives between calls (a chest)', src: counter },
   { key: 'recursion', group: 'basics', title: 'factorial', file: 'fact.c',

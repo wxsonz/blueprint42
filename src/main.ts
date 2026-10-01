@@ -2,6 +2,7 @@ import { diagReport, reportCheck } from './diag';
 import { askNote, renderNotes } from './notes-ui';
 import { readReplay } from './replay';
 import { renderMinimap } from './minimap';
+import { endTour, renderTourButton, tourStopIn } from './tour-ui';
 import { weightOf } from './skins/weight';
 import { initReplayButton, startReplay } from './replay-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
@@ -264,6 +265,8 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   setTraceRevision(traceRevision + 1);
   setLastInspectorKey('');
   renderNotes(); // (whether each note's step is still where it was)
+  endTour(); // (its steps were this trace's)
+  renderTourButton();
   const n = trace?.evs.length ?? 0;
   update('applyTrace', { pos: fresh ? 0 : atEnd ? n : Math.min(S.pos, n) });
   update('applyTrace', { stepTarget: null });
@@ -1216,6 +1219,13 @@ function tick(now: number): void {
           const r = spriteWorldRect(sp, S.trace?.snaps[hit.at]?.bound?.[sp.id]);
           view.ensureVisible(r.x, r.y - 2, r.w, r.h + 2, Math.max(2.5, (view.h * 0.28) / view.cs));
         }
+      }
+      // a tour's stop: pause there and frame the machine running it (src/tour-ui.ts)
+      const ts = S.tour ? tourStopIn(before, S.pos) : null;
+      if (ts !== null) {
+        update('tourStop', { pos: ts, playing: false, stepTarget: null });
+        const r = activeHostRect(S);
+        if (r) (view.focusOn(r), (lastPanAt = performance.now()));
       }
       // a breakpoint: pause where a marked statement is reached (and its condition holds)
       const bp = S.breaks.length ? breakHitsNow().find((h) => h > before + 1e-9 && h <= S.pos) : undefined;
