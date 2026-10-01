@@ -9,18 +9,21 @@
 //   options: --sample list  --mode fast|focus  --zoom 0.6  --seconds 3  --rounds 2
 //            --a <ref> (only one version: omit --b)  --b <ref>  --json
 //            --uncapped (Chromium: no vsync, so fps is the frame's whole cost, not the refresh rate)
+//            --save (with --uncapped: write src/skins/weight-data.ts, the skin picker's light/medium/heavy)
+//            --skins all (every skin the picker lists)
 //
 // The window must be visible: a page on another desktop is paused by the
 // browser, and the tool stops rather than report numbers that mean nothing.
 import { serve } from './lib/serve.mjs';
 import { launchChromium } from './lib/browser.mjs';
 import { launchZen } from './lib/zen.mjs';
+import { saveWeights } from './lib/weights.mjs';
 
-const opt = { browser: 'chromium', a: 'WORK', b: '', skins: 'minimal', sample: 'list', mode: 'fast', zoom: '0.6', seconds: '3', rounds: '2', json: '', uncapped: '' };
+const opt = { browser: 'chromium', a: 'WORK', b: '', skins: 'minimal', sample: 'list', mode: 'fast', zoom: '0.6', seconds: '3', rounds: '2', json: '', uncapped: '', save: '' };
 for (let i = 2; i < process.argv.length; i++) {
   const k = process.argv[i].replace(/^--/, '');
   if (!(k in opt)) { console.error(`unknown option --${k}`); process.exit(2); }
-  opt[k] = k === 'json' || k === 'uncapped' ? '1' : process.argv[++i];
+  opt[k] = k === 'json' || k === 'uncapped' || k === 'save' ? '1' : process.argv[++i];
 }
 
 // runs in the page
@@ -58,6 +61,7 @@ const PLAY = async ({ sample, skin, mode, zoom, seconds }) => {
   return JSON.stringify({ hidden: document.hidden, fps: +(n / secs).toFixed(1), worstMs: Math.round(worst), report });
 };
 
+if (opt.save && (!opt.uncapped || opt.browser !== 'chromium' || opt.b)) { console.error('--save needs --uncapped, Chromium and one version (no --b)'); process.exit(2); }
 const refs = [opt.a, ...(opt.b ? [opt.b] : [])];
 const servers = [];
 for (const r of refs) servers.push(await serve(r));
@@ -66,8 +70,14 @@ const goto = (u) => (opt.browser === 'zen' ? browser.goto(u) : browser.page.goto
 const play = async (args) => JSON.parse(opt.browser === 'zen' ? await browser.evaluate(`(${PLAY})(${JSON.stringify(args)})`) : await browser.page.evaluate(PLAY, args));
 
 const results = [];
+let skinIds = opt.skins.split(',');
 try {
-  for (const skin of opt.skins.split(',')) {
+  if (opt.skins === 'all') {
+    await goto(servers[0].url);
+    const ask = `(async () => { for (let i = 0; i < 200 && !window.__ftb?.SKINS; i++) await new Promise((r) => setTimeout(r, 100)); return JSON.stringify(window.__ftb.SKINS.filter((k) => !k.variantOf).map((k) => k.id)); })()`;
+    skinIds = JSON.parse(opt.browser === 'zen' ? await browser.evaluate(ask) : await browser.page.evaluate(ask));
+  }
+  for (const skin of skinIds) {
     for (let round = 0; round < Number(opt.rounds); round++) {
       // alternate the order each round
       const order = round % 2 ? [...servers].reverse() : servers;
@@ -84,11 +94,12 @@ try {
   await browser.close();
   for (const s of servers) await s.close();
 }
+if (opt.save) console.log(`wrote ${saveWeights(results, { browser: 'chromium, uncapped', sample: opt.sample, mode: opt.mode, zoom: Number(opt.zoom), seconds: Number(opt.seconds), rounds: Number(opt.rounds) })}`);
 if (opt.json) console.log(JSON.stringify(results, null, 2));
 else {
   // the median per skin and ref, and where the last run's time went
   console.log('');
-  for (const skin of opt.skins.split(',')) for (const s of servers) {
+  for (const skin of skinIds) for (const s of servers) {
     const rs = results.filter((r) => r.skin === skin && r.ref === s.ref);
     const med = [...rs.map((r) => r.fps)].sort((a, b) => a - b)[rs.length >> 1];
     const rep = rs.at(-1)?.report;

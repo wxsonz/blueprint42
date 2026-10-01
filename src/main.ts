@@ -2,6 +2,7 @@ import { diagReport, reportCheck } from './diag';
 import { askNote, renderNotes } from './notes-ui';
 import { readReplay } from './replay';
 import { renderMinimap } from './minimap';
+import { weightOf } from './skins/weight';
 import { initReplayButton, startReplay } from './replay-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
@@ -133,6 +134,12 @@ function toggleSpeedMenu(open = $('speed-menu').hidden): void {
   box.hidden = !open;
   $('pb-speed').setAttribute('aria-expanded', String(open));
   if (open) renderSpeedMenu();
+}
+
+// the skin picker's light / medium / heavy (src/skins/weight.ts)
+function weightBadge(id: string): string {
+  const w = weightOf(id);
+  return w ? ` <span class="wt ${w.cls}" title="${esc(w.title)}">${w.cls}</span>` : '';
 }
 
 // ---------------- analysis ----------------
@@ -974,7 +981,7 @@ function renderSkinPicker(): void {
       .map((g) => ({ ...g, skins: g.ids.map((id) => bases.find((s) => s.id === id)).filter((s): s is Skin => !!s) }))
       .filter((g) => g.skins.length);
     const card = (s: Skin) =>
-      `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt="">${isWip(s) ? '<span class="wip" title="Work in progress: this skin isn’t polished yet" aria-label="work in progress">⚠</span>' : ''}<span class="nm">${esc(s.name)}${otherMode(s) ? ' <span class="md" title="light and dark">☀☾</span>' : ''}</span><span class="bl">${esc(s.blurb)}</span></button>`;
+      `<button class="sk${s.id === base ? ' on' : ''}" data-id="${s.id}" role="option" aria-selected="${s.id === base}"><img src="${skinPreview(s)}" alt="">${isWip(s) ? '<span class="wip" title="Work in progress: this skin isn’t polished yet" aria-label="work in progress">⚠</span>' : ''}<span class="nm">${esc(s.name)}${otherMode(s) ? ' <span class="md" title="light and dark">☀☾</span>' : ''}${weightBadge(s.id)}</span><span class="bl">${esc(s.blurb)}</span></button>`;
     list.innerHTML =
       `<nav class="grp-jump">${groups.map((g, i) => `<button data-g="${i}"${g.skins.some((s) => s.id === base) ? ' class="on"' : ''}>${esc(g.name)}</button>`).join('')}</nav>` +
       groups.map((g, i) => `<h5 class="grp" id="skin-grp-${i}">${esc(g.name)}${g.blurb ? ` <span>${esc(g.blurb)}</span>` : ''}</h5>${g.skins.map(card).join('')}`).join('');

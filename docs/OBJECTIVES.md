@@ -142,7 +142,16 @@ In this order (the first three are the most value for the least work):
     camera there, hidden after Fit. A small overview of the whole grid in a corner:
     every machine as a box, the running one lit, the view as a frame; drag
     it to move. Only for grids bigger than the view.
-12. [ ] **How heavy is a skin** (S). In the skin picker, a light / medium /
+12. [x] **How heavy is a skin** (S). Done 2026-10-01: a light / medium /
+    heavy badge on each skin in the picker (`src/skins/weight.ts`: a
+    frame's whole cost against the lightest skin's, ≤1.3× light, ≤2×
+    medium), the numbers and how they were measured on hover, and a note on
+    skins that make 10+ gradients a frame (Firefox). Data in
+    `src/skins/weight-data.ts`, written by `node tools/bench.mjs --skins all
+    --sample reader --uncapped --save` (a headed window on the terminal's
+    desktop, which must be the one on screen). The numbers in it now are
+    provisional (one round, with a game on the same GPU): run that again on
+    a quiet machine. `test/weight.test.ts`. In the skin picker, a light / medium /
     heavy mark from `tools/bench.mjs` numbers kept in the repo (and a note
     that Firefox pays more for gradients), so a slow laptop can pick well.
 13. [ ] **Guided tours** (L). A sample can carry narration: steps with a
