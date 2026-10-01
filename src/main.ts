@@ -1,6 +1,7 @@
 import { diagReport, reportCheck } from './diag';
 import { askNote, renderNotes } from './notes-ui';
 import { readReplay } from './replay';
+import { renderMinimap } from './minimap';
 import { initReplayButton, startReplay } from './replay-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
@@ -1259,6 +1260,7 @@ function tick(now: number): void {
   view.draw(S, S.skin, now);
   renderStageCard(S, traceRevision);
   renderPlaybar();
+  renderMinimap(view, () => (lastPanAt = performance.now()));
   renderFeed(S, traceRevision);
   renderDuel(now, S, view, editor);
   renderInspector();

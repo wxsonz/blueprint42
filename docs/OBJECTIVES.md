@@ -133,7 +133,13 @@ In this order (the first three are the most value for the least work):
     canvas) or as one self-contained HTML replay (the trace and the app, no
     server, no gdb) a classmate can open. Done when the exported replay
     plays the same frames as the app (pixcmp on its frames).
-11. [ ] **A minimap** (S). A small overview of the whole grid in a corner:
+11. [x] **A minimap** (S). Done 2026-10-01: `src/minimap.ts`, bottom right
+    of the grid, in the chrome's CSS colours: every host a box, the running
+    one lit, the view a frame; click or drag to look there (it counts as
+    the author panning, so Follow waits). Hidden while the grid fits the
+    view; drawn only when the camera, layout or running machine changes.
+    Checked headless on the reader: shown zoomed in, a click moved the
+    camera there, hidden after Fit. A small overview of the whole grid in a corner:
     every machine as a box, the running one lit, the view as a frame; drag
     it to move. Only for grids bigger than the view.
 12. [ ] **How heavy is a skin** (S). In the skin picker, a light / medium /

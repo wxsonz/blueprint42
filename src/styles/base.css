@@ -781,3 +781,7 @@ kbd {
 /* a replay file (src/replay-ui.ts): nothing that runs code or opens other code */
 html[data-replay] #btn-open, html[data-replay] .examples:has(#tests, #examples), html[data-replay] #run-row, html[data-replay] #cases { display: none !important; }
 .replay-tag { margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px; font-size: 0.85em; opacity: 0.8; }
+
+/* the minimap (src/minimap.ts): the whole grid, small, bottom right */
+#minimap { position: absolute; right: 10px; bottom: 10px; width: 180px; height: 120px; z-index: 6; background: var(--panel-bg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 6px 20px rgba(0,0,0,0.35)); opacity: 0.92; cursor: crosshair; }
+#minimap[hidden] { display: none; }
