@@ -760,3 +760,7 @@ kbd {
 #explain p { margin: 8px 12px 6px; line-height: 1.4; }
 #explain.freed p, #explain.unset p { color: var(--err, #e8453a); }
 #explain button.link { margin: 0 12px 10px; background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* search the trace: a box after the timeline */
+#trace-search { width: 13em; font: calc(11px * var(--mono-scale, 1)) var(--font-mono); background: var(--input-bg, transparent); color: inherit; border: var(--input-border, 1px solid color-mix(in srgb, currentColor 30%, transparent)); border-radius: 3px; padding: 2px 6px; }
+#trace-search-note { font: calc(11px * var(--mono-scale, 1)) var(--font-mono); opacity: 0.75; white-space: nowrap; max-width: 22em; overflow: hidden; text-overflow: ellipsis; }

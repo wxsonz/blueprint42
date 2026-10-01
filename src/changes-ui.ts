@@ -3,7 +3,7 @@
 // (playbar.ts); a chip beside it counts them and steps to the previous or next
 // one, where the statement that did it is the one lit.
 import { esc } from './dom';
-import { changesOf, explainValue } from './history';
+import { changesOf, explainValue, searchTrace } from './history';
 import { S, timeline, toast, update } from './state';
 
 function chip(): HTMLElement {
@@ -86,4 +86,42 @@ export function showExplain(fn: string, name: string, x: number, y: number): voi
   el.innerHTML = `<div class="ex-title"><span>${esc(name)} in ${esc(fn)}</span><button class="btn sm" data-close title="Close">×</button></div>
     <p>${esc(ex.text)}</p>${ex.at !== null ? `<button class="link" data-at="${ex.at}">go to step ${ex.at + 1}${ex.line !== null ? ` (line ${ex.line + 1})` : ''}</button>` : ''}`;
   el.hidden = false;
+}
+
+// Search the trace (nice to have 5): a box after the timeline. Enter goes to
+// the next match, Shift+Enter the one before, Escape clears; matches are
+// marked on the timeline (playbar.ts).
+export function initSearch(): void {
+  const input = document.createElement('input');
+  input.id = 'trace-search';
+  input.placeholder = 'search: i == 3, a function, line 52, malloc…';
+  input.spellcheck = false;
+  input.title = 'Search the trace: a condition (i == 3, p == NULL: where it becomes true), a function (its calls), line 52, malloc, free, write, read. Enter: next, Shift+Enter: previous, Esc: clear';
+  const note = document.createElement('span');
+  note.id = 'trace-search-note';
+  timeline.after(input, note);
+  const run = () => {
+    const t = S.trace;
+    const q = input.value.trim();
+    if (!t || !q) return void (update('search', { search: null }), (note.textContent = ''));
+    const r = searchTrace(t, S.model?.fns.map((f) => f.name) ?? [], q);
+    update('search', { search: { query: q, at: r.at, note: r.note } });
+    note.textContent = r.note;
+  };
+  input.addEventListener('input', run);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // typing here isn't the player's keys
+    if (e.key === 'Escape') return void ((input.value = ''), run(), input.blur());
+    if (e.key !== 'Enter') return;
+    const at = S.search?.at ?? [];
+    const now = S.pos;
+    const i = e.shiftKey ? [...at].reverse().find((x) => x + 0.9 < now - 1e-6) : at.find((x) => x + 0.9 > now + 1e-6);
+    if (i !== undefined) update('searchJump', { pos: i + 0.9, playing: false, stepTarget: null });
+  });
+}
+
+// a new trace: the search runs again on it
+export function searchAgain(): void {
+  const input = document.getElementById('trace-search') as HTMLInputElement | null;
+  if (input?.value.trim()) input.dispatchEvent(new Event('input'));
 }

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { handleTrace } from '../server/trace.mjs';
 import { convertGdb } from '../src/gdb';
 import { parse } from '../src/parse';
-import { changesOf, explainValue } from '../src/history';
+import { changesOf, explainValue, searchTrace } from '../src/history';
 import { sample, setupParser } from './helpers';
 
 beforeAll(setupParser);
@@ -55,3 +55,40 @@ describe('when did this change', () => {
   }, 60000);
 });
 
+
+describe('search the trace', () => {
+  it('finds what counting the trace by hand finds', async () => {
+    const s = sample('sort');
+    const m = parse(s.src);
+    const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name) });
+    const t = convertGdb(r, m, s.src);
+    const fns = m.fns.map((f) => f.name);
+    // a function: its calls
+    expect(searchTrace(t, fns, 'swap_ints').at).toEqual(t.evs.flatMap((e, i) => (e.k === 'call' && e.fn === 'swap_ints' ? [i] : [])));
+    // a condition: each step j becomes 2, counted from the snapshots by hand
+    let was = false;
+    const hand: number[] = [];
+    t.evs.forEach((_, i) => {
+      const now = t.snaps[i + 1].stack.flatMap((f) => f.cells).some((c) => c.name === 'j' && c.val.k === 'int' && c.val.v === 2);
+      if (now && !was) hand.push(i);
+      was = now;
+    });
+    expect(hand.length).toBeGreaterThan(0);
+    expect(searchTrace(t, fns, 'j == 2').at).toEqual(hand);
+    // a line: where the trace stopped on it
+    const L = s.src.split('\n').findIndex((l) => l.includes('swap_ints(&tab[j], &tab[j + 1]);'));
+    expect(searchTrace(t, fns, `line ${L + 1}`).at.length).toBe(t.evs.filter((e) => e.line === L && e.k !== 'ret').length);
+    // output
+    expect(searchTrace(t, fns, 'write').at.length).toBe(t.evs.filter((e) => e.k === 'out').length);
+    expect(searchTrace(t, fns, 'nonsense here').kind).toBe('none');
+  }, 60000);
+
+  it('malloc and free in the list sample: three each', async () => {
+    const s = sample('list');
+    const m = parse(s.src);
+    const r = await handleTrace({ src: s.src, fns: m.fns.map((f) => f.name) });
+    const t = convertGdb(r, m, s.src);
+    expect(searchTrace(t, [], 'malloc').at.length).toBe(3);
+    expect(searchTrace(t, [], 'free').at.length).toBe(3);
+  }, 60000);
+});

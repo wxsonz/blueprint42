@@ -1,5 +1,5 @@
 import { diagReport, reportCheck } from './diag';
-import { renderChanges, showChanges, showExplain } from './changes-ui';
+import { initSearch, renderChanges, searchAgain, showChanges, showExplain } from './changes-ui';
 import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
@@ -231,6 +231,7 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const atEnd = S.trace !== null && S.pos >= oldN;
   update('applyTrace', { trace });
   if (S.changes) update('applyTrace', { changes: null }), renderChanges(); // marks of the last run don't belong to this one
+  searchAgain();
   // dev: does the trace hold together? (src/validate.ts; failures in the diagnostics panel)
   if (import.meta.env.DEV && trace) setTimeout(() => { if (S.trace === trace) for (const p of validateTrace(trace)) reportCheck(p); }, 0);
   prepareStage(trace); // focus mode sizes each return's card before playing it
@@ -1484,6 +1485,7 @@ async function boot(): Promise<void> {
     // diagnostics: what a frame costs, what went wrong (on: start or stop the profiler)
     // (stopping returns what was counted, then clears it)
     diag: (on?: boolean) => { const r = diagReport(); if (on !== undefined) diagOn(view, on); return on ? diagReport() : r; } } });
+  initSearch();
   if (import.meta.env.DEV) initDiagPanel(view);
 }
 

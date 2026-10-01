@@ -38,6 +38,7 @@ export type AppState = ViewState & {
   project: Project | null; // M5: an open folder (or a bundled sample project)
   changes: { label: string; list: Change[] } | null; // "when did this change?": marked on the timeline
   cases: TestCase[]; // a single file's test cases (a project's are in its run settings)
+  search: { query: string; at: number[]; note: string } | null; // the trace search's matches, marked on the timeline
 };
 const state: AppState = {
   layout,
@@ -66,6 +67,7 @@ const state: AppState = {
   project: null,
   changes: null,
   cases: [],
+  search: null,
 };
 
 // S is read everywhere and changed only through update(), by name: dev

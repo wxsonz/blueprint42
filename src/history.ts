@@ -137,3 +137,49 @@ const fmt = (v: V) => (v.k === 'int' ? String(v.v) : v.k === 'ptr' ? (v.to === n
 function snapFn(t: Trace, i: number, frame: number): string | null {
   return t.snaps[i]?.stack.find((f) => f.id === frame)?.fn ?? null;
 }
+
+// ---- search the trace (nice to have 5) ----
+export interface SearchResult { kind: 'condition' | 'calls' | 'line' | 'malloc' | 'free' | 'write' | 'read' | 'none'; at: number[]; note: string }
+
+const OPS: Record<string, (a: number, b: number) => boolean> = { '==': (a, b) => a === b, '!=': (a, b) => a !== b, '<': (a, b) => a < b, '<=': (a, b) => a <= b, '>': (a, b) => a > b, '>=': (a, b) => a >= b };
+
+// what a query finds: `i == 3` (each step it becomes true, any function's i),
+// a function's name (its calls), `line 52`, malloc, free, write (output), read (stdin)
+export function searchTrace(t: Trace, fns: string[], query: string): SearchResult {
+  const q = query.trim();
+  const evs = t.evs;
+  const all = (f: (e: Trace['evs'][number]) => boolean) => evs.flatMap((e, i) => (f(e) ? [i] : []));
+  if (!q) return { kind: 'none', at: [], note: '' };
+  const cond = /^([A-Za-z_]\w*)\s*(==|!=|<=|>=|<|>)\s*(-?\d+|NULL)$/.exec(q);
+  if (cond) {
+    const [, name, op, rhs] = cond;
+    const want = rhs === 'NULL' ? null : Number(rhs);
+    // the variable's value after each event: any cell with this name (the newest frame first)
+    const holds = (i: number): boolean => {
+      const s = t.snaps[i];
+      const cells = [...s.stack].reverse().flatMap((f) => f.cells).concat(s.statics).filter((c) => c.name === name);
+      return cells.some((c) => (want === null ? c.val.k === 'ptr' && (op === '==' ? c.val.to === null : c.val.to !== null) : c.val.k === 'int' && OPS[op](Number(c.val.v), want)));
+    };
+    const at: number[] = [];
+    let was = holds(0);
+    for (let i = 0; i < evs.length; i++) {
+      const now = holds(i + 1);
+      if (now && !was) at.push(i);
+      was = now;
+    }
+    return { kind: 'condition', at, note: `${q}: becomes true ${at.length}×` };
+  }
+  const line = /^(?:line\s+)?(\d+)$/.exec(q);
+  if (line) {
+    const L = Number(line[1]) - 1;
+    const at = all((e) => e.line === L && e.k !== 'ret');
+    return { kind: 'line', at, note: `line ${L + 1}: reached ${at.length}×` };
+  }
+  if (q === 'malloc') { const at = all((e) => e.k === 'alloc'); return { kind: 'malloc', at, note: `malloc: ${at.length}×` }; }
+  if (q === 'free') { const at = all((e) => e.k === 'free'); return { kind: 'free', at, note: `free: ${at.length}×` }; }
+  if (q === 'write' || q === 'output') { const at = all((e) => e.k === 'out'); return { kind: 'write', at, note: `output written: ${at.length}×` }; }
+  if (q === 'read' || q === 'stdin') { const at = all((e) => e.k === 'in'); return { kind: 'read', at, note: `stdin read: ${at.length}×` }; }
+  const fn = fns.find((f) => f === q);
+  if (fn) { const at = all((e) => e.k === 'call' && e.fn === fn); return { kind: 'calls', at, note: `${fn}: called ${at.length}×` }; }
+  return { kind: 'none', at: [], note: `nothing to search for in "${q}": try i == 3, a function's name, line 52, malloc, free, write, read` };
+}

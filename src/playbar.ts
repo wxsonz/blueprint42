@@ -184,6 +184,14 @@ function drawTimeline(): void {
     }
     g.globalAlpha = 1;
   }
+  // the trace search's matches: a small triangle at the bottom
+  if (S.search?.at.length) {
+    g.fillStyle = cssVar('--tl-call');
+    for (const i of S.search.at) {
+      const sx = ((i + 0.9) / n) * W;
+      g.beginPath(); g.moveTo(sx - 3.5, H); g.lineTo(sx + 3.5, H); g.lineTo(sx, H - 6); g.fill();
+    }
+  }
   g.fillStyle = '#ef5b50';
   for (const v of violations()) {
     const vx = (v.at / n) * W;

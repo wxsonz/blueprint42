@@ -64,7 +64,11 @@ In this order (the first three are the most value for the least work):
    since its frame began; written at line N (jump); or read from a block
    freed at step N (and what glibc keeps there, the tcache key, named as
    such). Done when the list sample's read after free says so.
-5. [ ] **Search the trace** (S). A box over the timeline: `i == 3`, a
+5. [x] **Search the trace** (S). Done 2026-10-01: `searchTrace`
+   (`src/history.ts`: a condition where it becomes true, a function's calls,
+   a line, malloc, free, write, read) and a box after the timeline (Enter,
+   Shift+Enter, Esc; matches as triangles). `test/history.test.ts` checks it
+   against counting the trace by hand. A box over the timeline: `i == 3`, a
    function name (its calls), a line number, `malloc` / `free`, `write`. The
    matches are marked; Enter jumps to the next. Done when each kind finds
    what a hand count of the trace finds.
