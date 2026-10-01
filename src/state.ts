@@ -12,6 +12,7 @@ import type { IconKind, Skin } from './skins/types';
 import type { Sprite } from './blueprint';
 import type { Project } from './workspace';
 import type { Change } from './history';
+import type { TestCase } from './cases';
 import { $, store } from './dom';
 import { setRecentActions } from './diag';
 
@@ -36,6 +37,7 @@ export type AppState = ViewState & {
   sprites: Sprite[];
   project: Project | null; // M5: an open folder (or a bundled sample project)
   changes: { label: string; list: Change[] } | null; // "when did this change?": marked on the timeline
+  cases: TestCase[]; // a single file's test cases (a project's are in its run settings)
 };
 const state: AppState = {
   layout,
@@ -63,6 +65,7 @@ const state: AppState = {
   sprites: [],
   project: null,
   changes: null,
+  cases: [],
 };
 
 // S is read everywhere and changed only through update(), by name: dev

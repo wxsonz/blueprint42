@@ -2,6 +2,7 @@
 // they are on disk), run settings, and the calls to the local file server.
 // No DOM here; main.ts draws it. Nothing is ever written to disk from here
 // except by save(), which main.ts calls only after the author confirmed.
+import { sanitizeCases, type TestCase } from './cases';
 import type { EditorState } from '@codemirror/state';
 import { parseProject, type Model } from './parse';
 
@@ -23,6 +24,7 @@ export interface RunCfg {
   stdin: string;
   args: string[];
   defines: string[];
+  cases?: TestCase[]; // test cases (src/cases.ts), saved with the rest
 }
 
 export interface Project {
@@ -105,6 +107,8 @@ export function parseRun(text: string | undefined): RunCfg {
     if (typeof j.stdin === 'string') run.stdin = j.stdin.slice(0, 100_000);
     if (Array.isArray(j.args)) run.args = j.args.filter((a): a is string => typeof a === 'string').slice(0, 32);
     if (Array.isArray(j.defines)) run.defines = j.defines.filter((d): d is string => typeof d === 'string' && DEF.test(d)).slice(0, 32);
+    const cases = sanitizeCases(j.cases);
+    if (cases.length) run.cases = cases;
   } catch {
     /* a broken run.json keeps the defaults; the file itself stays as it is */
   }
@@ -112,7 +116,7 @@ export function parseRun(text: string | undefined): RunCfg {
 }
 
 export const serializeRun = (run: RunCfg) => JSON.stringify(run, null, 2) + '\n';
-export const runEmpty = (run: RunCfg) => !run.stdin && !run.args.length && !run.defines.length;
+export const runEmpty = (run: RunCfg) => !run.stdin && !run.args.length && !run.defines.length && !run.cases?.length;
 
 // "a 'b c' d" → ["a", "b c", "d"]: arguments the way a shell splits them.
 export function splitArgs(s: string): string[] {

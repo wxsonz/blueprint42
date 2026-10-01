@@ -40,7 +40,13 @@ In this order (the first three are the most value for the least work):
    Click a row to jump there. Only what the trace knows; nothing guessed.
    Done when the lost and crash samples' reports match their traces in a
    test.
-3. [ ] **Test cases** (M). Per sample or project, a list of runs (stdin,
+3. [x] **Test cases** (M). Done 2026-10-01: `src/cases.ts` (`judge`: pass,
+   the first differing byte both ways, crashed, cut short), the panel under
+   the run settings (`src/cases-ui.ts`: + this run, Run all, open a case,
+   edit its expected output), stdout as a pipe so the bytes are exact; a
+   project's cases in `.blueprint42/run.json` (Save dialog), a file's in the
+   browser. The reader sample comes with three; `test/cases.test.ts` runs
+   them: two pass, the third fails at byte 2 and says so. Per sample or project, a list of runs (stdin,
    arguments, -D, and optionally the output expected). "Run all" traces
    each (gdb), and shows pass, fail (the first differing byte of output) or
    crashed, with a click to open that run. Saved with the project

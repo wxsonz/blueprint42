@@ -13,7 +13,7 @@ import { createEditor, setVim, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp';
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
-import { convertGdb, type GResult } from './gdb';
+import { convertGdb, type GdbRequest, type GResult } from './gdb';
 import { initGfxButton } from './gfx/ui';
 import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
@@ -267,6 +267,23 @@ export function cancelGdb(): void {
   if (S.gdb.status === 'running') update('cancelGdb', { gdb: { status: 'idle' } });
 }
 
+// What the trace server is asked to run: this file or the open project, with
+// these run settings (the page's own, or a test case's).
+export function gdbRequest(src: string, model: Model, cfg: { stdin: string; args: string[]; defines: string[] }, terminal: boolean, files = S.project ? buildFiles(S.project) : null): GdbRequest {
+  const p = S.project;
+  return p
+    ? {
+      project: { files: files! }, defines: cfg.defines, stdin: cfg.stdin, args: cfg.args,
+      fns: [...new Set(model.fns.map((f) => f.cname))], maxSteps: 20000, maxSeconds: 8, terminal,
+      // the tracer knows functions by C name and file, not by key
+      bindings: S.sprites.map((sp) => {
+        const fn = sp.binding?.fn ? model.byName.get(sp.binding.fn) : undefined;
+        return fn && sp.binding ? { ...sp, binding: { ...sp.binding, fn: fn.cname, file: fn.file } } : sp;
+      }),
+    }
+    : { src, files: S.sample.files, defines: cfg.defines, args: cfg.args, stdin: cfg.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites, terminal };
+}
+
 export function startGdb(src: string, model: Model, fresh: boolean): void {
   update('startGdb', { gdb: { status: 'running' } });
   gdbTimer = window.setTimeout(async () => {
@@ -276,21 +293,7 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
     const p = S.project;
     const files = p ? buildFiles(p) : null;
     try {
-      r = await traceWindow(
-        p
-          ? {
-            project: { files: files! }, defines: p.run.defines, stdin: p.run.stdin, args: p.run.args,
-            fns: [...new Set(model.fns.map((f) => f.cname))], maxSteps: 20000, maxSeconds: 8, terminal: store.get('stdout') !== 'pipe',
-            // the tracer knows functions by C name and file, not by key
-            bindings: S.sprites.map((sp) => {
-              const fn = sp.binding?.fn ? model.byName.get(sp.binding.fn) : undefined;
-              return fn && sp.binding ? { ...sp, binding: { ...sp.binding, fn: fn.cname, file: fn.file } } : sp;
-            }),
-          }
-          : { src, files: S.sample.files, defines: S.defines, args: S.args, stdin: S.stdin, fns: model.fns.map((f) => f.name), maxSteps: 20000, maxSeconds: 8, bindings: S.sprites, terminal: store.get('stdout') !== 'pipe' },
-        0,
-        ac.signal,
-      );
+      r = await traceWindow(gdbRequest(src, model, p ? p.run : { stdin: S.stdin, args: S.args, defines: S.defines }, store.get('stdout') !== 'pipe', files), 0, ac.signal);
     } catch {
       return; // superseded by a newer edit
     }

@@ -1,6 +1,7 @@
 // Built-in examples, bundled at build time (no runtime fs access). Each
 // shows something the blueprint can do; the line reader is also the test
 // fixture (samples/line_reader, read-only: its tests pin its behaviour).
+import type { TestCase } from './cases';
 import lrH from '../samples/line_reader/line_reader.h?raw';
 import lrC from '../samples/line_reader/line_reader.c?raw';
 import lrU from '../samples/line_reader/line_reader_utils.c?raw';
@@ -15,6 +16,7 @@ export interface Sample {
   stdin?: string; // fed to the program under gdb
   defines?: string[]; // -D flags for the trace server
   files?: Record<string, string>; // read-only support files (headers) next to the buffer
+  cases?: TestCase[]; // test cases it comes with (src/cases.ts)
 }
 
 const pointer = `void	bump(int *n)
@@ -503,7 +505,13 @@ export const SAMPLES: Sample[] = [
     blurb: 'two blocks allocated, one freed: the other is reported as a leak', src: leak },
   { key: 'reader', group: 'io', title: 'line reader (stdin)', file: 'line_reader.c',
     blurb: 'a get_next_line-style reader run for real on a 3-line input: a static table, a growing buffer, read() in small chunks',
-    src: reader, stdin: READER_STDIN, defines: READER_DEFINES, files: { 'line_reader.h': lrH } },
+    src: reader, stdin: READER_STDIN, defines: READER_DEFINES, files: { 'line_reader.h': lrH },
+    // it prints back what it reads: two cases that pass, one that fails on purpose
+    cases: [
+      { name: 'three lines', stdin: READER_STDIN, args: [], defines: READER_DEFINES, expect: READER_STDIN },
+      { name: 'no newline at the end', stdin: 'last line', args: [], defines: READER_DEFINES, expect: 'last line' },
+      { name: 'fails on purpose', stdin: 'a\nb\n', args: [], defines: READER_DEFINES, expect: 'a\nB\n' },
+    ] },
 ];
 
 // A sample *project*: files as they'd sit in a folder, plus what the tool

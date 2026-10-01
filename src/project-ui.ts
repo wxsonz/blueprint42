@@ -1,6 +1,7 @@
 // Projects (M5) and everything around them: opening folders, files and tabs,
 // live edits from other editors (M6), polling the disk, the explorer, and the
 // Save / Open Folder / Go to file dialogs.
+import { renderCases } from './cases-ui';
 import { type Blueprint, parseBlueprint, serializeBlueprint } from './blueprint';
 import { $, esc, store } from './dom';
 import { createState, jumpTo, swapState } from './editor';
@@ -440,6 +441,7 @@ export function renderRunFields(): void {
   const defs = $<HTMLInputElement>('run-defs');
   if (document.activeElement !== args) args.value = joinArgs(p ? p.run.args : S.args);
   if (document.activeElement !== defs) defs.value = (p ? p.run.defines : S.defines).join(' ');
+  renderCases(); // the cases that go with these settings
 }
 
 // A single file's run settings changed: keep them, and run it again under gdb.

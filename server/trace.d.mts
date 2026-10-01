@@ -12,6 +12,7 @@ export interface TraceRequest {
   maxSteps?: number;
   maxSeconds?: number;
   bindings?: Sprite[];
+  terminal?: boolean; // stdout a terminal (line-buffered, the default) or a pipe (fully buffered, the bytes exactly)
 }
 export function handleTrace(req: TraceRequest): Promise<GResult>;
 export function parseDiagnostics(text: string, dir?: string | null, paths?: string[] | null): { file: string; line: number; col: number; severity: string; msg: string }[];
