@@ -767,6 +767,12 @@ kbd {
 #trace-search-note { font: calc(11px * var(--mono-scale, 1)) var(--font-mono); opacity: 0.75; white-space: nowrap; max-width: 22em; overflow: hidden; text-overflow: ellipsis; }
 
 /* "pause here when…": the condition field */
+#note-ask { position: fixed; z-index: 30; padding: 6px 8px; background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 8px 30px rgba(0,0,0,0.45)); font: calc(12px * var(--mono-scale, 1)) var(--font-mono); }
+#note-ask[hidden] { display: none; }
+#note-ask input { width: 18em; font: inherit; margin-left: 4px; }
+.notes li { grid-template-columns: 1.2em auto 1fr auto; }
+.notes li.stale { opacity: 0.7; }
+.notes[hidden] { display: none; }
 #bp-cond { position: absolute; z-index: 8; padding: 6px 8px; background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 8px 30px rgba(0,0,0,0.45)); font: calc(12px * var(--mono-scale, 1)) var(--font-mono); }
 #bp-cond[hidden] { display: none; }
 #bp-cond input { width: 12em; font: inherit; margin-left: 4px; }

@@ -110,7 +110,13 @@ In this order (the first three are the most value for the least work):
    the editor, counted as norminette counts (`src/norm.ts`). Done when the
    marks agree with norminette on the samples (tested on its rules, not by
    calling it).
-9. [ ] **Notes on the timeline** (S). Pin a note to a step ("the bug starts
+9. [x] **Notes on the timeline** (S). Done 2026-10-01: `src/notes.ts`,
+   `src/notes-ui.ts`. Right-click the timeline: a note at that step, a flag
+   on the timeline, a row under the test cases (jump, ×). Each note keeps
+   its step's function and line, so after an edit or another input a note
+   whose step is elsewhere says so (a hollow flag, no jump) instead of
+   pointing at the wrong moment. Kept in run.json (Save dialog) or per
+   sample in this browser; `test/notes.test.ts`. Pin a note to a step ("the bug starts
    here"); shown as a mark, listed in a panel, kept with the project's
    `.blueprint42/` (after the Save dialog) or per sample in the browser.
 10. [ ] **Export a run** (M). A range of steps as a video (WebM, from the

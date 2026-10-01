@@ -1,4 +1,5 @@
 import { diagReport, reportCheck } from './diag';
+import { askNote, renderNotes } from './notes-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
 import { validateTrace } from './validate';
@@ -251,6 +252,7 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   prepareStage(trace); // focus mode sizes each return's card before playing it
   setTraceRevision(traceRevision + 1);
   setLastInspectorKey('');
+  renderNotes(); // (whether each note's step is still where it was)
   const n = trace?.evs.length ?? 0;
   update('applyTrace', { pos: fresh ? 0 : atEnd ? n : Math.min(S.pos, n) });
   update('applyTrace', { stepTarget: null });
@@ -1451,12 +1453,18 @@ async function boot(): Promise<void> {
     seek(Math.round(((e.clientX - r.left) / r.width) * N()));
   };
   timeline.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return; // (right-click: a note)
     scrubbing = true;
     timeline.setPointerCapture(e.pointerId);
     scrub(e);
   });
   timeline.addEventListener('pointermove', (e) => scrubbing && scrub(e));
   timeline.addEventListener('pointerup', () => (scrubbing = false));
+  timeline.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const r = timeline.getBoundingClientRect();
+    askNote(Math.min(N() - 1, Math.floor(((e.clientX - r.left) / r.width) * N())), e.clientX, e.clientY);
+  });
 
   bindMouse();
   window.addEventListener('keydown', onKey, true);

@@ -11,6 +11,7 @@ import { switchFile } from './project-ui';
 import { pointeeName } from './render';
 import { frameAt } from './playback';
 import { renderChanges, renderCompare } from './changes-ui';
+import { noteHolds } from './notes';
 import { renderReport } from './report-ui';
 import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline, traceRevision } from './state';
 import { EditorView } from '@codemirror/view';
@@ -184,6 +185,19 @@ function drawTimeline(): void {
       g.beginPath(); g.arc(cx, H - 8, 2.5, 0, Math.PI * 2); g.fill();
     }
     g.globalAlpha = 1;
+  }
+  // notes: a flag at each one's step (a hollow one: its step is somewhere else now)
+  const notes = S.project ? S.project.run.notes ?? [] : S.notes;
+  if (notes.length) {
+    g.strokeStyle = g.fillStyle = cssVar('--tl-head');
+    g.lineWidth = 1;
+    for (const nt of notes) {
+      if (nt.at >= n) continue;
+      const fx = Math.round(((nt.at + 0.9) / n) * W) + 0.5;
+      g.beginPath(); g.moveTo(fx, H); g.lineTo(fx, 2); g.stroke();
+      g.beginPath(); g.moveTo(fx, 2); g.lineTo(fx + 6, 4.5); g.lineTo(fx, 7); g.closePath();
+      if (noteHolds(t, nt)) g.fill(); else g.stroke();
+    }
   }
   // the trace search's matches: a small triangle at the bottom
   if (S.search?.at.length) {

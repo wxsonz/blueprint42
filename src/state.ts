@@ -13,6 +13,7 @@ import type { Sprite } from './blueprint';
 import type { Project } from './workspace';
 import type { Change } from './history';
 import type { TestCase } from './cases';
+import type { Note } from './notes';
 import type { Breakpoint, Divergence } from './history';
 import { $, store } from './dom';
 import { setRecentActions } from './diag';
@@ -39,6 +40,7 @@ export type AppState = ViewState & {
   project: Project | null; // M5: an open folder (or a bundled sample project)
   changes: { label: string; list: Change[] } | null; // "when did this change?": marked on the timeline
   cases: TestCase[]; // a single file's test cases (a project's are in its run settings)
+  notes: Note[]; // a single file's notes on the timeline (a project's are in its run settings)
   search: { query: string; at: number[]; note: string } | null; // the trace search's matches, marked on the timeline
   breaks: Breakpoint[]; // statements playback pauses on
   compare: { name: string; len: number; div: Divergence | null } | null; // this run beside a test case's: where they part
@@ -70,6 +72,7 @@ const state: AppState = {
   project: null,
   changes: null,
   cases: [],
+  notes: [],
   search: null,
   breaks: [],
   compare: null,

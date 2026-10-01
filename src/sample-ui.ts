@@ -1,6 +1,7 @@
 // A single sample's work, kept in this browser: its text, run settings,
 // layout and sprites; loading, reverting, blueprint export and import.
 import { sanitizeCases, type TestCase } from './cases';
+import { sanitizeNotes, type Note } from './notes';
 import { type Blueprint, type Sprite, parseBlueprint, serializeBlueprint } from './blueprint';
 import { $, store } from './dom';
 import { setDoc } from './editor';
@@ -19,6 +20,7 @@ interface Saved {
   args?: string[];
   defines?: string[];
   cases?: TestCase[]; // test cases (src/cases.ts), kept in this browser
+  notes?: Note[]; // notes on the timeline (src/notes.ts)
   places: [string, number, number, boolean][];
   waypoints: [string, number, number][];
   sprites?: Sprite[];
@@ -46,6 +48,7 @@ export function saveSoon(): void {
     args: S.args,
     defines: S.defines,
     ...(S.cases.length ? { cases: S.cases } : {}),
+    ...(S.notes.length ? { notes: S.notes } : {}),
     places: [...layout.nodes.values()].map((n) => [n.id, n.place.x, n.place.y, n.place.pinned]),
     waypoints: [...layout.waypoints].map(([k, w]) => [k, w.x, w.y]),
     sprites: structuredClone(S.sprites),
@@ -204,6 +207,7 @@ export function loadSample(key: string | undefined, pristine = false): void {
   update('loadSample', { args: saved?.args ?? [] });
   update('loadSample', { defines: saved?.defines ?? s.defines ?? [] });
   update('loadSample', { cases: sanitizeCases(saved?.cases ?? s.cases) });
+  update('loadSample', { notes: sanitizeNotes(saved?.notes) });
   $<HTMLTextAreaElement>('stdin').value = S.stdin;
   renderRunFields();
   $('file-name').textContent = s.file;

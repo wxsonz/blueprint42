@@ -241,7 +241,7 @@ export interface Divergence {
   b: string;
 }
 
-const where = (t: Trace, i: number) => {
+export const where = (t: Trace, i: number) => {
   const e = t.evs[i];
   const fn = e.frame !== null ? t.snaps[i + 1]?.stack.find((f) => f.id === e.frame)?.fn ?? t.snaps[i]?.stack.find((f) => f.id === e.frame)?.fn : null;
   return { k: e.k, line: e.line, fn: fn ?? null };
