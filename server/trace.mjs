@@ -12,6 +12,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { META, listDir, openProject, pollProject, safeRel, saveFiles, wanted } from './project.mjs';
 import { livePush, liveStream } from './live.mjs';
+import { replayPlayer } from './replay.mjs';
 
 const TRACER = fileURLToPath(new URL('./tracer.py', import.meta.url));
 const SRC = 'sandbox.c';
@@ -371,6 +372,7 @@ export function traceMiddleware(opts = {}) {
     '/api/fs/poll': async (b) => ({ ok: true, ...(await pollProject(b.root, b.known)) }),
     '/api/fs/save': async (b) => ({ ok: true, ...(await saveFiles(b.root, b.writes, !!b.force)) }),
     '/api/live/push': (b) => livePush(b),
+    '/api/replay/player': () => replayPlayer(),
   };
   return async (req, res, next) => {
     const stream = req.url === '/api/live/stream';

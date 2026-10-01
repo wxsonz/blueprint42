@@ -14,7 +14,7 @@ import { SAMPLES, SAMPLE_PROJECTS } from './samples';
 import { S, debounce, editor, layout, setLastInspectorKey, setLoadingSample, toast, view, update } from './state';
 
 // ---------------- per-sample work, kept in this browser ----------------
-interface Saved {
+export interface Saved {
   src: string;
   stdin?: string;
   args?: string[];
@@ -38,11 +38,9 @@ function readSaved(key: string): Saved | null {
 }
 
 const saveTimers = new Map<string, number>();
-export function saveSoon(): void {
-  if (S.project) return projectSaveSoon();
-  const key = S.sample.key;
-  clearTimeout(saveTimers.get(key));
-  const saved: Saved = {
+// this sample's work as it is now (what saveSoon keeps; a replay carries it)
+export function currentSaved(): Saved {
+  return {
     src: editor.state.doc.toString(),
     stdin: S.stdin,
     args: S.args,
@@ -55,6 +53,14 @@ export function saveSoon(): void {
     folded: [...folded],
     shut: [...shut],
   };
+}
+
+export function saveSoon(): void {
+  if (S.project) return projectSaveSoon();
+  if (S.replay) return; // a replay keeps nothing in the viewer's browser
+  const key = S.sample.key;
+  clearTimeout(saveTimers.get(key));
+  const saved = currentSaved();
   saveTimers.set(key, window.setTimeout(() => {
     store.set(`sample.${key}`, JSON.stringify(saved));
     saveTimers.delete(key);
@@ -191,7 +197,9 @@ export function revertSample(): void {
   toast('back to the original sample (Ctrl+Z in the editor undoes this)');
 }
 
-export function loadSample(key: string | undefined, pristine = false): void {
+export function loadSample(key: string | undefined, pristine = false, given?: Saved): void {
+  // a replay plays its one run: another sample here would be drawn with that trace
+  if (S.replay && !given) return toast('This page is a replay of one run: open blueprint42 to try other code');
   const sp = SAMPLE_PROJECTS.find((x) => x.key === key);
   if (sp) return openSampleProject(sp);
   const s = SAMPLES.find((x) => x.key === key || x.title === key) ?? (key ? SAMPLES[Number(key) - 1] : undefined);
@@ -199,8 +207,8 @@ export function loadSample(key: string | undefined, pristine = false): void {
   if (S.project) leaveProject();
   update('loadSample', { sample: s });
   update('loadSample', { selected: null });
-  store.set('lastSample', s.key);
-  const saved = pristine ? null : readSaved(s.key);
+  if (!given) store.set('lastSample', s.key);
+  const saved = given ?? (pristine ? null : readSaved(s.key));
   update('loadSample', { sprites: saved?.sprites ? parseSavedSprites(saved.sprites) : [] });
   const src = saved?.src ?? s.src;
   update('loadSample', { stdin: saved?.stdin ?? s.stdin ?? '' });
@@ -223,7 +231,7 @@ export function loadSample(key: string | undefined, pristine = false): void {
     view.home(S, true);
   }
   renderRevert();
-  if (S.trace) setTimeout(() => play(), 450);
+  if (S.trace && !given) setTimeout(() => play(), 450);
 }
 
 function parseSavedSprites(sprites: Sprite[]): Sprite[] {

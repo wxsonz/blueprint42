@@ -171,6 +171,11 @@ function watchVim(view: EditorView, hooks: EditorHooks): void {
   hooks.onMode('normal');
 }
 
+// a replay: the code is what ran, so it can't be edited
+export function setReadOnly(view: EditorView): void {
+  view.dispatch({ effects: StateEffect.appendConfig.of([EditorState.readOnly.of(true), EditorView.editable.of(false)]) });
+}
+
 export function setVim(view: EditorView, on: boolean, hooks: EditorHooks): void {
   view.dispatch({ effects: vimSlot.reconfigure(on ? vim() : []) });
   if (on) watchVim(view, hooks);

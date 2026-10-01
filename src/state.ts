@@ -14,6 +14,7 @@ import type { Project } from './workspace';
 import type { Change } from './history';
 import type { TestCase } from './cases';
 import type { Note } from './notes';
+import type { Trace } from './interp';
 import type { Breakpoint, Divergence } from './history';
 import { $, store } from './dom';
 import { setRecentActions } from './diag';
@@ -44,6 +45,7 @@ export type AppState = ViewState & {
   search: { query: string; at: number[]; note: string } | null; // the trace search's matches, marked on the timeline
   breaks: Breakpoint[]; // statements playback pauses on
   compare: { name: string; len: number; div: Divergence | null } | null; // this run beside a test case's: where they part
+  replay: { title: string; made: string; trace: Trace } | null; // a replay file (src/replay.ts): this trace, no engine, read-only
 };
 const state: AppState = {
   layout,
@@ -76,6 +78,7 @@ const state: AppState = {
   search: null,
   breaks: [],
   compare: null,
+  replay: null,
 };
 
 // S is read everywhere and changed only through update(), by name: dev

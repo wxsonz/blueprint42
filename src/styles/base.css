@@ -777,3 +777,7 @@ kbd {
 #bp-cond[hidden] { display: none; }
 #bp-cond input { width: 12em; font: inherit; margin-left: 4px; }
 #bp-cond .err { display: block; color: var(--err, #e8453a); margin-top: 4px; }
+
+/* a replay file (src/replay-ui.ts): nothing that runs code or opens other code */
+html[data-replay] #btn-open, html[data-replay] .examples:has(#tests, #examples), html[data-replay] #run-row, html[data-replay] #cases { display: none !important; }
+.replay-tag { margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px; font-size: 0.85em; opacity: 0.8; }

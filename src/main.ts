@@ -1,5 +1,7 @@
 import { diagReport, reportCheck } from './diag';
 import { askNote, renderNotes } from './notes-ui';
+import { readReplay } from './replay';
+import { initReplayButton, startReplay } from './replay-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
 import { validateTrace } from './validate';
@@ -172,7 +174,8 @@ export function analyze(src: string, fresh: boolean): void {
   renderNormMarks();
   const engine = engineFor(model);
   cancelGdb();
-  if (engine === 'interp') {
+  if (S.replay) applyTrace(S.replay.trace, fresh); // (the run it recorded: no engine runs here)
+  else if (engine === 'interp') {
     applyTrace(evaluateInterpreterBindings(run(model), S.sprites), fresh);
     if (fresh) autoSpeed(S.trace!);
   }
@@ -1513,9 +1516,21 @@ async function boot(): Promise<void> {
   initGfxButton(view, () => S.skin);
   showSpeed();
   $('file-name').textContent = S.sample.file;
-  await applySkin(S.skin);
+  // a replay file (src/replay.ts): its skin, its run, and no server at all
+  const replay = readReplay();
+  if (replay) await applySkin(SKINS.find((k) => k.id === replay.skin) ?? S.skin);
+  else await applySkin(S.skin);
   await document.fonts.ready;
   view.resize();
+  if (replay) {
+    startReplay(replay);
+    requestAnimationFrame(frame);
+    initSearch();
+    // (a handle for the frame comparison, tools/replaycmp.mjs)
+    Object.assign(window, { __ftb: { S, view, layout, editor, applySkin, SKINS, freeze: (on = true) => void (frozen = on) } });
+    return;
+  }
+  initReplayButton();
   // Like VS Code: the folder named on the command line, else the last one open.
   const initial = await fsCall<{ path: string | null }>('initial', {}).catch(() => 'unavailable' as const);
   const last = store.get('lastProject') ?? '';

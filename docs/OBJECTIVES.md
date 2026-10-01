@@ -119,7 +119,17 @@ In this order (the first three are the most value for the least work):
    sample in this browser; `test/notes.test.ts`. Pin a note to a step ("the bug starts
    here"); shown as a mark, listed in a panel, kept with the project's
    `.blueprint42/` (after the Save dialog) or per sample in the browser.
-10. [ ] **Export a run** (M). A range of steps as a video (WebM, from the
+10. [x] **Export a run** (M). Done 2026-10-01, as the HTML replay (not
+    WebM: a video of the grid canvas would miss the GPU background layers).
+    "⤓ replay" by the speed saves one HTML file: the app built as a single
+    page (`vite.replay.config.mjs`, built on demand by the trace server,
+    `server/replay.mjs`) with the run in it (`src/replay.ts`; `src/pack.ts`
+    keeps the snapshots' sharing and the Maps). Opened from disk it plays
+    the recorded run read-only, with nothing that runs code. Single files
+    and samples for now; a project isn't exported yet.
+    `node tools/replaycmp.mjs`: list, reader and swap, 3 skins × 2 zooms × 4
+    positions, 72/72 frames the same as the app, no network but fonts.
+    A range of steps as a video (WebM, from the
     canvas) or as one self-contained HTML replay (the trace and the app, no
     server, no gdb) a classmate can open. Done when the exported replay
     plays the same frames as the app (pixcmp on its frames).
