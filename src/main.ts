@@ -1,5 +1,5 @@
 import { diagReport, reportCheck } from './diag';
-import { renderChanges, showChanges } from './changes-ui';
+import { renderChanges, showChanges, showExplain } from './changes-ui';
 import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
@@ -705,6 +705,7 @@ function bindMouse(): void {
       // any variable's row: every step it changed, on the timeline
       const slot = slotAt(S, wx, wy);
       if (slot && S.trace) items.push([`When did ${slot.name} change?`, () => showChanges(slot.fn, slot.name)]);
+      if (slot && S.trace) items.push([`Why is ${slot.name} this value?`, () => showExplain(slot.fn, slot.name, e.clientX, e.clientY)]);
       const nm = layout.nodes.get(hit.id)?.name;
       if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);

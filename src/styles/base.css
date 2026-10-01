@@ -752,3 +752,11 @@ kbd {
 .cases li.fail .mark, .cases li.crash .mark, .cases li.error .mark { color: var(--err, #e8453a); }
 .cases .none { margin: 0; opacity: 0.7; }
 .cases button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; }
+
+/* "why is this value…?": a card where the row was clicked */
+#explain { position: absolute; z-index: 7; width: min(370px, calc(100% - 16px)); background: var(--panel-bg); color: var(--panel-fg); border: var(--panel-border); border-radius: var(--panel-radius, 4px); box-shadow: var(--panel-shadow, 0 10px 40px rgba(0,0,0,0.5)); font: calc(12px * var(--mono-scale, 1)) var(--font-mono); }
+#explain[hidden] { display: none; }
+#explain .ex-title { display: flex; justify-content: space-between; align-items: center; padding: var(--ptitle-pad, 6px 10px); background: var(--ptitle-bg); color: var(--ptitle-fg); font: var(--ptitle-font, 600 13px var(--font-ui)); }
+#explain p { margin: 8px 12px 6px; line-height: 1.4; }
+#explain.freed p, #explain.unset p { color: var(--err, #e8453a); }
+#explain button.link { margin: 0 12px 10px; background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }

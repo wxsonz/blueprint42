@@ -53,7 +53,13 @@ In this order (the first three are the most value for the least work):
    (`.blueprint42/`, after the Save dialog) or per sample in the browser.
    Done when the reader sample has three cases, one failing on purpose, and
    the list says which and why.
-4. [ ] **Why is this value garbage, or NULL?** (M). On a pointer or a value
+4. [x] **Why is this value garbage, or NULL?** (M). Done 2026-10-01:
+   `explainValue` (`src/history.ts`): never set since its call began
+   (garbage), arrived with the call, set at a line (NULL too), or a pointer
+   into a block that's no longer on the heap (which free, where, and what a
+   freed block holds: glibc's bookkeeping); a card from the row's menu with
+   a jump. `test/history.test.ts` on the list sample: unset in main, set by
+   `list = push(list, 3);`, freed right after `free(list)` in clear. On a pointer or a value
    that reads as uninitialised or freed: where it came from. Never written
    since its frame began; written at line N (jump); or read from a block
    freed at step N (and what glibc keeps there, the tcache key, named as

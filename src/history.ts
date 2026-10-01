@@ -68,3 +68,72 @@ export function changesOf(t: Trace, ref: ChangeRef): Change[] {
   });
   return out;
 }
+
+// ---- why is this value what it is? (nice to have 4) ----
+export interface Explanation {
+  what: 'unset' | 'set' | 'freed' | 'gone';
+  text: string; // one sentence, from the trace
+  at: number | null; // the step to look at (the write, the free)
+  line: number | null;
+}
+
+// The variable's value at playback position `pos`, explained: never set since
+// its call began, set at a line (to NULL too), or a pointer into a block that
+// was freed (and what a freed block holds: glibc's own bookkeeping).
+export function explainValue(t: Trace, pos: number, fn: string, name: string): Explanation | null {
+  const i = Math.min(t.evs.length, Math.max(0, Math.floor(pos))); // snapshot i: the state now
+  const snap = t.snaps[i];
+  const ids = cellsOf(t, { fn, name });
+  let cell: SnapCell | undefined;
+  let frameId: number | null = null;
+  for (const c of snap.statics) if (ids.has(c.id)) cell = c;
+  for (const f of [...snap.stack].reverse()) {
+    if (cell) break;
+    const c = f.cells.find((x) => ids.has(x.id));
+    if (c) (cell = c), (frameId = f.id);
+  }
+  if (!cell) return { what: 'gone', text: `${name} doesn't exist now: no call of ${fn} is running`, at: null, line: null };
+  const v = cell.val;
+  // the last change to this very cell, at or before now
+  const last = changesOf(t, { cell: cell.id }).filter((c) => c.at < i).at(-1) ?? null;
+  // when its call began (a local): the call event of its frame
+  const began = frameId !== null ? t.evs.findIndex((e) => e.k === 'call' && e.frame === frameId) : -1;
+  // a pointer into a heap block that isn't on the heap any more (freed; the
+  // converter relabels it "freed #n" at the next stop)
+  const target = v.k === 'ptr' && v.to !== null ? v.to : null;
+  const freedNow = target !== null && (v.k === 'ptr' && v.label?.startsWith('freed ') || (t.cells.get(target)?.frame === -2 && !snap.heap.some((c) => c.id === target)));
+  if (v.k === 'ptr' && target !== null && freedNow) {
+    const block = t.cells.get(target)?.name ?? `#${target}`;
+    const freeAt = [...t.evs.keys()].filter((k) => k < i && t.evs[k].k === 'free' && (t.evs[k] as { cell: number }).cell === target).at(-1) ?? -1;
+    const fe = freeAt >= 0 ? t.evs[freeAt] : null;
+    const fnAt = fe && fe.frame !== null ? snapFn(t, freeAt, fe.frame) : null;
+    return {
+      what: 'freed',
+      text: `${name} still holds the address of block ${block}, freed ${fe ? `at step ${freeAt + 1} (line ${fe.line + 1}${fnAt ? `, in ${fnAt}` : ''})` : 'earlier'}. The memory isn't the program's any more: reading it is undefined behaviour, and what's there now is what free left, the allocator's own bookkeeping (glibc keeps a list pointer and a random key in a freed block's first 16 bytes), not the data that was there.`,
+      at: freeAt >= 0 ? freeAt : null,
+      line: fe ? fe.line : null,
+    };
+  }
+  if (v.k === 'undef' || !last) {
+    if (v.k !== 'undef' && began < 0) return { what: 'set', text: `${name} has held ${fmt(v)} since the run began (a static's initial value, or set before the trace started)`, at: null, line: null };
+    return {
+      what: 'unset',
+      text: v.k === 'undef'
+        ? `${name} hasn't been set since this call of ${fn} began${began >= 0 ? ` (step ${began + 1})` : ''}: its value is whatever was in that stack memory before, garbage.`
+        : `${name} arrived with the call of ${fn}${began >= 0 ? ` at step ${began + 1}` : ''} and hasn't changed since: it's a copy of what the caller passed.`,
+      at: began >= 0 ? began : null,
+      line: began >= 0 ? t.evs[began].line : null,
+    };
+  }
+  return {
+    what: 'set',
+    text: `${name} was set to ${last.after} at step ${last.at + 1}, by line ${last.line + 1} (it was ${last.before} before)${v.k === 'ptr' && v.to === null ? ': NULL, so it points at nothing' : ''}.`,
+    at: last.at,
+    line: last.line,
+  };
+}
+
+const fmt = (v: V) => (v.k === 'int' ? String(v.v) : v.k === 'ptr' ? (v.to === null ? 'NULL' : 'an address') : v.k === 'raw' ? v.text : v.k);
+function snapFn(t: Trace, i: number, frame: number): string | null {
+  return t.snaps[i]?.stack.find((f) => f.id === frame)?.fn ?? null;
+}
