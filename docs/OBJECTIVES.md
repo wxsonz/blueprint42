@@ -7,6 +7,87 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 Skin polish is not on this list. It's optional and guided by the author one
 skin at a time; `docs/SKINS.md` says which skins are reviewed.
 
+## Next (2026-10-01): nice to have
+
+The main objective: answer the questions a 42 student really asks of a run
+("when did this change?", "why is it garbage?", "does it leak?", "does it
+pass my tests?"), from data the trace already has. Every picture obeys the
+hard rule (SPEC principle 4: draw less, never something false); new
+pictures are prototyped in Minimal and Barebone; every step is checked with
+`tools/pixcmp.mjs` (other pictures unchanged), the frame tests and the
+contract tests. A browser opened to look goes to the terminal's desktop.
+
+In this order (the first three are the most value for the least work):
+1. [ ] **When did this change?** (S). Right-click a variable (a storage row,
+   a heap card, a static): "show when it changed". The timeline marks every
+   write to it (the cell's `write` events, and gdb steps where its value
+   moved); next/previous write jumps there, with the statement that did it
+   lit. Done when a test finds every write to `list->next` in the list
+   sample, and the marks match the trace.
+2. [ ] **The end report** (M). When a run ends, a card: each leak with its
+   size and where it was malloc'd (function, line), each lost block with the
+   step it was lost at, the exit code or the signal and the line it died on.
+   Click a row to jump there. Only what the trace knows; nothing guessed.
+   Done when the lost and crash samples' reports match their traces in a
+   test.
+3. [ ] **Test cases** (M). Per sample or project, a list of runs (stdin,
+   arguments, -D, and optionally the output expected). "Run all" traces
+   each (gdb), and shows pass, fail (the first differing byte of output) or
+   crashed, with a click to open that run. Saved with the project
+   (`.blueprint42/`, after the Save dialog) or per sample in the browser.
+   Done when the reader sample has three cases, one failing on purpose, and
+   the list says which and why.
+4. [ ] **Why is this value garbage, or NULL?** (M). On a pointer or a value
+   that reads as uninitialised or freed: where it came from. Never written
+   since its frame began; written at line N (jump); or read from a block
+   freed at step N (and what glibc keeps there, the tcache key, named as
+   such). Done when the list sample's read after free says so.
+5. [ ] **Search the trace** (S). A box over the timeline: `i == 3`, a
+   function name (its calls), a line number, `malloc` / `free`, `write`. The
+   matches are marked; Enter jumps to the next. Done when each kind finds
+   what a hand count of the trace finds.
+6. [ ] **Breakpoints by picture** (M). Click a station's stop to pause there
+   when playback reaches it (a dot on the station); a condition on it (`len
+   > cap`) pauses only when it holds. Uses the trace already recorded (no
+   re-run). Done when playing the reader stops at each breakpoint hit and
+   nowhere else.
+7. [ ] **Two runs side by side** (L). Run the same program with two inputs
+   (or two -D values): the timeline shows both, and the first step where
+   they differ (a branch taken, a value) is marked, with both values shown.
+   Done when two reader inputs diverge at the step a hand check says.
+8. [ ] **More of the Norm** (M). Beyond the capacity bars: line width (80),
+   forbidden statements (for, do while, switch, goto, ternary), declarations
+   after statements, the 42 header, as marks on the machine and the line in
+   the editor, counted as norminette counts (`src/norm.ts`). Done when the
+   marks agree with norminette on the samples (tested on its rules, not by
+   calling it).
+9. [ ] **Notes on the timeline** (S). Pin a note to a step ("the bug starts
+   here"); shown as a mark, listed in a panel, kept with the project's
+   `.blueprint42/` (after the Save dialog) or per sample in the browser.
+10. [ ] **Export a run** (M). A range of steps as a video (WebM, from the
+    canvas) or as one self-contained HTML replay (the trace and the app, no
+    server, no gdb) a classmate can open. Done when the exported replay
+    plays the same frames as the app (pixcmp on its frames).
+11. [ ] **A minimap** (S). A small overview of the whole grid in a corner:
+    every machine as a box, the running one lit, the view as a frame; drag
+    it to move. Only for grids bigger than the view.
+12. [ ] **How heavy is a skin** (S). In the skin picker, a light / medium /
+    heavy mark from `tools/bench.mjs` numbers kept in the repo (and a note
+    that Firefox pays more for gradients), so a slow laptop can pick well.
+13. [ ] **Guided tours** (L). A sample can carry narration: steps with a
+    sentence each ("watch `buf` here"); playing it moves the camera there,
+    pauses, and shows the sentence. Authored in the sample (no new file
+    format beyond a list of { step, text, focus }). Done when one sample has
+    a tour of its pointers.
+
+Rules for these steps:
+- The trace is the only source: a feature that needs data the trace
+  doesn't hold says so, or isn't drawn (draw less, never false).
+- Files are written only through `server/project.mjs` after the Save
+  dialog; nothing is auto-saved.
+- Reviewed skins keep their look: a new picture lands in Minimal and
+  Barebone first, and other skins get it through their existing parts.
+
 ## Next (2026-10-01): easy to diagnose, hard to break
 
 The main objective: when something looks wrong, slow or stuck, the tool
