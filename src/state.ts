@@ -11,6 +11,7 @@ import { SKINS } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import type { Sprite } from './blueprint';
 import type { Project } from './workspace';
+import type { Change } from './history';
 import { $, store } from './dom';
 import { setRecentActions } from './diag';
 
@@ -34,6 +35,7 @@ export type AppState = ViewState & {
   gdb: { status: 'idle' | 'running' | 'done' | 'unavailable' | 'error'; compile?: GResult['compile']; error?: string; ms?: number };
   sprites: Sprite[];
   project: Project | null; // M5: an open folder (or a bundled sample project)
+  changes: { label: string; list: Change[] } | null; // "when did this change?": marked on the timeline
 };
 const state: AppState = {
   layout,
@@ -60,6 +62,7 @@ const state: AppState = {
   gdb: { status: 'idle' },
   sprites: [],
   project: null,
+  changes: null,
 };
 
 // S is read everywhere and changed only through update(), by name: dev

@@ -10,6 +10,7 @@ import { violations } from './panels';
 import { switchFile } from './project-ui';
 import { pointeeName } from './render';
 import { frameAt } from './playback';
+import { renderChanges } from './changes-ui';
 import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline, traceRevision } from './state';
 import { EditorView } from '@codemirror/view';
 import { N } from './main';
@@ -65,6 +66,7 @@ function roomLine(): { html: string; ev: Ev | null; key: string } | null {
 }
 
 export function renderPlaybar(): void {
+  if (S.changes) renderChanges();
   const t = S.trace;
   const n = N();
   const fr = t && n ? frameAt(t, S.pos) : null;
@@ -169,6 +171,17 @@ function drawTimeline(): void {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = tlCache.head;
   g.fillRect(x / dpr - 1, 0, 2, H);
+  // "when did this change?": a mark at each change, the ones passed brighter
+  if (S.changes?.list.length) {
+    g.fillStyle = cssVar('--tl-head');
+    for (const c of S.changes.list) {
+      const cx = ((c.at + 0.9) / n) * W;
+      g.globalAlpha = c.at + 0.9 <= S.pos + 1e-6 ? 1 : 0.55;
+      g.fillRect(cx - 1, H - 7, 2, 7);
+      g.beginPath(); g.arc(cx, H - 8, 2.5, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
   g.fillStyle = '#ef5b50';
   for (const v of violations()) {
     const vx = (v.at / n) * W;

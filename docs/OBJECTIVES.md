@@ -18,7 +18,13 @@ pictures are prototyped in Minimal and Barebone; every step is checked with
 contract tests. A browser opened to look goes to the terminal's desktop.
 
 In this order (the first three are the most value for the least work):
-1. [ ] **When did this change?** (S). Right-click a variable (a storage row,
+1. [x] **When did this change?** (S). Done 2026-10-01: `src/history.ts`
+   (`changesOf`: every call's copy of a local, a static, a block; under gdb
+   the change is credited to the line before the stop; a pointer's value is
+   its address, so freeing its block isn't its change), the row's menu item,
+   pins on the timeline, a chip that steps through them (`src/changes-ui.ts`).
+   `test/history.test.ts`: main's `list` changes 4 times, each by a `list =`
+   line. Right-click a variable (a storage row,
    a heap card, a static): "show when it changed". The timeline marks every
    write to it (the cell's `write` events, and gdb steps where its value
    moved); next/previous write jumps there, with the statement that did it

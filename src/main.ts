@@ -1,4 +1,5 @@
 import { diagReport, reportCheck } from './diag';
+import { renderChanges, showChanges } from './changes-ui';
 import { validateTrace } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
@@ -18,7 +19,7 @@ import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, wi
 import { toggleStats } from './stats-ui';
 import { initParser, parse, type Model } from './parse';
 import { animMode, prepareStage, computeBelts, durationAt, frameAt, setAnimMode, spriteWorldRect, staged, type AnimMode, type Entity } from './playback';
-import { activeHostRect, entityAt, foldAt, stationAt, machineHeadAt, stageRect } from './hit';
+import { activeHostRect, entityAt, foldAt, stationAt, machineHeadAt, stageRect, slotAt } from './hit';
 import { SAMPLE_PROJECTS } from './samples';
 import { buildFiles, fsCall, isDirty, isSource, projectModel, splitArgs } from './workspace';
 import { SKINS, SKIN_FONTS, SKIN_GROUPS, isWip, otherMode } from './skins';
@@ -229,6 +230,7 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   const oldN = S.trace?.evs.length ?? 0;
   const atEnd = S.trace !== null && S.pos >= oldN;
   update('applyTrace', { trace });
+  if (S.changes) update('applyTrace', { changes: null }), renderChanges(); // marks of the last run don't belong to this one
   // dev: does the trace hold together? (src/validate.ts; failures in the diagnostics panel)
   if (import.meta.env.DEV && trace) setTimeout(() => { if (S.trace === trace) for (const p of validateTrace(trace)) reportCheck(p); }, 0);
   prepareStage(trace); // focus mode sizes each return's card before playing it
@@ -697,6 +699,9 @@ function bindMouse(): void {
         const key = `${row.fn}|${row.name}`;
         items.push([view.watches.has(key) ? `Stop watching ${row.name}` : `Watch ${row.name} on the heap bar`, () => void (view.watches.has(key) ? view.watches.delete(key) : view.watches.add(key))]);
       }
+      // any variable's row: every step it changed, on the timeline
+      const slot = slotAt(S, wx, wy);
+      if (slot && S.trace) items.push([`When did ${slot.name} change?`, () => showChanges(slot.fn, slot.name)]);
       const nm = layout.nodes.get(hit.id)?.name;
       if (nm) items.push([shut.has(nm) ? 'Show inside' : 'Hide inside', () => toggleShut(nm)]);
       if (layout.nodes.get(hit.id)?.place.pinned) items.push(['Unpin (auto-place)', () => unpin(hit.id)]);

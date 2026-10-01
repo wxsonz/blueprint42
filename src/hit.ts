@@ -160,6 +160,22 @@ export function foldAt(s: ViewState, wx: number, wy: number): { fn: string; name
   return null;
 }
 
+// A machine's storage row under the pointer: a variable or a static (not a
+// field: its history is its variable's), for "when did this change?".
+export function slotAt(s: ViewState, wx: number, wy: number): { fn: string; name: string } | null {
+  const scene = sceneAt(s);
+  for (const h of scene.hosts.values()) {
+    const fn = h.module ? null : s.model?.byName.get(h.fn) ?? null;
+    if (!fn || fn.broken || shut.has(fn.name)) continue;
+    const g = geomOf(fn);
+    if (wx < h.x + g.store.x || wx >= h.x + g.store.x + g.store.w) continue;
+    const slots = slotsOf(fn);
+    const i = slots.findIndex((sl, k) => wy >= h.y + g.store.slotTop[k] && wy < h.y + g.store.slotTop[k] + SLOT_PX / CELL_PX);
+    if (i >= 0 && (slots[i].kind === 'cell' || slots[i].kind === 'static')) return { fn: h.fn, name: slots[i].name };
+  }
+  return null;
+}
+
 // A machine's title bar or motor (where a double-click opens or closes it).
 export function machineHeadAt(s: ViewState, wx: number, wy: number): string | null {
   const scene = sceneAt(s);

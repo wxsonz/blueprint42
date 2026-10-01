@@ -717,3 +717,9 @@ kbd {
 #diag-panel td { padding: 1px 4px; }
 #diag-panel td.n { text-align: right; font-variant-numeric: tabular-nums; }
 #diag-panel ul { margin: 0; padding-left: 16px; font-size: 11px; }
+
+/* "when did this change?": the chip beside the timeline */
+.changes { display: inline-flex; align-items: center; gap: 4px; font: calc(11px * var(--mono-scale, 1)) var(--font-mono); white-space: nowrap; }
+.changes[hidden] { display: none; }
+.changes .what { font-weight: 600; }
+.changes .n { opacity: 0.75; margin-right: 4px; }
