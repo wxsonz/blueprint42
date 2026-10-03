@@ -376,7 +376,8 @@ export function eventPair(trace: Trace, i: number, ev: Ev, base: Scene): [string
 }
 
 // Scene for the current playback position, including belts that only exist
-// while a call between copies is live.
+// while a call between copies is live. (Both are kept: route.ts buildScene.)
+const beltKeys = new WeakMap<Scene, Set<string>>();
 export function sceneAt(s: ViewState): Scene {
   const base = buildScene(s.layout, s.model, s.trace);
   if (!s.trace || !s.trace.evs.length) return base;
@@ -386,7 +387,8 @@ export function sceneAt(s: ViewState): Scene {
     const p = eventPair(s.trace, fr.i, fr.ev, base);
     if (p) pairs.push(p);
   }
-  const keys = new Set(base.belts.map((b) => b.key));
+  let keys = beltKeys.get(base);
+  if (!keys) beltKeys.set(base, (keys = new Set(base.belts.map((b) => b.key))));
   const extra = pairs.filter(([a, b]) => a !== '' && !keys.has(`${a}>${b}`));
   return extra.length ? buildScene(s.layout, s.model, s.trace, extra) : base;
 }

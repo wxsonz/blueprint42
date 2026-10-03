@@ -7,6 +7,208 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 Skin polish is not on this list. It's optional and guided by the author one
 skin at a time; `docs/SKINS.md` says which skins are reviewed.
 
+## Next (2026-10-03): fast at any size
+
+The main objective: a frame costs what's on screen, not what's in the
+program, and a long run never stops the page. No new features and no new
+looks: every step keeps the pictures and the behaviour the same, proves it,
+and says what it saved with the same measurement before and after (step 1
+first, so the others can be measured).
+
+Why now. Measured 2026-10-03 with throwaway scripts, on generated projects
+(files of 5 Norm-sized functions, each calling the next one and one in the
+next file), in Node and in headless Chromium (JS time only: headless paint
+isn't the author's):
+- A frame redoes whole-program work even when nothing moved. The scene
+  (every host, and every belt's route: `route.ts` `buildScene`) is built 3
+  times a frame: by `frameState`, by the minimap, and by `activeHostRect`,
+  which the minimap calls. `sceneAt` builds it twice while a live call has
+  no belt of its own (from a recursion copy, or through a function
+  pointer), and a mouse move builds it twice more (`entityAt`,
+  `stationAt`). 50 files with every module open (251 machines, 495 belts):
+  18.6 ms a build, 21 frames a second headless, the slowest 117 ms. 500
+  machines: 69 ms a build.
+- At M5's own size (50 files, collapsed) a frame walks the whole node list
+  208 times. `Layout.nodesOf` copies and filters every node, once per
+  module, in `moduleRect` and `wall` (inside `buildScene`) and in
+  `moduleInfo` and `wallInfo` (the paint passes). `draw` alone is 11 ms of
+  JS there, 5 of it the modules pass.
+- Belt crossings are found pair by pair every frame (`render.ts`
+  `passBelts`): with everything on screen, 40 ms at 495 belts, 140 ms at
+  990.
+- A keystroke re-walks every file's tree. Parsed files are cached, but
+  `structTable` (from `attachFields`) visits every node of every tree on
+  each edit (9.4 of the 11 ms at 250 functions), so an edit costs as much
+  as parsing everything: 16 ms at 250 functions, 33–36 ms at 500.
+- A gdb window of 20,000 steps takes 18 s to record (about 1,100 steps a
+  second) and arrives as 5.6 MB. Then `convertGdb` (0.74 s) and
+  `timelineOf` (0.5 s) run on the main thread, so the page stops for about
+  1.25 s; about 30 MB once converted. The window cache (`session.ts`) keeps
+  raw responses: a prefetched window is converted only when playback
+  reaches it (the pause lands exactly at the edge), and going back to a
+  window converts it again.
+
+Already fine, left as is: tree-sitter itself (about 0.06 ms a function); a
+long trace's frame (`frameState` 0.1–0.3 ms at 33,000 events: snapshots are
+made once and share what didn't change); collapsed modules' scenes (1–4 ms);
+layout sync; `validateTrace`. web-tree-sitter frees old trees itself (a
+FinalizationRegistry), so re-parsing doesn't leak. The interpreter's 4,000
+events are by design (long runs are gdb's). The disk poll walks the folder
+every 2 s, fine under `project.mjs`'s 800-file cap. A new picture costs the
+kit (22 of the 26 skins are `makeSkin`) plus the 4 hand-written skins.
+
+Steps, in this order (2–4 save the most for the least work):
+1. [x] **Measure at size** (S). Done 2026-10-03: `tools/scale.mjs` (parts
+   code, frame, gdb and window; `--b HEAD` measures two versions in one
+   run). It measures in the app's own page (the engine the app runs in,
+   rather than Node), crossings as the belts pass of frames with the grid on
+   screen, and long tasks with the browser's own observer.
+   `tools/pixcmp.mjs --folders … --open` compares a project's pictures; the
+   dev profiler times the whole frame (playbar, minimap, feed…) and keeps
+   the slowest frame part by part (`__ftb.diag().worstFrame`).
+   `test/scale.test.ts` counts the work each step below removed.
+   `tools/scale.mjs` generates projects of a
+   given size in the OS temp dir (never `samples/`) and prints the numbers
+   above: parse (cold, one edit), layout sync, a scene (collapsed, open)
+   and crossings in Node; per frame in headless Chromium (the dev server
+   opening the generated folder): scene builds, node sweeps and who makes
+   them, `draw`'s JS time; one gdb window of 2,000 to 20,000 steps: record
+   time, bytes, `convertGdb`, `timelineOf`, memory. Paint stays
+   `tools/bench.mjs`'s job (a real window). Done when one command prints
+   these tables on today's code, and each step below gives its before and
+   after with it.
+2. [x] **One scene per change** (M). Done 2026-10-03 (decision 049):
+   `buildScene` keeps each layout's last few scenes, keyed on `Layout.rev`
+   (`touch()`, `setRoute`), the model, the trace, folded and shut machines
+   and the live pairs; `computeScene` builds one for real. A frame and a
+   mouse move build none (3 before); dev builds report a layout change made
+   without `touch()`. `geomOf`'s fold key was left as it is (a join of a
+   set that's usually empty). Steps 2–6 were measured together, HEAD → now,
+   ms of JS a frame: 100 files open 98.1 → 6.4, collapsed 20.5 → 9.7; 50
+   files open 32.0 → 6.6, collapsed 8.5 → 5.2. Pixels: the samples in every
+   skin 1,485 frames, 0 differing; a 30-file project with every module
+   open, 660 frames (one run had 3 PS4 frames differ by glyphs, which three
+   reruns didn't repeat: a font loading at another moment).
+   `sceneAt` keeps its last scene and
+   builds again only when something it reads changed: the layout (a
+   revision number, bumped by every `Layout` method that moves, opens,
+   closes, pins or re-routes anything; the writes from outside, the
+   restores in `sample-ui.ts` and the waypoints in `main.ts`, become
+   methods), the model, the trace, the folded and shut machines
+   (`machine.ts`; `geomOf`'s fold key becomes that number, not a string
+   joined on every call) and the live pairs. Whatever calls `buildScene` or
+   `computeBelts` directly (`stageRect`, `fit`, `panels.ts`, `main.ts`)
+   goes through it too. Done when a test counts builds (a counter in
+   `buildScene`) through what a frame and a mouse move call (`frameState`,
+   `activeHostRect`, `entityAt`, `stationAt`): 1 for a new state, 0 for the
+   same one again, 1 after a `setPos`; a drag still routes live; pixcmp
+   says 0 differing. Estimate: 2–3 builds a frame saved, about 40–55 ms at
+   250 open machines and 3 ms at 50 collapsed files.
+3. [x] **Nodes by file** (S). Done 2026-10-03: the node map counts machines
+   added and removed, and `nodesOf` reads a per-file index rebuilt only
+   then; `fileCap` counts once per model. A frame's sweeps of the node
+   list: 407 → 0 at 100 collapsed files (207 → 0 at 50); the test counts
+   them at 10 and 50 files. `Layout` keeps each file's nodes as it keeps
+   `nodes`, so `nodesOf`, `wall` and `moduleRect` look them up instead of
+   scanning, and `fileCap` (`norm.ts`) counts once per model, not once per
+   module per frame. Done when a frame's sweeps of the node list don't grow
+   with the number of modules (208 at 50 files today) and the modules pass
+   is under 1 ms there.
+4. [x] **Crossings once per scene** (S). Done 2026-10-03: `crossingsOf`
+   (once per scene, through a grid of cells) and `gapsFor` (a frame's gaps
+   for its drawing order): the same points in the same order as the
+   pairwise loop for any order (tested), from under a tenth of the pairs;
+   the next frame tries none. Belts pass, 100 collapsed files: 9.3 → 4.7 ms
+   a frame. Which belts cross and where is
+   worked out when the scene is built, and kept with it (found through a
+   grid of cells, each segment in the cells it passes, not every pair). A
+   frame only picks each belt's crossings with the belts drawn after it:
+   the order changes with what's live, the crossings don't. Done when the
+   belts pass no longer grows with the square of the belts on screen and
+   the gaps are the same (pixcmp 0 differing).
+5. [x] **An edit parses one file** (S). Done 2026-10-03: each tree's
+   structs and typedef names are kept with it (an anonymous struct's key
+   unique to its tree), its type definitions too, and `bufferShapes` once
+   per model (the inspector asked for it per variable, every step). One
+   edit: 500 functions 34.1 → 1.3 ms, 250 functions 16.9 → 1.2 ms; the
+   test counts one struct walk per edit. Each file's struct and union tags
+   and typedef names are kept with its parse (`unitCache`), and the
+   project's table is merged from them (anonymous structs numbered per
+   file). Done when one edit at 500 functions costs one file's parse plus
+   linking, not 33 ms, with `test/structs.test.ts` and the project tests
+   unchanged.
+6. [x] **Routing that scales** (M). Done 2026-10-03: obstacles in a grid of
+   cells (`Near`), taken corridors by half-cell row, an edge's verticals by
+   a map. A fresh scene, 500 machines open: 70.3 → 11.8 ms (250: 18.8 →
+   8.0). The same scenes field for field as the old code, checked on every
+   sample and on generated projects up to 60 files (open, half open,
+   dragged, hand-routed, live extras, folded); the test checks the work
+   grows with the program, not its square. In `buildScene` each edge finds its
+   verticals through a map (not `verts.find` over all of them), and
+   obstacles through a grid of cells (not every obstacle, per edge and per
+   corridor try, up to 120 tries a corridor). It still matters after step
+   2: a drag builds on every move, and opening, packing and tidying a big
+   project build too. Done when a build at 500 open machines is well under
+   today's 69 ms and the routes are the same (`test/route.test.ts`, pixcmp
+   0 differing).
+7. [x] **Long runs without a pause** (M). Done 2026-10-03, in slices rather
+   than a worker: a structured clone of a converted 20,000-step window
+   takes 240–260 ms (a worker's round trip 460 ms), one block the page
+   can't split, and a worker would need its own parser for the model.
+   `src/slices.ts` runs generators between frames: `convertGdbSliced`,
+   `timelineSliced`, `validateSliced` (dev), and `jsonSteps` (a window's
+   answer, its stops a piece at a time: the same value as `JSON.parse`).
+   `main.ts` `windowTrace` converts a window and works out what its first
+   frames need (deepest stacks, return cards, the kill feed, the playbar's
+   bars, the past values of the frames alive at its end) before it's
+   shown, the next one while this one plays; the window shown and its
+   neighbours stay converted. A row's past values are scanned from its
+   text alone, skipping snapshots that share its frame. Measured
+   (`--parts window`, 20,000-step windows, HEAD → now): the first window, 3
+   long tasks (the longest 790 ms) → none; playing into the next, 3 (745
+   ms) → none, no wait at the edge; back a window, 676 ms → 11 ms, none.
+   Left: a jump far into a window still costs its first frame one 58 ms
+   task (181 before). Nothing a window does blocks the
+   page for more than about 50 ms. First measure what sending a converted
+   20,000-step trace from a Web Worker costs (a structured clone keeps its
+   Maps and shared snapshots; the beats are plain data and typed arrays).
+   If it's small, `convertGdb` and `timelineOf` run in a worker that parses
+   the sources itself (a `Model` holds tree-sitter nodes and can't be
+   sent), prefetched windows included. If not, `convertGdb` works in
+   slices between frames and playback starts after the first. Either way
+   the cache keeps converted traces for the window playing and its
+   neighbours. Done when loading a 20,000-step window shows no long task in
+   the browser's profile, playback crosses into the next window without
+   stopping, and going back a window doesn't convert again.
+8. [x] **Faster recording** (L, the author's call). Done 2026-10-03
+   (decision 050): none for now, the author's call. With windows converted
+   ahead, playback no longer waits on recording; it shows only when a run
+   starts and after a far jump. The three ways past it are weighed there
+   for when that becomes the pain. gdb's line step is the
+   ceiling: recording runs at about 1,100 steps a second and stepping with
+   nothing recorded at 1,500–2,000 (decision 043), so even free recording
+   would be at most about 2× faster. Going further needs another way to
+   reach each line, each with its own decision in `docs/decisions/`
+   (principle 4; the student's source stays untouched):
+   - windows in parallel: record the run once with `rr` (close to full
+     speed; needs the CPU's performance counters), then several replays
+     each step through their own window at the same time;
+   - the program reports its own lines (a hook the compiler adds to each
+     block) and gdb reads memory only there: much faster, but the binary is
+     no longer the plain `-g -O0` build, so the picture has to be shown to
+     still be what really runs.
+
+   Done when the author has picked one, or none, recorded as a decision.
+
+Rules for these steps:
+- Pictures and behaviour don't change: pixcmp says 0 differing for each
+  step, and `npm run check` and `npm test` pass.
+- A cache keys on everything its result depends on, or clears on the event
+  that changes it (as text fitting clears on a font load).
+- Each step's Done note gives step 1's numbers before and after; the
+  estimates above are only estimates.
+- One step per commit series; each leaves the app working.
+
 ## Next (2026-10-01): nice to have
 
 The main objective: answer the questions a 42 student really asks of a run
@@ -579,8 +781,8 @@ reserved slot of a recursive copy).
 Aim: fun to look at, and every mark means exactly one thing.
 
 1. **A visual dictionary (S).** ✅ `docs/VISUALS.md`, checked against
-   norminette. Still to do: a Legend overlay in the app that shows the real
-   drawings. Each entry gives what it
+   norminette. The Legend overlay in the app that shows the real drawings:
+   ✅ too (Today 2026-09-30, item 13, `src/legend.ts`). Each entry gives what it
    is, what it means in C, and what makes it light up. Entries:
    - machine (storage rows, stations, memory floor), recursion copies,
      modules and walls;
@@ -599,10 +801,12 @@ Aim: fun to look at, and every mark means exactly one thing.
    doesn't show yet:
    - **Ownership.** Who malloc'd a block and who must free it: a tag on the
      block, and a warning belt when it leaves a function that forgot it.
+     ✅ as C really has it: the pointers holding a block and the moment the
+     last one goes (Today 2026-09-30, item 5, `src/ownership.ts`).
    - **Aliasing.** Two names for the same memory: pointer arrows from storage
-     rows to the bytes they point at.
-   - **Loop history.** ✅ per row (each storage row shows its past values);
-     a loop's rounds as a whole are not shown yet.
+     rows to the bytes they point at. ✅ (Today 2026-09-30, item 4).
+   - **Loop history.** ✅ per row (each storage row shows its past values),
+     and a loop's rounds as a whole (Today 2026-09-30, item 7).
    - **Output as it really happens.** A printf buffer node above the
      terminal: `printf` text waits there until a flush, `write` goes straight
      to the terminal, so mixed output shows why it came out in that order
@@ -618,6 +822,8 @@ Aim: fun to look at, and every mark means exactly one thing.
    - a segfault jams the machine at the statement that died;
    - `free` is a recycler taking the block away;
    - a return is the plate riding home.
+   ✅ the first three (Today 2026-09-30, item 14); returns ride their belt
+   home as plates (M5.5, and the machine's return plates).
 
 ## Order
 

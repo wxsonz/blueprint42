@@ -1,4 +1,4 @@
-import { diagReport, reportCheck } from './diag';
+import { diagReport, profFrameEnd, profPass, reportCheck } from './diag';
 import { askNote, renderNotes } from './notes-ui';
 import { readReplay } from './replay';
 import { renderMinimap } from './minimap';
@@ -7,12 +7,12 @@ import { weightOf } from './skins/weight';
 import { initReplayButton, startReplay } from './replay-ui';
 import { askCondition, initSearch, renderChanges, renderCompare, searchAgain, showChanges, showExplain } from './changes-ui';
 import { breakHits } from './history';
-import { validateTrace } from './validate';
+import { validateSliced } from './validate';
 import { diagOn, initDiagPanel } from './diag-ui';
 import { reportHookError } from './diag';
 import { setGlassTint } from './gfx/scenes/ps2';
 import { renderLegend } from './legend';
-import { beatStarts } from './beats';
+import { beatStarts, historyAhead, timelineSliced } from './beats';
 import { machineSize } from './machine';
 import { connectLive } from './live';
 import { Vim } from '@replit/codemirror-vim';
@@ -20,7 +20,7 @@ import { createEditor, setNormMarks, setVim, type EditorHooks } from './editor';
 import { evaluateInterpreterBindings, run, type Ev, type Trace } from './interp';
 import type { Sprite, SpriteKind } from './blueprint';
 import { folded, shut } from './layout';
-import { convertGdb, type GdbRequest, type GResult } from './gdb';
+import { convertGdbSliced, type GdbRequest, type GResult } from './gdb';
 import { initGfxButton } from './gfx/ui';
 import { closeSession, onLoading, prefetch, session, traceWindow, WINDOW_MAX, windowSize } from './session';
 import { toggleStats } from './stats-ui';
@@ -34,10 +34,12 @@ import { SKINS, SKIN_FONTS, SKIN_GROUPS, isWip, otherMode } from './skins';
 import type { IconKind, Skin } from './skins/types';
 import { $, esc, store } from './dom';
 import { LEGEND, S, alerts, canvas, debounce, editor, gridPane, inspector, layout, loadingSample, menu, modelRevision, overlay, setDebounce, setEditor, setLastInspectorKey, setLastPbKey, setModelRevision, setTraceRevision, timeline, toast, traceRevision, view, update, updateRun } from './state';
-import { renderDuel, renderFeed, renderStageCard } from './feed';
+import { feedAhead, renderDuel, renderFeed, renderStageCard } from './feed';
 import { paintPage, setUiZoom, stepUiZoom, ui } from './page';
 import { renderAlerts, renderDock, renderInspector, renderLiveStatus, renderSampleTabs, renderStatus, renderTestsMenu, violations } from './panels';
-import { renderPlaybar } from './playbar';
+import { renderPlaybar, timelineAhead } from './playbar';
+import { warmScene } from './route';
+import { inSlices } from './slices';
 import { dirtyFiles, liveFrom, onLive, openAt, openFolder, openFolderDialog, openSaveDialog, quickOpen, refreshMeta, renderLive, renderProjectChrome, runChanged, sampleRunChanged, setLiveEditors, switchFile, toggleExplorer, writeProjectBackup } from './project-ui';
 import { bindingsChanged, exportBlueprint, importBlueprint, loadSample, revertSample, saveSoon, setAllShut, tidy, toggleShut } from './sample-ui';
 import './styles/base.css';
@@ -200,11 +202,62 @@ export function analyze(src: string, fresh: boolean): void {
   }
 }
 
-// The run goes on past this window: start tracing the next one now, so
-// playback carries on into it instead of stopping at the edge.
+// The run goes on past this window: start tracing the next one now, and
+// convert it as soon as it's here, so playback carries on into it instead of
+// stopping at the edge.
 function prefetchNext(): void {
   const w = S.trace?.window;
-  if (w?.more) prefetch(w.to);
+  if (!w?.more) return;
+  prefetch(w.to);
+  void convertAhead(w.to);
+}
+async function convertAhead(from: number): Promise<void> {
+  const model = S.model;
+  if (!model || !session.id) return;
+  const r = await traceWindow(JSON.parse(session.key), from, undefined, true); // (the prefetch on its way)
+  if (r === 'unavailable' || !r.ok || S.model !== model || (r.window && r.window.to < from)) return;
+  const p = S.project;
+  await windowTrace(from, r, model, p ? buildFiles(p) : editor.state.doc.toString()).catch(() => {}); // (loadWindow says so if it fails)
+}
+
+// A window's trace: converted in slices with its beats (src/slices.ts), so
+// the page keeps drawing, and kept for the window shown and its neighbours,
+// so playing on into the next (converted ahead) or going back one shows it at
+// once. A conversion already under way is joined, not started again.
+const keptWindows = new Map<number, { r: GResult; model: Model; trace: Trace }>();
+const converting = new Map<GResult, { model: Model; job: Promise<Trace> }>();
+function windowTrace(from: number, r: GResult, model: Model, sources: string | Record<string, string>): Promise<Trace> {
+  const kept = keptWindows.get(from);
+  if (kept && kept.r === r && kept.model === model) return Promise.resolve(kept.trace);
+  const going = converting.get(r);
+  if (going && going.model === model) return going.job;
+  const p = S.project;
+  const job = (async () => {
+    const trace = await convertGdbSliced({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, sources);
+    await timelineSliced(trace, model);
+    await inSlices(warm(trace, model));
+    if (S.model === model) keptWindows.set(from, { r, model, trace });
+    return trace;
+  })();
+  converting.set(r, { model, job });
+  job.then(() => converting.delete(r), () => converting.delete(r));
+  return job;
+}
+// what the first frames of a trace work out once, worked out ahead
+function* warm(trace: Trace, model: Model): Generator<void, void, void> {
+  warmScene(trace); // (the deepest each function's calls go)
+  yield;
+  prepareStage(trace); // (its return cards)
+  yield;
+  feedAhead(trace, model); // (the kill feed's lines)
+  yield;
+  yield* timelineAhead(trace); // (the playbar's bars)
+  yield* historyAhead(trace, model); // (the long-lived frames' past values)
+}
+// the window at `from` is shown: let go of the others but its neighbours
+function keepAround(from: number): void {
+  const size = windowSize();
+  for (const [k, w] of [...keptWindows]) if (Math.abs(k - from) > size || w.model !== S.model) keptWindows.delete(k);
 }
 
 // Another stretch of the run (gdb sessions): fetch the window that holds step
@@ -236,7 +289,10 @@ export async function loadWindow(step: number, play_ = false): Promise<void> {
       return loadWindow(r.window.to, play_);
     }
     const p = S.project;
-    applyTrace(convertGdb({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, p ? buildFiles(p) : editor.state.doc.toString()), true);
+    const trace = await windowTrace(from, r, model, p ? buildFiles(p) : editor.state.doc.toString());
+    if (S.model !== model) return;
+    keepAround(from);
+    applyTrace(trace, true);
     prefetchNext();
     // the event where step `target` is: each 'step' event is one step of the run
     let n = from;
@@ -260,7 +316,7 @@ export function applyTrace(trace: Trace | null, fresh: boolean): void {
   if (S.compare) update('applyTrace', { compare: null }), renderCompare();
   searchAgain();
   // dev: does the trace hold together? (src/validate.ts; failures in the diagnostics panel)
-  if (import.meta.env.DEV && trace) setTimeout(() => { if (S.trace === trace) for (const p of validateTrace(trace)) reportCheck(p); }, 0);
+  if (import.meta.env.DEV && trace) void validateSliced(trace).then((ps) => { if (S.trace === trace) for (const p of ps) reportCheck(p); });
   prepareStage(trace); // focus mode sizes each return's card before playing it
   setTraceRevision(traceRevision + 1);
   setLastInspectorKey('');
@@ -345,8 +401,11 @@ export function startGdb(src: string, model: Model, fresh: boolean): void {
       update('startGdb', { gdb: { status: 'error', compile: r.compile, error: r.error } });
       applyTrace(null, fresh);
     } else {
+      const trace = await windowTrace(r.window?.from ?? 0, r, model, files ?? src);
+      if (ac.signal.aborted || S.model !== model) return;
       update('startGdb', { gdb: { status: 'done', ms: r.ms } });
-      applyTrace(convertGdb({ ...r, stdinText: r.stdinText ?? (p ? p.run.stdin : S.stdin) }, model, files ?? src), fresh);
+      keepAround(r.window?.from ?? 0);
+      applyTrace(trace, fresh);
       prefetchNext();
       if (fresh) {
         autoSpeed(S.trace!);
@@ -528,7 +587,7 @@ function unpin(id: string): void {
 }
 
 function resetRoute(key: string): void {
-  layout.waypoints.delete(key);
+  layout.setRoute(key, null);
   saveSoon();
   toast('route reset');
 }
@@ -633,7 +692,7 @@ function bindMouse(): void {
       const p = { x: Math.floor(wx) + 0.5, y: Math.floor(wy) + 0.5 };
       const cur = layout.waypoints.get(drag.key);
       if (!cur || cur.x !== p.x || cur.y !== p.y) {
-        layout.waypoints.set(drag.key, p);
+        layout.setRoute(drag.key, p);
         drag.moved = true;
       }
     } else if (drag?.k === 'sprite') {
@@ -1179,109 +1238,115 @@ function tick(now: number): void {
     lastT = now;
     return;
   }
+  const frameStart = performance.now();
   lastDrawAt = now;
   adaptQuality(now);
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   const t = S.trace;
-  if (S.playing && t) {
-    const n = t.evs.length;
-    const i = Math.floor(S.pos);
-    if (i >= n) update('advance', { playing: false });
-    else {
-      const before = S.pos;
-      // spend this frame's time across as many events as it covers (inside a
-      // machine, events elsewhere are only a few milliseconds long)
-      let left = dt;
-      for (let guard = 0; left > 0 && S.pos < n && guard < 20000; guard++) {
-        const j = Math.floor(S.pos);
-        const e = t.evs[j];
-        const rate = staged(e) ? Math.min(S.speed, FOCUS_MAX) : S.speed;
-        const d = durationAt(t, S.model, j);
-        const need = ((j + 1 - S.pos) * d) / rate;
-        if (need <= left) {
-          update('advance', { pos: j + 1 });
-          left -= need;
-          if (S.stepTarget !== null && S.pos >= S.stepTarget) break;
-        } else {
-          update('advance', { pos: S.pos + ((left * rate) / d) });
-          left = 0;
+  profPass('advance', () => {
+    if (S.playing && t) {
+      const n = t.evs.length;
+      const i = Math.floor(S.pos);
+      if (i >= n) update('advance', { playing: false });
+      else {
+        const before = S.pos;
+        // spend this frame's time across as many events as it covers (inside a
+        // machine, events elsewhere are only a few milliseconds long)
+        let left = dt;
+        for (let guard = 0; left > 0 && S.pos < n && guard < 20000; guard++) {
+          const j = Math.floor(S.pos);
+          const e = t.evs[j];
+          const rate = staged(e) ? Math.min(S.speed, FOCUS_MAX) : S.speed;
+          const d = durationAt(t, S.model, j);
+          const need = ((j + 1 - S.pos) * d) / rate;
+          if (need <= left) {
+            update('advance', { pos: j + 1 });
+            left -= need;
+            if (S.stepTarget !== null && S.pos >= S.stepTarget) break;
+          } else {
+            update('advance', { pos: S.pos + ((left * rate) / d) });
+            left = 0;
+          }
         }
-      }
-      // M4: freeze on the step where an invariant first breaks.
-      const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
-      if (hit) {
-        update('invariantBroke', { pos: hit.at, playing: false, stepTarget: null });
-        toast(`stopped: ${hit.invariant} broke — ${hit.detail}`);
-        // Bring the broken sprite into view, clear of the alert banner.
-        const sp = S.sprites.find((x) => x.id === hit.sprite);
-        if (sp) {
-          const r = spriteWorldRect(sp, S.trace?.snaps[hit.at]?.bound?.[sp.id]);
-          view.ensureVisible(r.x, r.y - 2, r.w, r.h + 2, Math.max(2.5, (view.h * 0.28) / view.cs));
+        // M4: freeze on the step where an invariant first breaks.
+        const hit = violations().find((v) => v.at > before + 1e-9 && v.at <= S.pos);
+        if (hit) {
+          update('invariantBroke', { pos: hit.at, playing: false, stepTarget: null });
+          toast(`stopped: ${hit.invariant} broke — ${hit.detail}`);
+          // Bring the broken sprite into view, clear of the alert banner.
+          const sp = S.sprites.find((x) => x.id === hit.sprite);
+          if (sp) {
+            const r = spriteWorldRect(sp, S.trace?.snaps[hit.at]?.bound?.[sp.id]);
+            view.ensureVisible(r.x, r.y - 2, r.w, r.h + 2, Math.max(2.5, (view.h * 0.28) / view.cs));
+          }
         }
-      }
-      // a tour's stop: pause there and frame the machine running it (src/tour-ui.ts)
-      const ts = S.tour ? tourStopIn(before, S.pos) : null;
-      if (ts !== null) {
-        update('tourStop', { pos: ts, playing: false, stepTarget: null });
-        const r = activeHostRect(S);
-        if (r) (view.focusOn(r), (lastPanAt = performance.now()));
-      }
-      // a breakpoint: pause where a marked statement is reached (and its condition holds)
-      const bp = S.breaks.length ? breakHitsNow().find((h) => h > before + 1e-9 && h <= S.pos) : undefined;
-      if (bp !== undefined) {
-        update('breakpoint', { pos: bp, playing: false, stepTarget: null });
-        const e = S.trace!.evs[bp];
-        const b = S.breaks.find((x) => x.line === e.line);
-        toast(`paused at line ${e.line + 1}${b?.cond ? `: ${b.cond}` : ''}`);
-      }
-      if (S.stepTarget !== null && S.pos >= S.stepTarget) {
-        update('stepDone', { pos: S.stepTarget, stepTarget: null, playing: false });
-      }
-      if (S.pos >= n) {
-        update('runEnd', { pos: n, playing: false });
-        // the run goes on past this window: fetch the next and keep playing
-        if (t.window?.more && S.stepTarget === null) void loadWindow(t.window.to, true);
+        // a tour's stop: pause there and frame the machine running it (src/tour-ui.ts)
+        const ts = S.tour ? tourStopIn(before, S.pos) : null;
+        if (ts !== null) {
+          update('tourStop', { pos: ts, playing: false, stepTarget: null });
+          const r = activeHostRect(S);
+          if (r) (view.focusOn(r), (lastPanAt = performance.now()));
+        }
+        // a breakpoint: pause where a marked statement is reached (and its condition holds)
+        const bp = S.breaks.length ? breakHitsNow().find((h) => h > before + 1e-9 && h <= S.pos) : undefined;
+        if (bp !== undefined) {
+          update('breakpoint', { pos: bp, playing: false, stepTarget: null });
+          const e = S.trace!.evs[bp];
+          const b = S.breaks.find((x) => x.line === e.line);
+          toast(`paused at line ${e.line + 1}${b?.cond ? `: ${b.cond}` : ''}`);
+        }
+        if (S.stepTarget !== null && S.pos >= S.stepTarget) {
+          update('stepDone', { pos: S.stepTarget, stepTarget: null, playing: false });
+        }
+        if (S.pos >= n) {
+          update('runEnd', { pos: n, playing: false });
+          // the run goes on past this window: fetch the next and keep playing
+          if (t.window?.more && S.stepTarget === null) void loadWindow(t.window.to, true);
+        }
       }
     }
-  }
+  });
   // Follow the running function, but never fight the author's own panning
   // (nor frame it under the kill feed).
-  if (S.follow && t && S.playing && !drag && now - lastPanAt > 2500) {
-    const feed = document.getElementById('feed');
-    view.insetRight = feed && feed.childElementCount ? feed.offsetWidth + 16 : 0;
-    const i = Math.floor(S.pos);
-    // Focus: the camera follows the scene — the sender while its data is
-    // read, both while it travels, the receiver while it's held there.
-    // Fast: only pan, never zoom.
-    const ph = i < t.evs.length && staged(t.evs[i]) ? frameAt(t, S.pos).ph : null;
-    const stageKey = ph ? `${i}|${ph.parked ?? 'move'}` : '';
-    if (ph && stageKey !== lastStage) {
-      lastStage = stageKey;
-      lastFollowEv = i;
-      // a write through a pointer is a short hop: keep both ends in view throughout
-      const which = t.evs[i].k === 'write' ? 'both' : ph.parked === 'read' || ph.parked === 'card' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both';
-      const r = stageRect(S, i, which);
-      if (r) view.focusOn(r, ph.parked ? 2.6 : 1.6);
-    } else if (!ph && i !== lastFollowEv && i < t.evs.length) {
-      lastFollowEv = i;
-      lastStage = '';
-      const r = activeHostRect(S);
-      if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+  profPass('follow', () => {
+    if (S.follow && t && S.playing && !drag && now - lastPanAt > 2500) {
+      const feed = document.getElementById('feed');
+      view.insetRight = feed && feed.childElementCount ? feed.offsetWidth + 16 : 0;
+      const i = Math.floor(S.pos);
+      // Focus: the camera follows the scene — the sender while its data is
+      // read, both while it travels, the receiver while it's held there.
+      // Fast: only pan, never zoom.
+      const ph = i < t.evs.length && staged(t.evs[i]) ? frameAt(t, S.pos).ph : null;
+      const stageKey = ph ? `${i}|${ph.parked ?? 'move'}` : '';
+      if (ph && stageKey !== lastStage) {
+        lastStage = stageKey;
+        lastFollowEv = i;
+        // a write through a pointer is a short hop: keep both ends in view throughout
+        const which = t.evs[i].k === 'write' ? 'both' : ph.parked === 'read' || ph.parked === 'card' ? 'src' : ph.parked === 'hold' ? 'dst' : 'both';
+        const r = stageRect(S, i, which);
+        if (r) view.focusOn(r, ph.parked ? 2.6 : 1.6);
+      } else if (!ph && i !== lastFollowEv && i < t.evs.length) {
+        lastFollowEv = i;
+        lastStage = '';
+        const r = activeHostRect(S);
+        if (r) view.ensureVisible(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      }
     }
-  }
-  update('violations', { violations: violations() });
+  });
+  profPass('violations', () => update('violations', { violations: violations() }));
   // a page-wide background (PS3, PS4) is the whole window of GPU work: it
   // moves slowly, so 30 fps while playing too, as when idle
-  if (!S.skin.fullBleed || now - lastPageAt >= 30) (lastPageAt = now), paintPage(now, S, view);
+  if (!S.skin.fullBleed || now - lastPageAt >= 30) (lastPageAt = now), profPass('page', () => paintPage(now, S, view));
   view.draw(S, S.skin, now);
-  renderStageCard(S, traceRevision);
-  renderPlaybar();
-  renderMinimap(view, () => (lastPanAt = performance.now()));
-  renderFeed(S, traceRevision);
-  renderDuel(now, S, view, editor);
-  renderInspector();
-  renderLiveStatus();
+  profPass('stage card', () => renderStageCard(S, traceRevision));
+  profPass('playbar', renderPlaybar);
+  profPass('minimap', () => renderMinimap(view, () => (lastPanAt = performance.now())));
+  profPass('feed', () => renderFeed(S, traceRevision));
+  profPass('duel card', () => renderDuel(now, S, view, editor));
+  profPass('inspector', renderInspector);
+  profPass('live', renderLiveStatus);
+  profFrameEnd(performance.now() - frameStart); // (the profiler, when on: the slowest frame's breakdown)
 }
 
 // ---------------- boot ----------------

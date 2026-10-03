@@ -15,7 +15,7 @@ import { geomOf, isCharArray, procH, shut, slotsOf, slotY, STDIN_H, stdinShown, 
 import { textOf, type FnInfo, type TypeDef } from './parse';
 import type { Host } from './route';
 import { fmtVal, type Payload, type Snap, type SnapCell, type SnapFrame, type Trace, type V } from './interp';
-import { buildScene, crossings, isModuleKey, procPlace, type Belt } from './route';
+import { buildScene, gapsFor, isModuleKey, procPlace, type Belt } from './route';
 import { clip, staticCellId } from './values';
 import { fnCaps, normMarks } from './norm';
 import { gfxMode } from './gfx/gfx';
@@ -485,7 +485,8 @@ export class GridView {
     } else profPass('background', () => this.background(skin, dc, now));
 
     if (prof.on) prof.frames++;
-    const fs = frameState(s);
+    let fs!: FrameState;
+    profPass('frame state', () => void (fs = frameState(s)));
     // the run's end as an event: a leak falls off, a crash jams its machine
     if (!fs.finished) this.endedAt = null;
     else if (this.endedAt === null) this.endedAt = now;
@@ -565,7 +566,7 @@ export class GridView {
     visible.sort((a, b) => order(a) - order(b));
     // a belt passes under every belt drawn after it that crosses it: it's
     // clipped there (the background shows through the gap, whatever it is)
-    const gaps = visible.map((b, i) => visible.slice(i + 1).flatMap((o) => crossings(o.pts, b.pts)));
+    const gaps = gapsFor(scene, visible);
     for (const [i, b] of visible.entries()) {
       const dim = !related(b);
       g.save();

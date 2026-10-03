@@ -3,6 +3,7 @@
 import type { Model } from './parse';
 import { EngineError, fmtVal, type CellInfo, type Ev, type Payload, type Snap, type SnapCell, type SnapField, type SnapFrame, type StdBuf, type Trace, type V } from './interp';
 import type { BoundValue, Sprite } from './blueprint';
+import { allAtOnce, inSlices } from './slices';
 
 // ---------------- wire format (server/tracer.py) ----------------
 
@@ -194,13 +195,24 @@ interface Region {
 export function convertGdb(r: GResult, model: Model, sources: string | Record<string, string>): Trace {
   const mark: { stage: string; at: number | null } = { stage: 'setup', at: null };
   try {
-    return convertStages(r, model, sources, mark);
+    return allAtOnce(convertStages(r, model, sources, mark));
   } catch (e) {
     throw new EngineError('gdb', mark.stage, mark.at, e);
   }
 }
 
-function convertStages(r: GResult, model: Model, sources: string | Record<string, string>, mark: { stage: string; at: number | null }): Trace {
+// The same, in slices between frames (src/slices.ts): a window of 20,000
+// steps is most of a second of work, and the page keeps drawing meanwhile.
+export async function convertGdbSliced(r: GResult, model: Model, sources: string | Record<string, string>): Promise<Trace> {
+  const mark: { stage: string; at: number | null } = { stage: 'setup', at: null };
+  try {
+    return await inSlices(convertStages(r, model, sources, mark));
+  } catch (e) {
+    throw new EngineError('gdb', mark.stage, mark.at, e);
+  }
+}
+
+function* convertStages(r: GResult, model: Model, sources: string | Record<string, string>, mark: { stage: string; at: number | null }): Generator<void, Trace, void> {
   const split = new Map<string, string[]>();
   const linesOf = (file: string | null | undefined): string[] => {
     const k = typeof sources === 'string' ? '' : file ?? '';
@@ -403,6 +415,7 @@ function convertStages(r: GResult, model: Model, sources: string | Record<string
 
   mark.stage = 'stops';
   for (const [stopIndex, stop] of stops.entries()) {
+    if ((stopIndex & 63) === 63) yield; // (a place to pause: between two stops)
     mark.at = stopIndex;
     const nextBound = stop.bound;
     for (const id of Object.keys(nextBound ?? {})) boundIds.add(id);

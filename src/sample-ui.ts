@@ -74,6 +74,7 @@ function applySavedLayout(saved: Saved): void {
     if (n) n.place = { x, y, pinned };
   }
   for (const [k, x, y] of saved.waypoints) layout.waypoints.set(k, { x, y });
+  layout.touch();
   for (const k of saved.shut ?? []) shut.add(k);
   if (saved.folded?.length || saved.shut?.length) {
     for (const k of saved.folded ?? []) folded.add(k);
@@ -109,6 +110,7 @@ export function tidy(): void {
       layout.waypoints.clear();
       for (const [k, v] of wp) layout.waypoints.set(k, v);
       for (const [f, m] of mods) layout.modules.set(f, m);
+      layout.touch();
       saveSoon();
     },
   });
@@ -172,6 +174,7 @@ export async function importBlueprint(file: File): Promise<void> {
       }
       layout.waypoints.clear();
       for (const [id, p] of Object.entries(bp.waypoints)) layout.waypoints.set(id, p);
+      layout.touch();
     }
     update('importBlueprint', { sprites: bp.sprites });
     update('importBlueprint', { selected: null });

@@ -8,6 +8,7 @@
 //   node tools/pixcmp.mjs --a main~3 --b HEAD --skins ps3,minimal --scales 1,1.25
 //   options: --samples list,lost  --zooms 0.5,1,1.6  --positions 0.1,0.35,0.6,0.9,1
 //            --threshold 2 (per channel, out of 255)  --out <dir> (PNGs of what differs)
+//            --folders /abs/project,…  (projects too, opened like Open Folder; --open: every module open)
 //
 // Headless Chromium, no window. Frames are deterministic: the grid reads the
 // time it's given, and each frame is drawn with the camera settled.
@@ -17,11 +18,11 @@ import { join } from 'node:path';
 import { serve } from './lib/serve.mjs';
 import { launchChromium } from './lib/browser.mjs';
 
-const opt = { a: 'HEAD', b: 'WORK', skins: '', samples: 'list,lost,structs', zooms: '0.5,1,1.6', positions: '0.1,0.35,0.6,0.9,1', scales: '1', threshold: '2', out: '' };
+const opt = { a: 'HEAD', b: 'WORK', skins: '', samples: 'list,lost,structs', folders: '', open: '', zooms: '0.5,1,1.6', positions: '0.1,0.35,0.6,0.9,1', scales: '1', threshold: '2', out: '' };
 for (let i = 2; i < process.argv.length; i++) {
   const k = process.argv[i].replace(/^--/, '');
   if (!(k in opt)) { console.error(`unknown option --${k}`); process.exit(2); }
-  opt[k] = process.argv[++i];
+  opt[k] = k === 'open' ? '1' : process.argv[++i];
 }
 const list = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
 const nums = (s) => list(s).map(Number);
@@ -107,12 +108,23 @@ async function open(url, scale) {
   await b.page.evaluate(() => window.__ftb.freeze?.(true)); // only our frames draw (an older version without it: its loop runs on)
   return b;
 }
-const load = (page, sample) => page.evaluate(async (s) => {
+const load = (page, sample) => sample.startsWith('/') ? page.evaluate(async ({ dir, openAll }) => {
+  // a project folder, opened the way Open Folder does (and every module opened, with --open)
+  const f = window.__ftb;
+  await f.openFolder(dir);
+  for (let i = 0; i < 1200 && !(f.S.project?.root === dir && f.S.trace?.evs.length); i++) await new Promise((r) => setTimeout(r, 100));
+  if (openAll) {
+    const { toggleModule } = await import('/src/main.ts');
+    for (const [file, m] of [...f.layout.modules]) if (m.collapsed) toggleModule(file);
+  }
+  await new Promise((r) => setTimeout(r, 1200));
+}, { dir: sample, openAll: !!opt.open }) : page.evaluate(async (s) => {
   const m = await import('/src/sample-ui.ts');
   m.loadSample(s);
   for (let i = 0; i < 150 && !(window.__ftb.S.trace?.evs.length && window.__ftb.S.sample?.key === s); i++) await new Promise((r) => setTimeout(r, 100));
   await new Promise((r) => setTimeout(r, 1200)); // the trace settles (gdb samples run on the server)
 }, sample);
+const label = (s) => (s.startsWith('/') ? s.slice(s.lastIndexOf('/') + 1) : s);
 
 const A = await serve(opt.a);
 const B = await serve(opt.b);
@@ -123,7 +135,7 @@ try {
   await probe.close();
   for (const scale of nums(opt.scales)) {
     const [pa, pb] = [await open(A.url, scale), await open(B.url, scale)];
-    for (const sample of list(opt.samples)) {
+    for (const sample of [...list(opt.samples), ...list(opt.folders)]) {
       await load(pa.page, sample);
       await load(pb.page, sample);
       for (const skin of skins) {
@@ -135,20 +147,20 @@ try {
           if (ha.hash === hb.hash) { same++; continue; }
           const aPng = await pa.page.evaluate(PNG);
           const d = await pb.page.evaluate(DIFF, { png: aPng, threshold });
-          if (d.size) { bad.push(`${sample} z${zoom} p${pos}: size ${d.size}`); continue; }
+          if (d.size) { bad.push(`${label(sample)} z${zoom} p${pos}: size ${d.size}`); continue; }
           worst = Math.max(worst, d.max);
           if (d.n === 0) { same++; continue; } // within the threshold
-          const tag = `${skin}-${sample}-s${scale}-z${zoom}-p${pos}`;
+          const tag = `${skin}-${label(sample)}-s${scale}-z${zoom}-p${pos}`;
           mkdirSync(out, { recursive: true });
           const png = (u) => Buffer.from(u.split(',')[1], 'base64');
           writeFileSync(join(out, `${tag}-a.png`), png(aPng)); // the pair that was compared
           writeFileSync(join(out, `${tag}-b.png`), png(d.png));
           writeFileSync(join(out, `${tag}-diff.png`), png(d.map));
-          bad.push(`${sample} z${zoom} p${pos}: ${d.n} px over ${threshold}, max ${d.max}, box ${d.box.join(',')}`);
+          bad.push(`${label(sample)} z${zoom} p${pos}: ${d.n} px over ${threshold}, max ${d.max}, box ${d.box.join(',')}`);
         }
         differing += bad.length;
         const n = nums(opt.zooms).length * nums(opt.positions).length;
-        console.log(`${bad.length ? 'DIFF' : 'same'}  ${skin.padEnd(15)} ${sample.padEnd(8)} @${scale}  ${same}/${n} identical${worst ? ` (worst ${worst}/255)` : ''}`);
+        console.log(`${bad.length ? 'DIFF' : 'same'}  ${skin.padEnd(15)} ${label(sample).padEnd(8)} @${scale}  ${same}/${n} identical${worst ? ` (worst ${worst}/255)` : ''}`);
         for (const l of bad) console.log(`        ${l}`);
       }
     }

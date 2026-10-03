@@ -13,7 +13,8 @@ import { frameAt } from './playback';
 import { renderChanges, renderCompare } from './changes-ui';
 import { noteHolds } from './notes';
 import { renderReport } from './report-ui';
-import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline, traceRevision } from './state';
+import { S, editor, lastExec, lastPbKey, setLastExec, setLastPbKey, timeline } from './state';
+import { allAtOnce } from './slices';
 import { EditorView } from '@codemirror/view';
 import { N } from './main';
 
@@ -120,9 +121,64 @@ function cssVar(name: string): string {
 
 // The timeline under the playbar: its bars are drawn once per trace, skin and
 // size (bright and dim copies); each frame only lays the bright part over the
-// dim one up to the playhead.
-export let tlCache: { key: string; bright: HTMLCanvasElement; dim: HTMLCanvasElement; head: string } | null = null;
+// dim one up to the playhead. A long window's are drawn ahead, in slices,
+// while it's converted (timelineAhead; main.ts windowTrace).
+interface Strip { key: string; bright: HTMLCanvasElement; dim: HTMLCanvasElement; head: string }
+const strips = new WeakMap<Trace, Strip>();
 let tlSize = { w: 0, h: 0, at: 0 };
+const stripKey = () => `${S.skin.id}|${timeline.width}x${timeline.height}`;
+function* stripSteps(t: Trace, key: string, ahead = false): Generator<void, Strip, void> {
+  const dpr = window.devicePixelRatio || 1;
+  const { w: W, h: H } = tlSize;
+  const n = t.evs.length;
+  let maxD = 1;
+  for (const s of t.snaps) if (s.stack.length > maxD) maxD = s.stack.length;
+  const colW = W / n;
+  const col = {
+    call: cssVar('--tl-call'), ret: cssVar('--tl-ret'), ptr: cssVar('--tl-ptr'),
+    write: cssVar('--tl-write'), eval: cssVar('--tl-eval'), error: cssVar('--tl-err'),
+  };
+  const make = function* (alpha: number): Generator<void, HTMLCanvasElement, void> {
+    const c = document.createElement('canvas');
+    c.width = timeline.width;
+    c.height = timeline.height;
+    const cg = c.getContext('2d')!;
+    cg.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cg.globalAlpha = alpha;
+    // drawn ahead: what's been drawn is painted now, slice by slice (a canvas
+    // keeps its drawing calls until something needs its pixels, and a browser
+    // painting canvases on the CPU would do all of them in the first frame
+    // that shows the strip); a snapshot needs the pixels, and changes nothing
+    const paint = () => void createImageBitmap(c).then((b) => b.close(), () => {});
+    for (let i = 0; i < n; i++) {
+      if ((i & 2047) === 2047) {
+        if (ahead) paint();
+        yield;
+      }
+      const e = t.evs[i];
+      const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
+      const h = 3 + (d / maxD) * (H - 8);
+      cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : e.k === 'out' || e.k === 'in' ? col.write : col[e.k];
+      cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
+    }
+    if (ahead) {
+      paint();
+      yield;
+    }
+    return c;
+  };
+  const bright = yield* make(1);
+  const dim = yield* make(0.3);
+  return { key, bright, dim, head: cssVar('--tl-head') };
+}
+// A trace's bars ahead of showing it (steps for src/slices.ts), at the
+// timeline's size now; drawn again at once if the size or skin has changed.
+export function* timelineAhead(t: Trace): Generator<void, void, void> {
+  if (!t.evs.length || !tlSize.w || !timeline.width) return;
+  const key = stripKey();
+  if (strips.get(t)?.key === key) return;
+  strips.set(t, yield* stripSteps(t, key, true));
+}
 function drawTimeline(): void {
   const now = performance.now();
   if (now - tlSize.at > 500 || !tlSize.w) {
@@ -143,37 +199,14 @@ function drawTimeline(): void {
   const t = S.trace;
   if (!t || !t.evs.length) return;
   const n = t.evs.length;
-  const key = `${traceRevision}|${S.skin.id}|${timeline.width}x${timeline.height}`;
-  if (tlCache?.key !== key) {
-    const make = (alpha: number) => {
-      const c = document.createElement('canvas');
-      c.width = timeline.width;
-      c.height = timeline.height;
-      const cg = c.getContext('2d')!;
-      cg.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const maxD = Math.max(1, ...t.snaps.map((s) => s.stack.length));
-      const colW = W / n;
-      const col = {
-        call: cssVar('--tl-call'), ret: cssVar('--tl-ret'), ptr: cssVar('--tl-ptr'),
-        write: cssVar('--tl-write'), eval: cssVar('--tl-eval'), error: cssVar('--tl-err'),
-      };
-      cg.globalAlpha = alpha;
-      for (let i = 0; i < n; i++) {
-        const e = t.evs[i];
-        const d = t.snaps[i + 1].stack.length || t.snaps[i].stack.length;
-        const h = 3 + (d / maxD) * (H - 8);
-        cg.fillStyle = e.k === 'write' && e.via !== null ? col.ptr : e.k === 'step' ? col.eval : e.k === 'alloc' ? col.call : e.k === 'free' ? col.ret : e.k === 'out' || e.k === 'in' ? col.write : col[e.k];
-        cg.fillRect(i * colW + (colW > 3 ? 0.5 : 0), H - h, Math.max(1, colW - (colW > 3 ? 1 : 0)), h);
-      }
-      return c;
-    };
-    tlCache = { key, bright: make(1), dim: make(0.3), head: cssVar('--tl-head') };
-  }
+  const key = stripKey();
+  let strip = strips.get(t);
+  if (strip?.key !== key) strips.set(t, (strip = allAtOnce(stripSteps(t, key))));
   const x = Math.round((S.pos / n) * W * dpr);
-  g.drawImage(tlCache.dim, 0, 0);
-  if (x > 0) g.drawImage(tlCache.bright, 0, 0, x, timeline.height, 0, 0, x, timeline.height);
+  g.drawImage(strip.dim, 0, 0);
+  if (x > 0) g.drawImage(strip.bright, 0, 0, x, timeline.height, 0, 0, x, timeline.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = tlCache.head;
+  g.fillStyle = strip.head;
   g.fillRect(x / dpr - 1, 0, 2, H);
   // "when did this change?": a mark at each change, the ones passed brighter
   if (S.changes?.list.length) {

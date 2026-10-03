@@ -5,7 +5,7 @@
 // folder; see project.mjs for that.
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { constants as fsc } from 'node:fs';
+import { closeSync, constants as fsc, openSync } from 'node:fs';
 import { access, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
@@ -264,11 +264,18 @@ function ask(sess, cmd) {
   return job;
 }
 
+// Sessions told to quit, until their gdb is gone. A quit waits behind a
+// window being recorded, and the kill's timer doesn't keep the server up:
+// if the server exits first, it takes them with it (or they run on, orphaned).
+const closing = new Set();
+
 async function closeSession(id) {
   const sess = sessions.get(id);
   if (!sess) return;
   sessions.delete(id);
   if (!sess.dead) {
+    closing.add(sess);
+    sess.proc.once('exit', () => closing.delete(sess));
     await writeFifo(sess.cmd, JSON.stringify({ cmd: 'quit' }) + '\n', sess, 1000);
     setTimeout(() => sess.proc.kill('SIGKILL'), 2000).unref();
   }
@@ -279,7 +286,17 @@ setInterval(() => {
   for (const [id, sess] of sessions) if (Date.now() - sess.last > SESSION_IDLE_MS) void closeSession(id);
 }, 60000).unref();
 process.on('exit', () => {
-  for (const sess of sessions.values()) sess.proc.kill('SIGKILL');
+  for (const sess of [...sessions.values(), ...closing]) {
+    sess.proc.kill('SIGKILL');
+    // a reply still being waited for would hold the exit forever (a worker
+    // thread blocked opening the pipe for gdb's answer): give it a writer,
+    // and so its end
+    try {
+      closeSync(openSync(sess.resp, fsc.O_WRONLY | fsc.O_NONBLOCK));
+    } catch {
+      // (nobody waiting)
+    }
+  }
 });
 
 export async function openSession(req) {

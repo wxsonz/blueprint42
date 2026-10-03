@@ -76,6 +76,8 @@ export const prof = {
   pass: new Map<string, number>(), // ms in each paint pass
   hook: new Map<string, { n: number; ms: number }>(), // "skin.hook": calls and ms
   ops: new Map<string, number>(), // canvas calls by kind, on the grid's context
+  frame: new Map<string, number>(), // this frame's passes so far
+  worst: { ms: 0, passes: {} as Record<string, number> }, // the slowest frame, pass by pass
 };
 // the text memos (src/skins/util.ts): counted always, they're a few increments a frame
 export const memo = { fitHit: 0, fitMiss: 0, widthHit: 0, widthMiss: 0 };
@@ -86,7 +88,16 @@ export function profReset(): void {
   prof.pass.clear();
   prof.hook.clear();
   prof.ops.clear();
+  prof.frame.clear();
+  prof.worst = { ms: 0, passes: {} };
   for (const k of Object.keys(memo) as (keyof typeof memo)[]) memo[k] = 0;
+}
+
+// A frame is over (main.ts tick): the slowest one keeps what it spent where.
+export function profFrameEnd(ms: number): void {
+  if (!prof.on) return;
+  if (ms > prof.worst.ms) prof.worst = { ms: +ms.toFixed(1), passes: Object.fromEntries([...prof.frame].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, +v.toFixed(2)])) };
+  prof.frame.clear();
 }
 
 export function profPass(name: string, f: () => void): void {
@@ -95,7 +106,9 @@ export function profPass(name: string, f: () => void): void {
   try {
     f();
   } finally {
-    prof.pass.set(name, (prof.pass.get(name) ?? 0) + performance.now() - t);
+    const ms = performance.now() - t;
+    prof.pass.set(name, (prof.pass.get(name) ?? 0) + ms);
+    prof.frame.set(name, (prof.frame.get(name) ?? 0) + ms);
   }
 }
 
@@ -150,6 +163,7 @@ export function diagReport(extra: Record<string, unknown> = {}) {
     frames: prof.frames,
     fps: +(prof.frames / secs).toFixed(1),
     passMs: perFrame(prof.pass),
+    worstFrame: prof.worst,
     hooks: [...prof.hook].sort((a, b) => b[1].ms - a[1].ms).slice(0, 15).map(([k, v]) => ({ hook: k, perFrame: +(v.n / n).toFixed(1), ms: +(v.ms / n).toFixed(3) })),
     canvasCalls: perFrame(prof.ops),
     memo: { fitText: rate(memo.fitHit, memo.fitMiss), widths: rate(memo.widthHit, memo.widthMiss) },

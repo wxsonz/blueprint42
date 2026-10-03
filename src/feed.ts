@@ -7,6 +7,7 @@ import { fmtVal, type Payload, type Trace } from './interp';
 import { clip, type GridView } from './render';
 import { argLabel, frameAt, retLabel, returnCard, type ViewState } from './playback';
 import type { Project } from './workspace';
+import type { Model } from './parse';
 
 export type FeedState = Pick<ViewState, 'model' | 'trace' | 'pos'> & { project: Project | null };
 
@@ -19,9 +20,10 @@ export function payloadText(d: Payload): string {
 // ---------------- the kill feed: who sent what to whom ----------------
 // Calls, returns, and writes into memory another function owns, newest on
 // top, each with its type and the value that went across. Built once per
-// trace; redrawn only when the newest one changes.
+// trace (a long window's ahead of showing it: feedAhead); redrawn only when
+// the newest one changes.
 interface Transfer { i: number; kind: 'call' | 'ret' | 'write'; from: string; to: string; data: string }
-let transfers: { rev: number; list: Transfer[] } = { rev: -1, list: [] };
+const transfers = new WeakMap<Trace, { model: Model | null; list: Transfer[] }>();
 const FEED_COLORS = ['#2d89ef', '#00a300', '#e3008c', '#9f00a7', '#da532c', '#1e7145', '#b91d47', '#00aba9', '#603cba', '#e3a21a'];
 const FEED_ACT = {
   call: '<svg viewBox="0 0 18 14" aria-label="calls"><path d="M1 7h14M10 2l5 5-5 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -30,20 +32,21 @@ const FEED_ACT = {
 };
 const clipFeed = (v: string, n = 28) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
 
-function transfersOf(t: Trace, S: FeedState, traceRevision: number): Transfer[] {
-  if (transfers.rev === traceRevision) return transfers.list;
+function transfersOf(t: Trace, model: Model | null): Transfer[] {
+  const hit = transfers.get(t);
+  if (hit && hit.model === model) return hit.list;
   const list: Transfer[] = [];
-  const name = (fn: string | null | undefined) => (!fn ? 'process' : S.model?.byName.get(fn)?.cname ?? fn);
+  const name = (fn: string | null | undefined) => (!fn ? 'process' : model?.byName.get(fn)?.cname ?? fn);
   // the way C writes it: type, name, value
   const typed = (type: string | undefined, v: string, nm = '') => `${type ? `<i>${esc(type)}</i> ` : ''}${nm ? `${esc(nm)} = ` : ''}<b>${esc(clipFeed(v))}</b>`;
   t.evs.forEach((e, i) => {
     if (e.k === 'call') {
-      const fn = S.model?.byName.get(e.fn);
+      const fn = model?.byName.get(e.fn);
       const snap = t.snaps[i + 1];
       const args = e.args.map((a, k) => typed(fn?.params[k]?.type, a.data ? payloadText(a.data) : argLabel(a.val, a.text, t, snap), a.name));
       list.push({ i, kind: 'call', from: name(e.caller), to: name(e.fn), data: args.join(' · ') || '<i>no arguments</i>' });
     } else if (e.k === 'ret') {
-      const fn = S.model?.byName.get(e.fn);
+      const fn = model?.byName.get(e.fn);
       const v = e.data ? payloadText(e.data) : e.val.k === 'void' ? 'void' : retLabel(e.val, t);
       list.push({ i, kind: 'ret', from: name(e.fn), to: name(e.caller), data: typed(fn?.ret, v) });
     } else if (e.k === 'write' && e.frame !== null) {
@@ -56,9 +59,10 @@ function transfersOf(t: Trace, S: FeedState, traceRevision: number): Transfer[] 
       list.push({ i, kind: 'write', from: name(writer), to: name(owner), data: `${esc(info.name)} = <b>${esc(clipFeed(fmtVal(e.val), 36))}</b>` });
     }
   });
-  transfers = { rev: traceRevision, list };
+  transfers.set(t, { model, list });
   return list;
 }
+export const feedAhead = (t: Trace, model: Model | null): void => void transfersOf(t, model);
 
 function feedIcon(n: string): string {
   let h = 7;
@@ -76,7 +80,7 @@ export function renderFeed(S: FeedState, traceRevision: number): void {
     if (feedKey) (el.innerHTML = ''), (feedKey = '');
     return;
   }
-  const list = transfersOf(t, S, traceRevision);
+  const list = transfersOf(t, S.model);
   const at = Math.floor(S.pos);
   let lo = 0, hi = list.length - 1, last = -1;
   while (lo <= hi) {

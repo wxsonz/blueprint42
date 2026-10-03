@@ -76,7 +76,8 @@ Python on PATH. `npm run preview` also serves the trace server.
 Pipeline in `src/`: `parse.ts` (tree-sitter → symbol model) →
 `layout.ts` (positions by stable id, pinning, belt waypoints, rename
 heuristic) → `route.ts` (scene: recursive-copy slots, per-call ports,
-channel/corridor routing, crossings) → `interp.ts` (runs `main`, emits events plus a snapshot before
+channel/corridor routing, crossings; built once per change, so code outside
+`Layout`'s methods that moves anything calls `layout.touch()`, decision 049) → `interp.ts` (runs `main`, emits events plus a snapshot before
 and after each one) → `playback.ts` (timing and hosts; `frameAt(trace, pos)`
 picks the snapshot and in-flight event for a fractional playback position)
 and `hit.ts` (hit-testing, rects) → `render.ts` (`GridView`: camera and

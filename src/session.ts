@@ -5,6 +5,7 @@
 // fetched. Everything here is also what the nerd stats show.
 import { store } from './dom';
 import type { GResult, GdbRequest, WindowStats } from './gdb';
+import { inSlices, jsonSteps } from './slices';
 
 export const WINDOW_DEFAULT = 20000;
 const CACHE = 6; // windows kept in the page
@@ -63,6 +64,8 @@ async function post<T>(route: string, body: unknown, signal?: AbortSignal): Prom
   }
   if (res.status === 404 || res.status === 405) return 'unavailable';
   if (!res.ok) return { ok: false, error: `trace server: HTTP ${res.status}` } as T;
+  // a window is megabytes of stops: read in slices, so the page keeps drawing
+  if (route === 'window') return (await inSlices(jsonSteps(await res.text(), 'stops'))) as T;
   return (await res.json()) as T;
 }
 

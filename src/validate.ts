@@ -5,12 +5,23 @@
 // trace in dev builds (main.ts, into src/diag.ts) and on every sample in the
 // tests (test/validate.test.ts).
 import type { Snap, SnapCell, Trace } from './interp';
+import { allAtOnce, inSlices } from './slices';
 
 export interface Problem { check: string; detail: string; at: number | null }
 
 const MAX_PER_CHECK = 5; // examples of each, then a count
 
 export function validateTrace(t: Trace): Problem[] {
+  return allAtOnce(checks(t));
+}
+
+// The same, in slices between frames (src/slices.ts): a long window is tens
+// of thousands of snapshots, and dev builds check every trace they show.
+export function validateSliced(t: Trace): Promise<Problem[]> {
+  return inSlices(checks(t));
+}
+
+function* checks(t: Trace): Generator<void, Problem[], void> {
   const out: Problem[] = [];
   const counts = new Map<string, number>();
   const fail = (check: string, at: number | null, detail: string) => {
@@ -27,7 +38,9 @@ export function validateTrace(t: Trace): Problem[] {
   const cellName = new Map<number, string>();
   let lastSent = 0;
   let lastIn = 0;
-  t.snaps.forEach((s, i) => {
+  for (let i = 0; i < t.snaps.length; i++) {
+    if ((i & 255) === 255) yield; // (places to pause, here and below)
+    const s = t.snaps[i];
     const at = i === 0 ? null : i - 1; // the event this snapshot follows
     // frame ids: unique on a stack, and one function each for the whole run
     const seen = new Set<number>();
@@ -59,13 +72,15 @@ export function validateTrace(t: Trace): Problem[] {
       if (t.inText !== undefined && s.inPos > t.inText.length) fail('input', at, `${s.inPos} bytes taken from ${t.inText.length} of input`);
       lastIn = s.inPos;
     }
-  });
+  }
 
   // each event does what it says to the snapshots either side of it
-  t.evs.forEach((e, i) => {
+  for (let i = 0; i < t.evs.length; i++) {
+    if ((i & 255) === 255) yield;
+    const e = t.evs[i];
     const before = t.snaps[i];
     const after = t.snaps[i + 1];
-    if (!before || !after) return;
+    if (!before || !after) continue;
     const onStack = (s: Snap, id: number | null) => id !== null && s.stack.some((f) => f.id === id);
     if (e.frame !== null && !onStack(before, e.frame) && !onStack(after, e.frame)) fail('events', i, `${e.k} runs in frame ${e.frame}, on neither stack around it`);
     if (e.k === 'call') {
@@ -89,10 +104,12 @@ export function validateTrace(t: Trace): Problem[] {
       if (e.to < e.from) fail('input', i, `a read of stdin from ${e.from} back to ${e.to}`);
       if (t.inText !== undefined && t.inText.slice(e.from, e.to) !== e.text) fail('input', i, `a read of ${JSON.stringify(e.text)}, but stdin there says ${JSON.stringify(t.inText.slice(e.from, e.to))}`);
     }
-  });
+  }
 
   // the heap's slots: a live block has one, and two live blocks never share it
-  if (t.heapSlots) t.snaps.forEach((s, i) => {
+  if (t.heapSlots) for (let i = 0; i < t.snaps.length; i++) {
+    if ((i & 255) === 255) yield;
+    const s = t.snaps[i];
     const used = new Map<number, number>();
     for (const c of s.heap) {
       const slot = t.heapSlots!.get(c.id);
@@ -100,7 +117,7 @@ export function validateTrace(t: Trace): Problem[] {
       else if (used.has(slot)) fail('heap slots', i ? i - 1 : null, `blocks ${used.get(slot)} and ${c.id} share slot ${slot}`);
       else used.set(slot, c.id);
     }
-  });
+  }
 
   for (const [check, n] of counts) if (n > MAX_PER_CHECK) out.push({ check, detail: `…and ${n - MAX_PER_CHECK} more`, at: null });
   return out;

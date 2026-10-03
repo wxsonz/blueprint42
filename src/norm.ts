@@ -37,9 +37,17 @@ export function fnCaps(fn: FnInfo): FnCaps {
   return caps;
 }
 
-// Definitions in one file ('' for a single buffer).
+// Definitions in one file ('' for a single buffer). Counted once per model:
+// a frame asks for every module it shows.
+const perFile = new WeakMap<Model, Map<string, number>>();
 export function fileCap(model: Model, file: string): Cap {
-  return { used: model.fns.filter((f) => f.file === file).length, max: NORM.fns };
+  let counts = perFile.get(model);
+  if (!counts) {
+    counts = new Map();
+    for (const f of model.fns) counts.set(f.file, (counts.get(f.file) ?? 0) + 1);
+    perFile.set(model, counts);
+  }
+  return { used: counts.get(file) ?? 0, max: NORM.fns };
 }
 
 // The Norm's other rules (docs/OBJECTIVES.md, nice to have 8), as norminette

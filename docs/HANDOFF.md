@@ -12,7 +12,7 @@ why), then this file (current state and the next job).
 ## Where things stand (2026-09-28; tooling and diagnostics 2026-10-01: see the debugging map)
 
 - `main` has everything through M5.5. M6 is on branch `m6-live`. Nothing
-  is pushed (there is no remote).
+  was pushed then (a remote, `origin` on GitHub, came later).
 - **Done:** M0, M1, M3, M2, M4, M5, M5.5 and M6. M3 was built before M2 on
   purpose (see `decisions/` and SPEC §4).
 - **Next job:** none planned; see SPEC "Later / parking lot" and ask the
@@ -39,10 +39,11 @@ npx vitest run -t "M3 acceptance"    # one test by name
 | File | Role |
 |---|---|
 | `parse.ts` | tree-sitter-c → `Model` (functions, params, locals, statics, call sites, externals). Stable ids `func:<name>`. |
-| `layout.ts` | Node positions keyed by id; Sugiyama-style first placement; `setPos` pins; belt `waypoints`; rename heuristic; stale on parse errors. |
-| `route.ts` | `buildScene`: recursion copy slots (`fn#2…`), per-call ports, channel and corridor routing, `crossings`. |
+| `layout.ts` | Node positions keyed by id; Sugiyama-style first placement; `setPos` pins; belt `waypoints` (`setRoute`); rename heuristic; stale on parse errors. `rev` goes up with every change: code outside its methods that moves anything calls `touch()` (decision 049). |
+| `route.ts` | `buildScene`: recursion copy slots (`fn#2…`), per-call ports, channel and corridor routing, `crossings`. Kept per layout until something it reads changes (`computeScene` builds one for real); crossings once per scene (`crossingsOf`, `gapsFor`). |
 | `interp.ts` | In-browser interpreter (C subset) → `Trace`. Also owns the shared `Trace`/`Snap`/`Ev`/`V` types and `fmtVal`. |
-| `gdb.ts` | Client for the trace server + `convertGdb` (gdb timeline → `Trace`). |
+| `gdb.ts` | Client for the trace server + `convertGdb` (gdb timeline → `Trace`; `convertGdbSliced` for long windows). |
+| `slices.ts` | Long work between frames: a generator run in ~8 ms slices (`inSlices`) or at once (`allAtOnce`); `jsonSteps` reads a window's answer a piece at a time. |
 | `playback.ts` | Playback timing (`evDuration`, `switchAt`, `frameAt`), hosts (frame → home node or copy), the return card, M5.5 readouts and labels. No drawing. |
 | `hit.ts` | Hit-testing (`entityAt`, `stationAt`, `foldAt`) and rects (`heapSlotRect`, `stageRect`, `activeHostRect`). |
 | `frame.ts` | What a frame shows, as data (no canvas): `frameState` (step, snapshot, which machine runs, what's in flight) and what the process box, printf's buffer, stdin, modules, walls, the heap bar and the IN dock say. Tested in `test/frame.test.ts`. |
@@ -256,7 +257,8 @@ browsers they open for a measurement go to the terminal's virtual desktop.
 |---|---|---|
 | **a wrong value** (a readout, a card, a dock) | what the frame says, as data: `frame.ts` (`frameState`, `dockInfo`, `heapModel`, …), then the trace | a test in `test/frame.test.ts` against the run; `validateTrace` for the trace itself (`__ftb.diag().checks` in dev) |
 | **drawn in the wrong place, or changed by a refactor** | the paint pass (`render.ts` `pass*`), then the skin hook | `node tools/pixcmp.mjs --a <ref>`: which frames differ, pictures of each; 0 differing means nothing changed |
-| **slow** | the pass or hook that costs, and its canvas calls | the dev panel ("diag"); `node tools/bench.mjs` (Chromium or `--browser zen`, two refs alternating) |
+| **slow** | the pass or hook that costs, and its canvas calls; the slowest frame part by part (`__ftb.diag().worstFrame`: playbar, minimap, feed… too) | the dev panel ("diag"); `node tools/bench.mjs` (Chromium or `--browser zen`, two refs alternating) |
+| **slow on a big program or a long run** | what grows with the size: scene builds and node sweeps a frame, an edit's parse, a window's conversion and the long tasks around it | `node tools/scale.mjs` (generated projects, `--b HEAD` to compare; `--parts window` for long runs); counts in `test/scale.test.ts` |
 | **stuck or blank** | hook errors (a skin that threw), engine errors (`EngineError` names the stage) | the dev panel's errors, each with the state changes that led to it (`__ftb.diag().actions`) |
 | **a skin** (crash, NaN, spilling out of its box) | the skin contract | `npm test` (`test/skin-contract.test.ts`); `node tools/capture-hooks.mjs` when an info grows |
 | **the engines** (gdb conversion, the interpreter) | `validateTrace` on every sample, both engines | `test/validate.test.ts`; `EngineError` says setup / stops (at which stop) / finish |
@@ -287,6 +289,20 @@ check: under 2 s) and `npm test`. A change that should keep the pictures:
   computeBelts }` for exact coordinates.
 - **GNL trace size:** a 3-line input produces about 1,050 events and a
   1.6 MB JSON response. Fine locally; delta-encode it if it grows.
+- **Measuring at size (2026-10-03):**
+  - A tool killed from outside (`timeout`) leaves its trace server's gdb
+    sessions running, orphaned under `systemd --user`: find them by their
+    temp dir (`/tmp/ftb-*`, `ls -l /proc/<pid>/cwd`) and start time, and
+    kill by PID (they ignore SIGTERM; Vite catches it too, so use
+    `timeout -k`). On a normal exit the trace server now takes its sessions
+    with it, closed ones included, and ends a reply still being waited for
+    (a worker thread blocked on the reply pipe held Node's exit forever).
+  - A CPU profile can file JavaScript under `(program)`. A Chrome trace
+    (the CDP `Tracing` domain) says which task it is, and the dev
+    profiler's slowest frame says which part.
+  - A canvas keeps its drawing calls until something needs its pixels:
+    drawing a big offscreen canvas ahead doesn't paint it (a snapshot,
+    `createImageBitmap`, does, and changes nothing).
 - **Measuring (2026-10-01):**
   - Headless Chromium has no GPU compositor: its frame rates aren't the
     author's. Pictures and call counts are fine; use `tools/bench.mjs`

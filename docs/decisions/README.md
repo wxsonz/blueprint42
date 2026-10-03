@@ -55,3 +55,5 @@ and a line here. When a later decision replaces one, the old one's
 | [046](046-nothing-hidden.md) | 2026-09-30 | Accepted | nothing hidden: printf buffer, the statement that died, `*p` read from its memory, counted overflow |
 | [047](047-dev-tools.md) | 2026-10-01 | Accepted | dev tools: `tools/pixcmp` compares two versions' pictures; `playwright-core` drives the system Chromium |
 | [048](048-linter.md) | 2026-10-01 | Accepted | a linter: Oxlint (type-aware; typescript-eslint can't read TypeScript 7) and a canvas save/restore check |
+| [049](049-fast-at-any-size.md) | 2026-10-03 | Accepted | fast at any size: a scene per change, indexes instead of scans, long windows converted ahead in slices |
+| [050](050-recording-speed.md) | 2026-10-03 | Accepted | recording speed: gdb's stepping stays, for now (rr, compiler hooks and tuning weighed) |

@@ -9,11 +9,12 @@
 // differences between that snapshot and the one once the statement is done.
 import type { Past } from './skins/types';
 import { interiorAt, planOf, type Leaf, type Plan, type Station } from './interior';
-import type { Ev, Snap, SnapFrame, Trace, V } from './interp';
+import type { Ev, Snap, SnapCell, SnapFrame, Trace, V } from './interp';
 import { slotsOf, type Slot } from './machine';
 import type { FnInfo, Model } from './parse';
 import type { ValueKind } from './skins/types';
 import { fieldValue, pointeeName, staticCellId, valueOf } from './values';
+import { allAtOnce, inSlices } from './slices';
 
 export interface Beat {
   kind: 'stmt' | 'switch';
@@ -119,24 +120,48 @@ export function ptrTag(v: V, trace: Trace, frame: SnapFrame | null): { tag?: str
   return { tag: `${trace.cells.get(v.to!)?.owner === 'heap' ? 'heap ' : ''}${pointeeName(trace, v.to!, frame)}` };
 }
 
+// A slot's value as text alone: what slotValue says it holds, without the
+// memory and tags it draws (what a slot's past values are made of).
+function slotText(slot: Slot, fnName: string, frame: SnapFrame, snap: Snap, trace: Trace): string {
+  if (slot.kind === 'more') return '';
+  if (slot.kind === 'static') {
+    const id = staticCellId(trace, fnName, slot.name);
+    const c = id !== null ? snap.statics.find((x) => x.id === id) : undefined;
+    return c ? valueOf(c, null, trace, null).text : '';
+  }
+  if (slot.kind === 'cell') {
+    const c = frame.cells.find((x) => x.name === slot.name);
+    return c ? valueOf(c, frame, trace, null).text : '';
+  }
+  const [parent, field] = slot.key.slice(2).split('.');
+  const f = frame.cells.find((x) => x.name === parent)?.fields?.find((x) => x.name === field);
+  return f ? fieldValue(f, trace).text : '';
+}
+
 // What a slot held before, oldest first: each change the running frame saw,
 // up to snapshot `upto`, without the value it holds now. Scanned once per
-// frame and slot, extended as playback moves on.
-const histCache = new WeakMap<Trace, Map<string, { scanned: number; changes: { si: number; text: string }[] }>>();
+// frame and slot, extended as playback moves on. Snapshots share a frame (and
+// the statics) while nothing in it changed, and a text is made from those
+// alone: the same one again is the same text. A frame that returned never
+// comes back, so the snapshots after it are scanned once too.
+const histCache = new WeakMap<Trace, Map<string, { scanned: number; changes: { si: number; text: string }[]; from: SnapFrame | SnapCell[] | null }>>();
 export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: Trace, upto: number, n = 8): Past {
   if (slot.kind === 'more') return [];
   let byKey = histCache.get(trace);
   if (!byKey) histCache.set(trace, (byKey = new Map()));
   const k = `${frameId}|${slot.key}`;
   let h = byKey.get(k);
-  if (!h) byKey.set(k, (h = { scanned: -1, changes: [] }));
+  if (!h) byKey.set(k, (h = { scanned: -1, changes: [], from: null }));
   for (let si = h.scanned + 1; si <= upto && si < trace.snaps.length; si++) {
     const snap = trace.snaps[si];
+    h.scanned = si;
     const f = snap.stack.find((x) => x.id === frameId);
     if (!f) continue;
-    const text = slotValue(slot, fnName, f, snap, trace).text || '?';
+    const from = slot.kind === 'static' ? snap.statics : f;
+    if (from === h.from) continue;
+    h.from = from;
+    const text = slotText(slot, fnName, f, snap, trace) || '?';
     if (h.changes.at(-1)?.text !== text) h.changes.push({ si, text });
-    h.scanned = si;
   }
   const seen = h.changes.filter((c) => c.si <= upto);
   const from = Math.max(0, seen.length - 1 - n);
@@ -144,6 +169,23 @@ export function slotHistory(slot: Slot, fnName: string, frameId: number, trace: 
   const past: Past = seen.slice(from, -1).map((c) => c.text);
   if (from > 0) past.older = from;
   return past;
+}
+
+// The past values of the frames still there at a trace's end (main and the
+// calls it waits on), worked out ahead: a long window's, while it converts
+// (main.ts windowTrace). A jump anywhere in it then reads them instead of
+// scanning every snapshot up to there; the others' lives are short.
+export function* historyAhead(trace: Trace, model: Model): Generator<void, void, void> {
+  const last = trace.snaps.length - 1;
+  for (const f of trace.snaps[last]?.stack ?? []) {
+    const fn = model.byName.get(f.fn);
+    if (!fn || fn.broken) continue;
+    for (const slot of slotsOf(fn)) {
+      if (slot.kind === 'static' || slot.kind === 'more') continue; // (statics show no past values)
+      slotHistory(slot, fn.name, f.id, trace, last);
+      yield;
+    }
+  }
 }
 
 // The slot a read names: `x` (a local, param or static) or `a->b`.
@@ -383,12 +425,24 @@ const tlCache = new WeakMap<Trace, { model: Model; tl: Timeline }>();
 export function timelineOf(trace: Trace, model: Model): Timeline {
   const hit = tlCache.get(trace);
   if (hit && hit.model === model) return hit.tl;
-  const tl = build(trace, model);
+  const tl = allAtOnce(build(trace, model));
   tlCache.set(trace, { model, tl });
   return tl;
 }
 
-function build(trace: Trace, model: Model): Timeline {
+// The same, built in slices between frames (src/slices.ts) and kept for
+// timelineOf: a long window's beats are ready before it's shown.
+export async function timelineSliced(trace: Trace, model: Model): Promise<Timeline> {
+  const hit = tlCache.get(trace);
+  if (hit && hit.model === model) return hit.tl;
+  const tl = await inSlices(build(trace, model));
+  const now = tlCache.get(trace); // (asked for at once meanwhile: that one stands)
+  if (now && now.model === model) return now.tl;
+  tlCache.set(trace, { model, tl });
+  return tl;
+}
+
+function* build(trace: Trace, model: Model): Generator<void, Timeline, void> {
   const evs: Ev[] = trace.evs;
   const n = evs.length;
   const gdb = trace.engine === 'gdb';
@@ -409,6 +463,7 @@ function build(trace: Trace, model: Model): Timeline {
     open.delete(F);
   };
   for (let i = 0; i < n; i++) {
+    if ((i & 255) === 255) yield; // (places to pause, here and below)
     const e = evs[i];
     if (e.frame === null) continue;
     if (e.k === 'call') {
@@ -452,7 +507,8 @@ function build(trace: Trace, model: Model): Timeline {
 
   // gdb switches: the way the frame went next
   if (gdb) {
-    for (const b of beats) {
+    for (const [k, b] of beats.entries()) {
+      if ((k & 63) === 63) yield;
       if (b.kind !== 'switch') continue;
       const d = interiorAt(trace, planOf(model.byName.get(b.fn)!), b.frame, b.to + 1).decided.get(b.station);
       if (d && d.d.at === b.to + 1) b.result = d.d.result;
@@ -463,7 +519,8 @@ function build(trace: Trace, model: Model): Timeline {
   // the rest of the beat's own events write
   const own = new Map<number, number[]>();
   for (let i = 0; i < n; i++) if (beatAt[i] >= 0) (own.get(beatAt[i]) ?? own.set(beatAt[i], []).get(beatAt[i])!).push(i);
-  beats.forEach((b, k) => {
+  for (const [k, b] of beats.entries()) {
+    if ((k & 63) === 63) yield;
     const fn = model.byName.get(b.fn)!;
     const nw = writesOf(b, fn, trace).length;
     b.weight = readsOf(b, fn, trace).length + Math.min(8, nw);
@@ -474,7 +531,11 @@ function build(trace: Trace, model: Model): Timeline {
       list.push(b.lastRet);
       beatAt[b.lastRet] = k;
     }
-    if (list.length === 1) return void ((p0[list[0]] = 0), (p1[list[0]] = 1));
+    if (list.length === 1) {
+      p0[list[0]] = 0;
+      p1[list[0]] = 1;
+      continue;
+    }
     p0[list[0]] = 0;
     p1[list[0]] = COMPUTE_END;
     const rest = list.length - 1;
@@ -482,7 +543,7 @@ function build(trace: Trace, model: Model): Timeline {
       p0[i] = COMPUTE_END + ((1 - COMPUTE_END) * q) / rest;
       p1[i] = COMPUTE_END + ((1 - COMPUTE_END) * (q + 1)) / rest;
     });
-  });
+  }
   return { beats, beatAt, p0, p1 };
 }
 

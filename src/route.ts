@@ -6,7 +6,8 @@
 // placed in reserved slots next to the home, so recursion reads as a chain of
 // factories rather than one machine talking to itself.
 import { MH, MW, footprint, type Layout, type NodeState } from './layout';
-import { callPortY, geomOf, machineSize, procBlockH } from './machine';
+import { callPortY, folded, geomOf, machineSize, procBlockH, shut } from './machine';
+import { reportCheck } from './diag';
 //
 // Modules (M5): a collapsed module is one host (key "mod:<file>"). Calls
 // from outside land on it; all calls between the same two hosts share one
@@ -84,8 +85,62 @@ function maxFrames(trace: Trace | null, fn: string): number {
   return m.get(fn) ?? 0;
 }
 
+// What a scene reads of a trace, worked out ahead (a long window's, while it
+// converts: main.ts windowTrace), so its first frame doesn't pay for it.
+export function warmScene(trace: Trace): void {
+  maxFrames(trace, '');
+}
+
 const overlaps = (a: Rect, b: Rect, pad = 0) =>
   a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
+
+// A scene's obstacles by the cells of a grid they cover: "is this clear?"
+// tries only the ones nearby (an obstacle that overlaps a rect shares a cell
+// with it), with the same answer as trying them all, and `first` finds the
+// same one: the earliest added.
+const NEAR_CELL = 8;
+class Near {
+  private cells = new Map<number, number[]>();
+  constructor(readonly list: Rect[]) {}
+  add(r: Rect): void {
+    const i = this.list.length;
+    this.list.push(r);
+    this.cellsOf(r, 0, (k) => {
+      const l = this.cells.get(k);
+      if (l) l.push(i);
+      else this.cells.set(k, [i]);
+    });
+  }
+  // the cells under r, grown by pad (when it grows)
+  private cellsOf(r: Rect, pad: number, f: (key: number) => void): void {
+    const p = Math.max(0, pad);
+    const x1 = Math.floor((r.x + r.w + p) / NEAR_CELL), y1 = Math.floor((r.y + r.h + p) / NEAR_CELL);
+    for (let cx = Math.floor((r.x - p) / NEAR_CELL); cx <= x1; cx++) {
+      for (let cy = Math.floor((r.y - p) / NEAR_CELL); cy <= y1; cy++) f(cx * 65536 + cy);
+    }
+  }
+  // does an obstacle (not one of `skip`) overlap r, with `pad` around it?
+  any(r: Rect, pad: number, skip: Rect[] = []): boolean {
+    let hit = false;
+    this.cellsOf(r, pad, (k) => {
+      if (hit) return;
+      for (const i of this.cells.get(k) ?? []) {
+        const o = this.list[i];
+        sceneStats.near++;
+        if (!skip.includes(o) && overlaps(r, o, pad)) return void (hit = true);
+      }
+    });
+    return hit;
+  }
+  // the earliest added obstacle around r that passes `ok`
+  first(r: Rect, ok: (o: Rect) => boolean): Rect | undefined {
+    let best = Infinity;
+    this.cellsOf(r, 0, (k) => {
+      for (const i of this.cells.get(k) ?? []) if (i < best && ok(this.list[i])) best = i;
+    });
+    return this.list[best];
+  }
+}
 
 function hostRect(h: Host): Rect {
   return { x: h.x, y: h.y, w: h.w, h: h.h + h.inv };
@@ -132,10 +187,57 @@ interface Edge {
   ty: number;
 }
 
+// ---------- the scene, built once per change ----------
+// A frame, the minimap, the follow camera and every hit test ask for the same
+// scene, many times a frame. It is built again only when something it is made
+// of changes: the layout (its revision), the model, the trace, folded and
+// shut machines, and the live calls a frame adds (`transient`). A layout
+// keeps the last few (a frame in a recursion asks for two: with and without
+// the copies' live calls); one for another model or trace is let go.
+export const sceneStats = { builds: 0, pairs: 0, near: 0 }; // scenes really built, belt pairs tried for crossings, obstacles tried while routing (tests, tools/scale.mjs)
+interface Kept { rev: number; model: Model | null; trace: Trace | null; fold: string; live: string; scene: Scene; print: string; hits: number }
+const kept = new WeakMap<Layout, Kept[]>();
+const KEEP = 4;
+const foldKey = () => `${[...folded].join('|')}#${[...shut].join('|')}`;
+// what the scene reads of the layout (dev builds check a kept scene against
+// it now and then: a change made without Layout.touch() is reported, not drawn stale)
+function layoutPrint(l: Layout): string {
+  let s = '';
+  for (const [id, n] of l.nodes) s += `${id}@${n.file}:${n.place.x},${n.place.y};`;
+  for (const [f, m] of l.modules) s += `${f}:${m.x},${m.y},${+m.collapsed};`;
+  for (const [k, p] of l.waypoints) s += `${k}:${p.x},${p.y};`;
+  return s;
+}
+
 export function buildScene(layout: Layout, model: Model | null, trace: Trace | null, transient: [string, string][] = []): Scene {
+  const fold = foldKey();
+  const live = transient.map(([a, b]) => `${a}>${b}`).join(',');
+  const list = kept.get(layout) ?? [];
+  const i = list.findIndex((k) => k.rev === layout.rev && k.model === model && k.trace === trace && k.fold === fold && k.live === live);
+  if (i >= 0) {
+    const hit = list[i];
+    if (import.meta.env.DEV && ++hit.hits % 60 === 0 && hit.print !== layoutPrint(layout)) {
+      reportCheck({ check: 'scene kept', detail: 'the layout changed without Layout.touch(): the scene was built again', at: null });
+      list.splice(i, 1);
+      return buildScene(layout, model, trace, transient);
+    }
+    if (i) list.unshift(...list.splice(i, 1));
+    return hit.scene;
+  }
+  const scene = computeScene(layout, model, trace, transient);
+  const next = [{ rev: layout.rev, model, trace, fold, live, scene, print: import.meta.env.DEV ? layoutPrint(layout) : '', hits: 0 }, ...list.filter((k) => k.model === model && k.trace === trace)];
+  kept.set(layout, next.slice(0, KEEP));
+  return scene;
+}
+
+// The scene, built now (buildScene keeps it; tests and tools call this to
+// measure or compare a fresh one).
+export function computeScene(layout: Layout, model: Model | null, trace: Trace | null, transient: [string, string][] = []): Scene {
+  sceneStats.builds++;
   const hosts = new Map<string, Host>();
   const copies = new Map<string, number>();
   const obstacles: Rect[] = [];
+  const near = new Near(obstacles);
   const moduleOf = new Map<string, string>();
   const scene: Scene = { hosts, copies, belts: [], ports: new Map(), obstacles, moduleOf, walls: [] };
   if (!model) return scene;
@@ -148,7 +250,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     const size = machineSize(n.fn);
     hosts.set(n.name, { key: n.name, fn: n.name, copy: 1, x: n.place.x, y: n.place.y, w: size.w, h: size.h, inv: 0 });
     const f = footprint(n);
-    obstacles.push({ x: f.x + 1, y: f.y, w: f.w - 2, h: f.h });
+    near.add({ x: f.x + 1, y: f.y, w: f.w - 2, h: f.h });
   }
   for (const m of layout.modules.values()) {
     const r = layout.moduleRect(m.file);
@@ -158,11 +260,11 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     }
     const key = moduleKey(m.file);
     hosts.set(key, { key, fn: key, copy: 1, x: r.x, y: r.y, w: r.w, h: r.h, inv: 0, module: m.file });
-    obstacles.push(r);
+    near.add(r);
   }
   const pp = procPlace(layout);
   const procRect: Rect | null = pp ? { x: pp.x, y: pp.y, w: MW, h: procBlockH(trace) } : null;
-  if (procRect) obstacles.push(procRect);
+  if (procRect) near.add(procRect);
 
   // ---- reserve copy slots next to each recursive function ----
   for (const f of model.fns) {
@@ -176,10 +278,10 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     for (let c = 2; c <= want; c++) {
       const cands: [number, number][] = [[prev.x + w + 3, prev.y], [prev.x, prev.y + h + 1], [prev.x + w + 3, prev.y + h + 1]];
       for (let d = 2; d < 30; d++) cands.push([prev.x, prev.y + d * (h + 1)], [prev.x + w + 3, prev.y + d * (h + 1)]);
-      const spot = cands.find(([x, y]) => !obstacles.some((o) => overlaps({ x, y, w, h }, o, 0.9))) ?? cands[0];
+      const spot = cands.find(([x, y]) => !near.any({ x, y, w, h }, 0.9)) ?? cands[0];
       prev = { x: spot[0], y: spot[1] };
       hosts.set(hostKey(f.name, c), { key: hostKey(f.name, c), fn: f.name, copy: c, x: prev.x, y: prev.y, w, h, inv: 0 });
-      obstacles.push({ x: prev.x, y: prev.y, w, h });
+      near.add({ x: prev.x, y: prev.y, w, h });
     }
   }
 
@@ -276,10 +378,24 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
   // ---- routing ----
   interface Vert { e: Edge; which: 'only' | 'exit' | 'entry'; gapL: number; gapW: number; type: 'LR' | 'LL' | 'RR'; ly: number; ry: number; x?: number }
   const verts: Vert[] = [];
+  const vertsOf = new Map<Edge, Vert[]>();
+  const addVert = (v: Vert) => {
+    verts.push(v);
+    const l = vertsOf.get(v.e);
+    if (l) l.push(v);
+    else vertsOf.set(v.e, [v]);
+  };
   const plan = new Map<Edge, { kind: 'simple' | 'corridor' | 'custom'; cy?: number }>();
-  const corridors: { y: number; x0: number; x1: number }[] = [];
-  const clearOf = (r: Rect, skip: Rect[]) => !obstacles.some((o) => !skip.includes(o) && overlaps(r, o, -0.05));
-  const rectOfHost = (h: Host | null): Rect | null => (h ? obstacles.find((o) => o.x === h.x && o.y <= h.y && o.y + o.h >= h.y + h.h) ?? hostRect(h) : procRect);
+  // corridors taken so far, by half-cell row (a new one keeps 0.45 from them)
+  const corridors = new Map<number, { y: number; x0: number; x1: number }[]>();
+  const corridorNear = (y: number, lo: number, hi: number) => {
+    for (let b = Math.floor((y - 0.45) / 0.5); b <= Math.floor((y + 0.45) / 0.5); b++) {
+      for (const c of corridors.get(b) ?? []) if (Math.abs(c.y - y) < 0.45 && c.x0 < hi && lo < c.x1) return true;
+    }
+    return false;
+  };
+  const clearOf = (r: Rect, skip: Rect[]) => !near.any(r, -0.05, skip);
+  const rectOfHost = (h: Host | null): Rect | null => (h ? near.first(hostRect(h), (o) => o.x === h.x && o.y <= h.y && o.y + o.h >= h.y + h.h) ?? hostRect(h) : procRect);
 
   for (const e of edges) {
     const ax = (e.A ? e.A.x + e.A.w : pp!.x + MW);
@@ -295,7 +411,7 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
       const y1 = Math.max(e.sy, e.ty) + 0.15;
       if (clearOf({ x: ax + 0.05, y: y0, w: bx - ax - 0.1, h: y1 - y0 }, skip)) {
         plan.set(e, { kind: 'simple' });
-        verts.push({ e, which: 'only', gapL: ax, gapW: bx - ax, type: 'LR', ly: e.sy, ry: e.ty });
+        addVert({ e, which: 'only', gapL: ax, gapW: bx - ax, type: 'LR', ly: e.sy, ry: e.ty });
         continue;
       }
     }
@@ -309,15 +425,18 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
     for (let k = 0; k < 120; k++) {
       const y = ideal + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.5;
       const bar = { x: lo, y: y - 0.3, w: hi - lo, h: 0.6 };
-      if (obstacles.some((o) => overlaps(bar, o, 0.05))) continue;
-      if (corridors.some((c) => Math.abs(c.y - y) < 0.45 && c.x0 < hi && lo < c.x1)) continue;
+      if (near.any(bar, 0.05)) continue;
+      if (corridorNear(y, lo, hi)) continue;
       cy = y;
       break;
     }
-    corridors.push({ y: cy, x0: lo, x1: hi });
+    const row = Math.floor(cy / 0.5);
+    const taken = corridors.get(row);
+    if (taken) taken.push({ y: cy, x0: lo, x1: hi });
+    else corridors.set(row, [{ y: cy, x0: lo, x1: hi }]);
     plan.set(e, { kind: 'corridor', cy });
-    verts.push({ e, which: 'exit', gapL: ax, gapW: 3, type: forward ? 'LR' : 'LL', ly: e.sy, ry: cy });
-    verts.push({ e, which: 'entry', gapL: bx - 3, gapW: 3, type: forward ? 'LR' : 'RR', ly: cy, ry: e.ty });
+    addVert({ e, which: 'exit', gapL: ax, gapW: 3, type: forward ? 'LR' : 'LL', ly: e.sy, ry: cy });
+    addVert({ e, which: 'entry', gapL: bx - 3, gapW: 3, type: forward ? 'LR' : 'RR', ly: cy, ry: e.ty });
   }
 
   // Channels: verticals sharing a gap get distinct x, ordered to avoid crossings.
@@ -343,11 +462,11 @@ export function buildScene(layout: Layout, model: Model | null, trace: Trace | n
       const w = layout.waypoints.get(e.key)!;
       pts = [[ax, e.sy], [w.x, e.sy], [w.x, w.y], [bx - 0.5, w.y], [bx - 0.5, e.ty], [bx, e.ty]];
     } else if (p.kind === 'simple') {
-      const tx = verts.find((v) => v.e === e)!.x!;
+      const tx = vertsOf.get(e)![0].x!;
       pts = [[ax, e.sy], [tx, e.sy], [tx, e.ty], [bx, e.ty]];
     } else {
-      const ex = verts.find((v) => v.e === e && v.which === 'exit')!.x!;
-      const nx = verts.find((v) => v.e === e && v.which === 'entry')!.x!;
+      const ex = vertsOf.get(e)!.find((v) => v.which === 'exit')!.x!;
+      const nx = vertsOf.get(e)!.find((v) => v.which === 'entry')!.x!;
       pts = [[ax, e.sy], [ex, e.sy], [ex, p.cy!], [nx, p.cy!], [nx, e.ty], [bx, e.ty]];
     }
     scene.belts.push({
@@ -379,6 +498,72 @@ export function crossings(a: Pt[], b: Pt[]): { x: number; y: number; horizontal:
     }
   }
   return out;
+}
+
+// Which belts of a scene cross which, and where, worked out once per scene
+// (a frame asks every time it draws): for each belt, the belts that cross
+// it, with the points as crossings(other, belt) gives them. Pairs come from
+// a grid of cells, each segment in every cell it passes (two segments that
+// cross share the cell of the crossing), not from trying every pair.
+export interface Crossing { other: Belt; pts: { x: number; y: number; horizontal: boolean }[] }
+const crossed = new WeakMap<Scene, Map<Belt, Crossing[]>>();
+const CROSS_CELL = 8;
+export function crossingsOf(scene: Scene): Map<Belt, Crossing[]> {
+  const hit = crossed.get(scene);
+  if (hit) return hit;
+  const { belts } = scene;
+  const cells = new Map<string, number[]>();
+  belts.forEach((b, i) => {
+    for (let k = 0; k + 1 < b.pts.length; k++) {
+      const [p, q] = [b.pts[k], b.pts[k + 1]];
+      const cx1 = Math.floor(Math.max(p[0], q[0]) / CROSS_CELL), cy1 = Math.floor(Math.max(p[1], q[1]) / CROSS_CELL);
+      for (let cx = Math.floor(Math.min(p[0], q[0]) / CROSS_CELL); cx <= cx1; cx++) {
+        for (let cy = Math.floor(Math.min(p[1], q[1]) / CROSS_CELL); cy <= cy1; cy++) {
+          const key = `${cx},${cy}`;
+          const list = cells.get(key);
+          if (!list) cells.set(key, [i]);
+          else if (list[list.length - 1] !== i) list.push(i);
+        }
+      }
+    }
+  });
+  const out = new Map<Belt, Crossing[]>();
+  const add = (b: Belt, c: Crossing) => {
+    const list = out.get(b);
+    if (list) list.push(c);
+    else out.set(b, [c]);
+  };
+  const tried = new Set<number>();
+  for (const list of cells.values()) {
+    for (let a = 0; a < list.length; a++) {
+      for (let c = a + 1; c < list.length; c++) {
+        const i = list[a], j = list[c]; // i < j: belts go in in order
+        const key = i * belts.length + j;
+        if (tried.has(key)) continue;
+        tried.add(key);
+        sceneStats.pairs++;
+        const jOverI = crossings(belts[j].pts, belts[i].pts);
+        if (!jOverI.length) continue; // (the same points either way round)
+        add(belts[i], { other: belts[j], pts: jOverI });
+        add(belts[j], { other: belts[i], pts: crossings(belts[i].pts, belts[j].pts) });
+      }
+    }
+  }
+  crossed.set(scene, out);
+  return out;
+}
+
+// The gaps cut into each belt, for belts drawn in this order: a belt passes
+// under every later one that crosses it (the same points, in the same order,
+// as trying each later belt in turn).
+export function gapsFor(scene: Scene, drawn: Belt[]): Crossing['pts'][] {
+  const cross = crossingsOf(scene);
+  const at = new Map(drawn.map((b, i) => [b, i]));
+  return drawn.map((b, i) => {
+    const later = (cross.get(b) ?? []).filter((c) => (at.get(c.other) ?? -1) > i);
+    if (later.length > 1) later.sort((p, q) => at.get(p.other)! - at.get(q.other)!);
+    return later.flatMap((c) => c.pts);
+  });
 }
 
 export function nodeOfHost(layout: Layout, h: Host): NodeState | undefined {

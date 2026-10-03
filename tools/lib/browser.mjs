@@ -79,8 +79,8 @@ print('B42MOVE ${token} ' + (t ? 'moved ' + n : 'lost'));
 // antialias differently: pictures compared across pages must not switch)
 // uncapped: no vsync and no frame-rate limit, so frames a second is what a
 // frame costs (CPU and GPU), not the screen's refresh rate
-export async function launchChromium({ headed = false, gpu = headed, software = false, uncapped = false, width = 1400, height = 900, scale = 1 } = {}) {
-  const args = ['--no-sandbox'];
+export async function launchChromium({ headed = false, gpu = headed, software = false, uncapped = false, width = 1400, height = 900, scale = 1, args: extra = [] } = {}) {
+  const args = ['--no-sandbox', ...extra];
   if (uncapped) args.push('--disable-gpu-vsync', '--disable-frame-rate-limit');
   if (software) args.push('--disable-accelerated-2d-canvas', '--disable-gpu');
   if (headed) args.push('--ozone-platform=wayland');

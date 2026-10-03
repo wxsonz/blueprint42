@@ -95,8 +95,13 @@ export function validateBindingExpr(expr: string): string | null {
 export interface BufferShape { type: string; data: string; markers: string[] }
 
 /** Find the common char* + size_t buffer shape without relying on field names alone. */
+// (Once per model: the inspector asks for each variable it shows, at every step.)
+const shapesOf = new WeakMap<Model, BufferShape[]>();
 export function bufferShapes(model: Model): BufferShape[] {
+  const hit = shapesOf.get(model);
+  if (hit) return hit;
   const out: BufferShape[] = [];
+  shapesOf.set(model, out);
   const seen = new Set<string>();
   const visit = (n: Node, parent?: Node) => {
     if (n.type === 'struct_specifier') {
@@ -125,9 +130,32 @@ export function bufferShapes(model: Model): BufferShape[] {
 }
 
 // Struct definitions by every name they go by: `struct s_reader` and `t_reader`.
+// Each tree's own are kept with it, so an edit walks only the file it
+// changed; merged in file order, a later file's definition wins as before.
 export function structTable(trees: Tree[]): Map<string, Var[]> {
   const byTag = new Map<string, Var[]>();
+  const aliases = new Map<string, string>();
+  for (const t of trees) {
+    const own = treeStructs(t);
+    for (const [k, v] of own.byTag) byTag.set(k, v);
+    for (const [k, v] of own.aliases) aliases.set(k, v);
+  }
+  const out = new Map(byTag);
+  for (const [alias, key] of aliases) {
+    const f = byTag.get(key);
+    if (f) out.set(alias, f);
+  }
+  return out;
+}
+
+export const parseStats = { structWalks: 0 }; // trees walked for their structs (tests)
+const structsOf = new WeakMap<Tree, { byTag: Map<string, Var[]>; aliases: Map<string, string> }>();
+function treeStructs(tree: Tree): { byTag: Map<string, Var[]>; aliases: Map<string, string> } {
+  const hit = structsOf.get(tree);
+  if (hit) return hit;
+  const byTag = new Map<string, Var[]>();
   const aliases = new Map<string, string>(); // typedef name -> "struct tag" (or the body's own key)
+  const treeNo = parseStats.structWalks++; // (an anonymous struct's key is unique to its tree)
   let anon = 0;
   const visit = (n: Node) => {
     if (n.type === 'type_definition') {
@@ -135,7 +163,7 @@ export function structTable(trees: Tree[]): Map<string, Var[]> {
       if (spec?.type === 'struct_specifier' || spec?.type === 'union_specifier') {
         const kw = spec.type === 'union_specifier' ? 'union' : 'struct';
         const tag = spec.childForFieldName('name')?.text;
-        const key = tag ? `${kw} ${tag}` : `${kw} <anon ${anon++}>`;
+        const key = tag ? `${kw} ${tag}` : `${kw} <anon ${treeNo}.${anon++}>`;
         const body = spec.childForFieldName('body');
         if (body) byTag.set(key, fieldsIn(body));
         for (const d of n.childrenForFieldName('declarator')) {
@@ -152,16 +180,23 @@ export function structTable(trees: Tree[]): Map<string, Var[]> {
     }
     for (const c of n.namedChildren) if (c) visit(c);
   };
-  for (const t of trees) visit(t.rootNode);
-  const out = new Map(byTag);
-  for (const [alias, key] of aliases) {
-    const f = byTag.get(key);
-    if (f) out.set(alias, f);
-  }
-  return out;
+  visit(tree.rootNode);
+  const own = { byTag, aliases };
+  structsOf.set(tree, own);
+  return own;
 }
 
+// (Kept with the tree, like its structs: only an edited file's are read again.)
+const typeDefsKept = new WeakMap<Tree, { file: string; defs: TypeDef[] }>();
 export function typeDefsOf(tree: Tree, file: string): TypeDef[] {
+  const hit = typeDefsKept.get(tree);
+  if (hit?.file === file) return hit.defs;
+  const defs = readTypeDefs(tree, file);
+  typeDefsKept.set(tree, { file, defs });
+  return defs;
+}
+
+function readTypeDefs(tree: Tree, file: string): TypeDef[] {
   const out: TypeDef[] = [];
   const defines: TypeDef = { id: `type:${file}:#define`, kind: 'defines', name: '#define', file, line: 0, members: [] };
   const entry = (spec: Node, alias: string | undefined, at: Node) => {

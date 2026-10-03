@@ -66,15 +66,51 @@ export function blockHeight(doors: number): number {
   return Math.max(MH, 1.9 + rows * 0.55 + 0.4);
 }
 
+// The nodes, counting each machine added or removed (Layout.nodesOf keeps
+// each file's machines until the count moves).
+class NodeMap extends Map<string, NodeState> {
+  changes = 0;
+  override set(id: string, n: NodeState): this {
+    this.changes++;
+    return super.set(id, n);
+  }
+  override delete(id: string): boolean {
+    this.changes++;
+    return super.delete(id);
+  }
+  override clear(): void {
+    this.changes++;
+    super.clear();
+  }
+}
+
 export class Layout {
-  nodes = new Map<string, NodeState>();
+  nodes: Map<string, NodeState> = new NodeMap();
+  private byFile = { at: -1, files: new Map<string, NodeState[]>() };
   modules = new Map<string, ModuleState>();
   // Author-routed belts: key "caller>callee" ('' caller = the process) → the
   // cell centre the belt's middle leg passes through.
   waypoints = new Map<string, { x: number; y: number }>();
   private graph = ''; // the file-to-file call graph modules were last packed for
+  // Goes up with every change to a position, a module or a route: a scene
+  // built from this layout is kept until it does (route.ts buildScene).
+  rev = 0;
+
+  // Code outside these methods that changes positions, modules or routes
+  // says so here (or the grid keeps drawing the old scene).
+  touch(): void {
+    this.rev++;
+  }
+
+  // An author's route for a belt ("caller>callee"), or back to automatic.
+  setRoute(key: string, p: { x: number; y: number } | null): void {
+    this.touch();
+    if (p) this.waypoints.set(key, p);
+    else this.waypoints.delete(key);
+  }
 
   reset(): void {
+    this.touch();
     this.graph = '';
     folded.clear();
     shut.clear();
@@ -93,8 +129,20 @@ export class Layout {
     return [...this.nodes.values()].filter((n) => !this.hidden(n));
   }
 
-  nodesOf(file: string): NodeState[] {
-    return [...this.nodes.values()].filter((n) => n.file === file);
+  // A file's machines, in the order they were added. A frame asks once per
+  // module, so they're kept by file until a machine is added or removed.
+  nodesOf(file: string): readonly NodeState[] {
+    const changes = (this.nodes as NodeMap).changes;
+    if (this.byFile.at !== changes) {
+      const files = new Map<string, NodeState[]>();
+      for (const n of this.nodes.values()) {
+        const list = files.get(n.file);
+        if (list) list.push(n);
+        else files.set(n.file, [n]);
+      }
+      this.byFile = { at: changes, files };
+    }
+    return this.byFile.files.get(file) ?? [];
   }
 
   // The wall around a module's machines (whether or not it is expanded).
@@ -119,12 +167,13 @@ export class Layout {
   private refresh(file: string): void {
     const m = this.modules.get(file);
     const w = this.wall(file);
-    if (m && w && !m.collapsed) (m.x = w.x), (m.y = w.y);
+    if (m && w && !m.collapsed && (m.x !== w.x || m.y !== w.y)) (this.touch(), (m.x = w.x), (m.y = w.y));
   }
 
   private shift(file: string, dx: number, dy: number): void {
     const m = this.modules.get(file);
     if (!m || (!dx && !dy)) return;
+    this.touch();
     m.x += dx;
     m.y += dy;
     for (const n of this.nodesOf(file)) (n.place.x += dx), (n.place.y += dy);
@@ -147,6 +196,7 @@ export class Layout {
     const r = this.moduleRect(file);
     const next = { ...r, x: r.x + (x - m.x), y: r.y + (y - m.y) };
     for (const o of this.modules.values()) if (o.file !== file && overlap(next, this.moduleRect(o.file), 0.5)) return false;
+    this.touch();
     this.shift(file, x - m.x, y - m.y);
     m.pinned = true;
     return true;
@@ -155,6 +205,7 @@ export class Layout {
   setCollapsed(file: string, collapsed: boolean, model: Model | null): void {
     const m = this.modules.get(file);
     if (!m || m.collapsed === collapsed) return;
+    this.touch();
     if (!collapsed) {
       // Open where the block was: the wall's top-left lands on the block's.
       const w = this.wall(file);
@@ -170,6 +221,7 @@ export class Layout {
   unpinModule(file: string, model: Model): void {
     const m = this.modules.get(file);
     if (!m) return;
+    this.touch();
     m.pinned = false;
     this.pack(model);
   }
@@ -179,6 +231,7 @@ export class Layout {
   // they flow around pinned ones.
   pack(model: Model): void {
     if (!this.modules.size) return;
+    this.touch();
     const fileOfFn = new Map(model.fns.map((f) => [f.name, f.file]));
     this.graph = [...new Set(model.fns.flatMap((f) => f.calls.map((c) => fileOfFn.get(c.callee)).filter((t) => t && t !== f.file).map((t) => `${f.file}>${t}`)))].sort().join('|');
     for (const f of this.modules.keys()) this.refresh(f);
@@ -267,6 +320,7 @@ export class Layout {
   }
 
   applyBlueprint(bp: Blueprint, model: Model, full: boolean): void {
+    this.touch();
     folded.clear();
     for (const k of bp.folded ?? []) folded.add(k);
     shut.clear();
@@ -299,6 +353,7 @@ export class Layout {
   // Back to the auto layout: nothing pinned, no hand-routed belts. (The
   // author's sprites stay where they are.)
   tidy(model: Model): void {
+    this.touch();
     for (const n of this.nodes.values()) n.place.pinned = false;
     for (const m of this.modules.values()) m.pinned = false;
     this.waypoints.clear();
@@ -325,6 +380,7 @@ export class Layout {
   // many machines moved.
   settle(model: Model): number {
     if (!this.overlaps().length) return 0;
+    this.touch();
     const before = new Map([...this.nodes].map(([id, n]) => [id, `${n.place.x},${n.place.y}`]));
     this.reflow(model);
     for (let round = 0; round < 3; round++) {
@@ -342,6 +398,7 @@ export class Layout {
   // A frame changed height (a struct folded or unfolded): lay the auto-placed
   // machines out again, per module, from the same origin. Pinned ones stay.
   reflow(model: Model): void {
+    this.touch();
     const groups = model.project ? model.files : [''];
     for (const file of groups) {
       const fns = model.fns.filter((f) => f.file === file && this.nodes.has(f.id));
@@ -376,6 +433,7 @@ export class Layout {
 
   // Reconcile nodes with a fresh parse. Returns ids renamed this round (old → new).
   sync(model: Model): Map<string, string> {
+    this.touch();
     const renamed = new Map<string, string>();
     const present = new Map(model.fns.map((f) => [f.id, f]));
     const missing = [...this.nodes.keys()].filter((id) => !present.has(id));
@@ -478,6 +536,7 @@ export class Layout {
   // their callers to cut crossings. Recursive edges are ignored for layering.
   // In a project this lays out one module's functions at a time.
   private layered(model: Model, fns: FnInfo[]): void {
+    this.touch();
     const inSet = new Set(fns.map((f) => f.name));
     const callees = new Map<string, string[]>();
     const callers = new Map<string, string[]>();
@@ -534,6 +593,7 @@ export class Layout {
   // New symbol mid-session: nearest free spot right of its first caller in
   // the same module, else under the module's machines.
   private placeNear(fn: FnInfo, model: Model): void {
+    this.touch();
     const caller = model.fns.find((f) => f.file === fn.file && f.calls.some((c) => c.callee === fn.name) && this.nodes.has(f.id));
     const bottom = this.bottom(model.project ? fn.file : null);
     const left = model.project ? Math.min(...this.nodesOf(fn.file).map((n) => n.place.x), Infinity) : 0;
@@ -582,6 +642,7 @@ export class Layout {
     if (n.place.x === x && n.place.y === y) return true;
     const trial: NodeState = { ...n, place: { ...n.place, x, y } };
     if (!this.isFree(trial)) return false;
+    this.touch();
     n.place.x = x;
     n.place.y = y;
     n.place.pinned = true;
@@ -592,6 +653,7 @@ export class Layout {
   unpin(id: string, model: Model): void {
     const n = this.nodes.get(id);
     if (!n || !n.fn) return;
+    this.touch();
     this.nodes.delete(id);
     const fresh = new Layout();
     const fns = model.project ? model.fns.filter((f) => f.file === n.file) : model.fns;
