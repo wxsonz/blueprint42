@@ -1,6 +1,6 @@
 // "Minimal" — the calm baseline: dark cards, hairlines, one accent.
 import type { Dc, IconKind, Rect, Skin } from './types';
-import { argLine, arrowHead, baseName, beltMid, brackets, dirName, drawCap, drawPast, drawRuns, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, tailRuns, Walk } from './util';
+import { argLine, arrowHead, baseName, beltMid, brackets, dirName, dotGround, type DotGround, drawCap, drawPast, drawRuns, drawTag, platePath, fitText, hiddenLines, rrect, strokeLine, tailLines, tailRuns, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawDock, type DockPalette } from './dock';
 import { drawStdBuf, drawStdin } from './stdbuf';
@@ -14,6 +14,7 @@ const px = (dc: Dc, v: number, min = 1) => Math.max(min, v * dc.z);
 
 // The colours, dark (the original) and light.
 function minimalOf(dark: boolean): Skin {
+  const dots: { v: DotGround | null } = { v: null }; // the background, painted (util.ts dotGround)
   const C = dark ? {
     bg: '#131416', hover: '#44474f', beltHover: '#6a6e78', frame: '#17181b', beltIdle: '#3a3d44', dot: 'rgba(255,255,255,0.07)', wallFill: 'rgba(255,255,255,0.025)',
     procLive: '#3d4048', wallEdge: '#34373e', frameLive: '#33363d', cell: '#303e54', chestNull: '#2a2c31', frameStack: '#26282d', frameDim: '#25272c', plate: '#23252a',
@@ -70,22 +71,19 @@ function outline(g: CanvasRenderingContext2D, r: Rect, rad: number, strong: bool
 
   background(dc, camX, camY) {
     const g = dc.g;
-    g.fillStyle = C.bg;
-    g.fillRect(0, 0, dc.vw, dc.vh);
-    if (dc.cs < 14) return;
-    g.fillStyle = C.dot;
-    // one path, one fill: the dots never touch, so it's the same pixels as a
-    // fill each (thousands of them when zoomed out)
-    g.beginPath();
-    for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
-      for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
-        const dx = (x - camX) * dc.cs;
-        const dy = (y - camY) * dc.cs;
-        g.moveTo(dx + 1, dy);
-        g.arc(dx, dy, 1, 0, Math.PI * 2);
-      }
+    if (dc.cs < 14) {
+      g.fillStyle = C.bg;
+      g.fillRect(0, 0, dc.vw, dc.vh);
+      return;
     }
-    g.fill();
+    // the dots, in one image while the camera rests (util.ts dotGround)
+    dotGround(dc, camX, camY, dots, {
+      key: C.bg,
+      base: (h, r) => ((h.fillStyle = C.bg), h.fillRect(r.x, r.y, r.w, r.h)),
+      dot: C.dot,
+      reach: 1,
+      dots: (p, dx, dy) => (p.moveTo(dx + 1, dy), p.arc(dx, dy, 1, 0, Math.PI * 2)),
+    });
   },
 
   belt(dc, pts, o) {

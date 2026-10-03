@@ -27,12 +27,19 @@ function depthOf(g: CanvasRenderingContext2D): { n: number } {
   return d;
 }
 const STYLE = ['globalAlpha', 'globalCompositeOperation', 'fillStyle', 'strokeStyle', 'lineWidth', 'lineCap', 'lineJoin', 'miterLimit', 'lineDashOffset', 'font', 'textAlign', 'textBaseline', 'direction', 'shadowBlur', 'shadowColor', 'shadowOffsetX', 'shadowOffsetY', 'filter', 'imageSmoothingEnabled'] as const;
-type Snap = { depth: number; t: DOMMatrix; dash: number[]; style: Record<string, unknown> };
-const snap = (g: CanvasRenderingContext2D, d: { n: number }): Snap => ({ depth: d.n, t: g.getTransform(), dash: g.getLineDash(), style: Object.fromEntries(STYLE.map((k) => [k, (g as unknown as Record<string, unknown>)[k]])) });
+type Snap = { depth: number; t: DOMMatrix; dash: number[]; style: unknown[] };
+// taken before every hook (about 30 a frame), so a plain loop into an array:
+// building an object of the style cost a third of an empty frame's JS
+function snap(g: CanvasRenderingContext2D, d: { n: number }): Snap {
+  const c = g as unknown as Record<string, unknown>;
+  const style = new Array<unknown>(STYLE.length);
+  for (let i = 0; i < STYLE.length; i++) style[i] = c[STYLE[i]];
+  return { depth: d.n, t: g.getTransform(), dash: g.getLineDash(), style };
+}
 function putBack(g: CanvasRenderingContext2D, d: { n: number }, s: Snap): void {
   // lint-canvas: balanced elsewhere (it closes the saves a failed hook left open)
   while (d.n > s.depth) g.restore();
-  for (const k of STYLE) (g as unknown as Record<string, unknown>)[k] = s.style[k];
+  for (let i = 0; i < STYLE.length; i++) (g as unknown as Record<string, unknown>)[STYLE[i]] = s.style[i];
   g.setTransform(s.t);
   g.setLineDash(s.dash);
   g.beginPath();

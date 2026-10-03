@@ -11,14 +11,21 @@ import { toTerminalDesktop } from './browser.mjs';
 
 const BIN = process.env.ZEN ?? '/opt/zen-browser-bin/zen-bin';
 
-export async function launchZen({ port = 9400 + Math.floor(Math.random() * 400) } = {}) {
+// headless: no window at all (Firefox's own --headless; the GPU is still used),
+// for runs where there's no terminal window to put it beside (an agent's session)
+// uncapped: no frame-rate limit (layout.frame_rate 0), so fps is a frame's whole cost
+export async function launchZen({ port = 9400 + Math.floor(Math.random() * 400), headless = false, uncapped = false, width = 1400, height = 900 } = {}) {
   const prof = mkdtempSync(join(tmpdir(), 'b42-zen-'));
   writeFileSync(join(prof, 'user.js'), [
     'user_pref("dom.webgpu.enabled", true);', 'user_pref("gfx.webgpu.ignore-blocklist", true);',
     'user_pref("browser.shell.checkDefaultBrowser", false);', 'user_pref("datareporting.policy.dataSubmissionEnabled", false);',
-    'user_pref("browser.tabs.warnOnClose", false);', 'user_pref("browser.warnOnQuit", false);', 'user_pref("browser.sessionstore.resume_from_crash", false);',
+    'user_pref("browser.tabs.warnOnClose", false);', ...(uncapped ? ['user_pref("layout.frame_rate", 0);'] : []),
+    // headless Firefox paints 2D canvases in software unless told otherwise; a
+    // window on this machine draws them on the GPU (CanvasRenderer, over GL), a
+    // different cost altogether, so headless runs ask for the GPU like a window
+    ...(headless ? ['user_pref("gfx.canvas.accelerated.force-enabled", true);', 'user_pref("gfx.webrender.software", false);', 'user_pref("layers.acceleration.force-enabled", true);'] : []), 'user_pref("browser.warnOnQuit", false);', 'user_pref("browser.sessionstore.resume_from_crash", false);',
   ].join('\n'));
-  const proc = spawn(BIN, ['--no-remote', '--profile', prof, '--remote-debugging-port', String(port), '--new-window', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const proc = spawn(BIN, [...(headless ? ['--headless', '--width', String(width), '--height', String(height)] : []), '--no-remote', '--profile', prof, '--remote-debugging-port', String(port), '--new-window', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   const url = await new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error('Zen did not open its remote port')), 30000);
     proc.stderr.on('data', (d) => { const m = String(d).match(/WebDriver BiDi listening on (ws:\/\/\S+)/); if (m) (clearTimeout(t), res(m[1])); });
@@ -39,8 +46,8 @@ export async function launchZen({ port = 9400 + Math.floor(Math.random() * 400) 
   const { context } = await send('browsingContext.create', { type: 'tab', background: false });
   await send('browsingContext.activate', { context }).catch(() => {});
   // beside the terminal, or not at all (never on whatever desktop the author is on)
-  let where = 'lost';
-  for (const ms of [0, 800]) { await new Promise((r) => setTimeout(r, ms)); where = toTerminalDesktop(proc.pid); }
+  let where = headless ? 'moved' : 'lost';
+  if (!headless) for (const ms of [0, 800]) { await new Promise((r) => setTimeout(r, ms)); where = toTerminalDesktop(proc.pid); }
   if (where === 'lost') {
     try { await send('browser.close'); } catch { /* gone */ }
     proc.kill();

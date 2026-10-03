@@ -35,57 +35,128 @@ in headless Zen on the RTX 4060 (scratch copies of `tools/bench.mjs`;
 - Headless Chromium on the GPU: PS3 about 130–140 fps, so Chromium's bench
   never saw it. The headed bench can't run from an agent's session (no
   terminal window to put the browser beside); headless Zen can.
+- Minimal is meant to be light, and measures heavy: 7.6–8.2 ms a frame
+  against Barebone's 4.2–4.7 and System 7's 3.8 (headless Chromium on the
+  GPU, uncapped, the reader sample). Its dot grid (an arc per grid cell,
+  every frame) is about 1.5 ms; the running machine's blur glow little at
+  zoom 0.6 (it grows with zoom); the rest is its rounded, hairlined cards
+  (79 strokes and 55 fills a frame against Barebone's 40 `fillRect`). The
+  saved skin weights (`src/skins/weight-data.ts`, provisional) put
+  Barebone mid-pack and Minimal second heaviest.
+- Barebone is near its floor: drawing nothing at all, the frame is still
+  2.5 ms (the engine's JS, about 2 ms, and the browser's overhead);
+  Barebone's own drawing is about 1.7 ms, its text 0.3, its dashes
+  nothing, and caching `measureText` gains nothing.
 
 Steps, in this order (1 and 2 first: 2 is the reported lag):
-1. [ ] **Measure in Zen, and on the GPU** (S). `tools/bench.mjs
-   --headless` (Zen with `--headless`, Chromium with the GPU flags), a
-   `--pre <js>` to switch parts off from the command line (as the scratch
-   copies did), and which backend drew the page and grid layers in its
-   report. The GFX readout gives the GPU's own time where the browser can
-   (WebGPU `timestamp-query`, WebGL2 `EXT_disjoint_timer_query_webgl2`),
-   else says it can't. Done when one command prints the table above.
-2. [ ] **The page layer draws every frame the grid draws** (S). While the
-   grid redraws (playing, moving, input), PS3's and PS4's background draws
-   with it; at rest it keeps 30 (check at rest in Zen that a frame without
-   it doesn't stall input). A note in decision 045 (its 30 fps "by
-   design"). Done when PS4 holds 60 in Zen in focus mode, and Chromium's
-   extra cost is measured (expected about 1 ms of CPU a frame).
-3. [ ] **PS3's remaining gap** (S). With step 2, PS3 was 47–54 in Zen
-   against PS4's 60. Find what's left (the backdrop shader's cost at full
-   size, the frame pass's copy, the grid's PS3 drawing in Firefox) with
-   step 1's tools. Done when PS3 holds 60 in Zen, or the cause is written
-   here with what fixing it would take.
-4. [ ] **A frame-rate cap while playing** (S). A setting: 60, 120 or the
-   screen's rate (the author's is 240 Hz, where the grid is redrawn up to
-   240 times a second while playing). Playback is timed per event, so the
-   picture is the same, only fewer of them. Done when 60 on a 240 Hz
-   screen draws a quarter of the frames and pixcmp is unchanged.
-5. [ ] **GPU layer tidy-ups** (S). A scene with no regions (PS4) draws its
-   backdrop straight to the canvas (no offscreen image and full-screen
-   copy); both layers share one GPU device; pipelines are built ahead
-   (`createRenderPipelineAsync`) so a skin's first switch doesn't hitch;
-   `#page-bg` hidden while the GPU draws (no change in Zen; measure the
-   compositing in Chromium). Done when each is measured, and kept only if
-   it saves something.
-6. [ ] **Heavy skins' effects** (M). Gradients built once per size, not
+0. [x] **Skins as light as they're meant to be** (S). Done 2026-10-03
+   (decision 051), with a finding: Minimal and Barebone are the only skins
+   that draw the type cards and the IN dock (new pictures land there first),
+   so they can't be the lightest overall without dropping content (the
+   author's call). Like for like, Barebone is the lightest (3.3–3.4 ms) and
+   Minimal next: its dot grid is painted once (`util.ts` `dotGround`, amp's
+   too), 6.6 → 4.1 ms, the same pixels. Left for the author: the headed
+   `--save` run, so the picker's badges follow (headless numbers can't be
+   saved). Barebone the lightest skin, Minimal next, lighter than every
+   other. Minimal's dot grid becomes one fill a frame (a pattern of one
+   cell, or the dots kept as an image while the camera rests); then every
+   skin measured again (`node tools/bench.mjs --skins all --sample reader
+   --uncapped --save`, headed, which the author runs: it needs the
+   terminal's desktop), so the picker's badges are right too. If Minimal
+   still isn't second, its cards and the glow at high zoom next. Done when
+   the saved weights rank Barebone first and Minimal second, and pixcmp
+   shows Minimal's picture unchanged (or a shade, the author's OK).
+1. [x] **Measure in Zen, and on the GPU** (S). Done 2026-10-03: `bench
+   --headless`, `--pre` (and `window.__benchOut`), the backend and its GPU
+   time in the report and the GFX readout (timestamp-query, the WebGL2
+   timer). `tools/bench.mjs --headless` (Zen with `--headless`, Chromium
+   with the GPU flags), a `--pre <js>` to switch parts off from the command
+   line (as the scratch copies did), and which backend drew the page and
+   grid layers in its report. The GFX readout gives the GPU's own time where
+   the browser can (WebGPU `timestamp-query`, WebGL2
+   `EXT_disjoint_timer_query_webgl2`), else says it can't. Done when one
+   command prints the table above.
+2. [x] **The page layer draws every frame the grid draws** (S). Done
+   2026-10-03 (decision 051): PS3 and PS4 20 → 60 fps in Zen (focus mode,
+   the reader project); Chromium pays 0.5–1.1 ms a frame; at rest in Zen, 17
+   ms frames with an occasional 33. While the grid redraws (playing, moving,
+   input), PS3's and PS4's background draws with it; at rest it keeps 30
+   (check at rest in Zen that a frame without it doesn't stall input). A
+   note in decision 045 (its 30 fps "by design"). Done when PS4 holds 60 in
+   Zen in focus mode, and Chromium's extra cost is measured (expected about
+   1 ms of CPU a frame).
+3. [x] **PS3's remaining gap** (S). Done 2026-10-03: none left; with step 2
+   PS3 holds 60 in Zen (the 47–54 was the temporary edit's). The dips still
+   in the author's Zen profile after that: the grid pane's rounded clip,
+   which Firefox redraws through a mask every frame (bisected to
+   `--pane-radius`); the canvas now cuts its own corners: Minimal 73 → 274
+   fps, PS3 20 → 196, Tahoe 52 → 237 (Zen, uncapped; decision 051). The
+   dips in the next profile: Zen's WebGPU canvas stalling 66–130 ms while
+   its 2D canvases draw on the GPU; Firefox now gets WebGL2 for the GPU
+   backgrounds (PS3 22–46 frames over 33 ms in 5 s → 0). With
+   step 2, PS3 was 47–54 in Zen against PS4's 60. Find what's left (the
+   backdrop shader's cost at full size, the frame pass's copy, the grid's
+   PS3 drawing in Firefox) with step 1's tools. Done when PS3 holds 60 in
+   Zen, or the cause is written here with what fixing it would take.
+4. [x] **A frame-rate cap while playing** (S). Done 2026-10-03: the GFX
+   menu's Frame rate (60, 120, Screen, the default); 61 and 117 frames drawn
+   a second against 166 uncapped. A setting: 60, 120 or the screen's rate
+   (the author's is 240 Hz, where the grid is redrawn up to 240 times a
+   second while playing). Playback is timed per event, so the picture is the
+   same, only fewer of them. Done when 60 on a 240 Hz screen draws a quarter
+   of the frames and pixcmp is unchanged.
+5. [x] **The engine's cost a frame** (M). Done 2026-10-03: the floor 2.27 →
+   2.10 ms (the guard's snapshot an array, the font kept on our side); the
+   panels were already cheap (playbar, minimap, feed 0.02 ms each); not
+   done: no redraw at rest, which would freeze a live belt's dashes. Every
+   skin pays about 2.5 ms a frame before drawing anything (Barebone with
+   every drawing call a no-op): working out the frame, machines' insides,
+   playbar, minimap, kill feed, the browser's overhead. Profile it pass by
+   pass (the dev profiler and a browser trace), then cut what's redone when
+   nothing it reads changed (as "fast at any size" did for the scene), and
+   skip the DOM panels' updates when their content is the same. No redraw at
+   all while nothing moves (idle now redraws 15 times a second). Done when
+   the floor is measured before and after, and lower, with pixcmp 0
+   differing.
+6. [x] **GPU layer tidy-ups** (S). Done 2026-10-03: PS4 straight to the
+   screen (GPU 0.15 → 0.03 ms in Zen, 0.17 → 0.13 in Chromium); one device,
+   pipelines ahead and hiding `#page-bg` measured and not kept (decision
+   051). A scene with no regions (PS4) draws its backdrop straight to the
+   canvas (no offscreen image and full-screen copy); both layers share one
+   GPU device; pipelines are built ahead (`createRenderPipelineAsync`) so a
+   skin's first switch doesn't hitch; `#page-bg` hidden while the GPU draws
+   (no change in Zen; measure the compositing in Chromium). Done when each
+   is measured, and kept only if it saves something.
+7. [x] **Heavy skins' effects** (M). Done 2026-10-03 as far as the look
+   allows: amp's dot grid painted once (6.4 → 4.6 ms); reusing gradients
+   saves nothing (the cost is filling pixels: amp 1.7 ms, wii 2.0, Seven
+   0.8); Aqua's shadows 1.0 ms. Cheaper fills or pre-drawn shadows change
+   the look: the author's call per skin. Gradients built once per size, not
    per frame; blur shadows (`shadowBlur`: aqua, amp, the Macs, PS3's tiles
    and jelly icons) become pre-drawn shadow images stretched to fit
-   (9-slice). Firefox pays more for gradients (the skin picker says so).
-   The heavy skins from `tools/bench.mjs --skins all` first. The look
-   doesn't change (pixcmp; reviewed skins with the author's OK); each pass
-   logged in `docs/SKINS.md`. Done when the heaviest skins' frame cost
-   drops in both browsers.
-7. [ ] **Synthwave's background on the GPU** (M), as decision 044's next
-   step, matched against the canvas original as PS3 and PS4 were.
-8. [ ] **Draw what changed** (L). Each machine and belt drawn once into
-   its own bitmap per zoom step, redrawn only when it changes; a frame
-   mostly copies bitmaps, and panning shifts what's there and draws the
-   strip that comes into view. The skins draw as they do now. A later
-   step (the author is interested): tiles of these composited on the GPU,
-   which revises decision 044's "nothing else runs on the GPU" (a new
-   decision). Done when a frame's cost follows what moved, not what's on
-   screen, and pixcmp says 0 differing at rest.
-9. [ ] **three.js for the backgrounds?** (S, the author's call). Worth it
+   (9-slice). Firefox pays more for gradients (the skin picker says so). The
+   heavy skins from `tools/bench.mjs --skins all` first. The look doesn't
+   change (pixcmp; reviewed skins with the author's OK); each pass logged in
+   `docs/SKINS.md`. Done when the heaviest skins' frame cost drops in both
+   browsers.
+8. [x] **Synthwave's background on the GPU** (M). Decided 2026-10-03: not
+   now. Its background is 1.2 ms in Chromium (the sky already one image),
+   Zen holds 60, and a GPU layer costs 0.3–0.5 ms of its own (decision 051).
+   Was: as decision 044's next step, matched against the canvas original as
+   PS3 and PS4 were.
+9. [ ] **Draw what changed** (L). Next, in sessions of its own: the risk is
+   a stale picture (a machine's cache must key on everything its hooks read,
+   the clock too), so it starts with that dependency check. Upper bound
+   measured: a frame with nothing drawn costs 2.1 ms against 3.3 (Barebone)
+   to 7 ms (wii). Each machine and belt drawn once into its own bitmap per
+   zoom step, redrawn only when it changes; a frame mostly copies bitmaps,
+   and panning shifts what's there and draws the strip that comes into view.
+   The skins draw as they do now. A later step (the author is interested):
+   tiles of these composited on the GPU, which revises decision 044's
+   "nothing else runs on the GPU" (a new decision). Done when a frame's cost
+   follows what moved, not what's on screen, and pixcmp says 0 differing at
+   rest.
+10. [ ] **three.js for the backgrounds?** (S, the author's call). Worth it
    only if GPU backgrounds spread to many skins: its WebGPU renderer falls
    back to WebGL2 by itself, and its shader language (TSL) writes each
    shader once instead of in WGSL and GLSL by hand. It wouldn't help the

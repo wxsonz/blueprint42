@@ -455,3 +455,83 @@ export function drawPast(g: CanvasRenderingContext2D, past: Past | undefined, xR
   g.fillText(text, xRight, y);
   g.restore();
 }
+
+// A background that moves only with the camera (a fill and a grid of dots),
+// painted once into an image and copied while the camera, zoom and size stay
+// as they are: thousands of dots are one copy a frame instead of a path of
+// thousands. The pixels are the same as painting it on the grid:
+// - the image holds the whole device pixels only. The grid isn't cleared
+//   between frames, so a pixel the canvas only partly covers (its size is
+//   fractional, as 857.05 css px × the screen's scale) blends with the frames
+//   before; it gets what it always got, painted on the grid first: the base
+//   (over those edge strips only: their inner side on a whole pixel, their
+//   outer side the view's own edge) and the dots that reach it;
+// - the dots are one path, as the skins drew them (a big path is smoothed
+//   differently from a small one, and the image is drawn the same way).
+// The base must be opaque all over (a fill whose own seams fall inside a
+// pixel, as Aqua's pinstripes at fractional scaling, blends with the frame
+// before too, and can't use this). `base` fills the rect it's given (css px)
+// as part of the whole view's fill, `dots` adds a dot at a grid point's
+// screen position, `reach` is how far a dot goes from it.
+export interface DotGround { key: string; c: HTMLCanvasElement; edge: Path2D | null }
+export function dotGround(dc: Dc, camX: number, camY: number, cache: { v: DotGround | null }, o: {
+  key: string; base: (h: CanvasRenderingContext2D, r: Rect) => void; dot: string; reach: number; dots: (p: CanvasPath, dx: number, dy: number) => void;
+}): void {
+  const g = dc.g;
+  const pathOf = (keep: (dx: number, dy: number) => boolean) => {
+    const p = new Path2D();
+    for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
+      for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
+        const dx = (x - camX) * dc.cs;
+        const dy = (y - camY) * dc.cs;
+        if (keep(dx, dy)) o.dots(p, dx, dy);
+      }
+    }
+    return p;
+  };
+  const dotsOn = (h: CanvasRenderingContext2D, p: Path2D) => {
+    h.fillStyle = o.dot;
+    h.fill(p);
+  };
+  const all = { x: 0, y: 0, w: dc.vw, h: dc.vh };
+  // no Path2D or second canvas (a test's recording context): painted here
+  if (typeof Path2D === 'undefined' || typeof document === 'undefined') {
+    o.base(g, all);
+    g.fillStyle = o.dot;
+    g.beginPath();
+    for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) o.dots(g, (x - camX) * dc.cs, (y - camY) * dc.cs);
+    g.fill();
+    return;
+  }
+  const t = g.getTransform();
+  const W = Math.floor(dc.vw * t.a); // the whole device pixels
+  const H = Math.floor(dc.vh * t.d);
+  if (t.b || t.c || t.e || t.f || W < 1 || H < 1) {
+    o.base(g, all);
+    dotsOn(g, pathOf(() => true));
+    return;
+  }
+  const key = `${o.key}|${camX},${camY},${dc.cs},${dc.vw}x${dc.vh},${t.a},${t.d}`;
+  let v = cache.v;
+  if (v?.key !== key) {
+    const c = v?.c ?? document.createElement('canvas');
+    if (c.width !== W || c.height !== H) (c.width = W), (c.height = H);
+    const h = c.getContext('2d')!;
+    h.setTransform(t);
+    o.base(h, all);
+    dotsOn(h, pathOf(() => true));
+    const ex = W / t.a - o.reach - 1;
+    const ey = H / t.d - o.reach - 1;
+    const edge = W < dc.vw * t.a || H < dc.vh * t.d ? pathOf((dx, dy) => dx >= ex || dy >= ey) : null;
+    v = cache.v = { key, c, edge };
+  }
+  if (v.edge) {
+    if (H < dc.vh * t.d) o.base(g, { x: 0, y: H / t.d, w: dc.vw, h: dc.vh - H / t.d }); // below the whole pixels
+    if (W < dc.vw * t.a) o.base(g, { x: W / t.a, y: 0, w: dc.vw - W / t.a, h: H / t.d }); // right of them
+    dotsOn(g, v.edge);
+  }
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(v.c, 0, 0);
+  g.restore();
+}

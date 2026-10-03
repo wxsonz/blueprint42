@@ -93,6 +93,8 @@ checkpoints as savepoints); `stats-ui.ts` is the nerd stats panel. `norm.ts` cou
 `gfx/` is the GFX button's backgrounds (decision 044): `layer.ts` a GPU
 canvas under the grid (WebGPU, else WebGL2), `scenes/` a skin's GPU scene
 (WGSL and GLSL, keep both in step), `gfx.ts` the Full / Simple / Off setting.
+A page-wide background (PS3, PS4: `fullBleed`) runs its scene on a second
+layer under `#page-bg`, owned by `page.ts` (decision 045).
 `skins/*.ts` draw canvas entities and `styles/*.css` restyle the chrome and
 editor via CSS variables on `html[data-skin]`. Twenty-six skins: amp, classic,
 aqua, minimal (hand-written), and xp, seven, metro, the Mac eras in

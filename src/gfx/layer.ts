@@ -54,6 +54,8 @@ type Backend = 'webgpu' | 'webgl2';
 
 // GPUBufferUsage flags (the constants aren't in TypeScript's DOM lib)
 const USE = { COPY_DST: 0x08, TEXTURE_BINDING: 0x04, RENDER_ATTACHMENT: 0x10, VERTEX: 0x20, UNIFORM: 0x40 };
+// (buffers only) for reading the GPU's timestamps back
+const BUF = { MAP_READ: 0x01, COPY_SRC: 0x04, QUERY_RESOLVE: 0x200 };
 const FRAGMENT = 0x2; // GPUShaderStage.FRAGMENT
 
 export const LINE_WGSL = /* wgsl */ `
@@ -92,6 +94,11 @@ fn dither(fc: vec2f) -> vec3f { return vec3f((fract(sin(dot(fc, vec2f(12.9898, 7
 @fragment fn fs_wall(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   return vec4f(backAt(fc.xy / R.z) + dither(fc.xy), 1.0);
 }
+// a scene with nothing over its backdrop (no regions): the backdrop straight
+// to the screen, dithered as the copy would have been
+@fragment fn fs_direct(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  return vec4f(backdrop(fc.xy / R.z).rgb + dither(fc.xy), 1.0);
+}
 @fragment fn fs_full(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   return vec4f(scene(fc.xy / R.z).rgb + dither(fc.xy), 1.0);
 }
@@ -102,7 +109,7 @@ void main() {
   vec2 q = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   gl_Position = vec4(q, 0.0, 1.0);
 }`;
-const glFs = (s: GpuScene, pass: 'backdrop' | 'scene' | 'bake' | 'wall') => `#version 300 es
+const glFs = (s: GpuScene, pass: 'backdrop' | 'scene' | 'bake' | 'wall' | 'direct') => `#version 300 es
 precision highp float;
 layout(std140) uniform Uni { vec4 v[${s.vec4s}]; };
 uniform vec4 R; // css w, h, dpr, framebuffer height
@@ -115,7 +122,7 @@ ${s.glsl}
 void main() {
   vec2 p = vec2(gl_FragCoord.x, R.w - gl_FragCoord.y) / R.z;
   ${pass === 'bake' ? `outColor = bake(gl_FragCoord.xy / vec2(${s.bake?.w}.0, ${s.bake?.h}.0));` : pass === 'backdrop' ? 'outColor = vec4(backdrop(p).rgb, 1.0);' : `float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-  outColor = vec4(${pass === 'wall' ? 'backAt(p)' : 'scene(p).rgb'} + vec3(n / 255.0), 1.0);`}
+  outColor = vec4(${pass === 'wall' ? 'backAt(p)' : pass === 'direct' ? 'backdrop(p).rgb' : 'scene(p).rgb'} + vec3(n / 255.0), 1.0);`}
 }`;
 const GL_LINE_VS = `#version 300 es
 layout(location = 0) in vec2 p;
@@ -141,10 +148,13 @@ interface GpuState {
   lineBind: GPUBindGroup;
   resU: GPUBuffer;
   frameLayout: GPUPipelineLayout;
-  scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; wall: GPURenderPipeline; wallBind: GPUBindGroup | null; tex: GPUTexture | null; bake: { pipe: GPURenderPipeline; tex: GPUTexture; done: boolean } | null }>;
+  scenes: Map<string, { back: GPURenderPipeline; pipe: GPURenderPipeline; buf: GPUBuffer; backBind: GPUBindGroup; bind: GPUBindGroup | null; wall: GPURenderPipeline; wallBind: GPUBindGroup | null; tex: GPUTexture | null; bake: { pipe: GPURenderPipeline; tex: GPUTexture; done: boolean } | null; direct: { pipe: GPURenderPipeline; bind: GPUBindGroup } | null }>;
   sampler: GPUSampler;
   verts: GPUBuffer | null;
   vertCap: number;
+  // the GPU's own time for a frame: timestamps at the first pass's start and
+  // the last's end, read back one frame at a time (null: the adapter can't)
+  ts: { set: GPUQuerySet; res: GPUBuffer; read: GPUBuffer; busy: boolean } | null;
 }
 
 interface GlState {
@@ -153,10 +163,13 @@ interface GlState {
   lineR: WebGLUniformLocation | null;
   vao: WebGLVertexArrayObject;
   vbo: WebGLBuffer;
-  scenes: Map<string, { back: WebGLProgram; prog: WebGLProgram; wall: WebGLProgram; wallR: WebGLUniformLocation | null; wallT: WebGLUniformLocation | null; ubo: WebGLBuffer; rBack: WebGLUniformLocation | null; r: WebGLUniformLocation | null; t: WebGLUniformLocation | null; bU: WebGLUniformLocation | null; bake: { tex: WebGLTexture; done: boolean } | null }>;
+  scenes: Map<string, { direct: WebGLProgram | null; rDirect: WebGLUniformLocation | null; bDirect: WebGLUniformLocation | null; back: WebGLProgram; prog: WebGLProgram; wall: WebGLProgram; wallR: WebGLUniformLocation | null; wallT: WebGLUniformLocation | null; ubo: WebGLBuffer; rBack: WebGLUniformLocation | null; r: WebGLUniformLocation | null; t: WebGLUniformLocation | null; bU: WebGLUniformLocation | null; bake: { tex: WebGLTexture; done: boolean } | null }>;
   fbo: WebGLFramebuffer;
   tex: WebGLTexture;
   size: [number, number];
+  // the GPU's own time (EXT_disjoint_timer_query_webgl2, when the browser
+  // offers it): one query in flight, read when its result is there
+  timer: { ext: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }; q: WebGLQuery | null } | null;
 }
 
 export class GfxLayer {
@@ -168,6 +181,8 @@ export class GfxLayer {
   private ready: Promise<void> | null = null;
   private uni = new Float32Array(0);
   lastMs = 0; // CPU time of the last frame (the scene's JS and the submit)
+  gpuMs: number | null = null; // the GPU's time for a recent frame (null: not yet, or the browser can't tell)
+  gpuTimed = false; // whether this browser lets the page time the GPU
   frames = 0; // frames drawn, ever (the GFX readout counts them per second)
 
   constructor(under: HTMLCanvasElement, id = 'gfx') {
@@ -189,16 +204,22 @@ export class GfxLayer {
 
   private async start(): Promise<void> {
     try {
-      const adapter = 'gpu' in navigator ? await navigator.gpu.requestAdapter({ powerPreference: 'low-power' }) : null;
+      // Firefox (Zen) stalls a WebGPU canvas 66–130 ms every second or so
+      // while its 2D canvases draw on the GPU (they share one thread); WebGL2
+      // there has none (PS3: 22–46 frames over 33 ms in 5 s against 0), so
+      // Firefox gets WebGL2 (decision 051)
+      const gecko = /\bFirefox\//.test(navigator.userAgent);
+      const adapter = 'gpu' in navigator && !gecko ? await navigator.gpu.requestAdapter({ powerPreference: 'low-power' }) : null;
       // an emulated adapter (SwiftShader) runs the scene on the CPU: slower
       // than the canvas drawing it replaces, so it doesn't count as a GPU
       const soft = !!adapter && (adapter.info?.architecture === 'swiftshader' || (adapter as { isFallbackAdapter?: boolean }).isFallbackAdapter === true);
       if (soft) this.failed = 'WebGPU: only a software adapter';
       if (adapter && !soft) {
-        const device = await adapter.requestDevice();
+        const timed = adapter.features.has('timestamp-query');
+        const device = await adapter.requestDevice(timed ? { requiredFeatures: ['timestamp-query'] } : undefined);
         const ctx = this.canvas.getContext('webgpu') as GPUCanvasContext | null;
         if (ctx) {
-          this.setupGpu(device, ctx);
+          this.setupGpu(device, ctx, timed);
           this.backend = 'webgpu';
           // lost, or a shader it wouldn't take: WebGL2 on a fresh canvas (a
           // canvas that had a WebGPU context can't give a WebGL one)
@@ -228,6 +249,8 @@ export class GfxLayer {
     this.failed = why;
     this.gpu = null;
     this.backend = null;
+    this.gpuMs = null;
+    this.gpuTimed = false;
     const fresh = document.createElement('canvas');
     fresh.id = this.canvas.id;
     fresh.setAttribute('aria-hidden', 'true');
@@ -244,7 +267,7 @@ export class GfxLayer {
     }
   }
 
-  private setupGpu(device: GPUDevice, ctx: GPUCanvasContext): void {
+  private setupGpu(device: GPUDevice, ctx: GPUCanvasContext, timed: boolean): void {
     const format = navigator.gpu.getPreferredCanvasFormat();
     ctx.configure({ device, format, alphaMode: 'opaque' });
     const mod = device.createShaderModule({ code: LINE_WGSL });
@@ -268,7 +291,11 @@ export class GfxLayer {
       { binding: 2, visibility: FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 3, visibility: FRAGMENT, sampler: { type: 'filtering' } },
     ] })] });
-    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, frameLayout, scenes: new Map(), sampler, verts: null, vertCap: 0 };
+    const ts = timed
+      ? { set: device.createQuerySet({ type: 'timestamp', count: 2 }), res: device.createBuffer({ size: 16, usage: BUF.QUERY_RESOLVE | BUF.COPY_SRC }), read: device.createBuffer({ size: 16, usage: BUF.MAP_READ | USE.COPY_DST }), busy: false }
+      : null;
+    this.gpuTimed = timed;
+    this.gpu = { device, ctx, format, line, lineU, lineBind, resU, frameLayout, scenes: new Map(), sampler, verts: null, vertCap: 0, ts };
   }
 
   private setupGl(gl: WebGL2RenderingContext): void {
@@ -282,7 +309,9 @@ export class GfxLayer {
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8);
     gl.bindVertexArray(null);
-    this.glS = { gl, line, lineR: gl.getUniformLocation(line, 'R'), vao, vbo, scenes: new Map(), fbo: gl.createFramebuffer()!, tex: gl.createTexture()!, size: [0, 0] };
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+    this.gpuTimed = !!ext;
+    this.glS = { gl, line, lineR: gl.getUniformLocation(line, 'R'), vao, vbo, scenes: new Map(), fbo: gl.createFramebuffer()!, tex: gl.createTexture()!, size: [0, 0], timer: ext ? { ext, q: null } : null };
   }
 
   hide(): void {
@@ -301,7 +330,7 @@ export class GfxLayer {
     const verts = scene.frame(this.uni, view);
     let drawn = false;
     try {
-      drawn = this.gpu ? this.drawGpu(scene, view, verts, W, H) : this.drawGl(scene, view, verts, W, H);
+      drawn = this.gpu ? this.drawGpu(scene, view, verts, W, H) : this.timedGl(() => this.drawGl(scene, view, verts, W, H));
     } catch (e) {
       this.failed = `${scene.id}: ${(e as Error).message}`;
       drawn = false;
@@ -355,7 +384,13 @@ export class GfxLayer {
         { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } },
         ...(bk ? [{ binding: 3, resource: G.sampler }, { binding: 4, resource: bk.tex.createView() }] : []),
       ] });
-      sc = { back, pipe, buf, backBind, bind: null, wall, wallBind: null, tex: null, bake: bk };
+      // (a scene that may have nothing over its backdrop: its direct pipeline)
+      const dp = scene.regions ? pipeOf('fs_direct') : null;
+      const direct = dp ? { pipe: dp, bind: device.createBindGroup({ layout: dp.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: { buffer: G.resU } },
+        ...(bk ? [{ binding: 3, resource: G.sampler }, { binding: 4, resource: bk.tex.createView() }] : []),
+      ] }) } : null;
+      sc = { back, pipe, buf, backBind, bind: null, wall, wallBind: null, tex: null, bake: bk, direct };
       G.scenes.set(scene.id, sc);
     }
     // the backdrop's image, as big as the canvas
@@ -391,10 +426,18 @@ export class GfxLayer {
       z.end();
       sc.bake.done = true;
     }
-    // 1. the backdrop and the hairlines, into its image
-    const a = enc.beginRenderPass({ colorAttachments: [{ view: sc.tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
-    a.setPipeline(sc.back);
-    a.setBindGroup(0, sc.backBind);
+    const ts = G.ts && !G.ts.busy ? G.ts : null;
+    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
+    // nothing over the backdrop this frame (PS4 always): it goes straight to
+    // the screen, without its image and the full-screen copy
+    const direct = boxes && !boxes.length && sc.direct;
+    // 1. the backdrop and the hairlines, into its image (or the screen)
+    const a = enc.beginRenderPass({
+      colorAttachments: [{ view: direct ? G.ctx.getCurrentTexture().createView() : sc.tex.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+      timestampWrites: ts ? { querySet: ts.set, beginningOfPassWriteIndex: 0, ...(direct ? { endOfPassWriteIndex: 1 } : {}) } : undefined,
+    });
+    a.setPipeline(direct ? direct.pipe : sc.back);
+    a.setBindGroup(0, direct ? direct.bind : sc.backBind);
     a.draw(3);
     if (verts.length && G.verts) {
       a.setPipeline(G.line);
@@ -404,27 +447,63 @@ export class GfxLayer {
     }
     a.end();
     // 2. the frame, looking into it
-    const b = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
-    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
-    if (boxes) {
-      // the backdrop everywhere, then the scene only where it changes anything
-      b.setPipeline(sc.wall);
-      b.setBindGroup(0, sc.wallBind!);
-      b.draw(3);
-      b.setPipeline(sc.pipe);
-      b.setBindGroup(0, sc.bind!);
-      for (const [x, y, w, h] of boxes) {
-        b.setScissorRect(x, y, w, h);
+    if (!direct) {
+      const b = enc.beginRenderPass({ colorAttachments: [{ view: G.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }], timestampWrites: ts ? { querySet: ts.set, endOfPassWriteIndex: 1 } : undefined });
+      if (boxes) {
+        // the backdrop everywhere, then the scene only where it changes anything
+        b.setPipeline(sc.wall);
+        b.setBindGroup(0, sc.wallBind!);
+        b.draw(3);
+        b.setPipeline(sc.pipe);
+        b.setBindGroup(0, sc.bind!);
+        for (const [x, y, w, h] of boxes) {
+          b.setScissorRect(x, y, w, h);
+          b.draw(3);
+        }
+      } else {
+        b.setPipeline(sc.pipe);
+        b.setBindGroup(0, sc.bind!);
         b.draw(3);
       }
-    } else {
-      b.setPipeline(sc.pipe);
-      b.setBindGroup(0, sc.bind!);
-      b.draw(3);
+      b.end();
     }
-    b.end();
+    if (ts) {
+      enc.resolveQuerySet(ts.set, 0, 2, ts.res, 0);
+      enc.copyBufferToBuffer(ts.res, 0, ts.read, 0, 16);
+    }
     device.queue.submit([enc.finish()]);
+    if (ts) {
+      ts.busy = true;
+      ts.read.mapAsync(1 /* GPUMapMode.READ */).then(() => {
+        const [t0, t1] = new BigInt64Array(ts.read.getMappedRange());
+        ts.read.unmap();
+        // (unless the layer fell back to WebGL2 meanwhile: then it isn't WebGPU's time)
+        if (t1 >= t0 && t0 > 0n && this.gpu?.device === device) this.gpuMs = Number(t1 - t0) / 1e6;
+        ts.busy = false;
+      }, () => (ts.busy = false));
+    }
     return true;
+  }
+
+  // a WebGL2 frame, timed on the GPU when the browser allows: one query at a
+  // time, begun only when the last one has been read
+  private timedGl(draw: () => boolean): boolean {
+    const T = this.glS?.timer;
+    if (!T) return draw();
+    const gl = this.glS!.gl;
+    if (T.q && gl.getQueryParameter(T.q, gl.QUERY_RESULT_AVAILABLE)) {
+      if (!gl.getParameter(T.ext.GPU_DISJOINT_EXT)) this.gpuMs = (gl.getQueryParameter(T.q, gl.QUERY_RESULT) as number) / 1e6;
+      gl.deleteQuery(T.q);
+      T.q = null;
+    }
+    if (T.q) return draw();
+    T.q = gl.createQuery();
+    gl.beginQuery(T.ext.TIME_ELAPSED_EXT, T.q);
+    try {
+      return draw();
+    } finally {
+      gl.endQuery(T.ext.TIME_ELAPSED_EXT);
+    }
   }
 
   private drawGl(scene: GpuScene, view: GfxView, verts: Float32Array, W: number, H: number): boolean {
@@ -435,10 +514,11 @@ export class GfxLayer {
       const back = program(gl, GL_FULL_VS, glFs(scene, 'backdrop'));
       const prog = program(gl, GL_FULL_VS, glFs(scene, 'scene'));
       const wall = program(gl, GL_FULL_VS, glFs(scene, 'wall'));
+      const direct = scene.regions ? program(gl, GL_FULL_VS, glFs(scene, 'direct')) : null;
       const ubo = gl.createBuffer()!;
       gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
       gl.bufferData(gl.UNIFORM_BUFFER, scene.vec4s * 16, gl.DYNAMIC_DRAW);
-      for (const pr of [back, prog]) {
+      for (const pr of [back, prog, ...(direct ? [direct] : [])]) {
         // (a program that never reads the block has none: the compiler drops it)
         const at = gl.getUniformBlockIndex(pr, 'Uni');
         if (at !== gl.INVALID_INDEX) gl.uniformBlockBinding(pr, at, 0);
@@ -451,7 +531,7 @@ export class GfxLayer {
         for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
         bake = { tex, done: false };
       }
-      sc = { back, prog, wall, wallR: gl.getUniformLocation(wall, 'R'), wallT: gl.getUniformLocation(wall, 'T'), ubo, rBack: gl.getUniformLocation(back, 'R'), r: gl.getUniformLocation(prog, 'R'), t: gl.getUniformLocation(prog, 'T'), bU: gl.getUniformLocation(back, 'B'), bake };
+      sc = { direct, rDirect: direct && gl.getUniformLocation(direct, 'R'), bDirect: direct && gl.getUniformLocation(direct, 'B'), back, prog, wall, wallR: gl.getUniformLocation(wall, 'R'), wallT: gl.getUniformLocation(wall, 'T'), ubo, rBack: gl.getUniformLocation(back, 'R'), r: gl.getUniformLocation(prog, 'R'), t: gl.getUniformLocation(prog, 'T'), bU: gl.getUniformLocation(back, 'B'), bake };
       S.scenes.set(scene.id, sc);
     }
     // the backdrop's image, as big as the canvas
@@ -490,15 +570,19 @@ export class GfxLayer {
     gl.bindBuffer(gl.UNIFORM_BUFFER, sc.ubo);
     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, this.uni);
     gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sc.ubo);
-    // 1. the backdrop and the hairlines, into its image
-    gl.bindFramebuffer(gl.FRAMEBUFFER, S.fbo);
+    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
+    // nothing over the backdrop this frame (PS4 always): straight to the
+    // screen, without its image and the full-screen copy
+    const direct = boxes && !boxes.length ? sc.direct : null;
+    // 1. the backdrop and the hairlines, into its image (or the screen)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, direct ? null : S.fbo);
     gl.disable(gl.BLEND);
-    gl.useProgram(sc.back);
-    gl.uniform4f(sc.rBack, view.w, view.h, view.dpr, H);
+    gl.useProgram(direct ?? sc.back);
+    gl.uniform4f(direct ? sc.rDirect : sc.rBack, view.w, view.h, view.dpr, H);
     if (sc.bake) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, sc.bake.tex);
-      gl.uniform1i(sc.bU, 1);
+      gl.uniform1i(direct ? sc.bDirect : sc.bU, 1);
       gl.activeTexture(gl.TEXTURE0);
     }
     gl.bindVertexArray(null);
@@ -515,11 +599,11 @@ export class GfxLayer {
       gl.bindVertexArray(null);
       gl.disable(gl.BLEND);
     }
+    if (direct) return true;
     // 2. the frame, looking into it
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, S.tex);
-    const boxes = scene.regions ? this.boxes(scene, W, H, view.dpr) : null;
     if (boxes) {
       // the backdrop everywhere, then the scene only where it changes anything
       gl.useProgram(sc.wall);

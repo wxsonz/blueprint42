@@ -1,4 +1,5 @@
 import { diagReport, profFrameEnd, profPass, reportCheck } from './diag';
+import { fpsCap } from './gfx/gfx';
 import { askNote, renderNotes } from './notes-ui';
 import { readReplay } from './replay';
 import { renderMinimap } from './minimap';
@@ -1167,6 +1168,7 @@ let lastStage = '';
 let lastInputAt = 0;
 let lastDrawAt = 0;
 let lastPageAt = 0;
+let capDue = 0; // when the frame-rate cap lets the next frame draw
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown', 'input']) window.addEventListener(ev, () => (lastInputAt = performance.now()), { capture: true, passive: true });
 
 // Adaptive sharpness: while things move, watch the frame rate; if frames
@@ -1237,6 +1239,13 @@ function tick(now: number): void {
     else if (now - lastPageAt >= 33 && view.animateGfx(S.skin, now)) lastPageAt = now;
     lastT = now;
     return;
+  }
+  // the frame-rate cap (GFX menu): skip this frame if the next is due later;
+  // playback reads the clock (lastT stays), so it shows the same moments
+  const cap = fpsCap();
+  if (cap) {
+    if (now < capDue - 1) return;
+    capDue = Math.max(capDue + 1000 / cap, now);
   }
   const frameStart = performance.now();
   lastDrawAt = now;
@@ -1335,9 +1344,11 @@ function tick(now: number): void {
     }
   });
   profPass('violations', () => update('violations', { violations: violations() }));
-  // a page-wide background (PS3, PS4) is the whole window of GPU work: it
-  // moves slowly, so 30 fps while playing too, as when idle
-  if (!S.skin.fullBleed || now - lastPageAt >= 30) (lastPageAt = now), profPass('page', () => paintPage(now, S, view));
+  // a page-wide background (PS3, PS4) draws with every frame the grid draws:
+  // at 30 while the grid drew more, Firefox held each frame that skipped it
+  // (66-100 ms) until a timeout: PS3 and PS4 played at 20 fps (decision 045)
+  lastPageAt = now;
+  profPass('page', () => paintPage(now, S, view));
   view.draw(S, S.skin, now);
   profPass('stage card', () => renderStageCard(S, traceRevision));
   profPass('playbar', renderPlaybar);

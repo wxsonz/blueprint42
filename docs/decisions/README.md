@@ -52,8 +52,10 @@ and a line here. When a later decision replaces one, the old one's
 | [042](042-truth-under-the-hood.md) | 2026-09-29 | Accepted | the picture obeys how C really works |
 | [043](043-step-windows.md) | 2026-09-29 | Accepted | long runs in windows of steps, from savepoints |
 | [044](044-gfx-gpu-backgrounds.md) | 2026-09-29 | Accepted | GFX: backgrounds on the GPU (WebGPU, WebGL2), Full / Simple / Off |
+| [045](045-gfx-page-skins.md) | 2026-09-30 | Accepted | GFX: PS3's ribbon and PS4's prism on the GPU, on a second layer for page-wide backgrounds |
 | [046](046-nothing-hidden.md) | 2026-09-30 | Accepted | nothing hidden: printf buffer, the statement that died, `*p` read from its memory, counted overflow |
 | [047](047-dev-tools.md) | 2026-10-01 | Accepted | dev tools: `tools/pixcmp` compares two versions' pictures; `playwright-core` drives the system Chromium |
 | [048](048-linter.md) | 2026-10-01 | Accepted | a linter: Oxlint (type-aware; typescript-eslint can't read TypeScript 7) and a canvas save/restore check |
 | [049](049-fast-at-any-size.md) | 2026-10-03 | Accepted | fast at any size: a scene per change, indexes instead of scans, long windows converted ahead in slices |
 | [050](050-recording-speed.md) | 2026-10-03 | Accepted | recording speed: gdb's stepping stays, for now (rr, compiler hooks and tuning weighed) |
+| [051](051-smooth-in-every-browser.md) | 2026-10-03 | Accepted | smooth in every browser: the page layer every frame (Firefox held skipped ones), WebGL2 in Firefox, no rounded clip on the grid canvas, a frame-rate cap, GPU time, dot grids painted once |

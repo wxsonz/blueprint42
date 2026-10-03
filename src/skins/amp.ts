@@ -4,9 +4,11 @@
 // Frames are the playlist; pointers are amber.
 import type { Dc, IconKind, Rect, Skin } from './types';
 import { smooth } from './belts';
-import { arrowHead, baseName, beltMid, brackets, drawPast, fitText, hash, snapRect, strokeLine, Walk } from './util';
+import { arrowHead, baseName, beltMid, brackets, dotGround, type DotGround, drawPast, fitText, hash, snapRect, strokeLine, Walk } from './util';
 import { genericIcon } from './icons';
 import { drawCrate, drawInterior, drawSprite, drawStrip, type SpritePalette } from './sprites';
+
+const ground: { v: DotGround | null } = { v: null }; // the background, painted (util.ts dotGround)
 
 const LCD = '#00e000';
 const LCD_DIM = '#1f6a1f';
@@ -126,23 +128,20 @@ export const amp: Skin = {
   interior(dc, r, i) { drawInterior(dc, r, i, spritePalette); },
 
   background(dc, camX, camY) {
-    const g = dc.g;
-    const grad = g.createLinearGradient(0, 0, 0, dc.vh);
-    grad.addColorStop(0, '#12121c');
-    grad.addColorStop(1, '#08080d');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, dc.vw, dc.vh);
-    if (dc.cs < 14) return;
-    g.fillStyle = 'rgba(110,130,255,0.09)';
+    const base = (h: CanvasRenderingContext2D, r: Rect) => {
+      const grad = h.createLinearGradient(0, 0, 0, dc.vh);
+      grad.addColorStop(0, '#12121c');
+      grad.addColorStop(1, '#08080d');
+      h.fillStyle = grad;
+      h.fillRect(r.x, r.y, r.w, r.h);
+    };
+    if (dc.cs < 14) return base(dc.g, { x: 0, y: 0, w: dc.vw, h: dc.vh });
     // one path, one fill: the dots never overlap, so it's the same pixels as
-    // a fill each (thousands a frame)
-    g.beginPath();
-    for (let x = Math.floor(camX); x < camX + dc.vw / dc.cs + 1; x++) {
-      for (let y = Math.floor(camY); y < camY + dc.vh / dc.cs + 1; y++) {
-        g.rect(Math.round((x - camX) * dc.cs) - 1, Math.round((y - camY) * dc.cs) - 1, 2, 2);
-      }
-    }
-    g.fill();
+    // a fill each (thousands a frame); in one image while the camera rests
+    dotGround(dc, camX, camY, ground, {
+      key: 'amp', base, dot: 'rgba(110,130,255,0.09)', reach: 2,
+      dots: (p, dx, dy) => p.rect(Math.round(dx) - 1, Math.round(dy) - 1, 2, 2),
+    });
   },
 
   belt(dc, pts, o) { pts = smooth(dc, pts);

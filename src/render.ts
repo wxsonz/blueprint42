@@ -148,13 +148,36 @@ function strPlate(text: string, val: V, trace: Trace): string {
 // frame would ask for new fractional sizes: Chrome then rasterizes fresh
 // glyphs for all of them (a 10-17 ms frame on the author's machine, against
 // 1 ms at rest). Half-pixel steps look the same and reuse its glyph cache.
-function quantizeFonts(g: CanvasRenderingContext2D): void {
+// The font in force is also kept here (through save and restore), so reading
+// it doesn't ask the canvas, and setting the one already set is skipped: the
+// skin guard reads it before every hook, and skins set the same font over and
+// over; both were a fifth of an empty frame's JS. Call the result when the
+// canvas resets its state (a resize).
+function quantizeFonts(g: CanvasRenderingContext2D): () => void {
   const d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'font');
-  if (!d?.get || !d.set) return;
+  if (!d?.get || !d.set) return () => {};
   const memo = new Map<string, string>();
+  let set: string | null = null; // the (quantized) font last set, while still in force; null: ask the canvas
+  let got: string | null = null; // the canvas's own spelling of it
+  const spelled = new Map<string, string>(); // a quantized font → the canvas's spelling (only ones it took)
+  const stack: [string | null, string | null][] = [];
+  const save = g.save;
+  const restore = g.restore;
+  g.save = function () {
+    stack.push([set, got]);
+    save.call(this);
+  };
+  g.restore = function () {
+    // an unbalanced restore does nothing to the canvas, so nothing changes here either
+    if (stack.length) [set, got] = stack.pop()!;
+    restore.call(this);
+  };
   Object.defineProperty(g, 'font', {
     configurable: true,
-    get: () => d.get!.call(g),
+    get: () => {
+      if (got === null) got = d.get!.call(g) as string;
+      return got;
+    },
     set: (v: string) => {
       let q = memo.get(v);
       if (q === undefined) {
@@ -162,9 +185,22 @@ function quantizeFonts(g: CanvasRenderingContext2D): void {
         if (memo.size > 4000) memo.clear();
         memo.set(v, q);
       }
+      if (q === set) return;
+      const was = got;
       d.set!.call(g, q);
+      set = q;
+      // the spelling the canvas gave this font before; a font it refused
+      // leaves the old one in force, so only one that changed is remembered
+      got = spelled.get(q) ?? null;
+      if (got === null && was !== null) {
+        const now = d.get!.call(g) as string;
+        if (now !== was) spelled.set(q, (got = now));
+        else (got = now), (set = null);
+      }
     },
   });
+  g.canvas.addEventListener('contextrestored', () => ((set = got = null), (stack.length = 0)));
+  return () => ((set = got = null), (stack.length = 0));
 }
 
 // Each frame's call event and the error it died of, found once per trace.
@@ -256,10 +292,11 @@ export class GridView {
   drawn = 0; // frames the grid drew, ever (the GFX readout's fps)
   bgMs = 0;
   bgKind: 'gpu' | 'canvas' | 'still' | 'off' | 'page' = 'canvas';
+  private fontReset: () => void;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d')!;
-    quantizeFonts(this.g);
+    this.fontReset = quantizeFonts(this.g);
     this.gfx = new GfxLayer(canvas); // started when a skin's GPU scene first needs it
   }
 
@@ -333,6 +370,7 @@ export class GridView {
     this.h = r.height;
     this.canvas.width = Math.round(r.width * this.dpr);
     this.canvas.height = Math.round(r.height * this.dpr);
+    this.fontReset(); // a resize resets the canvas's state, its font too
   }
 
   get pixelScale(): number {
@@ -526,6 +564,78 @@ export class GridView {
     profPass('heap bar', () => F.drawHeapBar?.());
     profPass('handle', () => this.passHandle(F));
     profPass('duel', () => this.passDuel(F));
+    this.cutCorners(skin.id);
+  }
+
+  // The grid's pane has rounded corners, and a canvas under a rounded clip is
+  // slow in Firefox: every frame it changes goes through a mask (PS3 and
+  // Minimal played at 60-70 fps in Zen, 200-290 without the clip). So the
+  // pane doesn't clip it: the canvas clears its own pixels outside the pane's
+  // inner curve, which shows the pane's border and background there as the
+  // clip did, and the header gets the same curve (or its own, if larger).
+  // A GPU background under the grid (PS2) can't cut its corners: the pane
+  // keeps its clip then.
+  private corners = { key: '', cut: [] as { x: number; y: number; rx: number; ry: number; sx: number; sy: number }[] };
+  private cutCorners(skinId: string): void {
+    const key = `${skinId}|${this.w}x${this.h}|${this.bgKind === 'gpu'}`;
+    if (this.corners.key !== key) this.corners = { key, cut: this.cornersOf(this.bgKind !== 'gpu') };
+    if (!this.corners.cut.length) return;
+    const g = this.g;
+    g.save();
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.globalCompositeOperation = 'destination-out';
+    g.globalAlpha = 1;
+    g.beginPath();
+    for (const c of this.corners.cut) {
+      // the corner, along its edge to where the curve starts, round the
+      // curve's quarter ellipse to the other edge, and back
+      const cx = c.x + c.sx * c.rx, cy = c.y + c.sy * c.ry;
+      g.moveTo(c.x, c.y);
+      g.lineTo(cx, c.y);
+      g.ellipse(cx, cy, c.rx, c.ry, 0, c.sy > 0 ? -Math.PI / 2 : Math.PI / 2, c.sx > 0 ? Math.PI : 0, c.sx * c.sy > 0);
+      g.closePath();
+    }
+    g.fill();
+    g.restore();
+  }
+  private cornersOf(cut: boolean): GridView['corners']['cut'] {
+    const pane = this.canvas.closest<HTMLElement>('.pane');
+    const head = pane?.querySelector<HTMLElement>('.pane-head');
+    if (!pane) return [];
+    pane.style.overflow = cut ? 'visible' : '';
+    if (head) head.style.borderTopLeftRadius = head.style.borderTopRightRadius = '';
+    if (!cut) return [];
+    const cs = getComputedStyle(pane);
+    const pr = pane.getBoundingClientRect();
+    const cr = this.canvas.getBoundingClientRect();
+    const k = this.canvas.offsetWidth ? cr.width / this.canvas.offsetWidth : 1; // the app's CSS zoom
+    const num = (v: string) => parseFloat(v) || 0;
+    const bl = num(cs.borderLeftWidth) * k, br = num(cs.borderRightWidth) * k, bt = num(cs.borderTopWidth) * k, bb = num(cs.borderBottomWidth) * k;
+    // the inner curve of a corner (CSS: the outer radius less the border)
+    const inner = (corner: string, bx: number, by: number) => {
+      const [rx = 0, ry = rx] = cs.getPropertyValue(`border-${corner}-radius`).split(' ').map(num);
+      return [Math.max(0, rx * k - bx), Math.max(0, ry * k - by)];
+    };
+    // the padding box, in the canvas's css px
+    const L = pr.left + bl - cr.left, R = pr.right - br - cr.left, T = pr.top + bt - cr.top, B = pr.bottom - bb - cr.top;
+    const out: GridView['corners']['cut'] = [];
+    for (const [corner, x, y, sx, sy, bx, by] of [['top-left', L, T, 1, 1, bl, bt], ['top-right', R, T, -1, 1, br, bt], ['bottom-left', L, B, 1, -1, bl, bb], ['bottom-right', R, B, -1, -1, br, bb]] as const) {
+      const [rx, ry] = inner(corner, bx, by);
+      if (!(rx > 0 && ry > 0)) continue;
+      // only a corner the canvas reaches into
+      const x0 = Math.min(x, x + sx * rx), y0 = Math.min(y, y + sy * ry);
+      if (x0 + rx > 0 && x0 < this.w && y0 + ry > 0 && y0 < this.h) out.push({ x, y, rx, ry, sx, sy });
+    }
+    // the header: the pane's inner curve at the top, or its own if larger
+    if (head) {
+      const hs = getComputedStyle(head);
+      for (const [corner, prop, bx] of [['top-left', 'borderTopLeftRadius', bl], ['top-right', 'borderTopRightRadius', br]] as const) {
+        const [rx, ry] = inner(corner, bx, bt);
+        const [ox = 0, oy = ox] = hs.getPropertyValue(`border-${corner}-radius`).split(' ').map(num);
+        if (rx > ox * k || ry > oy * k) head.style[prop] = `${Math.max(rx / k, ox)}px ${Math.max(ry / k, oy)}px`;
+      }
+    }
+    return out;
   }
 
   private passWalls(F: Frame): void {

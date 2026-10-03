@@ -34,3 +34,21 @@ export function setGfx(m: GfxMode): void {
 export function onGfx(f: (m: GfxMode) => void): void {
   listeners.add(f);
 }
+
+// The frame-rate cap (the GFX menu): the most frames a second the page draws
+// (60, 120), or 0 for the screen's own rate. On a 240 Hz screen the grid is
+// otherwise drawn up to 240 times a second; playback is timed by the clock,
+// not by frames, so a cap shows the same moments, fewer of them.
+export const FPS_CAPS = [60, 120, 0] as const;
+export type FpsCap = (typeof FPS_CAPS)[number];
+let cap: FpsCap = (() => {
+  const v = Number(store.get('fpsCap'));
+  return (FPS_CAPS as readonly number[]).includes(v) ? (v as FpsCap) : 0;
+})();
+export function fpsCap(): FpsCap {
+  return cap;
+}
+export function setFpsCap(c: FpsCap): void {
+  cap = c;
+  store.set('fpsCap', String(c));
+}

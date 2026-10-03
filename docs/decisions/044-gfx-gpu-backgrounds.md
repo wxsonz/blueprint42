@@ -68,5 +68,6 @@
   npm package, in a scratch folder, not a dependency), `test/gfx.test.ts`
   lints for the mix, and the layer asks the compiler after building a
   shader and falls back to WebGL2 on any error, saying why in the GFX menu.
-- **Next:** port the other animated backgrounds one at a time (PS3's waves,
-  PS4, Synthwave); a skin without a GPU scene keeps its canvas background.
+- **Next:** port the other animated backgrounds one at a time (Synthwave;
+  PS3's waves and PS4 are done: decision 045); a skin without a GPU scene
+  keeps its canvas background.
