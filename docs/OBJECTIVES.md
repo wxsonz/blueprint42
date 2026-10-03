@@ -7,6 +7,102 @@ clear about what it means. Sizes are rough: **S** a session, **M** a few,
 Skin polish is not on this list. It's optional and guided by the author one
 skin at a time; `docs/SKINS.md` says which skins are reviewed.
 
+## Next (2026-10-03): smooth in every browser
+
+The main objective: every skin plays smoothly in Chromium and in Firefox
+(Zen), focus mode and zooming included, and a frame's cost is measured on
+the GPU as well as in JS. No new looks: pictures stay the same (pixcmp),
+and each step gives its numbers before and after, in Chromium and in Zen.
+
+Why now. In Zen (the author's browser), PS3 in focus mode on the line
+reader project drops to 20 fps when it dims and zooms. Measured 2026-10-03
+in headless Zen on the RTX 4060 (scratch copies of `tools/bench.mjs`;
+`--sample reader-project --mode focus`):
+- PS3 and PS4 run at 20 fps (worst frame 100 ms); Minimal 60. Our JS is
+  about 4 ms a frame; GFX Simple or Off gives 60, and so does forcing the
+  page layer onto WebGL2. PS2 (WebGPU, the grid's layer) gives 60.
+- The page layer (decision 045) draws every other frame (30 a second, by
+  design). Frame by frame: `17 66P 17 66P 17 83P 17 99P …` (P: the
+  background drew): every frame after one that didn't draw it takes 66–100
+  ms. Firefox seems to wait for a WebGPU canvas that didn't present until
+  a timeout; it only shows while the grid redraws every frame (playing,
+  dimming, zooming). PS2 draws every frame while playing, so it never hits
+  this. Not the sparkles (merged into one draw: no change), not `#page-bg`
+  over it (hidden: no change), not GPU work (ten frames in a row cost
+  about what one does).
+- Drawing the page layer every frame (a temporary edit): PS4 60, PS3
+  47–54 (noisy single runs).
+- Headless Chromium on the GPU: PS3 about 130–140 fps, so Chromium's bench
+  never saw it. The headed bench can't run from an agent's session (no
+  terminal window to put the browser beside); headless Zen can.
+
+Steps, in this order (1 and 2 first: 2 is the reported lag):
+1. [ ] **Measure in Zen, and on the GPU** (S). `tools/bench.mjs
+   --headless` (Zen with `--headless`, Chromium with the GPU flags), a
+   `--pre <js>` to switch parts off from the command line (as the scratch
+   copies did), and which backend drew the page and grid layers in its
+   report. The GFX readout gives the GPU's own time where the browser can
+   (WebGPU `timestamp-query`, WebGL2 `EXT_disjoint_timer_query_webgl2`),
+   else says it can't. Done when one command prints the table above.
+2. [ ] **The page layer draws every frame the grid draws** (S). While the
+   grid redraws (playing, moving, input), PS3's and PS4's background draws
+   with it; at rest it keeps 30 (check at rest in Zen that a frame without
+   it doesn't stall input). A note in decision 045 (its 30 fps "by
+   design"). Done when PS4 holds 60 in Zen in focus mode, and Chromium's
+   extra cost is measured (expected about 1 ms of CPU a frame).
+3. [ ] **PS3's remaining gap** (S). With step 2, PS3 was 47–54 in Zen
+   against PS4's 60. Find what's left (the backdrop shader's cost at full
+   size, the frame pass's copy, the grid's PS3 drawing in Firefox) with
+   step 1's tools. Done when PS3 holds 60 in Zen, or the cause is written
+   here with what fixing it would take.
+4. [ ] **A frame-rate cap while playing** (S). A setting: 60, 120 or the
+   screen's rate (the author's is 240 Hz, where the grid is redrawn up to
+   240 times a second while playing). Playback is timed per event, so the
+   picture is the same, only fewer of them. Done when 60 on a 240 Hz
+   screen draws a quarter of the frames and pixcmp is unchanged.
+5. [ ] **GPU layer tidy-ups** (S). A scene with no regions (PS4) draws its
+   backdrop straight to the canvas (no offscreen image and full-screen
+   copy); both layers share one GPU device; pipelines are built ahead
+   (`createRenderPipelineAsync`) so a skin's first switch doesn't hitch;
+   `#page-bg` hidden while the GPU draws (no change in Zen; measure the
+   compositing in Chromium). Done when each is measured, and kept only if
+   it saves something.
+6. [ ] **Heavy skins' effects** (M). Gradients built once per size, not
+   per frame; blur shadows (`shadowBlur`: aqua, amp, the Macs, PS3's tiles
+   and jelly icons) become pre-drawn shadow images stretched to fit
+   (9-slice). Firefox pays more for gradients (the skin picker says so).
+   The heavy skins from `tools/bench.mjs --skins all` first. The look
+   doesn't change (pixcmp; reviewed skins with the author's OK); each pass
+   logged in `docs/SKINS.md`. Done when the heaviest skins' frame cost
+   drops in both browsers.
+7. [ ] **Synthwave's background on the GPU** (M), as decision 044's next
+   step, matched against the canvas original as PS3 and PS4 were.
+8. [ ] **Draw what changed** (L). Each machine and belt drawn once into
+   its own bitmap per zoom step, redrawn only when it changes; a frame
+   mostly copies bitmaps, and panning shifts what's there and draws the
+   strip that comes into view. The skins draw as they do now. A later
+   step (the author is interested): tiles of these composited on the GPU,
+   which revises decision 044's "nothing else runs on the GPU" (a new
+   decision). Done when a frame's cost follows what moved, not what's on
+   screen, and pixcmp says 0 differing at rest.
+9. [ ] **three.js for the backgrounds?** (S, the author's call). Worth it
+   only if GPU backgrounds spread to many skins: its WebGPU renderer falls
+   back to WebGL2 by itself, and its shader language (TSL) writes each
+   shader once instead of in WGSL and GLSL by hand. It wouldn't help the
+   grid (a 2D diagram; text there would be glyph-atlas text). A deviation
+   from the stack: a decision either way.
+
+Dropped (the author, 2026-10-03): backgrounds drawn at half resolution.
+Not planned: a GPU renderer of our own for the grid, or PixiJS (every skin
+rewritten, text from a glyph atlas).
+
+Rules for these steps:
+- Pictures don't change: pixcmp says 0 differing; `npm run check` and
+  `npm test` pass.
+- Every number before and after, in Chromium and in Zen; headless
+  Chromium only on the GPU flags (its software compositor misleads).
+- One step per commit series; each leaves the app working.
+
 ## Next (2026-10-03): fast at any size
 
 The main objective: a frame costs what's on screen, not what's in the
